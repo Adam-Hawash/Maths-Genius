@@ -4,7 +4,7 @@ export const maxDuration = 10
 
 var DEFAULT_EMAIL = 'adam7awash@gmail.com'
 var DEFAULT_PASSWORD = '7awash@)!!'
-var ADMIN_NAME = 'Maths Genius'
+var ADMIN_NAME = 'Adam Hawash'
 
 export async function POST(request) {
   var body
