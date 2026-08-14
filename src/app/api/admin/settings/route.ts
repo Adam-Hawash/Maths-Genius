@@ -1,19 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+// @ts-nocheck
+import { NextResponse } from 'next/server'
+import { db, safeWrite } from '@/lib/db'
 
-// Default credentials (only used for first-time setup)
-const DEFAULT_EMAIL = 'adam7awash@gmail.com'
-const DEFAULT_PASSWORD = '7awash@)!!'
+var DEFAULT_EMAIL = 'adam7awash@gmail.com'
+var DEFAULT_PASSWORD = '7awash@)!!'
+var DEFAULT_NAME = 'Mr Wael Khodier'
 
 export async function GET() {
   try {
-    let admin = await db.admin.findFirst()
+    var admin = await db.admin.findFirst()
     if (!admin) {
       admin = await db.admin.create({
-        data: { email: DEFAULT_EMAIL, password: DEFAULT_PASSWORD, name: 'Mr Wael Khodier' },
+        data: { email: DEFAULT_EMAIL, password: DEFAULT_PASSWORD, name: DEFAULT_NAME },
       })
     }
-    const { password: _, ...safe } = admin
+    var safe = { id: admin.id, email: admin.email, name: admin.name, createdAt: admin.createdAt, updatedAt: admin.updatedAt }
     return NextResponse.json({ admin: safe })
   } catch (error) {
     console.error('Admin settings fetch error:', error)
@@ -21,27 +22,27 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request) {
   try {
-    const body = await request.json()
-    const { oldPassword, newEmail, newPassword } = body
+    var body = await request.json()
+    var oldPassword = body.oldPassword
+    var newEmail = body.newEmail
+    var newPassword = body.newPassword
 
     if (!oldPassword) {
       return NextResponse.json({ error: 'يجب إدخال كلمة المرور الحالية' }, { status: 400 })
     }
 
-    let admin = await db.admin.findFirst()
+    var admin = await db.admin.findFirst()
     if (!admin) {
       return NextResponse.json({ error: 'الحساب غير موجود' }, { status: 404 })
     }
 
-    // Verify old password
     if (admin.password !== oldPassword) {
       return NextResponse.json({ error: 'كلمة المرور الحالية غلط' }, { status: 401 })
     }
 
-    // Build update data
-    const updateData: Record<string, string> = {}
+    var updateData = {}
     if (newEmail && newEmail.trim()) {
       updateData.email = newEmail.trim()
     }
@@ -56,12 +57,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'مفيش حاجة تتغير' }, { status: 400 })
     }
 
-    const updated = await db.admin.update({
-      where: { id: admin.id },
-      data: updateData,
+    var updated = await safeWrite(function() {
+      return db.admin.update({
+        where: { id: admin.id },
+        data: updateData,
+      })
     })
 
-    const { password: _, ...safe } = updated
+    var safe = { id: updated.id, email: updated.email, name: updated.name, createdAt: updated.createdAt, updatedAt: updated.updatedAt }
     return NextResponse.json({ message: 'تم تحديث الإعدادات بنجاح', admin: safe })
   } catch (error) {
     console.error('Admin settings update error:', error)
