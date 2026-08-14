@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { NextResponse } from 'next/server'
 import { writeFile, mkdir, unlink, readFile } from 'fs/promises'
-import { join, extname } from 'path'
+import { join } from 'path'
 import { existsSync } from 'fs'
 
 var UPLOAD_DIR = join(process.cwd(), 'public', 'uploads')
@@ -47,7 +47,7 @@ export async function POST(request) {
         if (existsSync(partPath)) {
           var partData = await readFile(partPath)
           finalBuffer = Buffer.concat([finalBuffer, partData])
-          try { await unlink(partPath) } catch (e) { /* ignore */ }
+          try { await unlink(partPath) } catch (e) {}
         }
       }
 
