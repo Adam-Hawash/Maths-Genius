@@ -1,65 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, safeWrite } from '@/lib/db'
 
 export const maxDuration = 10
 
-const DEFAULT_EMAIL = 'adam7awash@gmail.com'
-const DEFAULT_PASSWORD = '7awash@)!!'
-const ADMIN_NAME = 'Adam Hawash'
+var DEFAULT_EMAIL = 'adam7awash@gmail.com'
+var DEFAULT_PASSWORD = '7awash@)!!'
+var ADMIN_NAME = 'Maths Genius'
 
-export async function POST(request: NextRequest) {
-  let body: { email?: string; password?: string }
+export async function POST(request) {
+  var body
   try {
     body = await request.json()
-  } catch {
+  } catch (e) {
     return NextResponse.json({ error: 'طلب غير صالح' }, { status: 400 })
   }
 
-  const { email, password } = body
+  var email = body.email || ''
+  var password = body.password || ''
 
   if (!email || !password) {
     return NextResponse.json({ error: 'البريد وكلمة المرور مطلوبين' }, { status: 400 })
   }
 
-  const cleanEmail = email.trim().toLowerCase()
-  const cleanPassword = password
+  var cleanEmail = email.trim().toLowerCase()
+  var cleanPassword = password
 
-  try {
-    console.log('[Admin Login] Checking for existing admin...')
-    let admin = await db.admin.findFirst()
-    console.log('[Admin Login] Existing admin:', admin ? 'found' : 'none')
-
-    if (!admin) {
-      console.log('[Admin Login] First-time login, validating defaults...')
-      if (cleanEmail !== DEFAULT_EMAIL || cleanPassword !== DEFAULT_PASSWORD) {
-        console.log('[Admin Login] Credentials mismatch')
-        return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
-      }
-      admin = await safeWrite(() =>
-        db.admin.create({
-          data: { email: DEFAULT_EMAIL, password: DEFAULT_PASSWORD, name: ADMIN_NAME },
-        })
-      )
-      console.log('[Admin Login] Admin created:', admin.id)
-    } else {
-      console.log('[Admin Login] Comparing against DB...')
-      console.log('[Admin Login] Input email:', cleanEmail, '| DB email:', admin.email)
-      if (cleanEmail !== admin.email || cleanPassword !== admin.password) {
-        console.log('[Admin Login] Credentials mismatch')
-        return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
-      }
+  // Check hardcoded credentials FIRST — works even if DB is down
+  if (cleanEmail === DEFAULT_EMAIL && cleanPassword === DEFAULT_PASSWORD) {
+    var adminData = {
+      id: 'admin-001',
+      email: DEFAULT_EMAIL,
+      name: ADMIN_NAME,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
-
-    const { password: _, ...adminWithoutPassword } = admin
-
-    console.log('[Admin Login] Success! Admin:', adminWithoutPassword.name)
-
     return NextResponse.json({
       message: 'تم تسجيل الدخول',
-      admin: adminWithoutPassword,
+      admin: adminData,
     })
-  } catch (error) {
-    console.error('[Admin Login] Error:', error)
-    return NextResponse.json({ error: 'خطأ في السيرفر' }, { status: 500 })
   }
+
+  // If not default creds, try DB (if available)
+  try {
+    var dbModule = await import('@/lib/db')
+    var db = dbModule.db
+    var admin = await db.admin.findFirst()
+
+    if (admin) {
+      if (cleanEmail !== admin.email || cleanPassword !== admin.password) {
+        return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
+      }
+      var password2 = admin.password
+      var adminWithoutPassword = {
+        id: admin.id,
+        email: admin.email,
+        name: admin.name,
+        createdAt: admin.createdAt,
+        updatedAt: admin.updatedAt,
+      }
+      return NextResponse.json({
+        message: 'تم تسجيل الدخول',
+        admin: adminWithoutPassword,
+      })
+    }
+  } catch (dbError) {
+    console.error('[Admin Login] DB error (non-fatal):', dbError)
+  }
+
+  return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
 }
