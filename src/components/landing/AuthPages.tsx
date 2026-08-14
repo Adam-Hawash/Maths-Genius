@@ -76,6 +76,7 @@ export function LoginView() {
   const [adminEmail, setAdminEmail] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [adminLoading, setAdminLoading] = useState(false)
+  const [adminStatusMsg, setAdminStatusMsg] = useState('')
 
   const handleStudentLogin = async () => {
     if (!studentPhone.trim()) {
@@ -124,15 +125,24 @@ export function LoginView() {
       toast.error('الرجاء إدخال البريد وكلمة المرور')
       return
     }
+    if (adminLoading) return
     setAdminLoading(true)
+    setAdminStatusMsg('جاري الاتصال بالسيرفر...')
+
+    var controller = new AbortController()
+    var timeout = setTimeout(function () { controller.abort() }, 15000)
+
     try {
-      const res = await fetch('/api/admin/login', {
+      setAdminStatusMsg('جاري التحقق من البيانات...')
+      var res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: adminEmail, password: adminPassword }),
+        signal: controller.signal,
       })
-      const data = await res.json()
+      var data = await res.json()
       if (res.ok) {
+        setAdminStatusMsg('جاري تحميل لوحة التحكم...')
         setCurrentAdmin(data.admin)
         setAdminLoggedIn(true)
         setView('admin-dashboard')
@@ -140,8 +150,16 @@ export function LoginView() {
       } else {
         toast.error(data.error || 'خطأ في تسجيل الدخول')
       }
-    } catch { toast.error('حدث خطأ في الاتصال') }
+    } catch (err) {
+      if (err && err.name === 'AbortError') {
+        toast.error('انتهت مهلة الاتصال — حاول مرة أخرى')
+      } else {
+        toast.error('حدث خطأ في الاتصال بالسيرفر')
+      }
+    }
+    clearTimeout(timeout)
     setAdminLoading(false)
+    setAdminStatusMsg('')
   }
 
   return (
@@ -182,13 +200,16 @@ export function LoginView() {
                   <div className="space-y-4">
                     <Badge variant="outline" className="mb-2 w-full justify-center py-1">دخول المشرفين فقط</Badge>
                     <div className="space-y-2">
-                      <Label htmlFor="admin-email" className="text-foreground">البريد الإلكتروني</Label>
-                      <Input id="admin-email" type="email" placeholder="البريد الإلكتروني" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} dir="ltr" className="min-h-[44px]" />
+                      <Label htmlFor="auth-admin-email" className="text-foreground">البريد الإلكتروني</Label>
+                      <Input id="auth-admin-email" type="email" placeholder="البريد الإلكتروني" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !adminLoading) handleAdminLogin() }} dir="ltr" className="min-h-[44px]" disabled={adminLoading} autoComplete="email" />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="admin-password" className="text-foreground">كلمة المرور</Label>
-                      <Input id="admin-password" type="password" placeholder="كلمة المرور" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()} dir="ltr" className="min-h-[44px]" />
+                      <Label htmlFor="auth-admin-password" className="text-foreground">كلمة المرور</Label>
+                      <Input id="auth-admin-password" type="password" placeholder="كلمة المرور" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !adminLoading) handleAdminLogin() }} dir="ltr" className="min-h-[44px]" disabled={adminLoading} autoComplete="current-password" />
                     </div>
+                    {adminStatusMsg && (
+                      <p className="text-xs text-center text-muted-foreground animate-pulse">{adminStatusMsg}</p>
+                    )}
                     <Button className="w-full min-h-[44px] font-semibold" onClick={handleAdminLogin} disabled={adminLoading}>
                       {adminLoading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />جاري تسجيل الدخول...</>) : 'دخول لوحة التحكم'}
                     </Button>
@@ -210,14 +231,12 @@ export function LoginView() {
 
 export function RegisterView() {
   const { setView, setCurrentStudent } = useAppStore()
-  // Student name - 4 parts
   const [name1, setName1] = useState('')
   const [name2, setName2] = useState('')
   const [name3, setName3] = useState('')
   const [name4, setName4] = useState('')
   const [phone, setPhone] = useState('')
   const [grade, setGrade] = useState('')
-  // Parent name - 2 parts
   const [parentName1, setParentName1] = useState('')
   const [parentName2, setParentName2] = useState('')
   const [parentPhone, setParentPhone] = useState('')
@@ -226,8 +245,6 @@ export function RegisterView() {
 
   const validate = (): boolean => {
     const e: Record<string, string> = {}
-    
-    // Validate student name parts
     if (!name1.trim()) e.name1 = 'مطلوب'
     else if (!TEXT_ONLY_REGEX.test(name1.trim())) e.name1 = 'حروف فقط'
     if (!name2.trim()) e.name2 = 'مطلوب'
@@ -236,24 +253,15 @@ export function RegisterView() {
     else if (!TEXT_ONLY_REGEX.test(name3.trim())) e.name3 = 'حروف فقط'
     if (!name4.trim()) e.name4 = 'مطلوب'
     else if (!TEXT_ONLY_REGEX.test(name4.trim())) e.name4 = 'حروف فقط'
-    
-    // Validate student phone
     if (!phone.trim()) e.phone = 'مطلوب'
     else if (!PHONE_REGEX.test(phone.trim())) e.phone = 'يجب أن يكون 11 رقم بالضبط'
-    
-    // Validate grade
     if (!grade) e.grade = 'مطلوب'
-    
-    // Validate parent name parts (2 parts only)
     if (!parentName1.trim()) e.parentName1 = 'مطلوب'
     else if (!TEXT_ONLY_REGEX.test(parentName1.trim())) e.parentName1 = 'حروف فقط'
     if (!parentName2.trim()) e.parentName2 = 'مطلوب'
     else if (!TEXT_ONLY_REGEX.test(parentName2.trim())) e.parentName2 = 'حروف فقط'
-    
-    // Validate parent phone
     if (!parentPhone.trim()) e.parentPhone = 'مطلوب'
     else if (!PHONE_REGEX.test(parentPhone.trim())) e.parentPhone = 'يجب أن يكون 11 رقم بالضبط'
-    
     setErrors(e)
     if (Object.keys(e).length > 0) {
       toast.error('الرجاء تصحيح الحقول المشار إليها')
@@ -264,10 +272,8 @@ export function RegisterView() {
 
   const handleRegister = async () => {
     if (!validate()) return
-    
     const fullName = `${name1.trim()} ${name2.trim()} ${name3.trim()} ${name4.trim()}`
     const fullParentName = `${parentName1.trim()} ${parentName2.trim()}`
-    
     setLoading(true)
     try {
       const res = await fetch('/api/students', {
@@ -303,12 +309,10 @@ export function RegisterView() {
           <h1 className="text-2xl font-bold text-foreground mb-1">إنشاء حساب جديد</h1>
           <p className="text-sm text-muted-foreground">سجل بياناتك وابدأ رحلة التعلم</p>
         </div>
-
         <div className="relative rounded-2xl p-[2px] bg-gradient-to-br from-gold-400 via-gold-600 to-gold-400">
           <Card className="rounded-2xl border-0 shadow-lg">
             <CardContent className="p-5">
               <div className="space-y-4">
-                {/* Student Name - 4 Parts */}
                 <div>
                   <p className="text-sm font-semibold text-foreground mb-2">اسم الطالب الرباعي</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -318,9 +322,7 @@ export function RegisterView() {
                     <NameField value={name4} onChange={setName4} placeholder="الاسم الرابع" id="reg-name4" error={errors.name4} />
                   </div>
                 </div>
-
                 <PhoneField value={phone} onChange={setPhone} placeholder="رقم هاتف الطالب" id="reg-phone" error={errors.phone} />
-
                 <div className="space-y-2">
                   <Label htmlFor="reg-grade" className="text-foreground">
                     الصف الدراسي <span className="text-destructive">*</span>
@@ -339,8 +341,6 @@ export function RegisterView() {
                   </div>
                   {errors.grade && <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.grade}</p>}
                 </div>
-
-                {/* Parent Name - 2 Parts */}
                 <div>
                   <p className="text-sm font-semibold text-foreground mb-2">اسم ولي الأمر</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -348,13 +348,10 @@ export function RegisterView() {
                     <NameField value={parentName2} onChange={setParentName2} placeholder="الاسم الثاني" id="reg-pname2" error={errors.parentName2} />
                   </div>
                 </div>
-
                 <PhoneField value={parentPhone} onChange={setParentPhone} placeholder="رقم هاتف ولي الأمر" id="reg-parent-phone" error={errors.parentPhone} />
-
                 <Button className="w-full min-h-[44px] font-semibold" onClick={handleRegister} disabled={loading}>
                   {loading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />جاري التسجيل...</>) : 'إنشاء الحساب'}
                 </Button>
-
                 <p className="text-center text-sm text-muted-foreground">
                   لديك حساب بالفعل؟{' '}
                   <button onClick={() => setView('auth-login')} className="text-primary font-medium hover:underline cursor-pointer">سجل دخولك</button>
