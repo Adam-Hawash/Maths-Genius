@@ -49,12 +49,15 @@ export function Footer() {
   const year = new Date().getFullYear()
   const { siteConfig } = useAppStore()
 
-  const portfolioUrl = siteConfig.hero_developer_url || FALLBACK_PORTFOLIO_URL
+  var cfg = siteConfig
+  var portfolioUrl = cfg.hero_developer_url || FALLBACK_PORTFOLIO_URL
+  var brandName = cfg.footer_brand || 'Maths Genius'
+  var copyrightText = cfg.footer_copyright || 'جميع الحقوق محفوظة لـ أدهم حواش'
 
-  var fb = siteConfig.social_facebook || ''
-  var wa = siteConfig.social_whatsapp_channel || ''
-  var ig = siteConfig.social_instagram || ''
-  var yt = siteConfig.social_youtube || ''
+  var fb = cfg.social_facebook || ''
+  var wa = cfg.social_whatsapp_channel || ''
+  var ig = cfg.social_instagram || ''
+  var yt = cfg.social_youtube || ''
 
   var hasSocial = fb || wa || ig || yt
 
@@ -101,12 +104,11 @@ export function Footer() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <GraduationCap className="h-4 w-4" />
             </div>
-            <span className="font-bold text-sm">Maths Genius</span>
+            <span className="font-bold text-sm">{brandName}</span>
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            &copy; {year} جميع الحقوق محفوظة لـ{' '}
-            <span className="font-semibold text-foreground">أدم حواش</span>
+            &copy; {year} {copyrightText}
           </p>
 
           <a
