@@ -23,8 +23,12 @@ import {
   Loader2,
   LayoutDashboard,
   Shield,
+  Youtube,
+  ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
+
+const HERO_DEV_URL = 'https://hero-developer-portfolio-11.vercel.app'
 
 export function Navbar() {
   const { theme, setTheme } = useTheme()
@@ -47,6 +51,7 @@ export function Navbar() {
   } = useAppStore()
 
   const instructorPhoto = siteConfig.instructor_photo || ''
+  const youtubeLink = siteConfig.social_youtube || ''
 
   const isAuthenticated = !!currentStudent || isAdminLoggedIn
   const isAuthPage = currentView === 'auth-login' || currentView === 'auth-register'
@@ -75,6 +80,21 @@ export function Navbar() {
 
   return (
     <>
+      {/* Made by Adam Hawash - Top Bar */}
+      <div className="w-full bg-background/60 backdrop-blur-sm border-b z-50 relative">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 py-1 flex items-center justify-center">
+          <a
+            href={siteConfig.hero_developer_url || HERO_DEV_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] text-muted-foreground/70 hover:text-primary transition-colors"
+          >
+            Made by <span className="font-semibold underline-offset-2 hover:underline">Adam Hawash</span>
+            <ExternalLink className="h-2.5 w-2.5" />
+          </a>
+        </div>
+      </div>
+
       <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           {/* Brand - Right side (RTL start) */}
@@ -85,7 +105,7 @@ export function Navbar() {
             {instructorPhoto ? (
               <img
                 src={instructorPhoto}
-                alt="Mr Wael Khodier"
+                alt="Maths Genius"
                 className="h-9 w-9 rounded-lg object-cover border border-primary/30"
               />
             ) : (
@@ -98,7 +118,7 @@ export function Navbar() {
                 Maths Genius
               </h1>
               <p className="text-[11px] text-muted-foreground leading-tight">
-                Mr Wael Khodier
+                Maths Genius
               </p>
             </div>
           </button>
@@ -163,7 +183,7 @@ export function Navbar() {
                   <UserPlus className="h-4 w-4 ml-1" />
                   حساب جديد
                 </Button>
-                {/* Discreet Admin Entry - hidden for auth pages */}
+                {/* Discreet Admin Entry */}
                 {!isAuthPage && (
                   <button
                     onClick={() => setShowAdminLogin(true)}
@@ -177,8 +197,20 @@ export function Navbar() {
             )}
           </nav>
 
-          {/* Theme Toggle + Mobile Menu Button */}
+          {/* YouTube + Theme Toggle + Mobile Menu Button */}
           <div className="flex items-center gap-2">
+            {youtubeLink && (
+              <a
+                href={youtubeLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center min-h-[44px] min-w-[44px] text-muted-foreground hover:text-red-500 transition-colors"
+                title="YouTube"
+              >
+                <Youtube className="h-4 w-4" />
+              </a>
+            )}
+
             {mounted && (
               <Button
                 variant="ghost"
@@ -293,7 +325,7 @@ export function Navbar() {
         )}
       </header>
 
-      {/* Admin Login Dialog - Hidden Entry Point */}
+      {/* Admin Login Dialog */}
       <AdminLoginDialog />
     </>
   )
@@ -311,37 +343,56 @@ function AdminLoginDialog() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [statusMsg, setStatusMsg] = useState('')
 
   const handleLogin = async () => {
     if (!email || !password) {
       toast.error('الرجاء إدخال البريد وكلمة المرور')
       return
     }
+    if (loading) return
     setLoading(true)
+    setStatusMsg('جاري الاتصال بالسيرفر...')
+
+    var controller = new AbortController()
+    var timeout = setTimeout(function () { controller.abort() }, 15000)
+
     try {
-      const res = await fetch('/api/admin/login', {
+      setStatusMsg('جاري التحقق من البيانات...')
+      var res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email, password: password }),
+        signal: controller.signal,
       })
-      const data = await res.json()
+      var data = await res.json()
       if (res.ok) {
+        setStatusMsg('جاري تحميل لوحة التحكم...')
+        console.log('[Navbar] Login success, setting admin state...', data.admin)
         setCurrentAdmin(data.admin)
         setAdminLoggedIn(true)
         setShowAdminLogin(false)
         setView('admin-dashboard')
         toast.success('مرحباً بك في لوحة التحكم')
+        console.log('[Navbar] State updated, currentView should be admin-dashboard')
       } else {
         toast.error(data.error || 'خطأ في تسجيل الدخول')
       }
-    } catch {
-      toast.error('حدث خطأ في الاتصال')
+    } catch (err) {
+      if (err && err.name === 'AbortError') {
+        toast.error('انتهت مهلة الاتصال — حاول مرة أخرى')
+      } else {
+        toast.error('حدث خطأ في الاتصال')
+      }
+    } finally {
+      clearTimeout(timeout)
+      setLoading(false)
+      setStatusMsg('')
     }
-    setLoading(false)
   }
 
   return (
-    <Dialog open={showAdminLogin} onOpenChange={setShowAdminLogin}>
+    <Dialog open={showAdminLogin} onOpenChange={(open) => { if (!loading) setShowAdminLogin(open) }}>
       <DialogContent className="sm:max-w-md" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-center gap-2 text-lg">
@@ -360,8 +411,11 @@ function AdminLoginDialog() {
               placeholder="البريد الإلكتروني"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !loading) handleLogin() }}
               dir="ltr"
               className="min-h-[44px]"
+              disabled={loading}
+              autoComplete="email"
             />
           </div>
           <div className="space-y-2">
@@ -374,11 +428,16 @@ function AdminLoginDialog() {
               placeholder="كلمة المرور"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !loading) handleLogin() }}
               dir="ltr"
               className="min-h-[44px]"
+              disabled={loading}
+              autoComplete="current-password"
             />
           </div>
+          {statusMsg && (
+            <p className="text-xs text-center text-muted-foreground animate-pulse">{statusMsg}</p>
+          )}
           <Button
             className="w-full min-h-[44px] font-semibold"
             onClick={handleLogin}
