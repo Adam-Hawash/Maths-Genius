@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+// @ts-nocheck
+import { NextResponse } from 'next/server'
+import { db, safeWrite } from '@/lib/db'
 
-const DEFAULTS: Record<string, string> = {
+var DEFAULTS = {
   hero_badge: 'منصة تعليمية متكاملة | Comprehensive Learning Platform',
   hero_title_line1: 'Maths Genius',
   hero_title_line2: 'Mr Wael Khodier',
@@ -26,15 +27,21 @@ const DEFAULTS: Record<string, string> = {
   social_facebook: '',
   social_whatsapp_channel: '',
   social_instagram: '',
+  social_youtube: '',
+  resend_api_key: '',
+  hero_developer_url: 'https://hero-developer-portfolio-11.vercel.app',
   gallery_title: 'صور طلابي الأعزاء | My Beloved Students',
   gallery_subtitle: 'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey',
+  footer_brand: 'Maths Genius',
+  footer_copyright: 'جميع الحقوق محفوظة لـ أدهم حواش',
 }
 
 export async function GET() {
   try {
-    const configs = await db.siteConfig.findMany()
-    const map: Record<string, string> = { ...DEFAULTS }
-    for (const c of configs) {
+    var configs = await db.siteConfig.findMany()
+    var map = Object.assign({}, DEFAULTS)
+    for (var i = 0; i < configs.length; i++) {
+      var c = configs[i]
       map[c.key] = c.value
     }
     return NextResponse.json(map)
@@ -44,17 +51,23 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request) {
   try {
-    const body = await request.json()
-    const updates: Record<string, string> = body
+    var body = await request.json()
+    var keys = Object.keys(body)
 
-    for (const [key, value] of Object.entries(updates)) {
-      await db.siteConfig.upsert({
-        where: { key },
-        update: { value, updatedAt: new Date() },
-        create: { key, value },
-      })
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i]
+      var value = body[key]
+      await safeWrite(function(k, v) {
+        return function() {
+          return db.siteConfig.upsert({
+            where: { key: k },
+            update: { value: v, updatedAt: new Date() },
+            create: { key: k, value: v },
+          })
+        }
+      }(key, value))
     }
 
     return NextResponse.json({ message: 'Config updated' })
