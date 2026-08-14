@@ -17,6 +17,8 @@ export default function HeroSection() {
 
   const [heroLoaded, setHeroLoaded] = useState(false)
   const [photoLoaded, setPhotoLoaded] = useState(false)
+  const [fallbackBgExists, setFallbackBgExists] = useState(false)
+  const [fallbackPhotoExists, setFallbackPhotoExists] = useState(false)
 
   useEffect(() => {
     if (!configLoaded) {
@@ -30,16 +32,39 @@ export default function HeroSection() {
     }
   }, [configLoaded, setSiteConfig])
 
+  useEffect(() => {
+    var hasDbBg = !!(siteConfig.hero_bg_image || '')
+    var hasDbPhoto = !!(siteConfig.instructor_photo || '')
+    if (!hasDbBg) {
+      var img = new Image()
+      img.onload = function () { setFallbackBgExists(true) }
+      img.src = '/images/hero-bg.jpg'
+    } else {
+      setFallbackBgExists(false)
+    }
+    if (!hasDbPhoto) {
+      var img2 = new Image()
+      img2.onload = function () { setFallbackPhotoExists(true) }
+      img2.src = '/images/instructor.jpg'
+    } else {
+      setFallbackPhotoExists(false)
+    }
+  }, [siteConfig.hero_bg_image, siteConfig.instructor_photo])
+
   const cfg = siteConfig
-  const heroPhoto = cfg.instructor_photo || ''
-  const heroBg = cfg.hero_bg_image || ''
+
+  const dbPhoto = cfg.instructor_photo || ''
+  const dbBg = cfg.hero_bg_image || ''
+  const heroPhoto = dbPhoto || '/images/instructor.jpg'
+  const heroBg = dbBg || '/images/hero-bg.jpg'
+
+  const showBg = !!dbBg || fallbackBgExists
+  const showPhoto = !!dbPhoto || fallbackPhotoExists
 
   return (
     <section className="relative overflow-hidden bg-[#0F0D0A]" dir="rtl">
-      {/* Banner Image at Top */}
-      {heroBg && (
+      {showBg && (
         <div className="relative w-full">
-          {/* Skeleton placeholder */}
           {!heroLoaded && (
             <div className="w-full h-auto max-h-[360px] bg-gradient-to-br from-[#1A1714] via-[#0F0D0A] to-[#1A1714] animate-pulse" style={{ minHeight: '200px' }} />
           )}
@@ -55,7 +80,6 @@ export default function HeroSection() {
         </div>
       )}
 
-      {/* Ambient light effects */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
         <div className="absolute top-20 right-20 h-96 w-96 rounded-full bg-[#C49A38]/10 blur-[100px]" />
         <div className="absolute bottom-20 left-20 h-72 w-72 rounded-full bg-[#C49A38]/5 blur-[80px]" />
@@ -70,16 +94,13 @@ export default function HeroSection() {
         </div>
       </div>
 
-      {/* Subtle gradient when no banner */}
-      {!heroBg && (
+      {!showBg && (
         <div className="absolute inset-0 bg-gradient-to-br from-[#0F0D0A] via-[#1A1714] to-[#0F0D0A] -z-10" />
       )}
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 py-12 sm:py-20 lg:py-24">
         <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
-          {/* Text Content */}
           <div className="space-y-6 text-center lg:text-right order-2 lg:order-1">
-            {/* Badge */}
             <div className="inline-flex items-center gap-2 rounded-full bg-[#C49A38]/15 px-4 py-1.5 text-sm font-medium text-[#E5BE5A] border border-[#C49A38]/20">
               <Award className="h-4 w-4" />
               <span>
@@ -88,7 +109,6 @@ export default function HeroSection() {
               </span>
             </div>
 
-            {/* Title */}
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-white">
               <span className="block text-[#E5BE5A]">
                 {cfg.hero_title_line1 || 'Maths Genius'}
@@ -98,13 +118,11 @@ export default function HeroSection() {
               </span>
             </h1>
 
-            {/* Subtitle */}
             <p className="max-w-xl text-white/60 text-base sm:text-lg leading-relaxed lg:mx-0 mx-auto">
               {cfg.hero_subtitle ||
                 'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.'}
             </p>
 
-            {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Button
                 size="lg"
@@ -123,7 +141,19 @@ export default function HeroSection() {
               </Button>
             </div>
 
-            {/* Stats Row */}
+            <div className="pt-4 flex flex-col items-center lg:items-start gap-1">
+              <a
+                href={cfg.hero_developer_url || 'https://hero-developer-portfolio-11.vercel.app'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold text-white/50 hover:text-[#E5BE5A] transition-colors underline underline-offset-4 decoration-white/20 hover:decoration-[#E5BE5A]/50"
+              >
+                Hero Developer
+              </a>
+              <div className="h-px w-16 bg-white/10" />
+              <span className="text-xs text-white/30 font-light tracking-wider">Adam Hawash</span>
+            </div>
+
             <div className="flex items-center justify-center lg:justify-start gap-8 pt-6">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -171,13 +201,11 @@ export default function HeroSection() {
             </div>
           </div>
 
-          {/* Instructor Photo */}
           <div className="flex justify-center lg:justify-end order-1 lg:order-2">
             <div className="relative group">
-              {/* Gold glow ring */}
               <div className="absolute -inset-4 rounded-full bg-gradient-to-br from-[#E5BE5A]/30 via-[#C49A38]/10 to-transparent blur-2xl transition-opacity duration-500 group-hover:opacity-80" />
               <div className="relative w-56 h-56 sm:w-72 sm:h-72 lg:w-80 lg:h-80 rounded-full overflow-hidden border-2 border-[#C49A38]/30 gold-glow bg-[#1A1714]">
-                {heroPhoto ? (
+                {showPhoto ? (
                   <>
                     {!photoLoaded && (
                       <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#2A1F00] via-[#1A1714] to-[#0F0D0A]" />
@@ -197,7 +225,6 @@ export default function HeroSection() {
                   </div>
                 )}
               </div>
-              {/* Badge overlay */}
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#1A1714] border border-[#C49A38]/30 rounded-full px-4 py-1.5">
                 <p className="text-[#E5BE5A] font-bold text-sm tracking-wider">
                   MATH GENIUS
