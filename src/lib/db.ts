@@ -29,9 +29,14 @@ async function withRetry(fn, retries, delayMs) {
 
 function createPrismaClient() {
   var dbUrl = process.env.DATABASE_URL || 'file:./db/custom.db'
+  var authToken = process.env.TURSO_AUTH_TOKEN || ''
 
   if (dbUrl.indexOf('libsql://') === 0 || dbUrl.indexOf('https://') === 0) {
-    var libsql = createClient({ url: dbUrl })
+    var clientOpts = { url: dbUrl }
+    if (authToken) {
+      clientOpts.authToken = authToken
+    }
+    var libsql = createClient(clientOpts)
     var adapter = new PrismaLibSQL(libsql)
     return new PrismaClient({ adapter: adapter, log: [] })
   }
