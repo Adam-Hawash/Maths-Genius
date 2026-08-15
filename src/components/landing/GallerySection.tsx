@@ -93,6 +93,7 @@ export default function GallerySection() {
     else imageCount++
   })
 
+  // Show placeholder when no items
   if (!loading && images.length === 0) {
     return (
       <section className="py-16 sm:py-20 bg-muted/30" dir="rtl">
@@ -231,6 +232,7 @@ export default function GallerySection() {
         )}
       </div>
 
+      {/* Video Modal */}
       {videoModal && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4" onClick={function() { setVideoModal(null) }}>
           <div className="relative w-full max-w-4xl aspect-video" onClick={function(e) { e.stopPropagation() }}>
