@@ -39,9 +39,9 @@ export function FeaturesSection() {
     <section className="py-16 sm:py-20 bg-muted/30">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="text-center mb-12">
-          <h2 className="text-2xl font-bold sm:text-3xl">لماذا تختارنا؟ | Why Choose Us?</h2>
+          <h2 className="text-2xl font-bold sm:text-3xl">{cfg.features_title || 'لماذا تختارنا؟ | Why Choose Us?'}</h2>
           <p className="mt-3 text-muted-foreground max-w-2xl mx-auto">
-            نقدّم لك تجربة تعليمية فريدة تجمع بين الشرح المبسط والتطبيق العملي في Algebra, Geometry, and More
+            {cfg.features_subtitle || 'نقدّم لك تجربة تعليمية فريدة تجمع بين الشرح المبسط والتطبيق العملي في Algebra, Geometry, and More'}
           </p>
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
