@@ -986,70 +986,167 @@ function ExamTrackingPanel() {
 
 /* ========== GALLERY MANAGER ========== */
 function GalleryManager() {
-  const [images, setImages] = useState<GalleryImage[]>([])
-  const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  var [images, setImages] = useState<GalleryImage[]>([])
+  var [loading, setLoading] = useState(true)
+  var [uploading, setUploading] = useState(false)
+  var [showAddMenu, setShowAddMenu] = useState(false)
+  var [imageUrl, setImageUrl] = useState('')
+  var [videoUrl, setVideoUrl] = useState('')
+  var [linkLoading, setLinkLoading] = useState(false)
+  var fileRef = useRef<HTMLInputElement>(null)
 
-  const loadGallery = async () => {
+  var loadGallery = async function() {
     setLoading(true)
     try {
-      const res = await fetch('/api/gallery')
-      const data = await res.json()
+      var res = await fetch('/api/gallery')
+      var data = await res.json()
       setImages(data.images || [])
     } catch { toast.error('خطأ في تحميل المعرض') }
     setLoading(false)
   }
 
-  useEffect(() => { loadGallery() }, [])
+  useEffect(function() { loadGallery() }, [])
 
-  const handleUpload = async (file: File) => {
+  var handleUpload = async function(file: File) {
     setUploading(true)
     try {
-      const upData = await chunkedUpload(file, 'gallery')
-      await fetch('/api/gallery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: file.name, filePath: upData.filePath }) })
+      var upData = await chunkedUpload(file, 'gallery')
+      await fetch('/api/gallery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: file.name, filePath: upData.filePath, type: 'image' }) })
       toast.success('تم رفع الصورة'); loadGallery()
     } catch (err: any) { toast.error(err.message || 'خطأ في رفع الصورة') }
     setUploading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    try { await fetch(`/api/gallery/${id}`, { method: 'DELETE' }); toast.success('تم حذف الصورة'); loadGallery() } catch { toast.error('خطأ') }
+  var handleAddByLink = async function(type: string) {
+    var url = type === 'video' ? videoUrl : imageUrl
+    if (!url || !url.trim()) { toast.error('الرجاء إدخال الرابط'); return }
+    setLinkLoading(true)
+    try {
+      var body: any = { type: type }
+      if (type === 'video') {
+        body.videoUrl = url.trim()
+        body.title = 'فيديو'
+      } else {
+        body.filePath = url.trim()
+        body.title = 'صورة'
+      }
+      var res = await fetch('/api/gallery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (res.ok) {
+        toast.success(type === 'video' ? 'تم إضافة الفيديو' : 'تم إضافة الصورة')
+        setImageUrl(''); setVideoUrl(''); setShowAddMenu(false); loadGallery()
+      } else {
+        toast.error('خطأ في الإضافة')
+      }
+    } catch { toast.error('خطأ في الاتصال') }
+    setLinkLoading(false)
+  }
+
+  var handleDelete = async function(id: string) {
+    try { await fetch(`/api/gallery/${id}`, { method: 'DELETE' }); toast.success('تم الحذف'); loadGallery() } catch { toast.error('خطأ') }
+  }
+
+  var getVideoEmbedUrl = function(url: string) {
+    var yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/)
+    if (yt) return 'https://www.youtube.com/embed/' + yt[1]
+    var fb = url.match(/facebook\.com\/.*\/videos\/(\d+)/)
+    if (fb) return 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url)
+    return url
+  }
+
+  var getVideoThumb = function(url: string) {
+    var yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/)
+    if (yt) return 'https://img.youtube.com/vi/' + yt[1] + '/mqdefault.jpg'
+    return ''
   }
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <CardTitle className="text-lg flex items-center gap-2"><Camera className="h-5 w-5 text-primary" />معرض صور الطلاب</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2"><Camera className="h-5 w-5 text-primary" />المعرض | Gallery</CardTitle>
           <div className="flex gap-2">
-            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
-              const files = e.target.files
-              if (files) { Array.from(files).forEach((f) => handleUpload(f)) }
+            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={function(e) {
+              var files = e.target.files
+              if (files) { Array.from(files).forEach(function(f) { handleUpload(f) }) }
               e.target.value = ''
             }} />
-            <Button size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4 ml-1" />}رفع صور
+            <Button size="sm" onClick={function() { fileRef.current?.click() }} disabled={uploading}>
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4 ml-1" />}
+              رفع صور
+            </Button>
+            <Button size="sm" variant="outline" onClick={function() { setShowAddMenu(!showAddMenu) }}>
+              <Plus className="h-4 w-4 ml-1" />
+              إضافة
             </Button>
           </div>
         </div>
       </CardHeader>
+
+      {/* Add Menu */}
+      {showAddMenu && (
+        <div className="px-6 pb-4 space-y-3">
+          <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
+            <p className="text-sm font-medium flex items-center gap-2"><Link2 className="h-4 w-4" />إضافة بالرابط | Add by URL</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs">صورة بالرابط</Label>
+                <div className="flex gap-2">
+                  <Input placeholder="https://example.com/image.jpg" value={imageUrl} onChange={function(e) { setImageUrl(e.target.value) }} dir="ltr" className="h-9 text-sm" />
+                  <Button size="sm" onClick={function() { handleAddByLink('image') }} disabled={linkLoading}>
+                    {linkLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">فيديو بالرابط (YouTube, etc.)</Label>
+                <div className="flex gap-2">
+                  <Input placeholder="https://youtube.com/watch?v=..." value={videoUrl} onChange={function(e) { setVideoUrl(e.target.value) }} dir="ltr" className="h-9 text-sm" />
+                  <Button size="sm" onClick={function() { handleAddByLink('video') }} disabled={linkLoading}>
+                    {linkLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <CardContent>
         {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : images.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Camera className="h-10 w-10 text-muted-foreground/30 mb-3" />
-            <p className="text-sm text-muted-foreground">لا توجد صور. ارفع صور طلابك!</p>
+            <p className="text-sm text-muted-foreground">لا توجد صور أو فيديوهات. أضف محتوى للمعرض!</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto custom-scrollbar">
-            {images.map((img) => (
-              <div key={img.id} className="relative group rounded-lg overflow-hidden border bg-card aspect-square">
-                <img src={img.filePath} alt={img.title} className="w-full h-full object-cover" loading="lazy" />
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Button size="icon" variant="destructive" className="h-8 w-8" onClick={() => handleDelete(img.id)}><Trash2 className="h-4 w-4" /></Button>
+            {images.map(function(img) {
+              var isVideo = img.type === 'video'
+              var thumb = isVideo ? (getVideoThumb(img.videoUrl) || '') : img.filePath
+              var src = thumb || img.filePath || img.videoUrl
+              return (
+                <div key={img.id} className="relative group rounded-lg overflow-hidden border bg-card aspect-square">
+                  {src ? (
+                    <img src={src} alt={img.title} className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-muted"><PlayCircle className="h-8 w-8 text-muted-foreground/30" /></div>
+                  )}
+                  {isVideo && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center"><PlayCircle className="h-5 w-5 text-white" /></div>
+                    </div>
+                  )}
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Badge variant="secondary" className="bg-black/50 text-white border-0 text-[10px] backdrop-blur-sm">
+                      {isVideo ? <Film className="h-3 w-3 ml-1" /> : <ImageIcon className="h-3 w-3 ml-1" />}
+                      {isVideo ? 'فيديو' : 'صورة'}
+                    </Badge>
+                  </div>
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Button size="icon" variant="destructive" className="h-8 w-8" onClick={function() { handleDelete(img.id) }}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </CardContent>
@@ -1119,7 +1216,7 @@ function MyStudentsPanel() {
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <CardTitle className="text-lg flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" />طلابي | My Students</CardTitle>
-            <select value={grade} onChange={(e) => setGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm min-w-[200px]">
+            <select value={grade} onChange={e => setGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm min-w-[200px]">
               <option value="">اختر الصف لعرض التحليلات</option>
               {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
@@ -1140,55 +1237,25 @@ function MyStudentsPanel() {
             </div>
           ) : (
             <>
-              {/* Grade Summary Cards */}
               {summary && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                   <div className="text-center p-3 rounded-lg bg-primary/10"><p className="text-xl font-bold text-primary">{summary.totalStudents}</p><p className="text-[10px] text-muted-foreground">طلاب مفعلون</p></div>
-                  <div className="text-center p-3 rounded-lg bg-emerald-500/10"><p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{summary.avgWatchPercent}%</p><p className="text-[10px] text-muted-foreground">متوسط المشاهدة</p></div>
-                  <div className="text-center p-3 rounded-lg bg-amber-500/10"><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{summary.avgExamScore}</p><p className="text-[10px] text-muted-foreground">متوسط الدرجات</p></div>
-                  <div className="text-center p-3 rounded-lg bg-purple-500/10"><p className="text-xl font-bold text-purple-600 dark:text-purple-400">{summary.avgActivity}%</p><p className="text-[10px] text-muted-foreground">متوسط النشاط</p></div>
+                  <div className="text-center p-3 rounded-lg bg-emerald-500/10"><p className="text-xl font-bold text-emerald-600">{summary.avgWatchPercent}%</p><p className="text-[10px] text-muted-foreground">متوسط المشاهدة</p></div>
+                  <div className="text-center p-3 rounded-lg bg-blue-500/10"><p className="text-xl font-bold text-blue-600">{summary.avgExamScore}</p><p className="text-[10px] text-muted-foreground">متوسط الامتحانات</p></div>
+                  <div className="text-center p-3 rounded-lg bg-amber-500/10"><p className="text-xl font-bold text-amber-600">{summary.passRate}%</p><p className="text-[10px] text-muted-foreground">نسبة النجاح</p></div>
                 </div>
               )}
-
-              {/* Student Analytics Table */}
-              <div className="overflow-x-auto">
+              <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b text-xs text-muted-foreground">
-                    <th className="text-right py-2 px-2 font-medium">الطالب</th>
-                    <th className="text-center py-2 px-1 font-medium">المشاهدة</th>
-                    <th className="text-center py-2 px-1 font-medium">الامتحانات</th>
-                    <th className="text-center py-2 px-1 font-medium">الدرجة</th>
-                    <th className="text-center py-2 px-1 font-medium">النشاط</th>
-                    <th className="text-center py-2 px-1 font-medium">آخر دخول</th>
-                    <th className="text-center py-2 px-1 font-medium">تفاصيل</th>
-                  </tr></thead>
+                  <thead><tr className="border-b text-right"><th className="pb-2 text-xs font-medium">الطالب</th><th className="pb-2 text-xs font-medium">النشاط</th><th className="pb-2 text-xs font-medium">الفيديوهات</th><th className="pb-2 text-xs font-medium">الامتحانات</th><th className="pb-2 text-xs font-medium">آخر دخول</th></tr></thead>
                   <tbody>
-                    {students.map((s) => (
-                      <tr key={s.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => loadDetail(s.id)}>
-                        <td className="py-2.5 px-2">
-                          <p className="font-medium text-xs truncate max-w-[150px]">{s.name}</p>
-                          <p className="text-[10px] text-muted-foreground" dir="ltr">{s.phone}</p>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <div className={`text-xs font-bold ${s.avgWatchPercent >= 70 ? 'text-emerald-600' : s.avgWatchPercent >= 40 ? 'text-amber-600' : 'text-red-500'}`}>{s.avgWatchPercent}%</div>
-                          <p className="text-[9px] text-muted-foreground">{s.watchedVideos}/{s.totalVideos}</p>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <div className="text-xs font-medium">{s.examsTaken}/{s.totalExams}</div>
-                          <p className={`text-[9px] ${s.examsPassed === s.examsTaken && s.examsTaken > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>{s.examsPassed} نجح</p>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <span className={`text-xs font-bold ${s.avgExamScore >= 50 ? 'text-emerald-600' : s.avgExamScore > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>{s.avgExamScore || '—'}</span>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full text-xs font-bold ${getActivityColor(s.activityScore)} ${getActivityBg(s.activityScore)}`}>{s.activityScore}</div>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <span className="text-[10px] text-muted-foreground">{s.lastLogin ? new Date(s.lastLogin).toLocaleDateString('ar-EG') : 'لم يسجل'}</span>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); loadDetail(s.id) }}><Eye className="h-3.5 w-3.5" /></Button>
-                        </td>
+                    {students.map(s => (
+                      <tr key={s.id} className="border-b hover:bg-muted/50 cursor-pointer" onClick={() => loadDetail(s.id)}>
+                        <td className="py-2"><p className="font-medium">{s.name}</p><p className="text-[10px] text-muted-foreground" dir="ltr">{s.phone}</p></td>
+                        <td className="py-2"><span className={`text-sm font-bold ${getActivityColor(s.activityScore)}`}>{s.activityScore}</span></td>
+                        <td className="py-2 text-xs">{s.completedVideos}/{s.totalVideos}</td>
+                        <td className="py-2 text-xs">{s.examsPassed}/{s.totalExams} <span className="text-muted-foreground">({s.avgExamScore})</span></td>
+                        <td className="py-2 text-xs">{s.lastLogin ? new Date(s.lastLogin).toLocaleDateString('ar-EG') : 'لم يدخل'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1199,73 +1266,49 @@ function MyStudentsPanel() {
         </CardContent>
       </Card>
 
-      {/* Student Detail Panel */}
       {selectedStudent && (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm">تحليلات: {selectedStudent.name}</CardTitle>
-              <Button size="sm" variant="ghost" onClick={() => { setSelectedStudent(null); setDetail(null) }}><X className="h-4 w-4" /></Button>
+              <CardTitle className="text-base">تفاصيل: {selectedStudent.name}</CardTitle>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedStudent(null)}><X className="h-4 w-4" /></Button>
             </div>
           </CardHeader>
           <CardContent>
-            {loadingDetail ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-            ) : detail ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-primary">{detail.summary?.totalVideosWatched || 0}</p><p className="text-[10px] text-muted-foreground">فيديوهات شاهدها</p></div>
-                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{detail.summary?.avgWatchPercent || 0}%</p><p className="text-[10px] text-muted-foreground">متوسط المشاهدة</p></div>
-                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-amber-600 dark:text-amber-400">{detail.summary?.avgExamScore || 0}</p><p className="text-[10px] text-muted-foreground">متوسط الدرجات</p></div>
-                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-purple-600 dark:text-purple-400">{detail.summary?.examsPassed || 0}/{detail.summary?.totalExamsTaken || 0}</p><p className="text-[10px] text-muted-foreground">نجح/قدم</p></div>
-
-                {/* Video Progress Detail */}
-                {detail.videoProgress && detail.videoProgress.length > 0 && (
-                  <div className="sm:col-span-2">
-                    <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><Video className="h-3.5 w-3.5" />تقدم الفيديوهات</h4>
-                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
-                      {detail.videoProgress.slice(0, 10).map((vp: any) => (
-                        <div key={vp.id} className="flex items-center gap-2 p-1.5 rounded border bg-card">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-medium truncate">{vp.videoTitle}</p>
-                          </div>
-                          <div className="shrink-0" style={{ minWidth: '50px' }}>
-                            <span className={`text-[11px] font-bold ${vp.percent >= 90 ? 'text-emerald-600' : vp.percent >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{vp.percent}%</span>
-                          </div>
-                          <div className="h-1.5 w-16 bg-muted rounded-full shrink-0"><div className={`h-full rounded-full ${vp.percent >= 90 ? 'bg-emerald-500' : vp.percent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${vp.percent}%` }} /></div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Exam Results Detail */}
-                {detail.examResults && detail.examResults.length > 0 && (
-                  <div className="sm:col-span-2">
-                    <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><Trophy className="h-3.5 w-3.5 text-amber-500" />نتائج الامتحانات</h4>
-                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
-                      {detail.examResults.map((er: any) => (
-                        <div key={er.id} className="flex items-center justify-between p-1.5 rounded border bg-card">
-                          <p className="text-[11px] font-medium truncate max-w-[200px]">{er.examTitle}</p>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold ${er.passed ? 'text-emerald-600' : 'text-red-500'}`}>{er.score}/{er.maxScore}</span>
-                            <Badge variant={er.passed ? 'default' : 'destructive'} className="text-[9px] h-5">{er.passed ? 'ناجح' : 'راسب'}</Badge>
-                          </div>
-                        </div>
+            {loadingDetail ? <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin" /></div> : detail ? (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className={`p-4 rounded-lg ${getActivityBg(selectedStudent.activityScore)}`}>
+                  <p className="text-3xl font-bold">{selectedStudent.activityScore}</p>
+                  <p className="text-xs text-muted-foreground mt-1">درجة النشاط</p>
+                </div>
+                <div className="p-4 rounded-lg bg-blue-500/10">
+                  <p className="text-3xl font-bold text-blue-600">{selectedStudent.completedVideos}/{selectedStudent.totalVideos}</p>
+                  <p className="text-xs text-muted-foreground mt-1">فيديوهات مكتملة</p>
+                  <p className="text-xs text-muted-foreground">متوسط المشاهدة: {selectedStudent.avgWatchPercent}%</p>
+                </div>
+                <div className="p-4 rounded-lg bg-emerald-500/10">
+                  <p className="text-3xl font-bold text-emerald-600">{selectedStudent.examsPassed}/{selectedStudent.totalExams}</p>
+                  <p className="text-xs text-muted-foreground mt-1">امتحانات ناجحة</p>
+                  <p className="text-xs text-muted-foreground">متوسط الدرجات: {selectedStudent.avgExamScore}</p>
+                </div>
+                {detail.recentActivities && detail.recentActivities.length > 0 && (
+                  <div className="sm:col-span-3">
+                    <p className="text-sm font-medium mb-2">آخر الأنشطة</p>
+                    <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                      {detail.recentActivities.map((a: any) => (
+                        <div key={a.id} className="text-xs p-2 rounded bg-muted/50"><span className="text-muted-foreground">{new Date(a.createdAt).toLocaleDateString('ar-EG')}</span> — {a.action} {a.details && <span className="text-muted-foreground">({a.details})</span>}</div>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-6 text-sm">لم يتم تحميل البيانات</p>
-            )}
+            ) : <p className="text-center py-6 text-muted-foreground text-sm">لا توجد تفاصيل</p>}
           </CardContent>
         </Card>
       )}
     </div>
   )
 }
-
 /* ========== CONTENT MANAGER (for Homework & Announcements) ========== */
 interface CMProps<T extends { id: string; grade: string; createdAt: string }> {
   title: string; apiPath: string; itemName: string
