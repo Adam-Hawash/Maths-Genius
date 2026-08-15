@@ -32,6 +32,7 @@ export default function TipsSection() {
   }, [configLoaded, siteConfig, setSiteConfig])
 
   var tipsBgImage = cfg.tips_bg_image || ''
+  var tipsSectionImage = cfg.tips_section_image || ''
   var tipImages = [
     cfg.tip1_image || '',
     cfg.tip2_image || '',
@@ -39,6 +40,7 @@ export default function TipsSection() {
   ]
   var [tipLoaded, setTipLoaded] = useState([false, false, false, false])
   var [bgLoaded, setBgLoaded] = useState(false)
+  var [sectionImgLoaded, setSectionImgLoaded] = useState(false)
 
   var tips = [
     {
@@ -70,6 +72,47 @@ export default function TipsSection() {
       color: TIP_COLORS[3],
     },
   ]
+
+  function renderTipCard(tip, idx) {
+    return (
+      <Card
+        key={tip.titleEn}
+        className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 border-border/50 bg-card"
+      >
+        <CardContent className="p-4 sm:p-5 flex gap-4 items-start">
+          {tipImages[idx] ? (
+            <div className="h-11 w-11 shrink-0 rounded-lg overflow-hidden border border-border/50 relative">
+              {!tipLoaded[idx] && <div className="h-full w-full animate-pulse bg-muted" />}
+              <img
+                src={tipImages[idx]}
+                alt={tip.titleAr}
+                className={"h-full w-full object-cover transition-opacity duration-300 " + (tipLoaded[idx] ? 'opacity-100' : 'opacity-0 absolute')}
+                loading="eager"
+                onLoad={function() { setTipLoaded(function(prev) { var n = [...prev]; n[idx] = true; return n }) }}
+              />
+            </div>
+          ) : (
+            <div
+              className={"inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-transform duration-300 group-hover:scale-110 " + tip.color}
+            >
+              <tip.icon className="h-5 w-5" />
+            </div>
+          )}
+          <div className="space-y-1.5 min-w-0">
+            <h3 className="font-semibold text-sm sm:text-base text-foreground leading-snug">
+              <span className="block">{tip.titleAr}</span>
+              <span className="block text-xs sm:text-sm text-muted-foreground font-normal mt-0.5">
+                {tip.titleEn}
+              </span>
+            </h3>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              {tip.description}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <section className="py-16 sm:py-20 relative" dir="rtl">
@@ -105,47 +148,34 @@ export default function TipsSection() {
           </p>
         </div>
 
+        {/* First 2 tips */}
         <div className="grid gap-4 sm:grid-cols-2">
-          {tips.map(function(tip, idx) {
-            return (
-              <Card
-                key={tip.titleEn}
-                className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 border-border/50 bg-card"
-              >
-                <CardContent className="p-4 sm:p-5 flex gap-4 items-start">
-                  {tipImages[idx] ? (
-                    <div className="h-11 w-11 shrink-0 rounded-lg overflow-hidden border border-border/50">
-                      {!tipLoaded[idx] && <div className="h-full w-full animate-pulse bg-muted" />}
-                      <img
-                        src={tipImages[idx]}
-                        alt={tip.titleAr}
-                        className={"h-full w-full object-cover transition-opacity duration-300 " + (tipLoaded[idx] ? 'opacity-100' : 'opacity-0 absolute')}
-                        loading="eager"
-                        onLoad={function() { setTipLoaded(function(prev) { var n = [...prev]; n[idx] = true; return n }) }}
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      className={"inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-transform duration-300 group-hover:scale-110 " + tip.color}
-                    >
-                      <tip.icon className="h-5 w-5" />
-                    </div>
-                  )}
-                  <div className="space-y-1.5 min-w-0">
-                    <h3 className="font-semibold text-sm sm:text-base text-foreground leading-snug">
-                      <span className="block">{tip.titleAr}</span>
-                      <span className="block text-xs sm:text-sm text-muted-foreground font-normal mt-0.5">
-                        {tip.titleEn}
-                      </span>
-                    </h3>
-                    <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                      {tip.description}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+          {renderTipCard(tips[0], 0)}
+          {renderTipCard(tips[1], 1)}
+        </div>
+
+        {/* Center Section Image */}
+        {tipsSectionImage && (
+          <div className="my-6 sm:my-8 flex justify-center">
+            <div className="relative w-full max-w-md rounded-2xl overflow-hidden shadow-lg border border-border/30">
+              {!sectionImgLoaded && (
+                <div className="w-full aspect-[16/9] animate-pulse bg-muted" />
+              )}
+              <img
+                src={tipsSectionImage}
+                alt="نصائح مستر وائل"
+                className={"w-full aspect-[16/9] object-cover transition-opacity duration-500 " + (sectionImgLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0')}
+                loading="eager"
+                onLoad={function() { setSectionImgLoaded(true) }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Last 2 tips */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {renderTipCard(tips[2], 2)}
+          {renderTipCard(tips[3], 3)}
         </div>
       </div>
     </section>
