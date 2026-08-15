@@ -17,82 +17,82 @@ model Admin {
 }
 
 model Student {
-  id            String   @id @default(cuid())
-  name          String
-  phone         String   @unique
-  grade         String
-  status        String   @default("pending")
-  parentName    String
-  parentPhone   String
-  loginCount    Int      @default(0)
-  lastLogin     DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  activities    StudentActivity[]
-  examResults   ExamResult[]
+  id          String            @id @default(cuid())
+  name        String
+  phone       String            @unique
+  grade       String
+  status      String            @default("pending")
+  parentName  String
+  parentPhone String
+  loginCount  Int               @default(0)
+  lastLogin   DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  examResults ExamResult[]
+  activities  StudentActivity[]
 }
 
 model StudentActivity {
-  id         String   @id @default(cuid())
-  studentId  String
-  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  action     String
-  details    String   @default("")
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  studentId String
+  action    String
+  details   String   @default("")
+  createdAt DateTime @default(now())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
 model Video {
-  id          String   @id @default(cuid())
-  title       String
-  url         String   @default("")
-  filePath    String   @default("")
-  fileType    String   @default("")
-  thumbnail   String   @default("")
-  grade       String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  title     String
+  url       String   @default("")
+  filePath  String   @default("")
+  fileType  String   @default("")
+  thumbnail String   @default("")
+  grade     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Homework {
-  id             String   @id @default(cuid())
-  title          String
-  content        String
-  filePath       String   @default("")
-  fileType       String   @default("")
-  thumbnail      String   @default("")
-  answerKeyPath  String   @default("")
-  answerKeyType  String   @default("")
-  grade          String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(cuid())
+  title         String
+  content       String
+  filePath      String   @default("")
+  fileType      String   @default("")
+  thumbnail     String   @default("")
+  answerKeyPath String   @default("")
+  answerKeyType String   @default("")
+  grade         String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Exam {
-  id             String   @id @default(cuid())
-  title          String
-  content        String
-  filePath       String   @default("")
-  fileType       String   @default("")
-  thumbnail      String   @default("")
-  answerKeyPath  String   @default("")
-  answerKeyType  String   @default("")
-  grade          String
-  questions      String   @default("") // JSON: [{q, options:[], correct:int, points:int}]
-  passScore      Float    @default(50)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  results        ExamResult[]
+  id            String       @id @default(cuid())
+  title         String
+  content       String
+  filePath      String   @default("")
+  fileType      String   @default("")
+  thumbnail     String   @default("")
+  answerKeyPath String   @default("")
+  answerKeyType String   @default("")
+  grade         String
+  questions     String       @default("")
+  passScore     Float        @default(50)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  results       ExamResult[]
 }
 
 model ExamResult {
   id          String   @id @default(cuid())
   examId      String
-  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
   studentId   String
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   score       Float
   maxScore    Float    @default(100)
   submittedAt DateTime @default(now())
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
 }
 
 model Announcement {
@@ -149,7 +149,9 @@ model VideoProgress {
 model GalleryImage {
   id        String   @id @default(cuid())
   title     String   @default("")
-  filePath  String
+  filePath  String   @default("")
+  type      String   @default("image")
+  videoUrl  String   @default("")
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
