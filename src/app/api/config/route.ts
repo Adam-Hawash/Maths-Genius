@@ -1,7 +1,3 @@
-// ============================================================
-// 📄 الملف 3: src/app/api/config/route.ts
-// ============================================================
-
 // @ts-nocheck
 import { NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
@@ -107,6 +103,9 @@ var DEFAULTS = {
 
   // === Tips Section Background ===
   tips_bg_image: '',
+
+  // === Tips Section Center Image ===
+  tips_section_image: '',
 
   // === API Keys ===
   resend_api_key: '',
