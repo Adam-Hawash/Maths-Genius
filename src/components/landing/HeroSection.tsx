@@ -20,15 +20,22 @@ export default function HeroSection() {
   const [fallbackBgExists, setFallbackBgExists] = useState(false)
   const [fallbackPhotoExists, setFallbackPhotoExists] = useState(false)
 
+  // Read config INSTANTLY from server-injected data (no API call needed)
   useEffect(() => {
     if (!configLoaded) {
-      fetch('/api/config')
-        .then((r) => r.json())
-        .then((data) => {
-          setSiteConfig(data)
-          useAppStore.getState().setConfigLoaded(true)
-        })
-        .catch(() => {})
+      var injected = (window as any).__INITIAL_CONFIG__
+      if (injected && Object.keys(injected).length > 0) {
+        setSiteConfig(injected)
+        useAppStore.getState().setConfigLoaded(true)
+      } else {
+        fetch('/api/config')
+          .then((r) => r.json())
+          .then((data) => {
+            setSiteConfig(data)
+            useAppStore.getState().setConfigLoaded(true)
+          })
+          .catch(() => {})
+      }
     }
   }, [configLoaded, setSiteConfig])
 
