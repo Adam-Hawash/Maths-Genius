@@ -179,6 +179,7 @@ var IMAGE_SLOTS: ImageSlot[] = [
   { configKey: 'tip1_image', label: 'صورة نصيحة 1', labelEn: 'Tip 1 Image', shape: 'square' },
   { configKey: 'tip2_image', label: 'صورة نصيحة 2', labelEn: 'Tip 2 Image', shape: 'square' },
   { configKey: 'tips_bg_image', label: 'صورة خلفية قسم النصائح', labelEn: 'Tips Section Background', shape: 'wide' },
+  { configKey: 'tips_section_image', label: 'صورة قسم النصائح (الوسط)', labelEn: 'Tips Section Image (Center)', shape: 'wide' },
   { configKey: 'tip3_image', label: 'صورة نصيحة 3', labelEn: 'Tip 3', shape: 'square' },
   { configKey: 'favicon_url', label: 'أيقونة التبويب (Favicon)', labelEn: 'Browser Tab Icon', shape: 'square' },
 ]
