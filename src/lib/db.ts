@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { PrismaClient } from '@prisma/client'
+import { PrismaLibSQL } from '@prisma/adapter-libsql'
+import { createClient } from '@libsql/client'
 
 var globalForPrisma = globalThis
 var _prisma = globalForPrisma._prismaInstance
@@ -26,8 +28,21 @@ async function withRetry(fn, retries, delayMs) {
 }
 
 function createPrismaClient() {
+  var dbUrl = process.env.DATABASE_URL || ''
+  var authToken = process.env.TURSO_AUTH_TOKEN || ''
+
+  // الاتصال بـ Turso السحابية
+  if (dbUrl.indexOf('libsql://') === 0 || dbUrl.indexOf('https://') === 0) {
+    var libsqlOpts = { url: dbUrl }
+    if (authToken) { libsqlOpts.authToken = authToken }
+    var libsql = createClient(libsqlOpts)
+    var adapter = new PrismaLibSQL(libsql)
+    return new PrismaClient({ adapter: adapter, log: ['error'] })
+  }
+
+  // في حالة التشغيل المحلي للاحتياط
   return new PrismaClient({
-    log: process.env.NODE_ENV !== 'production' ? ['query', 'error', 'warn'] : ['error'],
+    log: ['error'],
   })
 }
 
