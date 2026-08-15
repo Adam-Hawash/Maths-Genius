@@ -141,6 +141,7 @@ export default function HeroSection() {
               </Button>
             </div>
 
+            {/* Hero Developer / Adam Hawash branding */}
             <div className="pt-4 flex flex-col items-center lg:items-start gap-1">
               <a
                 href={cfg.hero_developer_url || 'https://hero-developer-portfolio-11.vercel.app'}
@@ -151,7 +152,14 @@ export default function HeroSection() {
                 Hero Developer
               </a>
               <div className="h-px w-16 bg-white/10" />
-              <span className="text-xs text-white/30 font-light tracking-wider">Adam Hawash</span>
+              <a
+                href={cfg.hero_developer_url || 'https://hero-developer-portfolio-11.vercel.app'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-white/30 font-light tracking-wider hover:text-[#E5BE5A] transition-colors"
+              >
+                Made by Adam Hawash
+              </a>
             </div>
 
             <div className="flex items-center justify-center lg:justify-start gap-8 pt-6">
@@ -212,7 +220,7 @@ export default function HeroSection() {
                     )}
                     <img
                       src={heroPhoto}
-                      alt="Mr Wael Khodier - Maths Genius"
+                      alt={cfg.instructor_name || 'Mr Wael Khodier'}
                       className={`w-full h-full object-cover transition-all duration-300 ${photoLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
                       loading="eager"
                       fetchPriority="high"
@@ -227,7 +235,7 @@ export default function HeroSection() {
               </div>
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#1A1714] border border-[#C49A38]/30 rounded-full px-4 py-1.5">
                 <p className="text-[#E5BE5A] font-bold text-sm tracking-wider">
-                  MATH GENIUS
+                  {(cfg.hero_title_line1 || 'Maths Genius').toUpperCase()}
                 </p>
               </div>
             </div>
