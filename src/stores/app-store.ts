@@ -37,6 +37,8 @@ export interface GalleryImage {
   id: string
   title: string
   filePath: string
+  type: string
+  videoUrl: string
   sortOrder: number
   createdAt: string
 }
@@ -137,6 +139,7 @@ export interface SocialLinks {
   social_facebook: string
   social_whatsapp_channel: string
   social_instagram: string
+  social_youtube: string
 }
 
 interface AppState {
@@ -208,6 +211,7 @@ export const useAppStore = create<AppState>((set) => ({
     social_facebook: '',
     social_whatsapp_channel: '',
     social_instagram: '',
+    social_youtube: '',
   },
   setSocialLinks: (links) => set({ socialLinks: links }),
 
