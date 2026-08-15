@@ -52,7 +52,7 @@ export function Footer() {
   var cfg = siteConfig
   var portfolioUrl = cfg.hero_developer_url || FALLBACK_PORTFOLIO_URL
   var brandName = cfg.footer_brand || 'Maths Genius'
-  var copyrightText = cfg.footer_copyright || 'جميع الحقوق محفوظة لـ أدهم حواش'
+  var copyrightText = cfg.footer_copyright || 'جميع الحقوق محفوظة لـ Maths Genius'
 
   var fb = cfg.social_facebook || ''
   var wa = cfg.social_whatsapp_channel || ''
