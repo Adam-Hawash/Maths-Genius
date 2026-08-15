@@ -48,8 +48,9 @@ export default async function RootLayout({
   var tip1 = initialConfig.tip1_image || "";
   var tip2 = initialConfig.tip2_image || "";
   var tip3 = initialConfig.tip3_image || "";
+  var tipsSectionImg = initialConfig.tips_section_image || "";
 
-  var allImages = [heroBg, instructorPhoto, tipsBg, siteLogo, tip1, tip2, tip3].filter(function (url) {
+  var allImages = [heroBg, instructorPhoto, tipsBg, siteLogo, tip1, tip2, tip3, tipsSectionImg].filter(function (url) {
     return url && url.length > 0;
   });
 
