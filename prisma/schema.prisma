@@ -1,5 +1,5 @@
 generator client {
-  provider = "npx prisma db push"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -17,19 +17,19 @@ model Admin {
 }
 
 model Student {
-  id          String   @id @default(cuid())
-  name        String
-  phone       String   @unique
-  grade       String
-  status      String   @default("pending")
-  parentName  String
-  parentPhone String
-  loginCount  Int      @default(0)
-  lastLogin   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  activities  StudentActivity[]
-  examResults ExamResult[]
+  id            String   @id @default(cuid())
+  name          String
+  phone         String   @unique
+  grade         String
+  status        String   @default("pending")
+  parentName    String
+  parentPhone   String
+  loginCount    Int      @default(0)
+  lastLogin     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  activities    StudentActivity[]
+  examResults   ExamResult[]
 }
 
 model StudentActivity {
@@ -81,17 +81,17 @@ model Exam {
   passScore      Float    @default(50)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-   results        ExamResult[]
+  results        ExamResult[]
 }
 
 model ExamResult {
-  id         String   @id @default(cuid())
-  examId     String
-  exam       Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
-  studentId  String
-  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  score      Float
-  maxScore   Float    @default(100)
+  id          String   @id @default(cuid())
+  examId      String
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  score       Float
+  maxScore    Float    @default(100)
   submittedAt DateTime @default(now())
 }
 
@@ -116,10 +116,10 @@ model Discussion {
 }
 
 model SiteConfig {
-  id          String   @id @default(cuid())
-  key         String   @unique
-  value       String   @default("")
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @default("")
+  updatedAt DateTime @updatedAt
 }
 
 model Media {
@@ -150,7 +150,7 @@ model GalleryImage {
   id        String   @id @default(cuid())
   title     String   @default("")
   filePath  String
-   sortOrder Int      @default(0)
+  sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
