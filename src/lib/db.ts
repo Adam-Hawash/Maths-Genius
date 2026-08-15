@@ -31,7 +31,6 @@ function createPrismaClient() {
   var dbUrl = process.env.DATABASE_URL || ''
   var authToken = process.env.TURSO_AUTH_TOKEN || ''
 
-  // الاتصال بـ Turso السحابية
   if (dbUrl.indexOf('libsql://') === 0 || dbUrl.indexOf('https://') === 0) {
     var libsqlOpts = { url: dbUrl }
     if (authToken) { libsqlOpts.authToken = authToken }
@@ -40,10 +39,7 @@ function createPrismaClient() {
     return new PrismaClient({ adapter: adapter, log: ['error'] })
   }
 
-  // في حالة التشغيل المحلي للاحتياط
-  return new PrismaClient({
-    log: ['error'],
-  })
+  return new PrismaClient({ log: ['error'] })
 }
 
 export var db = _prisma || createPrismaClient()
