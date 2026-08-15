@@ -1,10 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+// @ts-nocheck
+import { NextResponse } from 'next/server'
+import { db, safeWrite } from '@/lib/db'
 
-export const maxDuration = 10
+export var maxDuration = 10
 
-var DEFAULT_EMAIL = 'adam7awash@gmail.com'
-var DEFAULT_PASSWORD = '7awash@)!!'
-var ADMIN_NAME = 'Adam Hawash'
+var DEFAULT_EMAIL = 'math genius'
+var DEFAULT_PASSWORD = 'wael2026#'
+var ADMIN_NAME = 'Mr Wael Khodier'
 
 export async function POST(request) {
   var body
@@ -14,8 +16,8 @@ export async function POST(request) {
     return NextResponse.json({ error: 'طلب غير صالح' }, { status: 400 })
   }
 
-  var email = body.email || ''
-  var password = body.password || ''
+  var email = body.email
+  var password = body.password
 
   if (!email || !password) {
     return NextResponse.json({ error: 'البريد وكلمة المرور مطلوبين' }, { status: 400 })
@@ -24,47 +26,32 @@ export async function POST(request) {
   var cleanEmail = email.trim().toLowerCase()
   var cleanPassword = password
 
-  // Check hardcoded credentials FIRST — works even if DB is down
-  if (cleanEmail === DEFAULT_EMAIL && cleanPassword === DEFAULT_PASSWORD) {
-    var adminData = {
-      id: 'admin-001',
-      email: DEFAULT_EMAIL,
-      name: ADMIN_NAME,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-    return NextResponse.json({
-      message: 'تم تسجيل الدخول',
-      admin: adminData,
-    })
-  }
-
-  // If not default creds, try DB (if available)
   try {
-    var dbModule = await import('@/lib/db')
-    var db = dbModule.db
     var admin = await db.admin.findFirst()
 
-    if (admin) {
+    if (!admin) {
+      if (cleanEmail !== DEFAULT_EMAIL || cleanPassword !== DEFAULT_PASSWORD) {
+        return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
+      }
+      admin = await safeWrite(function() {
+        return db.admin.create({
+          data: { email: DEFAULT_EMAIL, password: DEFAULT_PASSWORD, name: ADMIN_NAME },
+        })
+      })
+    } else {
       if (cleanEmail !== admin.email || cleanPassword !== admin.password) {
         return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
       }
-      var password2 = admin.password
-      var adminWithoutPassword = {
-        id: admin.id,
-        email: admin.email,
-        name: admin.name,
-        createdAt: admin.createdAt,
-        updatedAt: admin.updatedAt,
-      }
-      return NextResponse.json({
-        message: 'تم تسجيل الدخول',
-        admin: adminWithoutPassword,
-      })
     }
-  } catch (dbError) {
-    console.error('[Admin Login] DB error (non-fatal):', dbError)
-  }
 
-  return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
+    var adminWithoutPassword = { id: admin.id, email: admin.email, name: admin.name, createdAt: admin.createdAt, updatedAt: admin.updatedAt }
+
+    return NextResponse.json({
+      message: 'تم تسجيل الدخول',
+      admin: adminWithoutPassword,
+    })
+  } catch (error) {
+    console.error('Admin login error:', error)
+    return NextResponse.json({ error: 'خطأ في السيرفر' }, { status: 500 })
+  }
 }
