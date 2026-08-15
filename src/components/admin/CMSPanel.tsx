@@ -179,6 +179,7 @@ var IMAGE_SLOTS: ImageSlot[] = [
   { configKey: 'tip1_image', label: 'نصيحة 1', labelEn: 'Tip 1', shape: 'square' },
   { configKey: 'tip2_image', label: 'نصيحة 2', labelEn: 'Tip 2', shape: 'square' },
   { configKey: 'tip3_image', label: 'نصيحة 3', labelEn: 'Tip 3', shape: 'square' },
+  { configKey: 'favicon_url', label: 'أيقونة التبويب (Favicon)', labelEn: 'Browser Tab Icon', shape: 'square' },
 ]
 
 export function CMSPanel() {
@@ -194,6 +195,13 @@ export function CMSPanel() {
     setLoading(true)
     try {
       var res = await fetch('/api/config')
+      if (!res.ok) {
+        var errText = ''
+        try { errText = await res.text() } catch(x) {}
+        toast.error('خطأ في تحميل الإعدادات: ' + res.status + ' ' + errText.substring(0, 100))
+        setLoading(false)
+        return
+      }
       var data = await res.json()
       setConfig(data)
       var pvs: Record<string, string> = {}
@@ -217,7 +225,11 @@ export function CMSPanel() {
         toast.success('تم حفظ الإعدادات بنجاح | Settings saved')
         var storeState = await (await import('@/stores/app-store')).useAppStore.getState()
         storeState.setSiteConfig(config)
-      } else { toast.error('خطأ في الحفظ') }
+      } else {
+        var errText = ''
+        try { errText = await res.text() } catch(x) {}
+        toast.error('خطأ في الحفظ: ' + res.status + ' ' + errText.substring(0, 150))
+      }
     } catch(e) { toast.error('خطأ في الاتصال') }
     setSaving(false)
   }
