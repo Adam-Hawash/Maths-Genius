@@ -1,19 +1,15 @@
-// ============================================================
-// 📄 الملف 1: src/app/layout.tsx
-// ============================================================
-
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 
-var geistSans = Geist({
+const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
-var geistMono = Geist_Mono({
+const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
@@ -41,8 +37,10 @@ export default async function RootLayout({
     /* DB not available yet */
   }
 
+  // Favicon: use user's custom image or empty (no Z logo)
   var faviconUrl = initialConfig.favicon_url || "https://imgh.in/host/4pdrhw";
 
+  // Collect all image URLs for preloading
   var heroBg = initialConfig.hero_bg_image || "";
   var instructorPhoto = initialConfig.instructor_photo || "";
   var tipsBg = initialConfig.tips_bg_image || "";
@@ -58,6 +56,7 @@ export default async function RootLayout({
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
+        {/* Cairo via Google Fonts CDN (avoids Turbopack build error) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -68,7 +67,11 @@ export default async function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
+
+        {/* Favicon — user's custom image, NO Z logo */}
         <link rel="icon" href={faviconUrl} />
+
+        {/* Preload all config images for instant display */}
         {allImages.map(function (url, idx) {
           return (
             <link
@@ -79,6 +82,8 @@ export default async function RootLayout({
             />
           );
         })}
+
+        {/* Inject config server-side for instant client access */}
         <script
           dangerouslySetInnerHTML={{
             __html:
