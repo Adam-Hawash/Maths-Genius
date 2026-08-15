@@ -1,3 +1,7 @@
+// ============================================================
+// 📄 الملف 6: src/components/landing/HeroSection.tsx
+// ============================================================
+
 'use client'
 
 import { Button } from '@/components/ui/button'
@@ -20,24 +24,20 @@ export default function HeroSection() {
   const [fallbackBgExists, setFallbackBgExists] = useState(false)
   const [fallbackPhotoExists, setFallbackPhotoExists] = useState(false)
 
-  // Read config INSTANTLY from server-injected data (no API call needed)
+  var initialCfg = (typeof window !== 'undefined' && (window as any).__INITIAL_CONFIG__) || {}
+  var cfg = configLoaded ? siteConfig : (Object.keys(siteConfig).length > 0 ? siteConfig : initialCfg)
+
   useEffect(() => {
-    if (!configLoaded) {
-      var injected = (window as any).__INITIAL_CONFIG__
-      if (injected && Object.keys(injected).length > 0) {
-        setSiteConfig(injected)
-        useAppStore.getState().setConfigLoaded(true)
-      } else {
-        fetch('/api/config')
-          .then((r) => r.json())
-          .then((data) => {
-            setSiteConfig(data)
-            useAppStore.getState().setConfigLoaded(true)
-          })
-          .catch(() => {})
-      }
+    if (!configLoaded && Object.keys(siteConfig).length === 0) {
+      fetch('/api/config')
+        .then((r) => r.json())
+        .then((data) => {
+          setSiteConfig(data)
+          useAppStore.getState().setConfigLoaded(true)
+        })
+        .catch(() => {})
     }
-  }, [configLoaded, setSiteConfig])
+  }, [configLoaded, setSiteConfig, siteConfig])
 
   useEffect(() => {
     var hasDbBg = !!(siteConfig.hero_bg_image || '')
@@ -57,8 +57,6 @@ export default function HeroSection() {
       setFallbackPhotoExists(false)
     }
   }, [siteConfig.hero_bg_image, siteConfig.instructor_photo])
-
-  const cfg = siteConfig
 
   const dbPhoto = cfg.instructor_photo || ''
   const dbBg = cfg.hero_bg_image || ''
@@ -148,7 +146,6 @@ export default function HeroSection() {
               </Button>
             </div>
 
-            {/* Hero Developer / Adam Hawash branding */}
             <div className="pt-4 flex flex-col items-center lg:items-start gap-1">
               <a
                 href={cfg.hero_developer_url || 'https://hero-developer-portfolio-11.vercel.app'}
