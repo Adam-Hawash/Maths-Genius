@@ -29,7 +29,6 @@ export async function PUT(request) {
     var newEmail = body.newEmail
     var newPassword = body.newPassword
 
-    // Always require current password for ANY change
     if (!oldPassword || !oldPassword.trim()) {
       return NextResponse.json({ error: 'يجب إدخال كلمة المرور الحالية' }, { status: 400 })
     }
@@ -39,7 +38,6 @@ export async function PUT(request) {
       return NextResponse.json({ error: 'الحساب غير موجود' }, { status: 404 })
     }
 
-    // Verify current password is correct
     if (admin.password !== oldPassword.trim()) {
       return NextResponse.json({ error: 'كلمة المرور الحالية غلط' }, { status: 401 })
     }
@@ -47,13 +45,11 @@ export async function PUT(request) {
     var updateData = {}
     var changesMade = false
 
-    // Update email if provided and different
     if (newEmail && newEmail.trim() && newEmail.trim() !== admin.email) {
       updateData.email = newEmail.trim()
       changesMade = true
     }
 
-    // Update password if provided
     if (newPassword !== undefined && newPassword !== null && String(newPassword).trim() !== '') {
       var trimmedPass = String(newPassword).trim()
       if (trimmedPass.length < 6) {
