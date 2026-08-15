@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Cairo } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
-import { DynamicFavicon } from "@/components/DynamicFavicon";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,13 +12,6 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-});
-
-const cairo = Cairo({
-  variable: "--font-cairo",
-  subsets: ["arabic", "latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -33,7 +25,6 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // === Fetch config from DB on the SERVER (instant, no client JS needed) ===
   var initialConfig: Record<string, string> = {}
   try {
     var dbModule = await import('@/lib/db')
@@ -51,16 +42,24 @@ export default async function RootLayout({
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
-        {/* Preload images from config — browser starts downloading BEFORE any JS runs */}
+        {/* Cairo font from Google Fonts CDN — avoids Turbopack build error */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
+        {/* Preload images from config */}
         {heroBg && <link rel="preload" href={heroBg} as="image" />}
         {instructorPhoto && <link rel="preload" href={instructorPhoto} as="image" />}
-        {/* Favicon from config — instant, no flash */}
+        {/* Favicon from config */}
         <link rel="icon" href={faviconUrl} />
-        {/* Inject config into page so client reads it instantly without API call */}
+        {/* Inject config for instant client-side access */}
         <script dangerouslySetInnerHTML={{ __html: 'document.documentElement.style.backgroundColor="#09090b";window.__INITIAL_CONFIG__=' + JSON.stringify(initialConfig) }} />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${cairo.variable} antialiased bg-background text-foreground`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        style={{ fontFamily: 'Cairo, sans-serif' }}
       >
         <ThemeProvider>{children}</ThemeProvider>
         <Toaster />
