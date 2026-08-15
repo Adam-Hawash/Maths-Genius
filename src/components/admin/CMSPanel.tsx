@@ -1,3 +1,7 @@
+// ============================================================
+// 📄 الملف 4: src/components/admin/CMSPanel.tsx
+// ============================================================
+
 'use client'
 
 import { Button } from '@/components/ui/button'
@@ -175,6 +179,7 @@ interface ImageSlot {
 var IMAGE_SLOTS: ImageSlot[] = [
   { configKey: 'hero_bg_image', label: 'صورة البانر (الخلفية)', labelEn: 'Hero Banner Image', shape: 'wide' },
   { configKey: 'instructor_photo', label: 'صورة المعلم', labelEn: 'Instructor Photo', shape: 'circle' },
+  { configKey: 'tips_bg_image', label: 'صورة خلفية قسم النصائح', labelEn: 'Tips Section Background', shape: 'wide' },
   { configKey: 'site_logo', label: 'شعار الموقع', labelEn: 'Site Logo', shape: 'wide' },
   { configKey: 'tip1_image', label: 'نصيحة 1', labelEn: 'Tip 1', shape: 'square' },
   { configKey: 'tip2_image', label: 'نصيحة 2', labelEn: 'Tip 2', shape: 'square' },
@@ -266,7 +271,6 @@ export function CMSPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Image Management */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center justify-between">
@@ -326,7 +330,6 @@ export function CMSPanel() {
         </CardContent>
       </Card>
 
-      {/* Section Tabs */}
       <div className="flex flex-wrap gap-2">
         {TEXT_SECTIONS.map(function(section) {
           var IconComp = section.icon
@@ -346,7 +349,6 @@ export function CMSPanel() {
         })}
       </div>
 
-      {/* Active Section Fields */}
       {TEXT_SECTIONS.map(function(section) {
         if (section.id !== activeSection) return null
         var IconComp = section.icon
