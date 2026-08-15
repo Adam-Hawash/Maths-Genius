@@ -3,12 +3,15 @@ import { NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 
 var DEFAULTS = {
+  // === Navbar ===
   navbar_brand: 'Maths Genius',
   navbar_subtitle: 'Mr Wael Khodier',
+
+  // === Hero Section ===
   hero_badge: 'منصة تعليمية متكاملة | Comprehensive Learning Platform',
   hero_title_line1: 'Maths Genius',
   hero_title_line2: 'Mr Wael Khodier',
-  hero_subtitle: 'نبسّط لك الرياضيات ونجعلها سهلة وممتعة!',
+  hero_subtitle: 'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.',
   hero_stat1_value: '8+',
   hero_stat1_label: 'Grade Levels',
   hero_stat2_value: '100+',
@@ -16,66 +19,89 @@ var DEFAULTS = {
   hero_stat3_value: '24/7',
   hero_stat3_label: 'Progress Tracking',
   hero_developer_url: 'https://hero-developer-portfolio-11.vercel.app',
+
+  // === Instructor ===
   instructor_name: 'Mr Wael Khodier',
   instructor_title: 'Mathematics Specialist | معلم الرياضيات المتخصص',
   instructor_photo: '',
+
+  // === Features Section ===
   features_title: 'لماذا تختارنا؟ | Why Choose Us?',
-  features_subtitle: 'نقدّم لك تجربة تعليمية فريدة',
-  feature1_title: 'شرح مبسط',
-  feature1_desc: 'شرح واضح ومبسط لكل درس',
-  feature2_title: 'فهم العمليات',
-  feature2_desc: 'نركّز على الفهم من الجذور',
-  feature3_title: 'حل المسائل',
-  feature3_desc: 'حل خطوة بخطوة',
-  feature4_title: 'تحضير وامتحانات',
-  feature4_desc: 'تحضير شامل ومراجعات دورية',
+  features_subtitle: 'نقدّم لك تجربة تعليمية فريدة تجمع بين الشرح المبسط والتطبيق العملي في Algebra, Geometry, and More',
+  feature1_title: 'شرح مبسط | Simplified Explanations',
+  feature1_desc: 'شرح واضح ومبسط لكل درس رياضيات بطريقة تساعد الطالب على الفهم السريع والاستيعاب العميق لمفاهيم Algebra و Geometry الأساسية.',
+  feature2_title: 'فهم العمليات | Deep Understanding',
+  feature2_desc: 'نركّز على فهم العمليات الرياضية من الجذور وليس الحفظ فقط، مما يبني قدرة حقيقية على حل أي مسألة في Formulas و Problem Solving.',
+  feature3_title: 'حل المسائل | Step-by-Step Solutions',
+  feature3_desc: 'حل خطوة بخطوة للمسائل المعقدة مع Cheat Sheets وملخصات بصرية تسهّل الفهم والتذكّر.',
+  feature4_title: 'تحضير وامتحانات | Reviews & Exams',
+  feature4_desc: 'تحضير شامل ومراجعات دورية واختبارات أسبوعية لضمان التفوّق والاستعداد الكامل للامتحانات النهائية.',
+
+  // === Grades Section ===
   grades_title: 'السنوات الدراسية',
-  grades_subtitle: 'اختر صفك الدراسي',
-  tips_badge: 'نصائح للتفوّق',
-  tips_title: 'نصائح الأستاذ وائل',
-  tips_subtitle: 'نصائح ذهبية',
+  grades_subtitle: 'اختر صفك الدراسي للوصول إلى المحتوى التعليمي المخصص لك',
+
+  // === Tips Section ===
+  tips_badge: 'نصائح للتفوّق | Tips for Excellence',
+  tips_title: 'نصائح الأستاذ وائل | Mr. Wael\'s Tips',
+  tips_subtitle: 'نصائح ذهبية من الأستاذ وائل خضير للتفوّق في الرياضيات — Golden advice from Mr. Wael Khodier',
   tips_card1_title: 'حدد وقت يومي للمراجعة',
   tips_card1_title_en: 'Set Daily Review Time',
-  tips_card1_desc: 'خصص 20-30 دقيقة كل يوم',
+  tips_card1_desc: 'خصص 20-30 دقيقة كل يوم لمراجعة ما تعلمته. الاستمرارية هي مفتاح التفوّق في الرياضيات. Dedicate 20-30 minutes daily for review.',
   tips_card2_title: 'ركز على الفهم وليس الحفظ',
-  tips_card2_title_en: 'Focus on Understanding',
-  tips_card2_desc: 'حاول فهم لماذا وليس كيف فقط',
-  tips_card3_title: 'حل مسائل إضافية',
-  tips_card3_title_en: 'Solve Extra Problems',
-  tips_card3_desc: 'لا تكتفي بالواجبات فقط',
+  tips_card2_title_en: 'Focus on Understanding, Not Memorization',
+  tips_card2_desc: 'حاول فهم لماذا وليس كيف فقط. الفهم العميق يبقي المعلومة لفترة أطول ويساعدك في حل مسائل جديدة. Understand why, not just how.',
+  tips_card3_title: 'حل مسائل إضافية كل يوم',
+  tips_card3_title_en: 'Solve Extra Problems Daily',
+  tips_card3_desc: 'لا تكتفي بالواجبات فقط. حل مسائل إضافية من الكتاب المدرسي لتعزيز مهاراتك. Practice beyond homework for stronger skills.',
   tips_card4_title: 'لا تتردد في السؤال',
   tips_card4_title_en: 'Never Hesitate to Ask',
-  tips_card4_desc: 'إذا لم تفهم شيئاً اسأل فوراً',
-  guide_badge: 'دليلك التعليمي',
-  guide_title: 'كيف تستخدم المنصة؟',
-  guide_subtitle: 'ست خطوات بسيطة',
+  tips_card4_desc: 'إذا لم تفهم شيئاً اسأل فوراً. السؤال الجيد هو بداية الفهم العميق. Ask immediately when something is unclear.',
+
+  // === Guide Section ===
+  guide_badge: 'دليلك التعليمي | Learning Guide',
+  guide_title: 'كيف تستخدم المنصة؟ | How to Use the Platform',
+  guide_subtitle: 'ست خطوات بسيطة لتبدأ رحلتك التعليمية في Maths Genius — Six simple steps to begin your learning journey',
   guide_card1_title: 'تسجيل حسابك',
   guide_card1_title_en: 'Register',
-  guide_card1_desc: 'أنشئ حسابك في المنصة',
+  guide_card1_desc: 'أنشئ حسابك في المنصة بسرعة وسهولة. اختر صفّك الدراسي وابدأ رحلتك التعليمية فوراً. Create your account quickly and start learning.',
   guide_card2_title: 'مشاهدة الدروس',
   guide_card2_title_en: 'Watch Lessons',
-  guide_card2_desc: 'تابع شروحات مبسّطة',
+  guide_card2_desc: 'تابع شروحات مبسّطة ومتسلسلة لكل درس رياضيات بأسلوب تفاعلي يجعل الفهم أسهل. Watch simplified, step-by-step video lessons.',
   guide_card3_title: 'حل الواجبات',
   guide_card3_title_en: 'Homework',
-  guide_card3_desc: 'أكمل واجباتك الأسبوعية',
+  guide_card3_desc: 'أكمل واجباتك الأسبوعية وحلّ التمارين لتثبيت المعلومات واختبار فهمك. Complete weekly homework to reinforce your learning.',
   guide_card4_title: 'أداء الامتحانات',
   guide_card4_title_en: 'Take Exams',
-  guide_card4_desc: 'شارك في الامتحانات الدورية',
+  guide_card4_desc: 'شارك في الامتحانات الدورية لمتابعة مستواك والاستعداد للامتحانات النهائية. Take periodic exams to track your progress.',
   guide_card5_title: 'بطاقات تعليمية',
   guide_card5_title_en: 'Flashcards',
-  guide_card5_desc: 'استخدم البطاقات التعليمية',
+  guide_card5_desc: 'استخدم البطاقات التعليمية لمراجعة المصطلحات والقوانين الرياضية بشكل سريع. Review formulas and terms with flashcards.',
   guide_card6_title: 'تحديات ومسابقات',
   guide_card6_title_en: 'Challenges',
-  guide_card6_desc: 'تنافس مع زملائك',
-  gallery_title: 'صور طلابي الأعزاء',
-  gallery_subtitle: 'لحظات مميزة',
+  guide_card6_desc: 'تنافس مع زملائك في تحديات رياضية ممتعة واربح مراكز متقدمة. Compete in fun math challenges with your classmates.',
+
+  // === Gallery ===
+  gallery_title: 'صور طلابي الأعزاء | My Beloved Students',
+  gallery_subtitle: 'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey',
+
+  // === Social Links ===
   social_facebook: '',
   social_whatsapp_channel: '',
   social_instagram: '',
   social_youtube: '',
+
+  // === WhatsApp Button ===
   whatsapp_number: '201017201680',
+
+  // === Footer ===
   footer_brand: 'Maths Genius',
   footer_copyright: 'جميع الحقوق محفوظة لـ أدهم حواش',
+
+  // === Favicon ===
+  favicon_url: '',
+
+  // === API Keys ===
   resend_api_key: '',
 }
 
@@ -90,7 +116,7 @@ export async function GET() {
     return NextResponse.json(map)
   } catch (error) {
     console.error('Config fetch error:', error)
-    return NextResponse.json(Object.assign({ _error: error.message }, DEFAULTS))
+    return NextResponse.json({ error: error.message, defaults: DEFAULTS })
   }
 }
 
