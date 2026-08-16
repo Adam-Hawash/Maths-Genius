@@ -24,13 +24,14 @@ const nextConfig: NextConfig = {
       'react-day-picker',
       'date-fns',
     ],
-    // ✅ Exclude dynamic upload paths from file tracing (fixes warning)
-    outputFileTracingExcludes: {
-      '*': ['./.tmp/**', './public/uploads/**'],
-    },
   },
 
-  // ✅ Image optimization — remotePatterns for external images
+  // ✅ برا experimental — Next.js 16
+  outputFileTracingExcludes: {
+    '*': ['./.tmp/**', './public/uploads/**'],
+  },
+
+  // Image optimization
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**' },
