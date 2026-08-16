@@ -3,9 +3,12 @@
 import { useAppStore } from '@/stores/app-store'
 import { Badge } from '@/components/ui/badge'
 import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X } from 'lucide-react'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
+// ✅ التحسين 1: next/image بدل <img>
+import Image from 'next/image'
 import type { GalleryImage } from '@/stores/app-store'
 
+// ✅ التحسين 1 + 3 + 4: next/image مع lazy loading + sizes + أبعاد
 function ImageWithSkeleton({ src, alt }: { src: string; alt: string }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
@@ -15,14 +18,14 @@ function ImageWithSkeleton({ src, alt }: { src: string; alt: string }) {
       {!loaded && !error && (
         <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-muted via-muted-foreground/10 to-muted" />
       )}
-      <img
+      <Image
         src={src}
         alt={alt}
-        className="w-full h-full object-cover transition-all duration-500 absolute inset-0"
-        loading="lazy"
-        decoding="async"
-        onLoad={() => setLoaded(true)}
-        onError={() => setError(true)}
+        fill
+        className={"object-cover transition-all duration-500 " + (loaded ? 'opacity-100' : 'opacity-0')}
+        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 25vw"
+        onLoad={function() { setLoaded(true) }}
+        onError={function() { setError(true) }}
       />
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-muted">
@@ -48,6 +51,7 @@ function getVideoThumb(url: string) {
 }
 
 export default function GallerySection() {
+  // ✅ التحسين 6: قراءة الصور من الـ store (preloaded)
   const { siteConfig, isAdminLoggedIn, galleryImages } = useAppStore()
   const [images, setImages] = useState<GalleryImage[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,7 +64,8 @@ export default function GallerySection() {
     siteConfig.gallery_subtitle ||
     'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey'
 
-    useEffect(function() {
+  // ✅ التحسين 6: لو الصور جاية من الـ store (preloaded) يعرضها فوراً
+  useEffect(function() {
     if (galleryImages.length > 0) {
       setImages(galleryImages)
       setLoading(false)
@@ -71,6 +76,7 @@ export default function GallerySection() {
         .catch(function() { setLoading(false) })
     }
   }, [galleryImages])
+
   const handleDelete = async (id: string) => {
     try {
       const res = await fetch(`/api/gallery/${id}`, { method: 'DELETE' })
@@ -122,6 +128,7 @@ export default function GallerySection() {
   return (
     <section className="py-16 sm:py-20 bg-muted/30" dir="rtl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        {/* Header */}
         <div className="text-center mb-12 space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
             <Camera className="h-4 w-4" />
@@ -196,7 +203,7 @@ export default function GallerySection() {
               </div>
             )}
 
-            {/* ========== قسم الفيديوهات شورتس ========== */}
+            {/* ========== قسم الفيديوهات (شورتس) ========== */}
             {videoCount > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-6">
@@ -218,8 +225,16 @@ export default function GallerySection() {
                         onClick={function() { setVideoModal(img.videoUrl) }}
                       >
                         <div className="relative w-full h-full overflow-hidden">
+                          {/* ✅ التحسين 1 + 4 + 6: next/image + sizes + unoptimized للخارجي */}
                           {thumb ? (
-                            <img src={thumb} alt={img.title || 'فيديو ' + (index + 1)} className="w-full h-full object-cover" loading="lazy" />
+                            <Image
+                              src={thumb}
+                              alt={img.title || 'فيديو ' + (index + 1)}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+                              unoptimized
+                            />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-muted">
                               <Film className="h-10 w-10 text-muted-foreground/30" />
@@ -262,6 +277,7 @@ export default function GallerySection() {
           </>
         )}
 
+        {/* Stats */}
         {!loading && images.length > 0 && (
           <div className="flex items-center justify-center gap-4 mt-8 text-muted-foreground text-sm">
             <span className="flex items-center gap-1.5"><ImagePlus className="h-4 w-4" />{imageCount} صورة</span>
@@ -271,6 +287,7 @@ export default function GallerySection() {
         )}
       </div>
 
+      {/* Video Modal */}
       {videoModal && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4" onClick={function() { setVideoModal(null) }}>
           <div className="relative w-full max-w-4xl aspect-video" onClick={function(e) { e.stopPropagation() }}>
