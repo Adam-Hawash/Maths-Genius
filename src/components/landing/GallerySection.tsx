@@ -48,7 +48,7 @@ function getVideoThumb(url: string) {
 }
 
 export default function GallerySection() {
-  const { siteConfig, isAdminLoggedIn } = useAppStore()
+  const { siteConfig, isAdminLoggedIn, galleryImages } = useAppStore()
   const [images, setImages] = useState<GalleryImage[]>([])
   const [loading, setLoading] = useState(true)
   const [videoModal, setVideoModal] = useState<string | null>(null)
@@ -60,20 +60,17 @@ export default function GallerySection() {
     siteConfig.gallery_subtitle ||
     'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey'
 
-  const fetchImages = useCallback(() => {
-    fetch('/api/gallery')
-      .then((r) => r.json())
-      .then((d) => {
-        setImages(d.images || [])
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
-
-  useEffect(() => {
-    fetchImages()
-  }, [fetchImages])
-
+    useEffect(function() {
+    if (galleryImages.length > 0) {
+      setImages(galleryImages)
+      setLoading(false)
+    } else {
+      fetch('/api/gallery')
+        .then(function(r) { return r.json() })
+        .then(function(d) { setImages(d.images || []); setLoading(false) })
+        .catch(function() { setLoading(false) })
+    }
+  }, [galleryImages])
   const handleDelete = async (id: string) => {
     try {
       const res = await fetch(`/api/gallery/${id}`, { method: 'DELETE' })
