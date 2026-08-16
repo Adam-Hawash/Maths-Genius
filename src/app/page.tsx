@@ -39,8 +39,13 @@ const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard')
 })
 
 export default function HomePage() {
-  const { currentView } = useAppStore()
-
+    const { currentView, setGalleryImages } = useAppStore()
+    useEffect(function() {
+    fetch('/api/gallery')
+      .then(function(r) { return r.json() })
+      .then(function(d) { setGalleryImages(d.images || []) })
+      .catch(function() {})
+  }, [])
   const showFooter = currentView === 'landing'
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
 
