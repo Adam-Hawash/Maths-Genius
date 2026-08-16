@@ -5,12 +5,36 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+
+  // Standalone output for Vercel — smaller cold starts
+  output: "standalone",
+
+  // Disable powered-by header for security
+  poweredByHeader: false,
+
   experimental: {
     serverActions: {
       bodySizeLimit: '500mb',
     },
+    // Optimize package imports for smaller chunks
+    optimizePackageImports: [
+      'lucide-react',
+      'framer-motion',
+      'embla-carousel-react',
+      'react-day-picker',
+      'date-fns',
+    ],
   },
-  // Cache static assets aggressively for fast loading
+
+  // ✅ التحسين 5: remotePatterns للصور الخارجية
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
+      { protocol: 'http', hostname: '**' },
+    ],
+  },
+
+  // Aggressive static caching
   async headers() {
     return [
       {
