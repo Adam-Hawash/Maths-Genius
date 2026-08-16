@@ -5,18 +5,13 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-
-  // Standalone output for Vercel — smaller cold starts
   output: "standalone",
-
-  // Disable powered-by header for security
   poweredByHeader: false,
 
   experimental: {
     serverActions: {
       bodySizeLimit: '500mb',
     },
-    // Optimize package imports for smaller chunks
     optimizePackageImports: [
       'lucide-react',
       'framer-motion',
@@ -26,12 +21,11 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // ✅ برا experimental — Next.js 16
+  // ✅ هنا برا experimental
   outputFileTracingExcludes: {
     '*': ['./.tmp/**', './public/uploads/**'],
   },
 
-  // Image optimization
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**' },
@@ -39,7 +33,6 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Aggressive static caching
   async headers() {
     return [
       {
