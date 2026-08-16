@@ -22,7 +22,7 @@ function ImageWithLoader({ src, alt }: { src: string; alt: string }) {
         src={src}
         alt={alt}
         fill
-        className={"object-cover transition-all duration-500 " + (loaded ? 'opacity-100' : 'opacity-0')}
+        className={"object-cover transition-opacity duration-500 " + (loaded ? 'opacity-100' : 'opacity-0')}
         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 25vw"
         onLoad={function() { setLoaded(true) }}
         onError={function() { setError(true) }}
@@ -36,9 +36,9 @@ function ImageWithLoader({ src, alt }: { src: string; alt: string }) {
   )
 }
 
-function getVideoEmbedUrl(url: string) {
+function getVideoEmbedUrl(url: string, autoplay: boolean) {
   var yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/)
-  if (yt) return 'https://www.youtube.com/embed/' + yt[1] + '?modestbranding=1&rel=0&playsinline=1'
+  if (yt) return 'https://www.youtube.com/embed/' + yt[1] + '?controls=0&modestbranding=1&rel=0&playsinline=1&autoplay=' + (autoplay ? '1' : '0')
   var fb = url.match(/facebook\.com\/.*\/videos\/(\d+)/)
   if (fb) return 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url)
   return url
@@ -50,35 +50,49 @@ function getVideoThumb(url: string) {
   return ''
 }
 
+// Preload images so they appear instantly
+function preloadImages(urls: string[]): Promise<void[]> {
+  return Promise.all(urls.map(function(url) {
+    return new Promise(function(resolve) {
+      if (!url) { resolve(); return }
+      var img = new window.Image()
+      img.onload = function() { resolve() }
+      img.onerror = function() { resolve() }
+      img.src = url
+    })
+  }))
+}
+
 export default function GallerySection() {
   const { siteConfig, isAdminLoggedIn } = useAppStore()
   const [images, setImages] = useState<GalleryImage[]>([])
   const [loading, setLoading] = useState(true)
   const [videoModal, setVideoModal] = useState<string | null>(null)
 
-  const galleryTitle =
-    siteConfig.gallery_title ||
-    'معرض الصور لطلابي وأبنائي الأعزاء | Photos of My Beloved Students'
-  const gallerySubtitle =
-    siteConfig.gallery_subtitle ||
-    'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey'
+  var galleryTitle = siteConfig.gallery_title || 'معرض الصور لطلابي وأبنائي الأعزاء | Photos of My Beloved Students'
+  var gallerySubtitle = siteConfig.gallery_subtitle || 'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey'
 
   useEffect(function() {
     fetch('/api/gallery')
       .then(function(r) { return r.json() })
-      .then(function(d) { setImages(d.images || []); setLoading(false) })
+      .then(async function(d) {
+        var imgs = d.images || []
+        // Preload all image thumbnails before showing
+        var urls = imgs.filter(function(i) { return i.type !== 'video' && i.filePath }).map(function(i) { return i.filePath })
+        await preloadImages(urls)
+        setImages(imgs)
+        setLoading(false)
+      })
       .catch(function() { setLoading(false) })
   }, [])
 
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(`/api/gallery/${id}`, { method: 'DELETE' })
+      var res = await fetch('/api/gallery/' + id, { method: 'DELETE' })
       if (res.ok) {
-        setImages((prev) => prev.filter((img) => img.id !== id))
+        setImages(function(prev) { return prev.filter(function(img) { return img.id !== id }) })
       }
-    } catch {
-      // silently fail
-    }
+    } catch {}
   }
 
   var onlyImages = images.filter(function(img) { return img.type !== 'video' })
@@ -86,7 +100,6 @@ export default function GallerySection() {
   var imageCount = onlyImages.length
   var videoCount = onlyVideos.length
 
-  // Show placeholder when no items
   if (!loading && images.length === 0) {
     return (
       <section className="py-16 sm:py-20 bg-muted/30" dir="rtl">
@@ -96,23 +109,15 @@ export default function GallerySection() {
               <Camera className="h-4 w-4" />
               <span>المعرض | Gallery</span>
             </div>
-            <h2 className="text-2xl font-bold sm:text-3xl text-foreground">
-              {galleryTitle}
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base">
-              {gallerySubtitle}
-            </p>
+            <h2 className="text-2xl font-bold sm:text-3xl text-foreground">{galleryTitle}</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base">{gallerySubtitle}</p>
           </div>
           <div className="max-w-lg mx-auto text-center py-16">
             <div className="mx-auto w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
               <Camera className="h-10 w-10 text-primary/60" />
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              سيتم عرض صور وفيديوهات طلابي الأبطال هنا
-            </h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              لحظات مميزة من رحلتنا التعليمية مع أبنائنا الطلاب الأبطال
-            </p>
+            <h3 className="text-lg font-semibold text-foreground mb-2">سيتم عرض صور وفيديوهات طلابي الأبطال هنا</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">لحظات مميزة من رحلتنا التعليمية مع أبنائنا الطلاب الأبطال</p>
           </div>
         </div>
       </section>
@@ -122,31 +127,28 @@ export default function GallerySection() {
   return (
     <section className="py-16 sm:py-20 bg-muted/30" dir="rtl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        {/* Header */}
         <div className="text-center mb-12 space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
             <Camera className="h-4 w-4" />
             <span>المعرض | Gallery</span>
           </div>
-          <h2 className="text-2xl font-bold sm:text-3xl text-foreground">
-            {galleryTitle}
-          </h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base">
-            {gallerySubtitle}
-          </p>
+          <h2 className="text-2xl font-bold sm:text-3xl text-foreground">{galleryTitle}</h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base">{gallerySubtitle}</p>
         </div>
 
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="aspect-square rounded-xl overflow-hidden">
-                <div className="w-full h-full animate-pulse bg-gradient-to-br from-muted via-muted-foreground/10 to-muted" />
-              </div>
-            ))}
+            {Array.from({ length: 8 }).map(function(_, i) {
+              return (
+                <div key={i} className="aspect-square rounded-xl overflow-hidden">
+                  <div className="w-full h-full animate-pulse bg-gradient-to-br from-muted via-muted-foreground/10 to-muted" />
+                </div>
+              )
+            })}
           </div>
         ) : (
           <>
-            {/* ========== قسم الصور ========== */}
+            {/* Images */}
             {imageCount > 0 && (
               <div className="mb-12">
                 <div className="flex items-center gap-3 mb-6">
@@ -159,45 +161,35 @@ export default function GallerySection() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {onlyImages.map((img, index) => (
-                    <div
-                      key={img.id}
-                      className="aspect-square rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card"
-                    >
-                      <div className="relative w-full h-full overflow-hidden">
-                        <ImageWithLoader
-                          src={img.filePath}
-                          alt={img.title || 'صورة ' + (index + 1)}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                        <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
-                          <p className="text-white text-xs font-medium truncate">
-                            {img.title || 'صورة ' + (index + 1)}
-                          </p>
+                  {onlyImages.map(function(img, index) {
+                    return (
+                      <div key={img.id} className="aspect-square rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card">
+                        <div className="relative w-full h-full overflow-hidden">
+                          <ImageWithLoader src={img.filePath} alt={img.title || 'صورة ' + (index + 1)} />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                          <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
+                            <p className="text-white text-xs font-medium truncate">{img.title || 'صورة ' + (index + 1)}</p>
+                          </div>
+                          <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                            <Badge variant="secondary" className="bg-black/40 text-white border-0 text-[10px] backdrop-blur-sm">
+                              <Heart className="h-3 w-3 ml-1" />
+                              {String(index + 1).padStart(2, '0')}
+                            </Badge>
+                          </div>
+                          {isAdminLoggedIn && (
+                            <button onClick={function() { handleDelete(img.id) }} className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-destructive/90 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-destructive backdrop-blur-sm z-20" aria-label={'حذف ' + (img.title || 'عنصر')}>
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
-                        <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                          <Badge variant="secondary" className="bg-black/40 text-white border-0 text-[10px] backdrop-blur-sm">
-                            <Heart className="h-3 w-3 ml-1" />
-                            {String(index + 1).padStart(2, '0')}
-                          </Badge>
-                        </div>
-                        {isAdminLoggedIn && (
-                          <button
-                            onClick={() => handleDelete(img.id)}
-                            className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-destructive/90 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-destructive backdrop-blur-sm z-20"
-                            aria-label={'حذف ' + (img.title || 'عنصر')}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
 
-            {/* ========== قسم الفيديوهات (شورتس) ========== */}
+            {/* Videos */}
             {videoCount > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-6">
@@ -210,24 +202,13 @@ export default function GallerySection() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {onlyVideos.map((img, index) => {
+                  {onlyVideos.map(function(img, index) {
                     var thumb = getVideoThumb(img.videoUrl) || img.filePath || ''
                     return (
-                      <div
-                        key={img.id}
-                        className="aspect-[9/16] rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card cursor-pointer"
-                        onClick={function() { setVideoModal(img.videoUrl) }}
-                      >
+                      <div key={img.id} className="aspect-[9/16] rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card cursor-pointer" onClick={function() { setVideoModal(img.videoUrl) }}>
                         <div className="relative w-full h-full overflow-hidden">
                           {thumb ? (
-                            <Image
-                              src={thumb}
-                              alt={img.title || 'فيديو ' + (index + 1)}
-                              fill
-                              className="object-cover"
-                              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                              unoptimized
-                            />
+                            <Image src={thumb} alt={img.title || 'فيديو ' + (index + 1)} fill className="object-cover" sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw" unoptimized />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-muted">
                               <Film className="h-10 w-10 text-muted-foreground/30" />
@@ -236,9 +217,7 @@ export default function GallerySection() {
                           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors" />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                           <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
-                            <p className="text-white text-xs font-medium truncate">
-                              {img.title || 'فيديو ' + (index + 1)}
-                            </p>
+                            <p className="text-white text-xs font-medium truncate">{img.title || 'فيديو ' + (index + 1)}</p>
                           </div>
                           <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
                             <Badge variant="secondary" className="bg-primary/80 text-white border-0 text-[10px] backdrop-blur-sm">
@@ -252,11 +231,7 @@ export default function GallerySection() {
                             </div>
                           </div>
                           {isAdminLoggedIn && (
-                            <button
-                              onClick={function(e) { e.stopPropagation(); handleDelete(img.id) }}
-                              className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-destructive/90 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-destructive backdrop-blur-sm z-20"
-                              aria-label={'حذف ' + (img.title || 'عنصر')}
-                            >
+                            <button onClick={function(e) { e.stopPropagation(); handleDelete(img.id) }} className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-destructive/90 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-destructive backdrop-blur-sm z-20" aria-label={'حذف ' + (img.title || 'عنصر')}>
                               <Trash2 className="h-4 w-4" />
                             </button>
                           )}
@@ -270,7 +245,6 @@ export default function GallerySection() {
           </>
         )}
 
-        {/* Stats */}
         {!loading && images.length > 0 && (
           <div className="flex items-center justify-center gap-4 mt-8 text-muted-foreground text-sm">
             <span className="flex items-center gap-1.5"><ImagePlus className="h-4 w-4" />{imageCount} صورة</span>
@@ -280,45 +254,49 @@ export default function GallerySection() {
         )}
       </div>
 
-      {/* Video Modal */}
+      {/* Video Modal - no YouTube controls = no download */}
       {videoModal && (
         <div
-          className="fixed inset-0 z-[100] bg-black flex items-center justify-center p-4"
-          onClick={function() {
-            document.exitFullscreen && document.exitFullscreen().catch(function(){})
-            setVideoModal(null)
-          }}
+          className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center"
           ref={function(el) {
             if (el) {
-              setTimeout(function() {
+              var tryFs = function() {
                 el.requestFullscreen && el.requestFullscreen().catch(function(){})
-              }, 100)
+              }
+              setTimeout(tryFs, 200)
             }
           }}
         >
-          <div className="relative w-full max-w-5xl aspect-video" onClick={function(e) { e.stopPropagation() }}>
-            {/* Exit fullscreen button - always visible */}
-            <button
-              className="absolute -top-12 left-0 flex items-center gap-2 text-white hover:text-white/80 text-sm z-20 min-h-[44px] min-w-[44px] justify-center"
-              onClick={function() {
-                document.exitFullscreen && document.exitFullscreen().catch(function(){})
-                setVideoModal(null)
-              }}
-            >
-              <X className="h-5 w-5" />
-              <span>إغلاق</span>
-            </button>
-            <div className="relative w-full h-full rounded-xl overflow-hidden">
-              <iframe
-                src={getVideoEmbedUrl(videoModal)}
-                className="w-full h-full rounded-xl"
-                allowFullScreen
-                allow="accelerometer; autoplay; encrypted-media; gyroscope; fullscreen"
-              />
-              {/* Block YouTube 3-dot menu on mobile */}
-              <div className="absolute top-0 right-0 w-16 h-12 sm:hidden z-10" />
-            </div>
+          {/* Close button - always visible at top */}
+          <button
+            className="absolute top-4 left-4 z-[200] w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center backdrop-blur-sm min-h-[44px] min-w-[44px]"
+            onClick={function() {
+              if (document.fullscreenElement) {
+                document.exitFullscreen().catch(function(){})
+              }
+              setVideoModal(null)
+            }}
+          >
+            <X className="h-6 w-6" />
+          </button>
+          {/* Tap background to close */}
+          <div className="absolute inset-0" onClick={function() {
+            if (document.fullscreenElement) {
+              document.exitFullscreen().catch(function(){})
+            }
+            setVideoModal(null)
+          }} />
+          {/* Video */}
+          <div className="relative w-full max-w-5xl aspect-video z-10 mx-4" onClick={function(e) { e.stopPropagation() }}>
+            <iframe
+              src={getVideoEmbedUrl(videoModal, true)}
+              className="w-full h-full rounded-xl"
+              allowFullScreen
+              allow="accelerometer; autoplay; encrypted-media; gyroscope; fullscreen"
+            />
           </div>
         </div>
       )}
-     
+    </section>
+  )
+}
