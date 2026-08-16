@@ -283,27 +283,42 @@ export default function GallerySection() {
       {/* Video Modal */}
       {videoModal && (
         <div
-          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
-          onClick={function() { setVideoModal(null) }}
+          className="fixed inset-0 z-[100] bg-black flex items-center justify-center p-4"
+          onClick={function() {
+            document.exitFullscreen && document.exitFullscreen().catch(function(){})
+            setVideoModal(null)
+          }}
           ref={function(el) {
             if (el) {
-              el.requestFullscreen && el.requestFullscreen().catch(function(){})
+              setTimeout(function() {
+                el.requestFullscreen && el.requestFullscreen().catch(function(){})
+              }, 100)
             }
           }}
         >
           <div className="relative w-full max-w-5xl aspect-video" onClick={function(e) { e.stopPropagation() }}>
-            <button className="absolute -top-10 left-0 text-white hover:text-white/80 flex items-center gap-1 text-sm z-10" onClick={function() { setVideoModal(null) }}>
-              <X className="h-4 w-4" />إغلاق
+            {/* Exit fullscreen button - always visible */}
+            <button
+              className="absolute -top-12 left-0 flex items-center gap-2 text-white hover:text-white/80 text-sm z-20 min-h-[44px] min-w-[44px] justify-center"
+              onClick={function() {
+                document.exitFullscreen && document.exitFullscreen().catch(function(){})
+                setVideoModal(null)
+              }}
+            >
+              <X className="h-5 w-5" />
+              <span>إغلاق</span>
             </button>
-            <iframe
-              src={getVideoEmbedUrl(videoModal)}
-              className="w-full h-full rounded-xl"
-              allowFullScreen
-              allow="autoplay; encrypted-media; fullscreen"
-            />
+            <div className="relative w-full h-full rounded-xl overflow-hidden">
+              <iframe
+                src={getVideoEmbedUrl(videoModal)}
+                className="w-full h-full rounded-xl"
+                allowFullScreen
+                allow="accelerometer; autoplay; encrypted-media; gyroscope; fullscreen"
+              />
+              {/* Block YouTube 3-dot menu on mobile */}
+              <div className="absolute top-0 right-0 w-16 h-12 sm:hidden z-10" />
+            </div>
           </div>
         </div>
       )}
-    </section>
-  )
-}
+     
