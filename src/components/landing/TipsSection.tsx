@@ -116,6 +116,7 @@ export default function TipsSection() {
 
   return (
     <section className="py-16 sm:py-20 relative" dir="rtl">
+      {/* Background image */}
       {tipsBgImage && (
         <>
           {!bgLoaded && (
@@ -134,8 +135,9 @@ export default function TipsSection() {
       )}
       {!tipsBgImage && <div className="absolute inset-0 -z-10 bg-muted/30" />}
 
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 relative z-10">
-        <div className="text-center mb-12 space-y-3">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 relative z-10">
+        {/* Section Header */}
+        <div className="text-center mb-10 sm:mb-12 space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
             <Lightbulb className="h-4 w-4" />
             <span>{cfg.tips_badge || 'نصائح للتفوّق | Tips for Excellence'}</span>
@@ -148,34 +150,32 @@ export default function TipsSection() {
           </p>
         </div>
 
-        {/* First 2 tips */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          {renderTipCard(tips[0], 0)}
-          {renderTipCard(tips[1], 1)}
-        </div>
-
-        {/* Center Section Image */}
-        {tipsSectionImage && (
-          <div className="my-6 sm:my-8 flex justify-center">
-            <div className="relative w-full max-w-md rounded-2xl overflow-hidden shadow-lg border border-border/30">
-              {!sectionImgLoaded && (
-                <div className="w-full aspect-[16/9] animate-pulse bg-muted" />
-              )}
-              <img
-                src={tipsSectionImage}
-                alt="نصائح مستر وائل"
-                className={"w-full aspect-[16/9] object-cover transition-opacity duration-500 " + (sectionImgLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0')}
-                loading="eager"
-                onLoad={function() { setSectionImgLoaded(true) }}
-              />
-            </div>
+        {/* Two-column layout: Tips (left) + Image (right) */}
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6 lg:gap-8 items-start">
+          {/* Tips column - on mobile: order 2 (below), on desktop: LEFT (order 2 in RTL) */}
+          <div className="order-2 lg:order-2 space-y-4">
+            {tips.map(function(tip, idx) {
+              return renderTipCard(tip, idx)
+            })}
           </div>
-        )}
 
-        {/* Last 2 tips */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          {renderTipCard(tips[2], 2)}
-          {renderTipCard(tips[3], 3)}
+          {/* Image column - on mobile: order 1 (on top), on desktop: RIGHT (order 1 in RTL) */}
+          {tipsSectionImage && (
+            <div className="order-1 lg:order-1">
+              <div className="lg:sticky lg:top-24 relative rounded-2xl overflow-hidden shadow-xl border border-border/20">
+                {!sectionImgLoaded && (
+                  <div className="w-full aspect-[3/4] animate-pulse bg-muted" />
+                )}
+                <img
+                  src={tipsSectionImage}
+                  alt="نصائح مستر وائل"
+                  className={"w-full aspect-[3/4] object-cover transition-opacity duration-500 " + (sectionImgLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0')}
+                  loading="eager"
+                  onLoad={function() { setSectionImgLoaded(true) }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>
