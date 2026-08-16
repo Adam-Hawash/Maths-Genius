@@ -1,9 +1,8 @@
 'use client'
 
 import { useAppStore } from '@/stores/app-store'
-import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Camera, Trash2, Heart, Users, ImagePlus, PlayCircle, Film, X } from 'lucide-react'
+import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import type { GalleryImage } from '@/stores/app-store'
 
@@ -91,7 +90,6 @@ export default function GallerySection() {
   var imageCount = onlyImages.length
   var videoCount = onlyVideos.length
 
-  // Show placeholder when no items
   if (!loading && images.length === 0) {
     return (
       <section className="py-16 sm:py-20 bg-muted/30" dir="rtl">
@@ -127,7 +125,6 @@ export default function GallerySection() {
   return (
     <section className="py-16 sm:py-20 bg-muted/30" dir="rtl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        {/* Header */}
         <div className="text-center mb-12 space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
             <Camera className="h-4 w-4" />
@@ -142,9 +139,9 @@ export default function GallerySection() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="aspect-[9/16] rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card cursor-pointer"
+              <div key={i} className="aspect-square rounded-xl overflow-hidden">
                 <div className="w-full h-full animate-pulse bg-gradient-to-br from-muted via-muted-foreground/10 to-muted" />
               </div>
             ))}
@@ -202,7 +199,7 @@ export default function GallerySection() {
               </div>
             )}
 
-            {/* ========== قسم الفيديوهات ========== */}
+            {/* ========== قسم الفيديوهات شورتس ========== */}
             {videoCount > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-6">
@@ -214,13 +211,13 @@ export default function GallerySection() {
                     <p className="text-xs text-muted-foreground">{videoCount} فيديو</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {onlyVideos.map((img, index) => {
                     var thumb = getVideoThumb(img.videoUrl) || img.filePath || ''
                     return (
                       <div
                         key={img.id}
-                        className="aspect-video rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card cursor-pointer"
+                        className="aspect-[9/16] rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card cursor-pointer"
                         onClick={function() { setVideoModal(img.videoUrl) }}
                       >
                         <div className="relative w-full h-full overflow-hidden">
@@ -244,10 +241,9 @@ export default function GallerySection() {
                               فيديو
                             </Badge>
                           </div>
-                          {/* Play Button */}
-                          <div className="absolute inset-0 flex items-center justify-center z-10">
-                            <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
-                              <PlayCircle className="h-7 w-7 text-primary ml-0.5" />
+                          <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                            <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
+                              <PlayCircle className="h-6 w-6 text-primary ml-0.5" />
                             </div>
                           </div>
                           {isAdminLoggedIn && (
@@ -269,7 +265,6 @@ export default function GallerySection() {
           </>
         )}
 
-        {/* Stats */}
         {!loading && images.length > 0 && (
           <div className="flex items-center justify-center gap-4 mt-8 text-muted-foreground text-sm">
             <span className="flex items-center gap-1.5"><ImagePlus className="h-4 w-4" />{imageCount} صورة</span>
@@ -279,7 +274,6 @@ export default function GallerySection() {
         )}
       </div>
 
-      {/* Video Modal */}
       {videoModal && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4" onClick={function() { setVideoModal(null) }}>
           <div className="relative w-full max-w-4xl aspect-video" onClick={function(e) { e.stopPropagation() }}>
