@@ -6,7 +6,6 @@ import { Footer } from '@/components/landing/Footer'
 import { StudentPendingView } from '@/components/landing/StudentPendingView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
-import { useEffect } from 'react'
 
 const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
   loading: () => <div className="min-h-[70vh] bg-[#0F0D0A]" />,
@@ -40,16 +39,7 @@ const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard')
 })
 
 export default function HomePage() {
-  // ✅ جلب setGalleryImages من الـ store
-  const { currentView, setGalleryImages } = useAppStore()
-
-  // ✅ جلب بيانات المعرض مبكراً عشان الصور تكون جاهزة فوراً
-  useEffect(function() {
-    fetch('/api/gallery')
-      .then(function(r) { return r.json() })
-      .then(function(d) { setGalleryImages(d.images || []) })
-      .catch(function() {})
-  }, [])
+  const { currentView } = useAppStore()
 
   const showFooter = currentView === 'landing'
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
