@@ -2,12 +2,12 @@
 
 import { useAppStore } from '@/stores/app-store'
 import { Badge } from '@/components/ui/badge'
-import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X, Loader2 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X, Loader2, Maximize } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import type { GalleryImage } from '@/stores/app-store'
 
-function ImageWithLoader({ src, alt }: { src: string; alt: string }) {
+function ImageWithSkeleton({ src, alt }: { src: string; alt: string }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
 
@@ -22,7 +22,7 @@ function ImageWithLoader({ src, alt }: { src: string; alt: string }) {
         src={src}
         alt={alt}
         fill
-        className={"object-cover transition-opacity duration-500 " + (loaded ? 'opacity-100' : 'opacity-0')}
+        className={"object-cover transition-all duration-500 " + (loaded ? 'opacity-100' : 'opacity-0')}
         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 25vw"
         onLoad={function() { setLoaded(true) }}
         onError={function() { setError(true) }}
@@ -36,9 +36,9 @@ function ImageWithLoader({ src, alt }: { src: string; alt: string }) {
   )
 }
 
-function getVideoEmbedUrl(url: string, autoplay: boolean) {
+function getVideoEmbedUrl(url: string) {
   var yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/)
-  if (yt) return 'https://www.youtube.com/embed/' + yt[1] + '?controls=0&modestbranding=1&rel=0&playsinline=1&autoplay=' + (autoplay ? '1' : '0')
+  if (yt) return 'https://www.youtube.com/embed/' + yt[1] + '?modestbranding=1&rel=0&playsinline=1'
   var fb = url.match(/facebook\.com\/.*\/videos\/(\d+)/)
   if (fb) return 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url)
   return url
@@ -50,49 +50,40 @@ function getVideoThumb(url: string) {
   return ''
 }
 
-// Preload images so they appear instantly
-function preloadImages(urls: string[]): Promise<void[]> {
-  return Promise.all(urls.map(function(url) {
-    return new Promise(function(resolve) {
-      if (!url) { resolve(); return }
-      var img = new window.Image()
-      img.onload = function() { resolve() }
-      img.onerror = function() { resolve() }
-      img.src = url
-    })
-  }))
-}
-
 export default function GallerySection() {
-  const { siteConfig, isAdminLoggedIn } = useAppStore()
+  const { siteConfig, isAdminLoggedIn, galleryImages } = useAppStore()
   const [images, setImages] = useState<GalleryImage[]>([])
   const [loading, setLoading] = useState(true)
   const [videoModal, setVideoModal] = useState<string | null>(null)
 
-  var galleryTitle = siteConfig.gallery_title || 'معرض الصور لطلابي وأبنائي الأعزاء | Photos of My Beloved Students'
-  var gallerySubtitle = siteConfig.gallery_subtitle || 'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey'
+  const galleryTitle =
+    siteConfig.gallery_title ||
+    'معرض الصور لطلابي وأبنائي الأعزاء | Photos of My Beloved Students'
+  const gallerySubtitle =
+    siteConfig.gallery_subtitle ||
+    'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey'
 
   useEffect(function() {
-    fetch('/api/gallery')
-      .then(function(r) { return r.json() })
-      .then(async function(d) {
-        var imgs = d.images || []
-        // Preload all image thumbnails before showing
-        var urls = imgs.filter(function(i) { return i.type !== 'video' && i.filePath }).map(function(i) { return i.filePath })
-        await preloadImages(urls)
-        setImages(imgs)
-        setLoading(false)
-      })
-      .catch(function() { setLoading(false) })
-  }, [])
+    if (galleryImages.length > 0) {
+      setImages(galleryImages)
+      setLoading(false)
+    } else {
+      fetch('/api/gallery')
+        .then(function(r) { return r.json() })
+        .then(function(d) { setImages(d.images || []); setLoading(false) })
+        .catch(function() { setLoading(false) })
+    }
+  }, [galleryImages])
 
   const handleDelete = async (id: string) => {
     try {
-      var res = await fetch('/api/gallery/' + id, { method: 'DELETE' })
+      const res = await fetch(`/api/gallery/${id}`, { method: 'DELETE' })
       if (res.ok) {
-        setImages(function(prev) { return prev.filter(function(img) { return img.id !== id }) })
+        setImages((prev) => prev.filter((img) => img.id !== id))
       }
-    } catch {}
+    } catch {
+      // silently fail
+    }
   }
 
   var onlyImages = images.filter(function(img) { return img.type !== 'video' })
@@ -109,15 +100,23 @@ export default function GallerySection() {
               <Camera className="h-4 w-4" />
               <span>المعرض | Gallery</span>
             </div>
-            <h2 className="text-2xl font-bold sm:text-3xl text-foreground">{galleryTitle}</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base">{gallerySubtitle}</p>
+            <h2 className="text-2xl font-bold sm:text-3xl text-foreground">
+              {galleryTitle}
+            </h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base">
+              {gallerySubtitle}
+            </p>
           </div>
           <div className="max-w-lg mx-auto text-center py-16">
             <div className="mx-auto w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
               <Camera className="h-10 w-10 text-primary/60" />
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">سيتم عرض صور وفيديوهات طلابي الأبطال هنا</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">لحظات مميزة من رحلتنا التعليمية مع أبنائنا الطلاب الأبطال</p>
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              سيتم عرض صور وفيديوهات طلابي الأبطال هنا
+            </h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              لحظات مميزة من رحلتنا التعليمية مع أبنائنا الطلاب الأبطال
+            </p>
           </div>
         </div>
       </section>
@@ -132,23 +131,25 @@ export default function GallerySection() {
             <Camera className="h-4 w-4" />
             <span>المعرض | Gallery</span>
           </div>
-          <h2 className="text-2xl font-bold sm:text-3xl text-foreground">{galleryTitle}</h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base">{gallerySubtitle}</p>
+          <h2 className="text-2xl font-bold sm:text-3xl text-foreground">
+            {galleryTitle}
+          </h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base">
+            {gallerySubtitle}
+          </p>
         </div>
 
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map(function(_, i) {
-              return (
-                <div key={i} className="aspect-square rounded-xl overflow-hidden">
-                  <div className="w-full h-full animate-pulse bg-gradient-to-br from-muted via-muted-foreground/10 to-muted" />
-                </div>
-              )
-            })}
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="aspect-square rounded-xl overflow-hidden">
+                <div className="w-full h-full animate-pulse bg-gradient-to-br from-muted via-muted-foreground/10 to-muted" />
+              </div>
+            ))}
           </div>
         ) : (
           <>
-            {/* Images */}
+            {/* ========== قسم الصور ========== */}
             {imageCount > 0 && (
               <div className="mb-12">
                 <div className="flex items-center gap-3 mb-6">
@@ -161,35 +162,45 @@ export default function GallerySection() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {onlyImages.map(function(img, index) {
-                    return (
-                      <div key={img.id} className="aspect-square rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card">
-                        <div className="relative w-full h-full overflow-hidden">
-                          <ImageWithLoader src={img.filePath} alt={img.title || 'صورة ' + (index + 1)} />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                          <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
-                            <p className="text-white text-xs font-medium truncate">{img.title || 'صورة ' + (index + 1)}</p>
-                          </div>
-                          <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                            <Badge variant="secondary" className="bg-black/40 text-white border-0 text-[10px] backdrop-blur-sm">
-                              <Heart className="h-3 w-3 ml-1" />
-                              {String(index + 1).padStart(2, '0')}
-                            </Badge>
-                          </div>
-                          {isAdminLoggedIn && (
-                            <button onClick={function() { handleDelete(img.id) }} className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-destructive/90 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-destructive backdrop-blur-sm z-20" aria-label={'حذف ' + (img.title || 'عنصر')}>
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
+                  {onlyImages.map((img, index) => (
+                    <div
+                      key={img.id}
+                      className="aspect-square rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card"
+                    >
+                      <div className="relative w-full h-full overflow-hidden">
+                        <ImageWithSkeleton
+                          src={img.filePath}
+                          alt={img.title || 'صورة ' + (index + 1)}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
+                          <p className="text-white text-xs font-medium truncate">
+                            {img.title || 'صورة ' + (index + 1)}
+                          </p>
                         </div>
+                        <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                          <Badge variant="secondary" className="bg-black/40 text-white border-0 text-[10px] backdrop-blur-sm">
+                            <Heart className="h-3 w-3 ml-1" />
+                            {String(index + 1).padStart(2, '0')}
+                          </Badge>
+                        </div>
+                        {isAdminLoggedIn && (
+                          <button
+                            onClick={() => handleDelete(img.id)}
+                            className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-destructive/90 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-destructive backdrop-blur-sm z-20"
+                            aria-label={'حذف ' + (img.title || 'عنصر')}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
-                    )
-                  })}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Videos */}
+            {/* ========== قسم الفيديوهات ========== */}
             {videoCount > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-6">
@@ -202,13 +213,26 @@ export default function GallerySection() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {onlyVideos.map(function(img, index) {
+                  {onlyVideos.map((img, index) => {
                     var thumb = getVideoThumb(img.videoUrl) || img.filePath || ''
                     return (
-                      <div key={img.id} className="aspect-[9/16] rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card cursor-pointer" onClick={function() { setVideoModal(img.videoUrl) }}>
+                      <div
+                        key={img.id}
+                        className="aspect-[9/16] rounded-xl overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-border/50 bg-card cursor-pointer"
+                        onClick={function() { setVideoModal(img.videoUrl) }}
+                      >
                         <div className="relative w-full h-full overflow-hidden">
                           {thumb ? (
-                            <Image src={thumb} alt={img.title || 'فيديو ' + (index + 1)} fill className="object-cover" sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw" unoptimized />
+                            <Image
+                              src={thumb}
+                              alt={img.title || 'فيديو ' + (index + 1)}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+                              unoptimized
+                              loading="eager"
+                              fetchPriority="high"
+                            />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-muted">
                               <Film className="h-10 w-10 text-muted-foreground/30" />
@@ -217,7 +241,9 @@ export default function GallerySection() {
                           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors" />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                           <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
-                            <p className="text-white text-xs font-medium truncate">{img.title || 'فيديو ' + (index + 1)}</p>
+                            <p className="text-white text-xs font-medium truncate">
+                              {img.title || 'فيديو ' + (index + 1)}
+                            </p>
                           </div>
                           <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
                             <Badge variant="secondary" className="bg-primary/80 text-white border-0 text-[10px] backdrop-blur-sm">
@@ -231,7 +257,11 @@ export default function GallerySection() {
                             </div>
                           </div>
                           {isAdminLoggedIn && (
-                            <button onClick={function(e) { e.stopPropagation(); handleDelete(img.id) }} className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-destructive/90 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-destructive backdrop-blur-sm z-20" aria-label={'حذف ' + (img.title || 'عنصر')}>
+                            <button
+                              onClick={function(e) { e.stopPropagation(); handleDelete(img.id) }}
+                              className="absolute top-3 right-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-destructive/90 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-destructive backdrop-blur-sm z-20"
+                              aria-label={'حذف ' + (img.title || 'عنصر')}
+                            >
                               <Trash2 className="h-4 w-4" />
                             </button>
                           )}
@@ -254,49 +284,201 @@ export default function GallerySection() {
         )}
       </div>
 
-      {/* Video Modal - no YouTube controls = no download */}
       {videoModal && (
-        <div
-          className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center"
-          ref={function(el) {
-            if (el) {
-              var tryFs = function() {
-                el.requestFullscreen && el.requestFullscreen().catch(function(){})
-              }
-              setTimeout(tryFs, 200)
-            }
-          }}
-        >
-          {/* Close button - always visible at top */}
-          <button
-            className="absolute top-4 left-4 z-[200] w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center backdrop-blur-sm min-h-[44px] min-w-[44px]"
-            onClick={function() {
-              if (document.fullscreenElement) {
-                document.exitFullscreen().catch(function(){})
-              }
-              setVideoModal(null)
-            }}
-          >
-            <X className="h-6 w-6" />
-          </button>
-          {/* Tap background to close */}
-          <div className="absolute inset-0" onClick={function() {
-            if (document.fullscreenElement) {
-              document.exitFullscreen().catch(function(){})
-            }
-            setVideoModal(null)
-          }} />
-          {/* Video */}
-          <div className="relative w-full max-w-5xl aspect-video z-10 mx-4" onClick={function(e) { e.stopPropagation() }}>
-            <iframe
-              src={getVideoEmbedUrl(videoModal, true)}
-              className="w-full h-full rounded-xl"
-              allowFullScreen
-              allow="accelerometer; autoplay; encrypted-media; gyroscope; fullscreen"
-            />
-          </div>
-        </div>
+        <GalleryVideoModal url={videoModal} onClose={function() { setVideoModal(null) }} />
       )}
     </section>
+  )
+}
+
+/* ========== Gallery Video Modal (بدون 3-dot menu / بدون تحميل / مع fullscreen) ========== */
+function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const progressRef = useRef<HTMLDivElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [buffered, setBuffered] = useState(0)
+  const [showControls, setShowControls] = useState(true)
+  const hideTimerRef = useRef<any>(null)
+
+  var ytId = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/)
+  var isYouTube = !!ytId
+  var isDirectVideo = !isYouTube && /\.(mp4|webm|mov|avi|ogg)(\?|$)/i.test(url)
+
+  useEffect(function() {
+    if (playing) {
+      hideTimerRef.current = setTimeout(function() { setShowControls(false) }, 3000)
+    } else {
+      setShowControls(true)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    }
+    return function() { if (hideTimerRef.current) clearTimeout(hideTimerRef.current) }
+  }, [playing, showControls])
+
+  var togglePlay = function(e?: React.MouseEvent | React.TouchEvent) {
+    if (e) { e.preventDefault(); e.stopPropagation() }
+    var v = videoRef.current
+    if (!v) return
+    if (v.paused) { v.play().catch(function(){}) } else { v.pause() }
+  }
+
+  var handleTimeUpdate = function() {
+    var v = videoRef.current
+    if (!v) return
+    setCurrentTime(v.currentTime)
+    if (v.buffered.length > 0 && v.duration > 0) {
+      setBuffered((v.buffered.end(v.buffered.length - 1) / v.duration) * 100)
+    }
+  }
+
+  var handleSeek = function(e: React.MouseEvent | React.TouchEvent) {
+    var bar = progressRef.current
+    var v = videoRef.current
+    if (!bar || !v || !v.duration) return
+    var rect = bar.getBoundingClientRect()
+    var clientX = 'touches' in e ? e.changedTouches[0].clientX : (e as React.MouseEvent).clientX
+    var ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    v.currentTime = ratio * v.duration
+  }
+
+  /* ===== FULLSCREEN — iOS webkitEnterFullscreen + Android requestFullscreen ===== */
+  var handleFullscreen = function(e: React.MouseEvent | React.TouchEvent) {
+    if (e) { e.preventDefault(); e.stopPropagation() }
+    // لو يوتيوب: اعمل fullscreen للـ modal كله
+    if (isYouTube) {
+      var container = document.getElementById('gallery-modal-container')
+      if (container) { (container as any).requestFullscreen && (container as any).requestFullscreen().catch(function(){}) }
+      return
+    }
+    // لو فيديو مباشر: fullscreen للفيديو نفسه (أفضل على الموبايل)
+    var v = videoRef.current
+    if (!v) return
+    v.play().then(function() {
+      var el = v as any
+      // iOS Safari — لازم يتعمل على عنصر الفيديو نفسه
+      if (el.webkitEnterFullscreen) {
+        el.webkitEnterFullscreen()
+      }
+      // Android Chrome
+      else if (v.parentElement && v.parentElement.requestFullscreen) {
+        v.parentElement.requestFullscreen().catch(function(){})
+      }
+      // Fallback
+      else if ((el as any).requestFullscreen) {
+        (el as any).requestFullscreen().catch(function(){})
+      }
+    }).catch(function(){})
+  }
+
+  var formatTime = function(sec: number) {
+    if (!sec || !isFinite(sec)) return '0:00'
+    var m = Math.floor(sec / 60)
+    var s = Math.floor(sec % 60)
+    return m + ':' + String(s).padStart(2, '0')
+  }
+
+  var progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
+
+  return (
+    <div
+      id="gallery-modal-container"
+      className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
+      onClick={onClose}
+      onContextMenu={function(e) { e.preventDefault() }}
+    >
+      <div className="relative w-full max-w-5xl aspect-video" onClick={function(e) { e.stopPropagation() }}>
+        {/* زرار إغلاق */}
+        <button
+          className="absolute -top-10 left-0 text-white hover:text-white/80 flex items-center gap-1 text-sm z-30"
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" /> إغلاق
+        </button>
+
+        {isYouTube ? (
+          <iframe
+            src={"https://www.youtube.com/embed/" + ytId[1] + "?modestbranding=1&rel=0&playsinline=1&controls=0&showinfo=0&iv_load_policy=3&autoplay=1"}
+            className="w-full h-full rounded-xl"
+            allow="accelerometer; autoplay; encrypted-media; gyroscope"
+            allowFullScreen
+          />
+        ) : isDirectVideo ? (
+          <div
+            className="w-full h-full relative select-none rounded-xl overflow-hidden bg-black"
+            onClick={togglePlay}
+            onTouchStart={function() { setShowControls(true) }}
+          >
+            <video
+              ref={videoRef}
+              className="w-full h-full object-contain"
+              src={url}
+              preload="metadata"
+              playsInline
+              disablePictureInPicture
+              disableRemotePlayback
+              autoPlay
+              onPlay={function() { setPlaying(true) }}
+              onPause={function() { setPlaying(false) }}
+              onTimeUpdate={handleTimeUpdate}
+              onEnded={function() { setPlaying(false); setShowControls(true) }}
+              onLoadedMetadata={function() { if (videoRef.current) setDuration(videoRef.current.duration) }}
+            />
+
+            {!playing && (
+              <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-2xl">
+                  <svg className="h-8 w-8 text-gray-800" style={{ marginLeft: '3px' }} fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </div>
+              </div>
+            )}
+
+            <div
+              className={
+                'absolute bottom-0 left-0 right-0 z-20 transition-opacity duration-300 ' +
+                (showControls || !playing ? 'opacity-100' : 'opacity-0 pointer-events-none')
+              }
+              onClick={function(e) { e.stopPropagation() }}
+            >
+              <div
+                ref={progressRef}
+                className="w-full h-1.5 bg-white/30 cursor-pointer group"
+                onClick={handleSeek}
+                onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleSeek(e) }}
+              >
+                <div className="absolute top-0 left-0 h-full bg-white/40 pointer-events-none" style={{ width: buffered + '%' }} />
+                <div className="absolute top-0 left-0 h-full bg-primary group-hover:h-2 transition-all pointer-events-none" style={{ width: progressPercent + '%' }} />
+              </div>
+              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-t from-black/80 to-transparent">
+                <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={togglePlay} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); togglePlay() }}>
+                  {playing ? (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                  ) : (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  )}
+                </button>
+                <span className="text-white text-sm tabular-nums" dir="ltr">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                <div className="flex-1" />
+                {/* ===== زرار Fullscreen ===== */}
+                <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={handleFullscreen} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <iframe
+            src={getVideoEmbedUrl(url)}
+            className="w-full h-full rounded-xl"
+            allowFullScreen
+            allow="autoplay; encrypted-media; fullscreen"
+          />
+        )}
+      </div>
+    </div>
   )
 }
