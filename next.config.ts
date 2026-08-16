@@ -9,21 +9,18 @@ const nextConfig: NextConfig = {
   // Disable powered-by header for security
   poweredByHeader: false,
 
-  // Vercel Build Command: npx next build --webpack
-  // Do NOT use output: "standalone" — causes Turso/libsql webpack errors
+  // Fix libsql: don't bundle these server-only packages
+  serverExternalPackages: [
+    '@libsql/client',
+    '@prisma/adapter-libsql',
+    '@libsql/isomorphic-fetch',
+    '@libsql/isomorphic-ws',
+  ],
 
   experimental: {
     serverActions: {
       bodySizeLimit: '500mb',
     },
-    // Fix libsql webpack bundling: don't bundle these packages
-    serverComponentsExternalPackages: [
-      '@libsql/client',
-      '@prisma/adapter-libsql',
-      '@libsql/isomorphic-fetch',
-      '@libsql/isomorphic-ws',
-    ],
-    // Optimize package imports for smaller chunks
     optimizePackageImports: [
       'lucide-react',
       'framer-motion',
@@ -59,20 +56,8 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Fix @libsql/client webpack error: ignore non-JS files (README.md, LICENSE)
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.module.rules.push({
-        test: /\.md$/i,
-        type: 'asset/source',
-      });
-      config.module.rules.push({
-        test: /\/(LICENSE|README)$/i,
-        type: 'asset/source',
-      });
-    }
-    return config;
-  },
+  // Silence Turbopack webpack-config warning (Next.js 16 default)
+  turbopack: {},
 };
 
 export default nextConfig;
