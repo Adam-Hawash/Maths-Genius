@@ -378,8 +378,32 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                   {/* Block YouTube 3-dot menu on mobile */}
                   <div className="absolute top-0 right-0 w-16 h-12 sm:hidden z-10" />
                 </div>
-              ) : isVideoFile ? (
-                <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
+                         ) : isVideoFile ? (
+                <div
+                  className="video-protected w-full h-full relative"
+                  data-fs-video={video.id}
+                  onClick={function(e) {
+                    var target = e.currentTarget
+                    var vid = target.querySelector('video') as HTMLVideoElement
+                    if (vid) {
+                      vid.play && vid.play().catch(function(){})
+                      target.requestFullscreen && target.requestFullscreen().catch(function(){})
+                      // Show close button when fullscreen
+                      var closeBtn = target.querySelector('[data-fs-close]') as HTMLElement
+                      if (closeBtn) {
+                        var onFsChange = function() {
+                          if (!document.fullscreenElement) {
+                            closeBtn.classList.add('hidden')
+                            document.removeEventListener('fullscreenchange', onFsChange)
+                          } else {
+                            closeBtn.classList.remove('hidden')
+                          }
+                        }
+                        document.addEventListener('fullscreenchange', onFsChange)
+                      }
+                    }
+                  }}
+                >
                   <video
                     controls
                     controlsList="nodownload noremoteplayback"
@@ -393,7 +417,6 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                     onTimeUpdate={(e) => {
                       const v = e.currentTarget
                       if (v.duration && studentId) {
-                        // Report progress every 5 seconds
                         if (Math.floor(v.currentTime) % 5 === 0 && v.currentTime > 0) {
                           fetch('/api/video-progress', {
                             method: 'POST',
@@ -404,7 +427,6 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                       }
                     }}
                     onEnded={() => {
-                      // Mark as completed when video ends
                       if (studentId) {
                         fetch('/api/video-progress', {
                           method: 'POST',
@@ -417,11 +439,18 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                   >
                     Your browser does not support video.
                   </video>
-                </div>
-              ) : thumbSrc ? (
-                <div className="w-full h-full relative">
-                  <ImageWithLoader src={thumbSrc} alt={video.title} fill className="object-cover" sizes="(max-width: 640px) 100vw, 50vw" unoptimized />
-                </div>
+                  {/* Exit fullscreen button - hidden until fullscreen */}
+                  <button
+                    className="absolute top-2 left-2 w-10 h-10 rounded-full bg-black/70 text-white flex items-center justify-center z-20 hidden"
+                    data-fs-close
+                    onClick={function(e) {
+                      e.stopPropagation()
+                      document.exitFullscreen && document.exitFullscreen().catch(function(){})
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div> 
               ) : video.url ? (
                 <a href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full h-full text-white/70 hover:text-white transition-colors">
                   <ExternalLink className="h-6 w-6" />
