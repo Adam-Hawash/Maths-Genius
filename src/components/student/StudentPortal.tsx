@@ -342,6 +342,7 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
           <Card key={video.id} className={`overflow-hidden transition-all ${isWatched ? 'border-emerald-500/30' : ''}`}>
             <div className="relative aspect-video bg-black">
               {ytId ? (
+                /* YouTube: controls=0 يخفي الـ 3-dot menu بالكامل */
                 <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
                   <iframe
                     src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1&controls=0&showinfo=0&iv_load_policy=3`}
@@ -353,6 +354,7 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                   />
                 </div>
               ) : isVideoFile ? (
+                /* MP4: كنترولات مخصصة — مفيش controls يعني مفيش 3-dot menu */
                 <CustomVideoPlayer
                   videoId={video.id}
                   src={video.filePath}
@@ -469,26 +471,15 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
     v.currentTime = ratio * v.duration
   }
 
-  /* ===== FULLSCREEN — شغال على iOS (webkit) و Android (requestFullscreen) ===== */
   var handleFullscreen = function(e: React.MouseEvent | React.TouchEvent) {
     if (e) { e.preventDefault(); e.stopPropagation() }
     var v = videoRef.current
     if (!v) return
-    // لازم يشغل الأول على الموبايل عشان fullscreen يشتغل
     v.play().then(function() {
-      var el = v as any
-      // iOS Safari
-      if (el.webkitEnterFullscreen) {
-        el.webkitEnterFullscreen()
-      }
-      // Android Chrome / Firefox
-      else if (v.parentElement && v.parentElement.requestFullscreen) {
-        v.parentElement.requestFullscreen().catch(function(){})
-      }
-      // Fallback
-      else if ((el as any).requestFullscreen) {
-        (el as any).requestFullscreen().catch(function(){})
-      }
+      var vv = v as any
+      if (vv.webkitEnterFullscreen) { vv.webkitEnterFullscreen() }
+      else if (vv.parentElement && vv.parentElement.requestFullscreen) { vv.parentElement.requestFullscreen().catch(function(){}) }
+      else if (vv.requestFullscreen) { vv.requestFullscreen().catch(function(){}) }
     }).catch(function(){})
   }
 
@@ -570,7 +561,6 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
 
           <div className="flex-1" />
 
-          {/* ===== زرار Fullscreen ===== */}
           <button
             className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
             onClick={handleFullscreen}
