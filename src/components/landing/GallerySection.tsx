@@ -225,7 +225,7 @@ export default function GallerySection() {
 
         {!loading && images.length > 0 && (
           <div className="flex items-center justify-center gap-4 mt-8 text-muted-foreground text-sm">
-            <span className="flex items-center gap-1.5"><ImageIcon className="h-4 w-4" />{imageCount} صورة</span>
+                        <span className="flex items-center gap-1.5"><ImagePlus className="h-4 w-4" />{imageCount} صورة</span>
             {videoCount > 0 && <span className="flex items-center gap-1.5"><Film className="h-4 w-4" />{videoCount} فيديو</span>}
             <span>— {images.length} عنصر</span>
           </div>
