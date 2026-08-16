@@ -45,20 +45,27 @@ export default function HomePage() {
   const [appReady, setAppReady] = useState(false)
 
   useEffect(function() {
-    // Wait for the page to fully load then show content
-    if (document.readyState === 'complete') {
-      setTimeout(function() { setAppReady(true) }, 600)
-    } else {
-      window.addEventListener('load', function() {
-        setTimeout(function() { setAppReady(true) }, 600)
-      })
+    var done = false
+    function finish() {
+      if (done) return
+      done = true
+      setTimeout(function() { setAppReady(true) }, 400)
     }
+
+    if (document.readyState === 'complete') {
+      finish()
+    } else {
+      window.addEventListener('load', finish)
+    }
+    // Fallback: show after 4 seconds max
+    setTimeout(finish, 4000)
+
+    return function() { window.removeEventListener('load', finish) }
   }, [])
 
   const showFooter = currentView === 'landing'
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
 
-  // Full-page loading screen
   if (!appReady) {
     return (
       <div className="fixed inset-0 z-[9999] bg-[#0F0D0A] flex flex-col items-center justify-center gap-6">
