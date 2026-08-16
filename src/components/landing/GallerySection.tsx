@@ -3,7 +3,7 @@
 import { useAppStore } from '@/stores/app-store'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Camera, Trash2, Heart, Users, ImageIcon, PlayCircle, Film, X } from 'lucide-react'
+import { Camera, Trash2, Heart, Users, ImagePlus, PlayCircle, Film, X } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import type { GalleryImage } from '@/stores/app-store'
 
