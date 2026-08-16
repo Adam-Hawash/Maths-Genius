@@ -5,13 +5,15 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  output: "standalone",
+
+  // Disable powered-by header for security
   poweredByHeader: false,
 
   experimental: {
     serverActions: {
       bodySizeLimit: '500mb',
     },
+    // Optimize package imports for smaller chunks
     optimizePackageImports: [
       'lucide-react',
       'framer-motion',
@@ -21,11 +23,7 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // ✅ هنا برا experimental
-  outputFileTracingExcludes: {
-    '*': ['./.tmp/**', './public/uploads/**'],
-  },
-
+  // Image optimization
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**' },
@@ -33,6 +31,7 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // Aggressive static caching
   async headers() {
     return [
       {
