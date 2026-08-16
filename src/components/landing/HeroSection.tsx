@@ -3,8 +3,6 @@
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/stores/app-store'
 import { useEffect, useState } from 'react'
-// ✅ next/image بدل <img>
-import Image from 'next/image'
 import { Award, GraduationCap, Users, BookOpen, Clock } from 'lucide-react'
 
 export default function HeroSection() {
@@ -17,8 +15,6 @@ export default function HeroSection() {
     stats,
   } = useAppStore()
 
-  const [heroLoaded, setHeroLoaded] = useState(false)
-  const [photoLoaded, setPhotoLoaded] = useState(false)
   const [fallbackBgExists, setFallbackBgExists] = useState(false)
   const [fallbackPhotoExists, setFallbackPhotoExists] = useState(false)
 
@@ -66,20 +62,13 @@ export default function HeroSection() {
 
   return (
     <section className="relative overflow-hidden bg-[#0F0D0A]" dir="rtl">
-      {/* ✅ بانر الـ hero — next/image + priority + أبعاد */}
+      {/* Banner Image at Top */}
       {showBg && (
         <div className="relative w-full">
-          {!heroLoaded && (
-            <div className="w-full h-auto max-h-[360px] bg-gradient-to-br from-[#1A1714] via-[#0F0D0A] to-[#1A1714] animate-pulse" style={{ minHeight: '200px' }} />
-          )}
-          <Image
+          <img
             src={heroBg}
             alt="Maths Genius Banner"
-            width={1600}
-            height={360}
-            className={`w-full h-auto max-h-[360px] object-cover object-center transition-opacity duration-300 ${heroLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
-            priority
-            onLoad={function() { setHeroLoaded(true) }}
+            className="w-full h-auto max-h-[360px] object-cover object-center"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0F0D0A] via-[#0F0D0A]/50 to-transparent" />
         </div>
@@ -100,6 +89,7 @@ export default function HeroSection() {
         </div>
       </div>
 
+      {/* Subtle gradient when no banner */}
       {!showBg && (
         <div className="absolute inset-0 bg-gradient-to-br from-[#0F0D0A] via-[#1A1714] to-[#0F0D0A] -z-10" />
       )}
@@ -108,6 +98,7 @@ export default function HeroSection() {
         <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
           {/* Text Content */}
           <div className="space-y-6 text-center lg:text-right order-2 lg:order-1">
+            {/* Badge */}
             <div className="inline-flex items-center gap-2 rounded-full bg-[#C49A38]/15 px-4 py-1.5 text-sm font-medium text-[#E5BE5A] border border-[#C49A38]/20">
               <Award className="h-4 w-4" />
               <span>
@@ -116,6 +107,7 @@ export default function HeroSection() {
               </span>
             </div>
 
+            {/* Title */}
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-white">
               <span className="block text-[#E5BE5A]">
                 {cfg.hero_title_line1 || 'Maths Genius'}
@@ -125,11 +117,13 @@ export default function HeroSection() {
               </span>
             </h1>
 
+            {/* Subtitle */}
             <p className="max-w-xl text-white/60 text-base sm:text-lg leading-relaxed lg:mx-0 mx-auto">
               {cfg.hero_subtitle ||
                 'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.'}
             </p>
 
+            {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Button
                 size="lg"
@@ -148,6 +142,7 @@ export default function HeroSection() {
               </Button>
             </div>
 
+            {/* Hero Developer / Adam Hawash branding */}
             <div className="pt-4 flex flex-col items-center lg:items-start gap-1">
               <a
                 href={cfg.hero_developer_url || 'https://hero-developer-portfolio-11.vercel.app'}
@@ -168,6 +163,7 @@ export default function HeroSection() {
               </a>
             </div>
 
+            {/* Stats Row */}
             <div className="flex items-center justify-center lg:justify-start gap-8 pt-6">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -215,32 +211,25 @@ export default function HeroSection() {
             </div>
           </div>
 
-          {/* ✅ صورة المدرس — next/image + priority + أبعاد */}
+          {/* Instructor Photo */}
           <div className="flex justify-center lg:justify-end order-1 lg:order-2">
             <div className="relative group">
+              {/* Gold glow ring */}
               <div className="absolute -inset-4 rounded-full bg-gradient-to-br from-[#E5BE5A]/30 via-[#C49A38]/10 to-transparent blur-2xl transition-opacity duration-500 group-hover:opacity-80" />
               <div className="relative w-56 h-56 sm:w-72 sm:h-72 lg:w-80 lg:h-80 rounded-full overflow-hidden border-2 border-[#C49A38]/30 gold-glow bg-[#1A1714]">
                 {showPhoto ? (
-                  <>
-                    {!photoLoaded && (
-                      <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#2A1F00] via-[#1A1714] to-[#0F0D0A]" />
-                    )}
-                    <Image
-                      src={heroPhoto}
-                      alt={cfg.instructor_name || 'Mr Wael Khodier'}
-                      width={320}
-                      height={320}
-                      className={`w-full h-full object-cover transition-all duration-300 ${photoLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
-                      priority
-                      onLoad={function() { setPhotoLoaded(true) }}
-                    />
-                  </>
+                  <img
+                    src={heroPhoto}
+                    alt={cfg.instructor_name || 'Mr Wael Khodier'}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[#C49A38]/30">
                     <GraduationCap className="h-24 w-24" />
                   </div>
                 )}
               </div>
+              {/* Badge overlay */}
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#1A1714] border border-[#C49A38]/30 rounded-full px-4 py-1.5">
                 <p className="text-[#E5BE5A] font-bold text-sm tracking-wider">
                   {(cfg.hero_title_line1 || 'Maths Genius').toUpperCase()}
