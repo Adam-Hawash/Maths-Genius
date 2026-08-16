@@ -307,8 +307,6 @@ function FullPortalContent({ initialData, onBack }: { initialData: PortalData; o
 /* ========== VIDEOS TAB ========== */
 function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; watchedIds: Set<string>; studentId: string }) {
   const [localWatched, setLocalWatched] = useState(watchedIds)
-  const [playingId, setPlayingId] = useState<string | null>(null)
-  const [fullscreenError, setFullscreenError] = useState<string | null>(null)
 
   const trackVideoWatch = (videoId: string) => {
     if (!studentId || localWatched.has(videoId)) return
@@ -330,33 +328,6 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
     return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null
   }
 
-  // Fullscreen handler - works on both iOS and Android
-  const handleFullscreen = (e: React.MouseEvent | React.TouchEvent, videoEl: HTMLVideoElement) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setFullscreenError(null)
-    try {
-      var el = videoEl as any
-      if (el.webkitEnterFullscreen) {
-        // iOS Safari
-        el.webkitEnterFullscreen()
-      } else if (el.requestFullscreen) {
-        // Android / Chrome / Firefox
-        el.requestFullscreen().catch(function() {
-          setFullscreenError('المتصفح لا يدعم التكبير')
-        })
-      } else if (videoEl.parentElement && (videoEl.parentElement as any).requestFullscreen) {
-        (videoEl.parentElement as any).requestFullscreen().catch(function() {
-          setFullscreenError('المتصفح لا يدعم التكبير')
-        })
-      }
-    } catch {
-      setFullscreenError('المتصفح لا يدعم التكبير')
-    }
-    // Hide error message after 3 seconds
-    setTimeout(function() { setFullscreenError(null) }, 3000)
-  }
-
   if (videos.length === 0) return <EmptyState message="لا توجد دروس حالياً" />
 
   return (
@@ -369,10 +340,9 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
 
         return (
           <Card key={video.id} className={`overflow-hidden transition-all ${isWatched ? 'border-emerald-500/30' : ''}`}>
-            {/* Thumbnail / Video Area */}
             <div className="relative aspect-video bg-black">
               {ytId ? (
-                /* ===== YouTube: controls=0 يخفي الـ 3-dot menu بالكامل ===== */
+                /* YouTube: controls=0 يخفي الـ 3-dot menu بالكامل */
                 <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
                   <iframe
                     src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1&controls=0&showinfo=0&iv_load_policy=3`}
@@ -380,95 +350,21 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                     className="w-full h-full"
                     allow="accelerometer; autoplay; encrypted-media; gyroscope"
                     allowFullScreen
-                    loading="eager"
+                    loading="lazy"
                   />
-                  {/* Play/Pause overlay buttons since controls=0 */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-xl pointer-events-auto cursor-pointer hover:scale-110 transition-transform"
-                      onClick={function(e) {
-                        e.stopPropagation()
-                        var iframe = (e.currentTarget.closest('.video-protected') as HTMLElement)?.querySelector('iframe') as HTMLIFrameElement
-                        if (iframe) {
-                          iframe.contentWindow?.postMessage('{"event":"command","func":"togglePlay"}', '*')
-                        }
-                        trackVideoWatch(video.id)
-                      }}
-                    >
-                      {playingId === video.id
-                        ? <svg className="h-6 w-6 text-primary" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-                        : <svg className="h-6 w-6 text-primary ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                      }
-                    </div>
-                  </div>
                 </div>
               ) : isVideoFile ? (
-                /* ===== Direct video file مع fullscreen + nodownload ===== */
-                <div className="video-protected w-full h-full relative" onClick={() => trackVideoWatch(video.id)}>
-                  <video
-                    id={`video-${video.id}`}
-                    controls
-                    controlsList="nodownload noremoteplayback"
-                    disablePictureInPicture
-                    disableRemotePlayback
-                    className="w-full h-full"
-                    src={video.filePath}
-                    onContextMenu={(e) => e.preventDefault()}
-                    preload="metadata"
-                    poster={thumbSrc || undefined}
-                    playsInline
-                    onTimeUpdate={(e) => {
-                      var v = e.currentTarget
-                      if (v.duration && studentId) {
-                        if (Math.floor(v.currentTime) % 5 === 0 && v.currentTime > 0) {
-                          fetch('/api/video-progress', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ studentId, videoId: video.id, watchedSeconds: v.currentTime, totalSeconds: v.duration }),
-                          }).catch(() => {})
-                        }
-                      }
-                    }}
-                    onEnded={() => {
-                      if (studentId) {
-                        fetch('/api/video-progress', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ studentId, videoId: video.id, watchedSeconds: 999999, totalSeconds: 1 }),
-                        }).catch(() => {})
-                        setLocalWatched(prev => new Set([...prev, video.id]))
-                      }
-                    }}
-                  >
-                    Your browser does not support video.
-                  </video>
-                  {/* زرار Fullscreen مخصص للموبايل */}
-                  <button
-                    className="absolute bottom-2 left-2 z-20 w-10 h-10 rounded-lg bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors backdrop-blur-sm"
-                    onClick={function(e) {
-                      var vid = document.getElementById(`video-${video.id}`) as HTMLVideoElement
-                      if (vid) handleFullscreen(e, vid)
-                    }}
-                    onTouchEnd={function(e) {
-                      e.preventDefault()
-                      var vid = document.getElementById(`video-${video.id}`) as HTMLVideoElement
-                      if (vid) {
-                        (vid as any).play().catch(function(){})
-                        handleFullscreen(e, vid)
-                      }
-                    }}
-                    aria-label="تكبير الفيديو"
-                  >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
-                    </svg>
-                  </button>
-                  {/* رسالة خطأ الـ fullscreen */}
-                  {fullscreenError && (
-                    <div className="absolute top-2 left-2 right-2 z-30 bg-red-500/90 text-white text-xs text-center py-1.5 px-3 rounded-lg backdrop-blur-sm">
-                      {fullscreenError}
-                    </div>
-                  )}
-                </div>
+                /* MP4: كنترولات مخصصة — مفيش controls يعني مفيش 3-dot menu */
+                <CustomVideoPlayer
+                  videoId={video.id}
+                  src={video.filePath}
+                  poster={thumbSrc || undefined}
+                  studentId={studentId}
+                  onWatch={() => {
+                    trackVideoWatch(video.id)
+                    setLocalWatched(prev => new Set([...prev, video.id]))
+                  }}
+                />
               ) : thumbSrc ? (
                 <div className="w-full h-full relative">
                   <Image src={thumbSrc} alt={video.title} fill className="object-cover" sizes="(max-width: 640px) 100vw, 50vw" unoptimized loading="eager" fetchPriority="high" />
@@ -483,9 +379,8 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                   <Video className="h-10 w-10 text-white/30" />
                 </div>
               )}
-              {/* Watched overlay */}
               {isWatched && (
-                <div className="absolute top-2 right-2">
+                <div className="absolute top-2 right-2 z-30">
                   <Badge className="bg-emerald-500 text-white text-[10px] gap-1">
                     <CheckCircle2 className="h-3 w-3" /> تمت المشاهدة
                   </Badge>
@@ -503,6 +398,197 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
   )
 }
 
+/* ========== CUSTOM VIDEO PLAYER (لا يوجد 3-dot menu / لا يوجد تحميل) ========== */
+function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
+  videoId: string
+  src: string
+  poster?: string
+  studentId: string
+  onWatch: () => void
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const progressRef = useRef<HTMLDivElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [buffered, setBuffered] = useState(0)
+  const [showControls, setShowControls] = useState(true)
+  const hideTimerRef = useRef<any>(null)
+
+  // إخفاء الكنترولات بعد 3 ثواني من التشغيل
+  useEffect(() => {
+    if (playing) {
+      hideTimerRef.current = setTimeout(() => setShowControls(false), 3000)
+    } else {
+      setShowControls(true)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    }
+    return () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current) }
+  }, [playing, showControls])
+
+  var togglePlay = function(e?: React.MouseEvent | React.TouchEvent) {
+    if (e) { e.preventDefault(); e.stopPropagation() }
+    var v = videoRef.current
+    if (!v) return
+    if (v.paused) { v.play().catch(function(){}) } else { v.pause() }
+  }
+
+  var handleTimeUpdate = function() {
+    var v = videoRef.current
+    if (!v) return
+    setCurrentTime(v.currentTime)
+    if (v.buffered.length > 0 && v.duration > 0) {
+      setBuffered((v.buffered.end(v.buffered.length - 1) / v.duration) * 100)
+    }
+    if (v.duration && studentId && Math.floor(v.currentTime) % 5 === 0 && v.currentTime > 0) {
+      fetch('/api/video-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, videoId, watchedSeconds: v.currentTime, totalSeconds: v.duration }),
+      }).catch(function(){})
+    }
+  }
+
+  var handleEnded = function() {
+    setPlaying(false)
+    setShowControls(true)
+    if (studentId) {
+      fetch('/api/video-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, videoId, watchedSeconds: 999999, totalSeconds: 1 }),
+      }).catch(function(){})
+      onWatch()
+    }
+  }
+
+  var handleSeek = function(e: React.MouseEvent | React.TouchEvent) {
+    var bar = progressRef.current
+    var v = videoRef.current
+    if (!bar || !v || !v.duration) return
+    var rect = bar.getBoundingClientRect()
+    var clientX = 'touches' in e ? e.changedTouches[0].clientX : (e as React.MouseEvent).clientX
+    var ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    v.currentTime = ratio * v.duration
+  }
+
+  var handleFullscreen = function(e: React.MouseEvent | React.TouchEvent) {
+    if (e) { e.preventDefault(); e.stopPropagation() }
+    var v = videoRef.current
+    if (!v) return
+    v.play().then(function() {
+      var el = v as any
+      if (el.webkitEnterFullscreen) {
+        el.webkitEnterFullscreen()
+      } else if (v.parentElement && v.parentElement.requestFullscreen) {
+        v.parentElement.requestFullscreen().catch(function(){})
+      } else if ((el as any).requestFullscreen) {
+        (el as any).requestFullscreen().catch(function(){})
+      }
+    }).catch(function(){})
+  }
+
+  var formatTime = function(sec: number) {
+    if (!sec || !isFinite(sec)) return '0:00'
+    var m = Math.floor(sec / 60)
+    var s = Math.floor(sec % 60)
+    return m + ':' + String(s).padStart(2, '0')
+  }
+
+  var progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
+
+  return (
+    <div
+      className="video-protected w-full h-full relative select-none"
+      onClick={togglePlay}
+      onTouchStart={function() { setShowControls(true) }}
+      onContextMenu={function(e) { e.preventDefault() }}
+    >
+      {/* فيديو بدون controls — مفيش 3-dot menu أصلاً */}
+      <video
+        ref={videoRef}
+        className="w-full h-full object-contain"
+        src={src}
+        poster={poster}
+        preload="metadata"
+        playsInline
+        disablePictureInPicture
+        disableRemotePlayback
+        onPlay={function() { setPlaying(true) }}
+        onPause={function() { setPlaying(false) }}
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={handleEnded}
+        onLoadedMetadata={function() { if (videoRef.current) setDuration(videoRef.current.duration) }}
+      />
+
+      {/* أيقونة Play في النصف */}
+      {!playing && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+          <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-2xl">
+            <svg className="h-8 w-8 text-gray-800" style={{ marginLeft: '3px' }} fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </div>
+        </div>
+      )}
+
+      {/* شريط الكنترولات السفلي */}
+      <div
+        className={
+          'absolute bottom-0 left-0 right-0 z-20 transition-opacity duration-300 ' +
+          (showControls || !playing ? 'opacity-100' : 'opacity-0 pointer-events-none')
+        }
+        onClick={function(e) { e.stopPropagation() }}
+      >
+        {/* Progress bar */}
+        <div
+          ref={progressRef}
+          className="w-full h-1 bg-white/30 cursor-pointer group"
+          onClick={handleSeek}
+          onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleSeek(e) }}
+        >
+          <div className="absolute top-0 left-0 h-full bg-white/40 pointer-events-none" style={{ width: buffered + '%' }} />
+          <div className="absolute top-0 left-0 h-full bg-primary group-hover:h-1.5 transition-all pointer-events-none" style={{ width: progressPercent + '%' }} />
+        </div>
+
+        {/* أزرار الكنترول */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-t from-black/80 to-transparent">
+          {/* Play / Pause */}
+          <button
+            className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
+            onClick={togglePlay}
+            onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); togglePlay() }}
+          >
+            {playing ? (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+            ) : (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            )}
+          </button>
+
+          {/* الوقت */}
+          <span className="text-white text-xs tabular-nums" dir="ltr">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+
+          <div className="flex-1" />
+
+          {/* زرار التكبير (fullscreen) */}
+          <button
+            className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
+            onClick={handleFullscreen}
+            onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}
+            aria-label="تكبير"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 /* ========== HOMEWORK TAB ========== */
 function HomeworkTab({ homework }: { homework: Homework[] }) {
   if (homework.length === 0) return <EmptyState message="لا توجد واجبات حالياً" />
