@@ -176,6 +176,9 @@ interface AppState {
   stats: Stats | null
   setStats: (stats: Stats | null) => void
 
+  galleryImages: GalleryImage[]
+  setGalleryImages: (images: GalleryImage[]) => void
+
   logout: () => void
 }
 
@@ -217,6 +220,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   stats: null,
   setStats: (stats) => set({ stats }),
+
+  galleryImages: [],
+  setGalleryImages: (images) => set({ galleryImages: images }),
 
   logout: () =>
     set({
