@@ -342,8 +342,20 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
           <Card key={video.id} className={`overflow-hidden transition-all ${isWatched ? 'border-emerald-500/30' : ''}`}>
             {/* Thumbnail / Video Area */}
             <div className="relative aspect-video bg-black">
-              {ytId ? (
-                <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
+                            {ytId ? (
+                <div
+                  className="video-protected w-full h-full relative"
+                  onClick={function() {
+                    trackVideoWatch(video.id)
+                    var el = (function() {
+                      var e = document.querySelector('[data-fs-video="' + video.id + '"]')
+                      return e || null
+                    })()
+                    if (el) {
+                      el.requestFullscreen && el.requestFullscreen().catch(function(){})
+                    }
+                  }}
+                >
                   <iframe
                     src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1`}
                     title={video.title}
@@ -352,6 +364,19 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                     allowFullScreen
                     loading="lazy"
                   />
+                  {/* Exit fullscreen button */}
+                  <button
+                    className="absolute top-2 left-2 w-10 h-10 rounded-full bg-black/70 text-white flex items-center justify-center z-20 hidden"
+                    data-fs-close={video.id}
+                    onClick={function(e) {
+                      e.stopPropagation()
+                      document.exitFullscreen && document.exitFullscreen().catch(function(){})
+                    }}
+                  >
+                    ✕
+                  </button>
+                  {/* Block YouTube 3-dot menu on mobile */}
+                  <div className="absolute top-0 right-0 w-16 h-12 sm:hidden z-10" />
                 </div>
               ) : isVideoFile ? (
                 <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
