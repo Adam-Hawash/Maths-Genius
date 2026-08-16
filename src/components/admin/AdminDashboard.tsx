@@ -1189,8 +1189,8 @@ function GalleryManager() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto custom-scrollbar">
             {images.map(function(img) {
               var isVideo = img.type === 'video'
-              var thumb = isVideo ? (getVideoThumb(img.videoUrl) || img.filePath || '') : img.filePath
-              var src = thumb || img.filePath || img.videoUrl
+                            var thumb = isVideo ? (getVideoThumb(img.videoUrl) || img.filePath || '') : img.filePath
+              var src = isVideo ? thumb : img.filePath
               return (
                 <div key={img.id} className="relative group rounded-lg overflow-hidden border bg-card aspect-square">
                   {src ? (
