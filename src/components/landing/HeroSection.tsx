@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/stores/app-store'
 import { useEffect, useState } from 'react'
-// ✅ التحسين 1: next/image بدل <img>
+// ✅ next/image بدل <img>
 import Image from 'next/image'
 import { Award, GraduationCap, Users, BookOpen, Clock } from 'lucide-react'
 
@@ -22,7 +22,6 @@ export default function HeroSection() {
   const [fallbackBgExists, setFallbackBgExists] = useState(false)
   const [fallbackPhotoExists, setFallbackPhotoExists] = useState(false)
 
-  // Use server-injected config instantly, fallback to fetch
   var initialCfg = (typeof window !== 'undefined' && (window as any).__INITIAL_CONFIG__) || {}
   var cfg = configLoaded ? siteConfig : (Object.keys(siteConfig).length > 0 ? siteConfig : initialCfg)
 
@@ -38,7 +37,6 @@ export default function HeroSection() {
     }
   }, [configLoaded, setSiteConfig, siteConfig])
 
-  // Check if fallback images exist by preloading them
   useEffect(() => {
     var hasDbBg = !!(siteConfig.hero_bg_image || '')
     var hasDbPhoto = !!(siteConfig.instructor_photo || '')
@@ -68,7 +66,7 @@ export default function HeroSection() {
 
   return (
     <section className="relative overflow-hidden bg-[#0F0D0A]" dir="rtl">
-      {/* ✅ التحسين 2 + 4: بانر الـ hero بـ priority + أبعاد واضحة */}
+      {/* ✅ بانر الـ hero — next/image + priority + أبعاد */}
       {showBg && (
         <div className="relative w-full">
           {!heroLoaded && (
@@ -217,7 +215,7 @@ export default function HeroSection() {
             </div>
           </div>
 
-          {/* ✅ التحسين 2 + 4: صورة المدرس بـ priority + أبعاد واضحة */}
+          {/* ✅ صورة المدرس — next/image + priority + أبعاد */}
           <div className="flex justify-center lg:justify-end order-1 lg:order-2">
             <div className="relative group">
               <div className="absolute -inset-4 rounded-full bg-gradient-to-br from-[#E5BE5A]/30 via-[#C49A38]/10 to-transparent blur-2xl transition-opacity duration-500 group-hover:opacity-80" />
