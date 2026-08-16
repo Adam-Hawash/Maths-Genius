@@ -29,10 +29,9 @@ export async function POST(request) {
         return NextResponse.json({ error: 'مسار الصورة أو الرابط مطلوب' }, { status: 400 })
       }
     }
-
-    var count = await db.galleryImage.count()
+       var count = await db.galleryImage.count()
     var image = await db.galleryImage.create({
-      data: { title: title, filePath: filePath, type: type, videoUrl: videoUrl, sortOrder: count },
+      data: { title: title, filePath: filePath, type: type, videoUrl: videoUrl, sortOrder: body.sortOrder != null ? parseInt(body.sortOrder) : count },
     })
     return NextResponse.json({ image }, { status: 201 })
   } catch (error) {
