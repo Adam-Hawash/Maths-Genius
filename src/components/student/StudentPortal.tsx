@@ -307,6 +307,8 @@ function FullPortalContent({ initialData, onBack }: { initialData: PortalData; o
 /* ========== VIDEOS TAB ========== */
 function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; watchedIds: Set<string>; studentId: string }) {
   const [localWatched, setLocalWatched] = useState(watchedIds)
+  const [playingId, setPlayingId] = useState<string | null>(null)
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null)
 
   const trackVideoWatch = (videoId: string) => {
     if (!studentId || localWatched.has(videoId)) return
@@ -328,6 +330,33 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
     return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null
   }
 
+  // Fullscreen handler - works on both iOS and Android
+  const handleFullscreen = (e: React.MouseEvent | React.TouchEvent, videoEl: HTMLVideoElement) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setFullscreenError(null)
+    try {
+      var el = videoEl as any
+      if (el.webkitEnterFullscreen) {
+        // iOS Safari
+        el.webkitEnterFullscreen()
+      } else if (el.requestFullscreen) {
+        // Android / Chrome / Firefox
+        el.requestFullscreen().catch(function() {
+          setFullscreenError('المتصفح لا يدعم التكبير')
+        })
+      } else if (videoEl.parentElement && (videoEl.parentElement as any).requestFullscreen) {
+        (videoEl.parentElement as any).requestFullscreen().catch(function() {
+          setFullscreenError('المتصفح لا يدعم التكبير')
+        })
+      }
+    } catch {
+      setFullscreenError('المتصفح لا يدعم التكبير')
+    }
+    // Hide error message after 3 seconds
+    setTimeout(function() { setFullscreenError(null) }, 3000)
+  }
+
   if (videos.length === 0) return <EmptyState message="لا توجد دروس حالياً" />
 
   return (
@@ -342,69 +371,41 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
           <Card key={video.id} className={`overflow-hidden transition-all ${isWatched ? 'border-emerald-500/30' : ''}`}>
             {/* Thumbnail / Video Area */}
             <div className="relative aspect-video bg-black">
-                            {ytId ? (
-                <div
-                  className="video-protected w-full h-full relative"
-                  onClick={function() {
-                    trackVideoWatch(video.id)
-                    var el = (function() {
-                      var e = document.querySelector('[data-fs-video="' + video.id + '"]')
-                      return e || null
-                    })()
-                    if (el) {
-                      el.requestFullscreen && el.requestFullscreen().catch(function(){})
-                    }
-                  }}
-                >
+              {ytId ? (
+                /* ===== YouTube: controls=0 يخفي الـ 3-dot menu بالكامل ===== */
+                <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
                   <iframe
-                    src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1`}
+                    src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1&controls=0&showinfo=0&iv_load_policy=3`}
                     title={video.title}
                     className="w-full h-full"
-                    allow="accelerometer; autoplay; encrypted-media; gyroscope; fullscreen"
+                    allow="accelerometer; autoplay; encrypted-media; gyroscope"
                     allowFullScreen
-                    loading="lazy"
+                    loading="eager"
                   />
-                  {/* Exit fullscreen button */}
-                  <button
-                    className="absolute top-2 left-2 w-10 h-10 rounded-full bg-black/70 text-white flex items-center justify-center z-20 hidden"
-                    data-fs-close={video.id}
-                    onClick={function(e) {
-                      e.stopPropagation()
-                      document.exitFullscreen && document.exitFullscreen().catch(function(){})
-                    }}
-                  >
-                    ✕
-                  </button>
-                  {/* Block YouTube 3-dot menu on mobile */}
-                  <div className="absolute top-0 right-0 w-16 h-12 sm:hidden z-10" />
-                </div>
-                         ) : isVideoFile ? (
-                <div
-                  className="video-protected w-full h-full relative"
-                  data-fs-video={video.id}
-                  onClick={function(e) {
-                    var target = e.currentTarget
-                    var vid = target.querySelector('video') as HTMLVideoElement
-                    if (vid) {
-                      vid.play && vid.play().catch(function(){})
-                      target.requestFullscreen && target.requestFullscreen().catch(function(){})
-                      // Show close button when fullscreen
-                      var closeBtn = target.querySelector('[data-fs-close]') as HTMLElement
-                      if (closeBtn) {
-                        var onFsChange = function() {
-                          if (!document.fullscreenElement) {
-                            closeBtn.classList.add('hidden')
-                            document.removeEventListener('fullscreenchange', onFsChange)
-                          } else {
-                            closeBtn.classList.remove('hidden')
-                          }
+                  {/* Play/Pause overlay buttons since controls=0 */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-xl pointer-events-auto cursor-pointer hover:scale-110 transition-transform"
+                      onClick={function(e) {
+                        e.stopPropagation()
+                        var iframe = (e.currentTarget.closest('.video-protected') as HTMLElement)?.querySelector('iframe') as HTMLIFrameElement
+                        if (iframe) {
+                          iframe.contentWindow?.postMessage('{"event":"command","func":"togglePlay"}', '*')
                         }
-                        document.addEventListener('fullscreenchange', onFsChange)
+                        trackVideoWatch(video.id)
+                      }}
+                    >
+                      {playingId === video.id
+                        ? <svg className="h-6 w-6 text-primary" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                        : <svg className="h-6 w-6 text-primary ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                       }
-                    }
-                  }}
-                >
+                    </div>
+                  </div>
+                </div>
+              ) : isVideoFile ? (
+                /* ===== Direct video file مع fullscreen + nodownload ===== */
+                <div className="video-protected w-full h-full relative" onClick={() => trackVideoWatch(video.id)}>
                   <video
+                    id={`video-${video.id}`}
                     controls
                     controlsList="nodownload noremoteplayback"
                     disablePictureInPicture
@@ -414,8 +415,9 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                     onContextMenu={(e) => e.preventDefault()}
                     preload="metadata"
                     poster={thumbSrc || undefined}
+                    playsInline
                     onTimeUpdate={(e) => {
-                      const v = e.currentTarget
+                      var v = e.currentTarget
                       if (v.duration && studentId) {
                         if (Math.floor(v.currentTime) % 5 === 0 && v.currentTime > 0) {
                           fetch('/api/video-progress', {
@@ -439,18 +441,38 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                   >
                     Your browser does not support video.
                   </video>
-                  {/* Exit fullscreen button - hidden until fullscreen */}
+                  {/* زرار Fullscreen مخصص للموبايل */}
                   <button
-                    className="absolute top-2 left-2 w-10 h-10 rounded-full bg-black/70 text-white flex items-center justify-center z-20 hidden"
-                    data-fs-close
+                    className="absolute bottom-2 left-2 z-20 w-10 h-10 rounded-lg bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors backdrop-blur-sm"
                     onClick={function(e) {
-                      e.stopPropagation()
-                      document.exitFullscreen && document.exitFullscreen().catch(function(){})
+                      var vid = document.getElementById(`video-${video.id}`) as HTMLVideoElement
+                      if (vid) handleFullscreen(e, vid)
                     }}
+                    onTouchEnd={function(e) {
+                      e.preventDefault()
+                      var vid = document.getElementById(`video-${video.id}`) as HTMLVideoElement
+                      if (vid) {
+                        (vid as any).play().catch(function(){})
+                        handleFullscreen(e, vid)
+                      }
+                    }}
+                    aria-label="تكبير الفيديو"
                   >
-                    ✕
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                    </svg>
                   </button>
-                </div> 
+                  {/* رسالة خطأ الـ fullscreen */}
+                  {fullscreenError && (
+                    <div className="absolute top-2 left-2 right-2 z-30 bg-red-500/90 text-white text-xs text-center py-1.5 px-3 rounded-lg backdrop-blur-sm">
+                      {fullscreenError}
+                    </div>
+                  )}
+                </div>
+              ) : thumbSrc ? (
+                <div className="w-full h-full relative">
+                  <Image src={thumbSrc} alt={video.title} fill className="object-cover" sizes="(max-width: 640px) 100vw, 50vw" unoptimized loading="eager" fetchPriority="high" />
+                </div>
               ) : video.url ? (
                 <a href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full h-full text-white/70 hover:text-white transition-colors">
                   <ExternalLink className="h-6 w-6" />
