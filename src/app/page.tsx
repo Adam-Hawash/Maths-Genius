@@ -40,10 +40,10 @@ const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard')
 })
 
 export default function HomePage() {
-  // ✅ التحسين 6: جلب setGalleryImages من الـ store
+  // ✅ جلب setGalleryImages من الـ store
   const { currentView, setGalleryImages } = useAppStore()
 
-  // ✅ التحسين 6: جلب بيانات المعرض مبكراً عشان الصور تكون جاهزة
+  // ✅ جلب بيانات المعرض مبكراً عشان الصور تكون جاهزة فوراً
   useEffect(function() {
     fetch('/api/gallery')
       .then(function(r) { return r.json() })
