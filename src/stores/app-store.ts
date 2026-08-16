@@ -176,7 +176,7 @@ interface AppState {
   stats: Stats | null
   setStats: (stats: Stats | null) => void
 
-  // ✅ التحسين 6: تخزين صور المعرض للـ preload
+  // ✅ تخزين صور المعرض للـ preload
   galleryImages: GalleryImage[]
   setGalleryImages: (images: GalleryImage[]) => void
 
@@ -222,7 +222,7 @@ export const useAppStore = create<AppState>((set) => ({
   stats: null,
   setStats: (stats) => set({ stats }),
 
-  // ✅ التحسين 6: قيمة ابتدائية + setter
+  // ✅ قيمة ابتدائية + setter
   galleryImages: [],
   setGalleryImages: (images) => set({ galleryImages: images }),
 
