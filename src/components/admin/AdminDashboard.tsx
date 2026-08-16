@@ -13,7 +13,7 @@ import {
   Users, UserCheck, Clock, Video, ClipboardList, FileText,
   Megaphone, Plus, Check, X, Trash2, LogOut, Loader2,
   BarChart3, RefreshCw, Settings, Upload, MessageSquare,
-  Link2, Activity, Eye, Image, Trophy, UserX, Camera,
+  Link2, Activity, Eye, ImageIcon, Trophy, UserX, Camera,
   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save
 } from 'lucide-react'
 import { CMSPanel } from './CMSPanel'
@@ -1012,8 +1012,22 @@ function GalleryManager() {
     setUploading(true)
     try {
       var upData = await chunkedUpload(file, 'gallery')
-      await fetch('/api/gallery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: file.name, filePath: upData.filePath, type: 'image', sortOrder: parseInt(sortOrder) || 0 }) })
-      toast.success('تم رفع الصورة'); setShowAddDialog(false); setAddType(null); setImageUrl(''); setSortOrder('0'); loadGallery()
+      await fetch('/api/gallery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: file.name,
+          filePath: upData.filePath,
+          type: 'image',
+          sortOrder: parseInt(sortOrder) || 0
+        })
+      })
+      toast.success('تم رفع الصورة')
+      setShowAddDialog(false)
+      setAddType(null)
+      setImageUrl('')
+      setSortOrder('0')
+      loadGallery()
     } catch (err: any) { toast.error(err.message || 'خطأ في رفع الصورة') }
     setUploading(false)
   }
@@ -1031,21 +1045,38 @@ function GalleryManager() {
         body.filePath = url.trim()
         body.title = 'صورة'
       }
-      var res = await fetch('/api/gallery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      var res = await fetch('/api/gallery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
       if (res.ok) {
         toast.success(addType === 'video' ? 'تم إضافة الفيديو' : 'تم إضافة الصورة')
-        setShowAddDialog(false); setAddType(null); setImageUrl(''); setVideoUrl(''); setSortOrder('0'); loadGallery()
+        setShowAddDialog(false)
+        setAddType(null)
+        setImageUrl('')
+        setVideoUrl('')
+        setSortOrder('0')
+        loadGallery()
       } else { toast.error('خطأ في الإضافة') }
     } catch { toast.error('خطأ في الاتصال') }
     setSaving(false)
   }
 
   var handleDelete = async function(id: string) {
-    try { await fetch(`/api/gallery/${id}`, { method: 'DELETE' }); toast.success('تم الحذف'); loadGallery() } catch { toast.error('خطأ') }
+    try {
+      await fetch(`/api/gallery/${id}`, { method: 'DELETE' })
+      toast.success('تم الحذف')
+      loadGallery()
+    } catch { toast.error('خطأ') }
   }
 
   var openAddDialog = function(type: 'image' | 'video') {
-    setAddType(type); setImageUrl(''); setVideoUrl(''); setSortOrder(String(images.length)); setShowAddDialog(true)
+    setAddType(type)
+    setImageUrl('')
+    setVideoUrl('')
+    setSortOrder(String(images.length))
+    setShowAddDialog(true)
   }
 
   var getVideoThumb = function(url: string) {
@@ -1058,7 +1089,10 @@ function GalleryManager() {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <CardTitle className="text-lg flex items-center gap-2"><Camera className="h-5 w-5 text-primary" />المعرض | Gallery</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Camera className="h-5 w-5 text-primary" />
+            المعرض | Gallery
+          </CardTitle>
           <div className="flex gap-2">
             <Button size="sm" onClick={function() { openAddDialog('image') }}>
               <ImageIcon className="h-4 w-4 ml-1" />
@@ -1073,10 +1107,16 @@ function GalleryManager() {
       </CardHeader>
 
       <CardContent>
-        {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : images.length === 0 ? (
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : images.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Camera className="h-10 w-10 text-muted-foreground/30 mb-3" />
-            <p className="text-sm text-muted-foreground">لا توجد صور أو فيديوهات. اضغط "إضافة صورة" أو "إضافة فيديو" للبدء!</p>
+            <p className="text-sm text-muted-foreground">
+              لا توجد صور أو فيديوهات. اضغط &quot;إضافة صورة&quot; أو &quot;إضافة فيديو&quot; للبدء!
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto custom-scrollbar">
@@ -1089,11 +1129,15 @@ function GalleryManager() {
                   {src ? (
                     <img src={src} alt={img.title} className="w-full h-full object-cover" loading="lazy" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-muted"><PlayCircle className="h-8 w-8 text-muted-foreground/30" /></div>
+                    <div className="w-full h-full flex items-center justify-center bg-muted">
+                      <PlayCircle className="h-8 w-8 text-muted-foreground/30" />
+                    </div>
                   )}
                   {isVideo && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center"><PlayCircle className="h-5 w-5 text-white" /></div>
+                      <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
+                        <PlayCircle className="h-5 w-5 text-white" />
+                      </div>
                     </div>
                   )}
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1108,7 +1152,9 @@ function GalleryManager() {
                     </Badge>
                   </div>
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Button size="icon" variant="destructive" className="h-8 w-8" onClick={function() { handleDelete(img.id) }}><Trash2 className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="destructive" className="h-8 w-8" onClick={function() { handleDelete(img.id) }}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               )
@@ -1121,10 +1167,12 @@ function GalleryManager() {
       <Dialog open={showAddDialog && addType === 'image'} onOpenChange={function(open) { if (!open) { setShowAddDialog(false); setAddType(null) } }}>
         <DialogContent className="sm:max-w-md" dir="rtl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><ImageIcon className="h-5 w-5 text-primary" />إضافة صورة | Add Image</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <ImageIcon className="h-5 w-5 text-primary" />
+              إضافة صورة | Add Image
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            {/* Upload file */}
             <div className="space-y-2">
               <Label className="text-sm">رفع صورة من جهازك | Upload Image</Label>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={function(e) { var f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = '' }} />
@@ -1133,8 +1181,6 @@ function GalleryManager() {
                 {uploading ? 'جاري الرفع...' : 'اختر صورة'}
               </Button>
             </div>
-
-            {/* Or by URL */}
             <div className="relative flex items-center gap-3">
               <div className="flex-grow h-px bg-border" />
               <span className="text-xs text-muted-foreground">أو بالرابط | or by URL</span>
@@ -1144,14 +1190,11 @@ function GalleryManager() {
               <Label className="text-sm">رابط الصورة | Image URL</Label>
               <Input placeholder="https://example.com/image.jpg" value={imageUrl} onChange={function(e) { setImageUrl(e.target.value) }} dir="ltr" />
             </div>
-
-            {/* Sort order */}
             <div className="space-y-2">
               <Label className="text-sm">الترتيب | Sort Order</Label>
               <Input type="number" placeholder="0" value={sortOrder} onChange={function(e) { setSortOrder(e.target.value) }} />
               <p className="text-[11px] text-muted-foreground">كلما كان الرقم أصغر، كلما ظهرت الصورة أولاً</p>
             </div>
-
             <Button className="w-full" onClick={handleAddByLink} disabled={saving || !imageUrl.trim()}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
               {saving ? 'جاري الإضافة...' : 'إضافة الصورة بالرابط'}
@@ -1164,7 +1207,10 @@ function GalleryManager() {
       <Dialog open={showAddDialog && addType === 'video'} onOpenChange={function(open) { if (!open) { setShowAddDialog(false); setAddType(null) } }}>
         <DialogContent className="sm:max-w-md" dir="rtl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><PlayCircle className="h-5 w-5 text-primary" />إضافة فيديو | Add Video</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <PlayCircle className="h-5 w-5 text-primary" />
+              إضافة فيديو | Add Video
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
@@ -1172,14 +1218,11 @@ function GalleryManager() {
               <Input placeholder="https://youtube.com/watch?v=..." value={videoUrl} onChange={function(e) { setVideoUrl(e.target.value) }} dir="ltr" />
               <p className="text-[11px] text-muted-foreground">يدعم YouTube و Facebook و أي رابط فيديو آخر</p>
             </div>
-
-            {/* Sort order */}
             <div className="space-y-2">
               <Label className="text-sm">الترتيب | Sort Order</Label>
               <Input type="number" placeholder="0" value={sortOrder} onChange={function(e) { setSortOrder(e.target.value) }} />
               <p className="text-[11px] text-muted-foreground">كلما كان الرقم أصغر، كلما ظهر الفيديو أولاً</p>
             </div>
-
             <Button className="w-full" onClick={handleAddByLink} disabled={saving || !videoUrl.trim()}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
               {saving ? 'جاري الإضافة...' : 'إضافة الفيديو'}
