@@ -586,10 +586,7 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
     </div>
   )
 }
-
 /* ========== HOMEWORK TAB ========== */
-// ... باقي الكود لسه زي ما هو (HomeworkTab, ExamsTab, AnnouncementsTab, DiscussionsTab, FileAttachment, EmptyState)/* ========== HOMEWORK TAB ========== */
-function HomeworkTab({ homework }: { homework: Homework[] }) {
   if (homework.length === 0) return <EmptyState message="لا توجد واجبات حالياً" />
   return (
     <div className="space-y-3">
