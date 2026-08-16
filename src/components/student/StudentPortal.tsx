@@ -342,7 +342,6 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
           <Card key={video.id} className={`overflow-hidden transition-all ${isWatched ? 'border-emerald-500/30' : ''}`}>
             <div className="relative aspect-video bg-black">
               {ytId ? (
-                /* YouTube: controls=0 يخفي الـ 3-dot menu بالكامل */
                 <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
                   <iframe
                     src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1&controls=0&showinfo=0&iv_load_policy=3`}
@@ -354,7 +353,6 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                   />
                 </div>
               ) : isVideoFile ? (
-                /* MP4: كنترولات مخصصة — مفيش controls يعني مفيش 3-dot menu */
                 <CustomVideoPlayer
                   videoId={video.id}
                   src={video.filePath}
@@ -415,7 +413,6 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
   const [showControls, setShowControls] = useState(true)
   const hideTimerRef = useRef<any>(null)
 
-  // إخفاء الكنترولات بعد 3 ثواني من التشغيل
   useEffect(() => {
     if (playing) {
       hideTimerRef.current = setTimeout(() => setShowControls(false), 3000)
@@ -472,17 +469,24 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
     v.currentTime = ratio * v.duration
   }
 
+  /* ===== FULLSCREEN — شغال على iOS (webkit) و Android (requestFullscreen) ===== */
   var handleFullscreen = function(e: React.MouseEvent | React.TouchEvent) {
     if (e) { e.preventDefault(); e.stopPropagation() }
     var v = videoRef.current
     if (!v) return
+    // لازم يشغل الأول على الموبايل عشان fullscreen يشتغل
     v.play().then(function() {
       var el = v as any
+      // iOS Safari
       if (el.webkitEnterFullscreen) {
         el.webkitEnterFullscreen()
-      } else if (v.parentElement && v.parentElement.requestFullscreen) {
+      }
+      // Android Chrome / Firefox
+      else if (v.parentElement && v.parentElement.requestFullscreen) {
         v.parentElement.requestFullscreen().catch(function(){})
-      } else if ((el as any).requestFullscreen) {
+      }
+      // Fallback
+      else if ((el as any).requestFullscreen) {
         (el as any).requestFullscreen().catch(function(){})
       }
     }).catch(function(){})
@@ -504,7 +508,6 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
       onTouchStart={function() { setShowControls(true) }}
       onContextMenu={function(e) { e.preventDefault() }}
     >
-      {/* فيديو بدون controls — مفيش 3-dot menu أصلاً */}
       <video
         ref={videoRef}
         className="w-full h-full object-contain"
@@ -521,7 +524,6 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
         onLoadedMetadata={function() { if (videoRef.current) setDuration(videoRef.current.duration) }}
       />
 
-      {/* أيقونة Play في النصف */}
       {!playing && (
         <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
           <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-2xl">
@@ -532,7 +534,6 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
         </div>
       )}
 
-      {/* شريط الكنترولات السفلي */}
       <div
         className={
           'absolute bottom-0 left-0 right-0 z-20 transition-opacity duration-300 ' +
@@ -540,7 +541,6 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
         }
         onClick={function(e) { e.stopPropagation() }}
       >
-        {/* Progress bar */}
         <div
           ref={progressRef}
           className="w-full h-1 bg-white/30 cursor-pointer group"
@@ -551,9 +551,7 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
           <div className="absolute top-0 left-0 h-full bg-primary group-hover:h-1.5 transition-all pointer-events-none" style={{ width: progressPercent + '%' }} />
         </div>
 
-        {/* أزرار الكنترول */}
         <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-t from-black/80 to-transparent">
-          {/* Play / Pause */}
           <button
             className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
             onClick={togglePlay}
@@ -566,14 +564,13 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
             )}
           </button>
 
-          {/* الوقت */}
           <span className="text-white text-xs tabular-nums" dir="ltr">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
 
           <div className="flex-1" />
 
-          {/* زرار التكبير (fullscreen) */}
+          {/* ===== زرار Fullscreen ===== */}
           <button
             className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
             onClick={handleFullscreen}
@@ -589,7 +586,9 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
     </div>
   )
 }
+
 /* ========== HOMEWORK TAB ========== */
+// ... باقي الكود لسه زي ما هو (HomeworkTab, ExamsTab, AnnouncementsTab, DiscussionsTab, FileAttachment, EmptyState)/* ========== HOMEWORK TAB ========== */
 function HomeworkTab({ homework }: { homework: Homework[] }) {
   if (homework.length === 0) return <EmptyState message="لا توجد واجبات حالياً" />
   return (
