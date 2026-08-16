@@ -1,12 +1,10 @@
-// ============================================================
-// 📄 الملف 6: src/components/landing/HeroSection.tsx
-// ============================================================
-
 'use client'
 
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/stores/app-store'
 import { useEffect, useState } from 'react'
+// ✅ التحسين 1: next/image بدل <img>
+import Image from 'next/image'
 import { Award, GraduationCap, Users, BookOpen, Clock } from 'lucide-react'
 
 export default function HeroSection() {
@@ -24,6 +22,7 @@ export default function HeroSection() {
   const [fallbackBgExists, setFallbackBgExists] = useState(false)
   const [fallbackPhotoExists, setFallbackPhotoExists] = useState(false)
 
+  // Use server-injected config instantly, fallback to fetch
   var initialCfg = (typeof window !== 'undefined' && (window as any).__INITIAL_CONFIG__) || {}
   var cfg = configLoaded ? siteConfig : (Object.keys(siteConfig).length > 0 ? siteConfig : initialCfg)
 
@@ -39,6 +38,7 @@ export default function HeroSection() {
     }
   }, [configLoaded, setSiteConfig, siteConfig])
 
+  // Check if fallback images exist by preloading them
   useEffect(() => {
     var hasDbBg = !!(siteConfig.hero_bg_image || '')
     var hasDbPhoto = !!(siteConfig.instructor_photo || '')
@@ -68,23 +68,26 @@ export default function HeroSection() {
 
   return (
     <section className="relative overflow-hidden bg-[#0F0D0A]" dir="rtl">
+      {/* ✅ التحسين 2 + 4: بانر الـ hero بـ priority + أبعاد واضحة */}
       {showBg && (
         <div className="relative w-full">
           {!heroLoaded && (
             <div className="w-full h-auto max-h-[360px] bg-gradient-to-br from-[#1A1714] via-[#0F0D0A] to-[#1A1714] animate-pulse" style={{ minHeight: '200px' }} />
           )}
-          <img
+          <Image
             src={heroBg}
             alt="Maths Genius Banner"
+            width={1600}
+            height={360}
             className={`w-full h-auto max-h-[360px] object-cover object-center transition-opacity duration-300 ${heroLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
-            loading="eager"
-            fetchPriority="high"
-            onLoad={() => setHeroLoaded(true)}
+            priority
+            onLoad={function() { setHeroLoaded(true) }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0F0D0A] via-[#0F0D0A]/50 to-transparent" />
         </div>
       )}
 
+      {/* Ambient light effects */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
         <div className="absolute top-20 right-20 h-96 w-96 rounded-full bg-[#C49A38]/10 blur-[100px]" />
         <div className="absolute bottom-20 left-20 h-72 w-72 rounded-full bg-[#C49A38]/5 blur-[80px]" />
@@ -105,6 +108,7 @@ export default function HeroSection() {
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 py-12 sm:py-20 lg:py-24">
         <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+          {/* Text Content */}
           <div className="space-y-6 text-center lg:text-right order-2 lg:order-1">
             <div className="inline-flex items-center gap-2 rounded-full bg-[#C49A38]/15 px-4 py-1.5 text-sm font-medium text-[#E5BE5A] border border-[#C49A38]/20">
               <Award className="h-4 w-4" />
@@ -213,6 +217,7 @@ export default function HeroSection() {
             </div>
           </div>
 
+          {/* ✅ التحسين 2 + 4: صورة المدرس بـ priority + أبعاد واضحة */}
           <div className="flex justify-center lg:justify-end order-1 lg:order-2">
             <div className="relative group">
               <div className="absolute -inset-4 rounded-full bg-gradient-to-br from-[#E5BE5A]/30 via-[#C49A38]/10 to-transparent blur-2xl transition-opacity duration-500 group-hover:opacity-80" />
@@ -222,13 +227,14 @@ export default function HeroSection() {
                     {!photoLoaded && (
                       <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#2A1F00] via-[#1A1714] to-[#0F0D0A]" />
                     )}
-                    <img
+                    <Image
                       src={heroPhoto}
                       alt={cfg.instructor_name || 'Mr Wael Khodier'}
+                      width={320}
+                      height={320}
                       className={`w-full h-full object-cover transition-all duration-300 ${photoLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
-                      loading="eager"
-                      fetchPriority="high"
-                      onLoad={() => setPhotoLoaded(true)}
+                      priority
+                      onLoad={function() { setPhotoLoaded(true) }}
                     />
                   </>
                 ) : (
