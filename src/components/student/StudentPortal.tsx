@@ -12,6 +12,7 @@ import {
   User, Phone, Award,
 } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from 'react'
+import Image from 'next/image'
 import { toast } from 'sonner'
 import type { Video as VideoType, Homework, Exam, Announcement, Discussion, ExamResult } from '@/stores/app-store'
 
@@ -134,8 +135,8 @@ export function StudentPortal() {
               </div>
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 {stats.lastVideo.thumbnail ? (
-                  <div className="w-full sm:w-40 aspect-video rounded-lg overflow-hidden bg-muted shrink-0">
-                    <img src={stats.lastVideo.thumbnail} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  <div className="w-full sm:w-40 aspect-video rounded-lg overflow-hidden bg-muted shrink-0 relative">
+                    <ImageWithLoader src={stats.lastVideo.thumbnail} alt="" fill className="object-cover" sizes="300px" unoptimized />
                   </div>
                 ) : stats.lastVideo.filePath ? (
                   <div className="w-full sm:w-40 aspect-video rounded-lg overflow-hidden bg-black/80 flex items-center justify-center shrink-0">
@@ -344,10 +345,10 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
               {ytId ? (
                 <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
                   <iframe
-                    src={`https://www.youtube.com/embed/${ytId}`}
+                    src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1`}
                     title={video.title}
                     className="w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allow="accelerometer; autoplay; encrypted-media; gyroscope; fullscreen"
                     allowFullScreen
                     loading="lazy"
                   />
@@ -356,7 +357,7 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                 <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
                   <video
                     controls
-                    controlsList="nodownload nofullscreen noremoteplayback"
+                    controlsList="nodownload noremoteplayback"
                     disablePictureInPicture
                     disableRemotePlayback
                     className="w-full h-full"
@@ -393,8 +394,8 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
                   </video>
                 </div>
               ) : thumbSrc ? (
-                <div className="w-full h-full">
-                  <img src={thumbSrc} alt={video.title} className="w-full h-full object-cover" loading="lazy" />
+                <div className="w-full h-full relative">
+                  <ImageWithLoader src={thumbSrc} alt={video.title} fill className="object-cover" sizes="(max-width: 640px) 100vw, 50vw" unoptimized />
                 </div>
               ) : video.url ? (
                 <a href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full h-full text-white/70 hover:text-white transition-colors">
@@ -697,7 +698,7 @@ function FileAttachment({ filePath, fileType }: { filePath: string; fileType: st
   const isImage = fileType?.startsWith('image/')
   const isPdf = fileType === 'application/pdf'
   if (isImage) {
-    return <img src={filePath} alt="Attachment" className="max-h-12 rounded-lg border" loading="lazy" />
+    return <ImageWithLoader src={filePath} alt="Attachment" width={48} height={48} className="max-h-12 rounded-lg border" unoptimized />
   }
   return (
     <a href={filePath} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs shrink-0">
@@ -714,6 +715,25 @@ function EmptyState({ message }: { message: string }) {
         <MessageSquare className="h-6 w-6 text-muted-foreground" />
       </div>
       <p className="text-muted-foreground text-sm">{message}</p>
+    </div>
+  )
+}
+
+/* ========== IMAGE WITH LOADER ========== */
+function ImageWithLoader(props: React.ComponentProps<typeof Image>) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <div className="relative w-full h-full">
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-muted">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      )}
+      <Image
+        {...props}
+        onLoad={() => setLoaded(true)}
+        className={`${props.className || ''} ${!loaded ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
+      />
     </div>
   )
 }
