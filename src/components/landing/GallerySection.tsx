@@ -4,11 +4,11 @@ import { useAppStore } from '@/stores/app-store'
 import { Badge } from '@/components/ui/badge'
 import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
-// ✅ التحسين 1: next/image بدل <img>
+// ✅ next/image بدل <img>
 import Image from 'next/image'
 import type { GalleryImage } from '@/stores/app-store'
 
-// ✅ التحسين 1 + 3 + 4: next/image مع lazy loading + sizes + أبعاد
+// ✅ next/image مع lazy loading + sizes + skeleton
 function ImageWithSkeleton({ src, alt }: { src: string; alt: string }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
@@ -51,7 +51,7 @@ function getVideoThumb(url: string) {
 }
 
 export default function GallerySection() {
-  // ✅ التحسين 6: قراءة الصور من الـ store (preloaded)
+  // ✅ قراءة الصور من الـ store (preloaded)
   const { siteConfig, isAdminLoggedIn, galleryImages } = useAppStore()
   const [images, setImages] = useState<GalleryImage[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,7 +64,7 @@ export default function GallerySection() {
     siteConfig.gallery_subtitle ||
     'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey'
 
-  // ✅ التحسين 6: لو الصور جاية من الـ store (preloaded) يعرضها فوراً
+  // ✅ لو الصور جاية من الـ store يعرضها فوراً
   useEffect(function() {
     if (galleryImages.length > 0) {
       setImages(galleryImages)
@@ -225,7 +225,7 @@ export default function GallerySection() {
                         onClick={function() { setVideoModal(img.videoUrl) }}
                       >
                         <div className="relative w-full h-full overflow-hidden">
-                          {/* ✅ التحسين 1 + 4 + 6: next/image + sizes + unoptimized للخارجي */}
+                          {/* ✅ next/image + sizes + unoptimized للخارجي */}
                           {thumb ? (
                             <Image
                               src={thumb}
