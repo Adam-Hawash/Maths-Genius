@@ -27,7 +27,7 @@ function ImageWithSkeleton({ src, alt, className }: { src: string; alt: string; 
       />
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-muted">
-          <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
+                   <ImagePlus className="h-8 w-8 text-muted-foreground/30" />
         </div>
       )}
     </div>
@@ -154,8 +154,8 @@ export default function GallerySection() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {images.map((img, index) => {
               var isVideo = img.type === 'video'
-              var thumb = isVideo ? getVideoThumb(img.videoUrl) : ''
-              var src = isVideo ? (thumb || '') : img.filePath
+                            var thumb = isVideo ? (getVideoThumb(img.videoUrl) || img.filePath || '') : ''
+              var src = isVideo ? thumb : img.filePath
               return (
                 <Card
                   key={img.id}
