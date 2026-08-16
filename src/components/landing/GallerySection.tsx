@@ -2,7 +2,7 @@
 
 import { useAppStore } from '@/stores/app-store'
 import { Badge } from '@/components/ui/badge'
-import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X, Loader2, Maximize } from 'lucide-react'
+import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X, Loader2 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import type { GalleryImage } from '@/stores/app-store'
@@ -126,6 +126,7 @@ export default function GallerySection() {
   return (
     <section className="py-16 sm:py-20 bg-muted/30" dir="rtl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        {/* Header */}
         <div className="text-center mb-12 space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
             <Camera className="h-4 w-4" />
@@ -200,7 +201,7 @@ export default function GallerySection() {
               </div>
             )}
 
-            {/* ========== قسم الفيديوهات ========== */}
+            {/* ========== قسم الفيديوهات (شورتس) ========== */}
             {videoCount > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-6">
@@ -275,6 +276,7 @@ export default function GallerySection() {
           </>
         )}
 
+        {/* Stats */}
         {!loading && images.length > 0 && (
           <div className="flex items-center justify-center gap-4 mt-8 text-muted-foreground text-sm">
             <span className="flex items-center gap-1.5"><ImagePlus className="h-4 w-4" />{imageCount} صورة</span>
@@ -284,6 +286,7 @@ export default function GallerySection() {
         )}
       </div>
 
+      {/* Video Modal */}
       {videoModal && (
         <GalleryVideoModal url={videoModal} onClose={function() { setVideoModal(null) }} />
       )}
@@ -291,7 +294,7 @@ export default function GallerySection() {
   )
 }
 
-/* ========== Gallery Video Modal (بدون 3-dot menu / بدون تحميل / مع fullscreen) ========== */
+/* ========== Gallery Video Modal (بدون 3-dot menu / بدون تحميل) ========== */
 function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
@@ -342,32 +345,20 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
     v.currentTime = ratio * v.duration
   }
 
-  /* ===== FULLSCREEN — iOS webkitEnterFullscreen + Android requestFullscreen ===== */
   var handleFullscreen = function(e: React.MouseEvent | React.TouchEvent) {
     if (e) { e.preventDefault(); e.stopPropagation() }
-    // لو يوتيوب: اعمل fullscreen للـ modal كله
     if (isYouTube) {
       var container = document.getElementById('gallery-modal-container')
       if (container) { (container as any).requestFullscreen && (container as any).requestFullscreen().catch(function(){}) }
       return
     }
-    // لو فيديو مباشر: fullscreen للفيديو نفسه (أفضل على الموبايل)
     var v = videoRef.current
     if (!v) return
     v.play().then(function() {
-      var el = v as any
-      // iOS Safari — لازم يتعمل على عنصر الفيديو نفسه
-      if (el.webkitEnterFullscreen) {
-        el.webkitEnterFullscreen()
-      }
-      // Android Chrome
-      else if (v.parentElement && v.parentElement.requestFullscreen) {
-        v.parentElement.requestFullscreen().catch(function(){})
-      }
-      // Fallback
-      else if ((el as any).requestFullscreen) {
-        (el as any).requestFullscreen().catch(function(){})
-      }
+      var vv = v as any
+      if (vv.webkitEnterFullscreen) { vv.webkitEnterFullscreen() }
+      else if (vv.parentElement && vv.parentElement.requestFullscreen) { vv.parentElement.requestFullscreen().catch(function(){}) }
+      else if (vv.requestFullscreen) { vv.requestFullscreen().catch(function(){}) }
     }).catch(function(){})
   }
 
@@ -398,7 +389,7 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
 
         {isYouTube ? (
           <iframe
-            src={"https://www.youtube.com/embed/" + ytId[1] + "?modestbranding=1&rel=0&playsinline=1&controls=0&showinfo=0&iv_load_policy=3&autoplay=1"}
+            src={"https://www.youtube.com/embed/" + (ytId ? ytId[1] : '') + "?modestbranding=1&rel=0&playsinline=1&controls=0&showinfo=0&iv_load_policy=3&autoplay=1"}
             className="w-full h-full rounded-xl"
             allow="accelerometer; autoplay; encrypted-media; gyroscope"
             allowFullScreen
@@ -461,7 +452,6 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
                 </button>
                 <span className="text-white text-sm tabular-nums" dir="ltr">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <div className="flex-1" />
-                {/* ===== زرار Fullscreen ===== */}
                 <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={handleFullscreen} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
