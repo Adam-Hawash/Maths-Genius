@@ -1,83 +1,116 @@
-// @ts-nocheck
-import { NextResponse } from 'next/server'
-import { writeFile, mkdir, unlink, readFile } from 'fs/promises'
-import { join } from 'path'
+import { NextRequest, NextResponse } from 'next/server'
+import { writeFile, mkdir, readFile, unlink } from 'fs/promises'
 import { existsSync } from 'fs'
 
-var UPLOAD_DIR = join(process.cwd(), 'public', 'uploads')
+// Base uploads directory — resolved once at module level to avoid dynamic tracing
+const UPLOADS_BASE = process.cwd() + '/public/uploads'
 
-async function ensureDir() {
-  if (!existsSync(UPLOAD_DIR)) {
-    await mkdir(UPLOAD_DIR, { recursive: true })
+// Temp chunks directory
+const CHUNKS_DIR = process.cwd() + '/.tmp/chunks'
+
+async function ensureDir(dir: string) {
+  if (!existsSync(dir)) {
+    await mkdir(dir, { recursive: true })
   }
 }
 
-export async function POST(request) {
+// Safely resolve a path within uploads — prevents path traversal
+function safePath(category: string, filename: string): string {
+  var base = UPLOADS_BASE + '/' + category
+  return base + '/' + filename.replace(/[^a-zA-Z0-9._\-]/g, '_')
+}
+
+export async function POST(req: NextRequest) {
   try {
-    await ensureDir()
+    var fd = await req.formData()
+    var file = fd.get('file') as File | null
+    var uploadId = (fd.get('uploadId') as string) || ''
+    var chunkIndex = parseInt(fd.get('chunkIndex') as string) || 0
+    var totalChunks = parseInt(fd.get('totalChunks') as string) || 1
+    var fileName = (fd.get('fileName') as string) || 'file'
+    var category = (fd.get('category') as string) || 'general'
 
-    var formData = await request.formData()
-    var file = formData.get('file')
-    var uploadId = formData.get('uploadId') || 'unknown'
-    var chunkIndex = parseInt(formData.get('chunkIndex') || '0', 10)
-    var totalChunks = parseInt(formData.get('totalChunks') || '1', 10)
-    var fileName = formData.get('fileName') || 'file'
-    var category = formData.get('category') || 'general'
-
-    if (!file || !(file instanceof File)) {
+    if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
-    var categoryDir = join(UPLOAD_DIR, category)
-
-    if (!existsSync(categoryDir)) {
-      await mkdir(categoryDir, { recursive: true })
+    // Validate category to prevent path traversal
+    var allowedCategories = ['videos', 'homework', 'exams', 'gallery', 'general', 'thumbnails', 'answer-keys']
+    if (!allowedCategories.includes(category)) {
+      category = 'general'
     }
 
+    // Single chunk — save directly
+    if (totalChunks <= 1) {
+      var bytes = await file.arrayBuffer()
+      var safeName = fileName.replace(/[^a-zA-Z0-9._\-]/g, '_')
+      var timestamp = Date.now()
+      var finalFileName = timestamp + '_' + safeName
+      var finalPath = safePath(category, finalFileName)
+
+      await ensureDir(UPLOADS_BASE + '/' + category)
+      await writeFile(finalPath, Buffer.from(bytes))
+
+      return NextResponse.json({
+        filePath: '/uploads/' + category + '/' + finalFileName,
+        fileType: file.type || 'application/octet-stream',
+        filename: finalFileName,
+        size: bytes.byteLength,
+        done: true,
+      })
+    }
+
+    // Multi-chunk upload
+    await ensureDir(CHUNKS_DIR)
     var chunkFileName = uploadId + '.part' + chunkIndex
-    var chunkPath = join(categoryDir, chunkFileName)
+    var chunkPath = CHUNKS_DIR + '/' + chunkFileName
 
     var bytes = await file.arrayBuffer()
     await writeFile(chunkPath, Buffer.from(bytes))
 
-    if (chunkIndex + 1 >= totalChunks) {
-      var finalBuffer = Buffer.alloc(0)
+    // If this is the last chunk, combine all parts
+    if (chunkIndex === totalChunks - 1) {
+      var safeName = fileName.replace(/[^a-zA-Z0-9._\-]/g, '_')
+      var timestamp = Date.now()
+      var finalFileName = timestamp + '_' + safeName
+      var finalPath = safePath(category, finalFileName)
+
+      await ensureDir(UPLOADS_BASE + '/' + category)
+
+      // Combine all chunks in order
+      var chunks: Buffer[] = []
       for (var i = 0; i < totalChunks; i++) {
-        var partPath = join(categoryDir, uploadId + '.part' + i)
-        if (existsSync(partPath)) {
-          var partData = await readFile(partPath)
-          finalBuffer = Buffer.concat([finalBuffer, partData])
-          try { await unlink(partPath) } catch (e) {}
-        }
+        var partPath = CHUNKS_DIR + '/' + uploadId + '.part' + i
+        var chunkData = await readFile(partPath)
+        chunks.push(chunkData)
       }
 
-      var timestamp = Date.now()
-      var randomStr = Math.random().toString(36).substring(2, 8)
-      var safeName = fileName.replace(/[^a-zA-Z0-9._\-]/g, '_').substring(0, 50)
-      var finalFileName = timestamp + '_' + randomStr + '_' + safeName
-      var finalPath = join(categoryDir, finalFileName)
-
+      var finalBuffer = Buffer.concat(chunks)
       await writeFile(finalPath, finalBuffer)
 
-      var filePath = '/uploads/' + category + '/' + finalFileName
+      // Clean up chunk files
+      for (var i = 0; i < totalChunks; i++) {
+        var partPath = CHUNKS_DIR + '/' + uploadId + '.part' + i
+        try { await unlink(partPath) } catch {}
+      }
 
       return NextResponse.json({
-        filePath: filePath,
+        filePath: '/uploads/' + category + '/' + finalFileName,
         fileType: file.type || 'application/octet-stream',
         filename: finalFileName,
         size: finalBuffer.length,
-        done: true
+        done: true,
       })
     }
 
+    // Not the last chunk yet
     return NextResponse.json({
       chunkIndex: chunkIndex,
-      received: true,
-      done: false
+      done: false,
     })
 
-  } catch (error) {
-    console.error('Upload chunk error:', error)
-    return NextResponse.json({ error: 'Upload failed: ' + (error.message || 'Unknown error') }, { status: 500 })
+  } catch (err: any) {
+    console.error('Upload chunk error:', err)
+    return NextResponse.json({ error: err.message || 'Upload failed' }, { status: 500 })
   }
 }
