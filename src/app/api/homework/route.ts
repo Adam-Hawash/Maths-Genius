@@ -36,14 +36,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { title, content, grade, filePath, fileType, answerKeyPath, answerKeyType, thumbnail } = body
+    const { title, content, grade, filePath, fileType, answerKeyPath, answerKeyType, thumbnail, questions } = body
 
     if (!title || !grade) {
       return NextResponse.json({ error: 'Title and grade are required' }, { status: 400 })
     }
 
     const homework = await db.homework.create({
-      data: { title, content: content || '', grade, filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '' },
+      data: { title, content: content || '', grade, filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '', questions: questions || '' },
     })
 
     return NextResponse.json({ message: 'Homework added', homework }, { status: 201 })
