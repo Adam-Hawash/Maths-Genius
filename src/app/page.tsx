@@ -6,8 +6,7 @@ import { Footer } from '@/components/landing/Footer'
 import { StudentPendingView } from '@/components/landing/StudentPendingView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
-import { useState, useEffect } from 'react'
-import { GraduationCap, Loader2 } from 'lucide-react'
+import { useEffect } from 'react'
 
 const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
   loading: () => <div className="min-h-[70vh] bg-[#0F0D0A]" />,
@@ -41,47 +40,20 @@ const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard')
 })
 
 export default function HomePage() {
-  const { currentView } = useAppStore()
-  const [appReady, setAppReady] = useState(false)
+  var store = useAppStore()
+  var currentView = store.currentView || 'landing'
+  var setGalleryImages = (store as any).setGalleryImages || function(){}
 
+  // Preload gallery data early so images appear instantly
   useEffect(function() {
-    var done = false
-    function finish() {
-      if (done) return
-      done = true
-      setTimeout(function() { setAppReady(true) }, 400)
-    }
-
-    if (document.readyState === 'complete') {
-      finish()
-    } else {
-      window.addEventListener('load', finish)
-    }
-    // Fallback: show after 4 seconds max
-    setTimeout(finish, 4000)
-
-    return function() { window.removeEventListener('load', finish) }
+    fetch('/api/gallery')
+      .then(function(r) { return r.json() })
+      .then(function(d) { setGalleryImages(d.images || []) })
+      .catch(function() {})
   }, [])
 
   const showFooter = currentView === 'landing'
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
-
-  if (!appReady) {
-    return (
-      <div className="fixed inset-0 z-[9999] bg-[#0F0D0A] flex flex-col items-center justify-center gap-6">
-        <div className="relative">
-          <div className="absolute -inset-4 rounded-full bg-[#C49A38]/10 blur-2xl" />
-          <div className="relative w-20 h-20 rounded-full bg-[#1A1714] border-2 border-[#C49A38]/30 flex items-center justify-center">
-            <GraduationCap className="h-10 w-10 text-[#C49A38]" />
-          </div>
-        </div>
-        <div className="flex flex-col items-center gap-3">
-          <h1 className="text-2xl font-bold text-[#E5BE5A]">Maths Genius</h1>
-          <Loader2 className="h-6 w-6 animate-spin text-[#C49A38]/60" />
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen flex flex-col">
