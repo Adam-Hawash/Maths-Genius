@@ -472,9 +472,11 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
     var ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
     v.currentTime = ratio * v.duration
   }
-
   var handleFullscreen = function(e: React.MouseEvent | React.TouchEvent) {
     if (e) { e.preventDefault(); e.stopPropagation() }
+    // لو Already في fullscreen → خرج
+    if (document.fullscreenElement) { document.exitFullscreen().catch(function(){}) ; return }
+    if ((document as any).webkitFullscreenElement) { (document as any).webkitExitFullscreen() ; return }
     var v = videoRef.current
     if (!v) return
     v.play().then(function() {
