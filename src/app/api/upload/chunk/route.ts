@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { put } from '@vercel/blob'
 
 // Map file extensions to content types
 var CONTENT_TYPES: Record<string, string> = {
@@ -14,7 +13,30 @@ function getContentType(filename: string, fallback: string): string {
   return CONTENT_TYPES[ext] || fallback
 }
 
-// In-memory temp storage for chunked uploads (per-serverless-invocation, falls back to single-request)
+async function uploadToBlob(path: string, data: Buffer | Uint8Array, contentType: string): Promise<string> {
+  var token = process.env.BLOB_READ_WRITE_TOKEN
+  if (!token) throw new Error('BLOB_READ_WRITE_TOKEN is not set')
+
+  var res = await fetch('https://upload.blob.vercel-storage.com/' + encodeURIComponent(path), {
+    method: 'PUT',
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'x-content-type': contentType,
+      'x-blob-filename': path.split('/').pop() || 'file',
+    },
+    body: data,
+  })
+
+  if (!res.ok) {
+    var errText = await res.text()
+    throw new Error('Blob upload failed: ' + res.status + ' ' + errText)
+  }
+
+  var json = await res.json()
+  return json.url || ('https://' + (json.url || '').replace('https://', ''))
+}
+
+// In-memory temp storage for chunked uploads
 var tempChunks: Record<string, { parts: ArrayBuffer[]; fileName: string; fileType: string; totalChunks: number; received: number }> = {}
 
 export async function POST(request: NextRequest) {
@@ -38,13 +60,10 @@ export async function POST(request: NextRequest) {
       var contentType = getContentType(fileName, file.type || 'application/octet-stream')
       var blobPath = category + '/' + Date.now() + '-' + uploadId.slice(0, 8) + '.' + ext
 
-      var blob = await put(blobPath, buffer, {
-        contentType: contentType,
-        access: 'public',
-      })
+      var url = await uploadToBlob(blobPath, buffer, contentType)
 
       return NextResponse.json({
-        filePath: blob.url,
+        filePath: url,
         fileType: file.type || contentType,
         filename: fileName,
         size: file.size,
@@ -52,8 +71,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Multi-chunk: accumulate in memory (works within a single serverless function invocation)
-    // For Vercel serverless, each chunk may hit a different instance, so we try our best
+    // Multi-chunk: accumulate in memory
     var key = uploadId
     if (!tempChunks[key]) {
       tempChunks[key] = { parts: [], fileName: fileName, fileType: file.type, totalChunks: totalChunks, received: 0 }
@@ -77,15 +95,12 @@ export async function POST(request: NextRequest) {
       var ct = getContentType(fileName, entry.fileType || 'application/octet-stream')
       var bp = category + '/' + Date.now() + '-' + uploadId.slice(0, 8) + '.' + ext2
 
-      var result = await put(bp, assembled, {
-        contentType: ct,
-        access: 'public',
-      })
+      var resultUrl = await uploadToBlob(bp, assembled, ct)
 
       delete tempChunks[key]
 
       return NextResponse.json({
-        filePath: result.url,
+        filePath: resultUrl,
         fileType: entry.fileType || ct,
         filename: fileName,
         size: totalSize,
