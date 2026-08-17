@@ -35,9 +35,9 @@ export async function GET(request: NextRequest) {
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Videos fetch error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
   }
 }
 
@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({ message: 'Video added', video }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Video create error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
   }
 }
