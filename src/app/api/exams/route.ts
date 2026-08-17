@@ -16,50 +16,39 @@ export async function GET(request: NextRequest) {
       where.OR = [{ title: { contains: keyword } }]
     }
 
-    const [exams, total] = await Promise.all([
-      db.exam.findMany({
+    const [homeworks, total] = await Promise.all([
+      db.homework.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      db.exam.count({ where }),
+      db.homework.count({ where }),
     ])
 
-    return NextResponse.json({ exams, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
-  } catch (error) {
-    console.error('Exams fetch error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ homeworks, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
+  } catch (error: any) {
+    console.error('Homework fetch error:', error)
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { title, content, grade, filePath, fileType, questions, passScore, answerKeyPath, answerKeyType, thumbnail } = body
+    const { title, content, grade, filePath, fileType, answerKeyPath, answerKeyType, thumbnail, questions } = body
 
     if (!title || !grade) {
       return NextResponse.json({ error: 'Title and grade are required' }, { status: 400 })
     }
 
-    const exam = await db.exam.create({
-      data: {
-        title,
-        content: content || '',
-        grade,
-        filePath: filePath || '',
-        fileType: fileType || '',
-        answerKeyPath: answerKeyPath || '',
-        answerKeyType: answerKeyType || '',
-        thumbnail: thumbnail || '',
-        questions: questions || '',
-        passScore: passScore || 50,
-      },
+    const homework = await db.homework.create({
+      data: { title, content: content || '', grade, filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '', questions: questions || '' },
     })
 
-    return NextResponse.json({ message: 'Exam added', exam }, { status: 201 })
-  } catch (error) {
-    console.error('Exam create error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ message: 'Homework added', homework }, { status: 201 })
+  } catch (error: any) {
+    console.error('Homework create error:', error)
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
   }
 }
