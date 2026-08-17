@@ -63,6 +63,7 @@ model Homework {
   answerKeyPath String   @default("")
   answerKeyType String   @default("")
   grade         String
+  questions     String   @default("")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -71,11 +72,11 @@ model Exam {
   id            String       @id @default(cuid())
   title         String
   content       String
-  filePath      String   @default("")
-  fileType      String   @default("")
-  thumbnail     String   @default("")
-  answerKeyPath String   @default("")
-  answerKeyType String   @default("")
+  filePath      String       @default("")
+  fileType      String       @default("")
+  thumbnail     String       @default("")
+  answerKeyPath String       @default("")
+  answerKeyType String       @default("")
   grade         String
   questions     String       @default("")
   passScore     Float        @default(50)
