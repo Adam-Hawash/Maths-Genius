@@ -137,7 +137,7 @@ export function AdminDashboard() {
             <ContentManager<Homework> title="إدارة الواجبات | Homework" apiPath="/api/homework" itemName="homework"
               fields={{ title: { label: 'عنوان الواجب | HW Title', type: 'text' }, content: { label: 'المحتوى | Content', type: 'textarea' } }}
               renderTitle={(item) => item.title} renderSubtitle={(item) => item.content?.substring(0, 80) || (item.filePath ? `📎 ${item.fileType}` : '')}
-              supportFileUpload fileCategory="homework" acceptedTypes=".pdf,.doc,.docx,image/*" supportAnswerKey supportThumbnail onRefresh={fetchStats} />
+              supportFileUpload fileCategory="homework" acceptedTypes=".pdf,.doc,.docx,image/*" supportAnswerKey supportThumbnail supportMCQ onRefresh={fetchStats} />
           </TabsContent>
           <TabsContent value="exams"><ExamTrackingPanel /></TabsContent>
           <TabsContent value="announcements">
@@ -1529,16 +1529,17 @@ interface CMProps<T extends { id: string; grade: string; createdAt: string }> {
   fields: Record<string, { label: string; type: 'text' | 'textarea'; placeholder?: string }>
   renderTitle: (item: T) => string; renderSubtitle: (item: T) => string
   supportFileUpload?: boolean; fileCategory?: string; acceptedTypes?: string
-  supportAnswerKey?: boolean; supportThumbnail?: boolean
+  supportAnswerKey?: boolean; supportThumbnail?: boolean; supportMCQ?: boolean
   onRefresh: () => void
 }
 
-function ContentManager<T extends { id: string; grade: string; createdAt: string }>({ title, apiPath, itemName, fields, renderTitle, renderSubtitle, supportFileUpload, fileCategory, acceptedTypes, supportAnswerKey, supportThumbnail, onRefresh }: CMProps<T>) {
+function ContentManager<T extends { id: string; grade: string; createdAt: string }>({ title, apiPath, itemName, fields, renderTitle, renderSubtitle, supportFileUpload, fileCategory, acceptedTypes, supportAnswerKey, supportThumbnail, supportMCQ, onRefresh }: CMProps<T>) {
   const [items, setItems] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [formGrade, setFormGrade] = useState('')
   const [formValues, setFormValues] = useState<Record<string, string>>({})
+  const [mcqQuestions, setMcqQuestions] = useState<Array<{ question: string; options: string[]; correct: number }>>([])
   const [formFile, setFormFile] = useState<File | null>(null)
   const [formFilePath, setFormFilePath] = useState('')
   const [formFileUrl, setFormFileUrl] = useState('')
@@ -1678,9 +1679,10 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       if (filePathRef.val) { body.filePath = filePathRef.val; body.fileType = fileTypeRef.val }
       if (answerKeyPathRef.val) { body.answerKeyPath = answerKeyPathRef.val; body.answerKeyType = answerKeyTypeRef.val }
       if (thumbnailPathRef.val) { body.thumbnail = thumbnailPathRef.val }
+      if (supportMCQ && mcqQuestions.length > 0) { body.questions = JSON.stringify(mcqQuestions) }
       const res = await fetch(apiPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (res.ok) {
-        toast.success('تم الإضافة بنجاح'); setShowForm(false); setFormValues({}); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); loadItems(false); onRefresh()
+        toast.success('تم الإضافة بنجاح'); setShowForm(false); setFormValues({}); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setMcqQuestions([]); loadItems(false); onRefresh()
       } else { try { const d = await res.json(); toast.error(d.error || 'خطأ') } catch { toast.error('خطأ في السيرفر - حاول تاني') } }
     } catch { toast.error('خطأ في الاتصال') }
     setSubmitting(false)
@@ -1768,10 +1770,43 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
                 </div>
               </div>
             )}
+            {supportMCQ && (
+              <div className="space-y-3 p-3 rounded-lg border border-primary/30 bg-primary/5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold text-primary">أسئلة اختيار من متعدد (اختياري)</Label>
+                  <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={function() {
+                    setMcqQuestions([...mcqQuestions, { question: '', options: ['', '', '', ''], correct: 0 }])
+                  }}><Plus className="h-3 w-3 ml-1" />إضافة سؤال</Button>
+                </div>
+                {mcqQuestions.length === 0 && <p className="text-[11px] text-muted-foreground text-center py-2">اضغط "إضافة سؤال" لإضافة أسئلة متعددة</p>}
+                {mcqQuestions.map(function(q, qi) {
+                  return (
+                    <div key={qi} className="space-y-2 p-3 rounded-lg border bg-background">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">سؤال {qi + 1}</span>
+                        <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive" onClick={function() { setMcqQuestions(mcqQuestions.filter(function(_, i) { return i !== qi })) }}><X className="h-3 w-3" /></Button>
+                      </div>
+                      <Input placeholder="اكتب السؤال هنا..." value={q.question} onChange={function(e) { var updated = [...mcqQuestions]; updated[qi] = { ...updated[qi], question: e.target.value }; setMcqQuestions(updated) }} className="text-sm" />
+                      <div className="grid grid-cols-2 gap-2">
+                        {q.options.map(function(opt, oi) {
+                          return (
+                            <div key={oi} className="flex items-center gap-1.5">
+                              <input type="radio" name={"q" + qi} checked={q.correct === oi} onChange={function() { var updated = [...mcqQuestions]; updated[qi] = { ...updated[qi], correct: oi }; setMcqQuestions(updated) }} className="accent-primary" />
+                              <Input placeholder={"اختيار " + (oi + 1)} value={opt} onChange={function(e) { var updated = [...mcqQuestions]; var newOpts = [...updated[qi].options]; newOpts[oi] = e.target.value; updated[qi] = { ...updated[qi], options: newOpts }; setMcqQuestions(updated) }} className="h-8 text-xs" />
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">اختر الإجابة الصحيحة بجانب الاختيار</p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
             {uploadMsg && <p className="text-xs text-primary animate-pulse">{uploadMsg}</p>}
             <div className="flex gap-2">
               <Button size="sm" onClick={handleSubmit} disabled={submitting || uploading}>{submitting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ'}</Button>
-              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormValues({}); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setUploadMsg('') }}>إلغاء</Button>
+              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormValues({}); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setMcqQuestions([]); setUploadMsg('') }}>إلغاء</Button>
             </div>
           </div>
         )}
@@ -1789,6 +1824,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
                     {(item as any).thumbnail && <Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-600">صورة</Badge>}
                     {item.filePath && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">أسئلة</Badge>}
                     {item.answerKeyPath && <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">إجابة</Badge>}
+                    {(item as any).questions && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">أسئلة</Badge>}
                     <span className="text-[10px] text-muted-foreground">{new Date(item.createdAt).toLocaleDateString('ar-EG')}</span>
                   </div>
                 </div>
