@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
@@ -53,7 +52,7 @@ export async function POST(request: NextRequest) {
         answerKeyType: answerKeyType || '',
         thumbnail: thumbnail || '',
         questions: questions || '',
-        passScore: passScore || 50,
+        passScore: passScore ? parseFloat(passScore) : 50,
       },
     })
 
