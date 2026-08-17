@@ -51,21 +51,25 @@ function getVideoThumb(url: string) {
 }
 
 export default function GallerySection() {
-  const { siteConfig, isAdminLoggedIn, galleryImages } = useAppStore()
+  var store = useAppStore()
+  var siteConfig = store.siteConfig || {}
+  var isAdminLoggedIn = store.isAdminLoggedIn || false
+  var galleryImages = (store as any).galleryImages || []
   const [images, setImages] = useState<GalleryImage[]>([])
   const [loading, setLoading] = useState(true)
   const [videoModal, setVideoModal] = useState<string | null>(null)
 
-  const galleryTitle =
+  var galleryTitle =
     siteConfig.gallery_title ||
     'معرض الصور لطلابي وأبنائي الأعزاء | Photos of My Beloved Students'
-  const gallerySubtitle =
+  var gallerySubtitle =
     siteConfig.gallery_subtitle ||
     'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey'
 
   useEffect(function() {
-    if (galleryImages.length > 0) {
-      setImages(galleryImages)
+    var preloaded = Array.isArray(galleryImages) ? galleryImages : []
+    if (preloaded.length > 0) {
+      setImages(preloaded)
       setLoading(false)
     } else {
       fetch('/api/gallery')
@@ -126,7 +130,6 @@ export default function GallerySection() {
   return (
     <section className="py-16 sm:py-20 bg-muted/30" dir="rtl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        {/* Header */}
         <div className="text-center mb-12 space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
             <Camera className="h-4 w-4" />
@@ -150,7 +153,6 @@ export default function GallerySection() {
           </div>
         ) : (
           <>
-            {/* ========== قسم الصور ========== */}
             {imageCount > 0 && (
               <div className="mb-12">
                 <div className="flex items-center gap-3 mb-6">
@@ -201,7 +203,6 @@ export default function GallerySection() {
               </div>
             )}
 
-            {/* ========== قسم الفيديوهات (شورتس) ========== */}
             {videoCount > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-6">
@@ -276,7 +277,6 @@ export default function GallerySection() {
           </>
         )}
 
-        {/* Stats */}
         {!loading && images.length > 0 && (
           <div className="flex items-center justify-center gap-4 mt-8 text-muted-foreground text-sm">
             <span className="flex items-center gap-1.5"><ImagePlus className="h-4 w-4" />{imageCount} صورة</span>
@@ -286,7 +286,6 @@ export default function GallerySection() {
         )}
       </div>
 
-      {/* Video Modal */}
       {videoModal && (
         <GalleryVideoModal url={videoModal} onClose={function() { setVideoModal(null) }} />
       )}
@@ -294,7 +293,7 @@ export default function GallerySection() {
   )
 }
 
-/* ========== Gallery Video Modal (بدون 3-dot menu / بدون تحميل) ========== */
+/* ========== Gallery Video Modal ========== */
 function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
@@ -379,7 +378,6 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
       onContextMenu={function(e) { e.preventDefault() }}
     >
       <div className="relative w-full max-w-5xl aspect-video" onClick={function(e) { e.stopPropagation() }}>
-        {/* زرار إغلاق */}
         <button
           className="absolute -top-10 left-0 text-white hover:text-white/80 flex items-center gap-1 text-sm z-30"
           onClick={onClose}
