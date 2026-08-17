@@ -379,18 +379,19 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
   return (
     <div
       id="gallery-modal-container"
-      className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4"
       onClick={onClose}
       onContextMenu={function(e) { e.preventDefault() }}
     >
+      {/* زرار إغلاق — فوق الفيديو ومش مخفي */}
+      <button
+        className="self-start text-white hover:text-white/80 flex items-center gap-1 text-sm mb-2 shrink-0 z-30"
+        onClick={onClose}
+      >
+        <X className="h-4 w-4" /> إغلاق
+      </button>
+
       <div className="relative w-full max-w-5xl aspect-video" onClick={function(e) { e.stopPropagation() }}>
-        {/* زرار إغلاق */}
-        <button
-          className="absolute -top-10 left-0 text-white hover:text-white/80 flex items-center gap-1 text-sm z-30"
-          onClick={onClose}
-        >
-          <X className="h-4 w-4" /> إغلاق
-        </button>
 
         {isYouTube ? (
           <iframe
