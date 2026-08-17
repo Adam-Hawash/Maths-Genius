@@ -604,28 +604,91 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
 
 /* ========== HOMEWORK TAB ========== */
 function HomeworkTab({ homework }: { homework: Homework[] }) {
+  const [expandedHw, setExpandedHw] = useState<string | null>(null)
+  const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number>>>({})
+  const [hwSubmitted, setHwSubmitted] = useState<Record<string, boolean>>({})
+
   if (homework.length === 0) return <EmptyState message="لا توجد واجبات حالياً" />
   return (
     <div className="space-y-3">
-      {homework.map((hw) => (
-        <Card key={hw.id}>
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3 min-w-0 flex-1">
-                <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                  <ClipboardList className="h-4 w-4 text-blue-500" />
+      {homework.map((hw) => {
+        var mcq = (hw as any).questions ? JSON.parse((hw as any).questions) : []
+        var hasMCQ = Array.isArray(mcq) && mcq.length > 0
+        var isExpanded = expandedHw === hw.id
+        var isSubmitted = !!hwSubmitted[hw.id]
+        var myAnswers = hwAnswers[hw.id] || {}
+
+        var score = 0
+        if (isSubmitted && hasMCQ) {
+          mcq.forEach(function(q: any, i: number) { if (myAnswers[i] === q.correct) score++ })
+        }
+
+        return (
+          <Card key={hw.id} className={hasMCQ ? 'cursor-pointer' : ''}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-3" onClick={hasMCQ ? function() { setExpandedHw(isExpanded ? null : hw.id) } : undefined}>
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (hasMCQ ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
+                    <ClipboardList className={"h-4 w-4 " + (hasMCQ ? 'text-emerald-500' : 'text-blue-500')} />
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <h3 className="font-semibold text-sm">{hw.title}</h3>
+                    {hw.content && <p className="text-xs text-muted-foreground line-clamp-2">{hw.content}</p>}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-[10px] text-muted-foreground">{new Date(hw.createdAt).toLocaleDateString('ar-EG')}</p>
+                      {hasMCQ && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">{mcq.length} سؤال</Badge>}
+                      {isSubmitted && hasMCQ && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {score}/{mcq.length}</Badge>}
+                    </div>
+                  </div>
                 </div>
-                <div className="min-w-0 space-y-1">
-                  <h3 className="font-semibold text-sm">{hw.title}</h3>
-                  {hw.content && <p className="text-xs text-muted-foreground line-clamp-2">{hw.content}</p>}
-                  <p className="text-[10px] text-muted-foreground">{new Date(hw.createdAt).toLocaleDateString('ar-EG')}</p>
-                </div>
+                {hw.filePath && !hasMCQ && <FileAttachment filePath={hw.filePath} fileType={hw.fileType} />}
+                {hasMCQ && <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform shrink-0 mt-1 " + (isExpanded ? 'rotate-90' : '')} />}
               </div>
-              {hw.filePath && <FileAttachment filePath={hw.filePath} fileType={hw.fileType} />}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+
+              {isExpanded && hasMCQ && (
+                <div className="mt-4 pt-4 border-t space-y-4">
+                  {mcq.map(function(q: any, qi: number) {
+                    return (
+                      <div key={qi} className="space-y-2">
+                        <p className="font-medium text-sm">{qi + 1}. {q.question}</p>
+                        <div className="space-y-1.5">
+                          {q.options.map(function(opt: string, oi: number) {
+                            var isSelected = myAnswers[qi] === oi
+                            var isCorrect = isSubmitted && oi === q.correct
+                            var isWrong = isSubmitted && isSelected && oi !== q.correct
+                            return (
+                              <button
+                                key={oi}
+                                disabled={isSubmitted}
+                                onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [qi]: oi }; return a }) }}
+                                className={"w-full text-right p-3 rounded-lg border text-sm transition-colors " + (
+                                  isCorrect ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 font-medium' :
+                                  isWrong ? 'border-destructive bg-destructive/10 text-destructive' :
+                                  isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
+                                  'border-border hover:bg-muted/50'
+                                )}
+                              >
+                                <span className="ml-2">{String.fromCharCode(65 + oi)})</span>{opt}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {!isSubmitted ? (
+                    <Button size="sm" onClick={function() { setHwSubmitted(function(prev) { var n = { ...prev }; n[hw.id] = true; return n }) }} disabled={Object.keys(myAnswers).length === 0}>تسليم الإجابات</Button>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                      <p className="text-sm font-medium text-emerald-700">نتيجتك: {score} من {mcq.length} {score === mcq.length ? '— ممتاز! 🎉' : ''}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })}
     </div>
   )
 }
