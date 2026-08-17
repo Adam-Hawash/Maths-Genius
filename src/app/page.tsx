@@ -6,7 +6,8 @@ import { Footer } from '@/components/landing/Footer'
 import { StudentPendingView } from '@/components/landing/StudentPendingView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { GraduationCap, Loader2 } from 'lucide-react'
 
 const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
   loading: () => <div className="min-h-[70vh] bg-[#0F0D0A]" />,
@@ -43,17 +44,61 @@ export default function HomePage() {
   var store = useAppStore()
   var currentView = store.currentView || 'landing'
   var setGalleryImages = (store as any).setGalleryImages || function(){}
+  var siteConfig = store.siteConfig || {}
+  var configLoaded = store.configLoaded
+  var setSiteConfig = store.setSiteConfig
+  var setConfigLoaded = store.setConfigLoaded
+  var setStats = store.setStats
 
-  // Preload gallery data early so images appear instantly
+  const [appReady, setAppReady] = useState(false)
+
   useEffect(function() {
-    fetch('/api/gallery')
-      .then(function(r) { return r.json() })
-      .then(function(d) { setGalleryImages(d.images || []) })
-      .catch(function() {})
+    Promise.all([
+      fetch('/api/config').then(function(r) { return r.json() }).catch(function() { return {} }),
+      fetch('/api/gallery').then(function(r) { return r.json() }).catch(function() { return {} }),
+      fetch('/api/stats').then(function(r) { return r.json() }).catch(function() { return {} }),
+    ]).then(function(results) {
+      var cfg = results[0]
+      var gal = results[1]
+      var sta = results[2]
+      if (cfg && !configLoaded) {
+        setSiteConfig(cfg)
+        setConfigLoaded(true)
+      }
+      if (gal && gal.images) {
+        setGalleryImages(gal.images)
+      }
+      if (sta && sta.stats) {
+        setStats(sta.stats)
+      }
+      setTimeout(function() { setAppReady(true) }, 400)
+    })
   }, [])
 
   const showFooter = currentView === 'landing'
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
+
+  if (!appReady) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-[#0F0D0A] flex flex-col items-center justify-center gap-6">
+        <div className="relative">
+          <div className="absolute -inset-6 rounded-full bg-[#C49A38]/10 blur-xl" />
+          <div className="relative w-20 h-20 rounded-2xl bg-[#1A1714] border border-[#C49A38]/30 flex items-center justify-center">
+            <GraduationCap className="h-10 w-10 text-[#E5BE5A]" />
+          </div>
+        </div>
+        <div className="text-center space-y-3">
+          <h1 className="text-2xl font-bold text-white tracking-wide">
+            <span className="text-[#E5BE5A]">Maths</span> Genius
+          </h1>
+          <div className="flex items-center gap-3 justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-[#C49A38]" />
+            <p className="text-white/40 text-sm">جاري التحميل...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
