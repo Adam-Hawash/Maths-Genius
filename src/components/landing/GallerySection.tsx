@@ -2,7 +2,7 @@
 
 import { useAppStore } from '@/stores/app-store'
 import { Badge } from '@/components/ui/badge'
-import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X, Loader2, Maximize } from 'lucide-react'
+import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X, Loader2, Maximize, Minimize } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import type { GalleryImage } from '@/stores/app-store'
@@ -475,7 +475,7 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
                 </button>
                 <span className="text-white text-sm tabular-nums" dir="ltr">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={handleFullscreen} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}>
-                  {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
                 </button>
               </div>
             </div>
