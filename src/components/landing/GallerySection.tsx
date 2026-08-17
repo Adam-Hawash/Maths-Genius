@@ -308,7 +308,20 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
   const [duration, setDuration] = useState(0)
   const [buffered, setBuffered] = useState(0)
   const [showControls, setShowControls] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const hideTimerRef = useRef<any>(null)
+
+  useEffect(function() {
+    var onFsChange = function() {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', onFsChange)
+    document.addEventListener('webkitfullscreenchange', onFsChange)
+    return function() {
+      document.removeEventListener('fullscreenchange', onFsChange)
+      document.removeEventListener('webkitfullscreenchange', onFsChange)
+    }
+  }, [])
 
   var ytId = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/)
   var isYouTube = !!ytId
@@ -352,6 +365,9 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
 
   var handleFullscreen = function(e: React.MouseEvent | React.TouchEvent) {
     if (e) { e.preventDefault(); e.stopPropagation() }
+    // لو Already في fullscreen → خرج
+    if (document.fullscreenElement) { document.exitFullscreen().catch(function(){}) ; return }
+    if ((document as any).webkitFullscreenElement) { (document as any).webkitExitFullscreen() ; return }
     if (isYouTube) {
       var container = document.getElementById('gallery-modal-container')
       if (container) { (container as any).requestFullscreen && (container as any).requestFullscreen().catch(function(){}) }
@@ -379,16 +395,17 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
   return (
     <div
       id="gallery-modal-container"
-      className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4"
+      className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
       onClick={onClose}
       onContextMenu={function(e) { e.preventDefault() }}
     >
-      {/* زرار إغلاق — فوق الفيديو ومش مخفي */}
+      {/* زرار إغلاق — ثابت في أعلى يمين الشاشة */}
       <button
-        className="self-start text-white hover:text-white/80 flex items-center gap-1 text-sm mb-2 shrink-0 z-30"
-        onClick={onClose}
+        className="fixed top-4 right-4 z-[200] min-h-[48px] min-w-[48px] rounded-full bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+        onClick={function(e) { e.stopPropagation(); onClose() }}
+        onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); onClose() }}
       >
-        <X className="h-4 w-4" /> إغلاق
+        <X className="h-6 w-6" />
       </button>
 
       <div className="relative w-full max-w-5xl aspect-video" onClick={function(e) { e.stopPropagation() }}>
@@ -458,7 +475,7 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
                 </button>
                 <span className="text-white text-sm tabular-nums" dir="ltr">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={handleFullscreen} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}>
-                  <Maximize className="w-5 h-5" />
+                  {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
                 </button>
               </div>
             </div>
