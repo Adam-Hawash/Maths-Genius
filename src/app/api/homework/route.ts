@@ -27,9 +27,9 @@ export async function GET(request: NextRequest) {
     ])
 
     return NextResponse.json({ homeworks, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Homework fetch error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
   }
 }
 
@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({ message: 'Homework added', homework }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Homework create error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
   }
 }
