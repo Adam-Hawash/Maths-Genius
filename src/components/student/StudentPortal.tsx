@@ -10,7 +10,7 @@ import {
   Video, ClipboardList, FileText, Megaphone, MessageSquare, Send,
   LogOut, Loader2, FileDown, Bell, PlayCircle, CheckCircle2,
   BookOpen, Target, TrendingUp, GraduationCap, ChevronLeft, ExternalLink,
-   User, Phone, Award, Maximize, Minimize,
+  User, Phone, Award, Maximize, Minimize,
 } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Image from 'next/image'
@@ -414,7 +414,20 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
   const [duration, setDuration] = useState(0)
   const [buffered, setBuffered] = useState(0)
   const [showControls, setShowControls] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const hideTimerRef = useRef<any>(null)
+
+  useEffect(() => {
+    var onFsChange = function() {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', onFsChange)
+    document.addEventListener('webkitfullscreenchange', onFsChange)
+    return function() {
+      document.removeEventListener('fullscreenchange', onFsChange)
+      document.removeEventListener('webkitfullscreenchange', onFsChange)
+    }
+  }, [])
 
   // إخفاء الكنترولات بعد 3 ثواني من التشغيل
   useEffect(() => {
@@ -472,6 +485,7 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
     var ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
     v.currentTime = ratio * v.duration
   }
+
   var handleFullscreen = function(e: React.MouseEvent | React.TouchEvent) {
     if (e) { e.preventDefault(); e.stopPropagation() }
     // لو Already في fullscreen → خرج
@@ -580,7 +594,7 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
             onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}
             aria-label="تكبير"
           >
-            <Maximize className="w-5 h-5" />
+            {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
           </button>
         </div>
       </div>
