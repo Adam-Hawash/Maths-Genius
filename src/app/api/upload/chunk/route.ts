@@ -41,7 +41,6 @@ export async function POST(request: NextRequest) {
     var fileName = formData.get('fileName') as string || 'file'
     var category = formData.get('category') as string || 'general'
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-
     if (totalChunks <= 1) {
       var buffer = Buffer.from(await file.arrayBuffer())
       var ext = fileName.split('.').pop() || ''
@@ -50,23 +49,16 @@ export async function POST(request: NextRequest) {
       var url = await uploadToBlob(blobPath, buffer, contentType)
       return NextResponse.json({ filePath: url, fileType: file.type || contentType, filename: fileName, size: file.size, done: true })
     }
-
     var key = uploadId
-    if (!tempChunks[key]) {
-      tempChunks[key] = { parts: [], fileName: fileName, fileType: file.type, totalChunks: totalChunks, received: 0 }
-    }
+    if (!tempChunks[key]) tempChunks[key] = { parts: [], fileName: fileName, fileType: file.type, totalChunks: totalChunks, received: 0 }
     var entry = tempChunks[key]
     entry.parts[chunkIndex] = await file.arrayBuffer()
     entry.received++
-
     if (entry.received >= entry.totalChunks) {
-      var totalSize = entry.parts.reduce(function(sum, p) { return sum + p.byteLength }, 0)
+      var totalSize = entry.parts.reduce(function(s, p) { return s + p.byteLength }, 0)
       var assembled = new Uint8Array(totalSize)
-      var offset = 0
-      for (var i = 0; i < entry.parts.length; i++) {
-        assembled.set(new Uint8Array(entry.parts[i]), offset)
-        offset += entry.parts[i].byteLength
-      }
+      var off = 0
+      for (var i = 0; i < entry.parts.length; i++) { assembled.set(new Uint8Array(entry.parts[i]), off); off += entry.parts[i].byteLength }
       var ext2 = fileName.split('.').pop() || ''
       var ct = getContentType(fileName, entry.fileType || 'application/octet-stream')
       var bp = category + '/' + Date.now() + '-' + uploadId.slice(0, 8) + '.' + ext2
@@ -74,10 +66,8 @@ export async function POST(request: NextRequest) {
       delete tempChunks[key]
       return NextResponse.json({ filePath: resultUrl, fileType: entry.fileType || ct, filename: fileName, size: totalSize, done: true })
     }
-
-    return NextResponse.json({ message: 'Chunk ' + (chunkIndex + 1) + ' of ' + totalChunks + ' received', chunkIndex: chunkIndex, done: false })
+    return NextResponse.json({ message: 'Chunk ' + (chunkIndex + 1) + '/' + totalChunks, done: false })
   } catch (error: any) {
-    console.error('Upload chunk error:', error)
     return NextResponse.json({ error: error.message || 'Upload failed' }, { status: 500 })
   }
 }
