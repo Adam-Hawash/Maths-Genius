@@ -437,10 +437,7 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
                 onClick={handleSeek}
                 onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleSeek(e) }}
               >
-                <div className="absolute top-0 left-0 h-full bg-white/40 pointer-events-none" style={{ width: buffered + '%' }} />
-                <div className="absolute top-0 left-0 h-full bg-primary group-hover:h-2 transition-all pointer-events-none" style={{ width: progressPercent + '%' }} />
-              </div>
-              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-t from-black/80 to-transparent">
+              <div className="flex items-center gap-1 px-4 py-3 bg-gradient-to-t from-black/80 to-transparent">
                 <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={togglePlay} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); togglePlay() }}>
                   {playing ? (
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
@@ -448,16 +445,14 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                   )}
                 </button>
-                <span className="text-white text-sm tabular-nums" dir="ltr">{formatTime(currentTime)} / {formatTime(duration)}</span>
-                <div className="flex-1" />
                 <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={handleFullscreen} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
                   </svg>
                 </button>
+                <div className="flex-1" />
+                <span className="text-white text-sm tabular-nums" dir="ltr">{formatTime(currentTime)} / {formatTime(duration)}</span>
               </div>
-            </div>
-          </div>
         ) : (
           <iframe
             src={getVideoEmbedUrl(url)}
