@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { put } from '@vercel/blob'
 
 var CONTENT_TYPES: Record<string, string> = {
   'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime', 'avi': 'video/x-msvideo',
@@ -10,26 +11,6 @@ var CONTENT_TYPES: Record<string, string> = {
 function getContentType(filename: string, fallback: string): string {
   var ext = filename.split('.').pop()?.toLowerCase() || ''
   return CONTENT_TYPES[ext] || fallback
-}
-
-async function uploadToBlob(filename: string, data: Buffer | Uint8Array, contentType: string): Promise<string> {
-  var token = process.env.BLOB_READ_WRITE_TOKEN
-  if (!token) throw new Error('BLOB_READ_WRITE_TOKEN is not set')
-  var res = await fetch('https://upload.blob.vercel-storage.com', {
-    method: 'POST',
-    headers: {
-      'authorization': 'Bearer ' + token,
-      'x-content-type': contentType,
-      'x-blob-filename': filename,
-    },
-    body: data,
-  })
-  if (!res.ok) {
-    var errText = await res.text().catch(function() { return '' })
-    throw new Error('Blob upload failed: ' + res.status + ' ' + errText)
-  }
-  var json = await res.json()
-  return json.url
 }
 
 var tempChunks: Record<string, { parts: ArrayBuffer[]; fileName: string; fileType: string; totalChunks: number; received: number }> = {}
@@ -49,12 +30,31 @@ export async function POST(request: NextRequest) {
       var buffer = Buffer.from(await file.arrayBuffer())
       var ext = fileName.split('.').pop() || ''
       var contentType = getContentType(fileName, file.type || 'application/octet-stream')
-      var blobFilename = Date.now() + '-' + uploadId.slice(0, 8) + '.' + ext
-      var url = await uploadToBlob(blobFilename, buffer, contentType)
-      return NextResponse.json({ filePath: url, fileType: file.type || contentType, filename: fileName, size: file.size, done: true })
+      var blobPath = category + '/' + Date.now() + '-' + uploadId.slice(0, 8) + '.' + ext
+      var blob = await put(blobPath, buffer, { contentType: contentType, access: 'public' })
+      return NextResponse.json({ filePath: blob.url, fileType: file.type || contentType, filename: fileName, size: file.size, done: true })
     }
 
     var key = uploadId
     if (!tempChunks[key]) tempChunks[key] = { parts: [], fileName: fileName, fileType: file.type, totalChunks: totalChunks, received: 0 }
     var entry = tempChunks[key]
-    entry.parts[chunkIndex] = await file.arra
+    entry.parts[chunkIndex] = await file.arrayBuffer()
+    entry.received++
+    if (entry.received >= entry.totalChunks) {
+      var totalSize = entry.parts.reduce(function(s, p) { return s + p.byteLength }, 0)
+      var assembled = new Uint8Array(totalSize)
+      var off = 0
+      for (var i = 0; i < entry.parts.length; i++) { assembled.set(new Uint8Array(entry.parts[i]), off); off += entry.parts[i].byteLength }
+      var ext2 = fileName.split('.').pop() || ''
+      var ct = getContentType(fileName, entry.fileType || 'application/octet-stream')
+      var bp = category + '/' + Date.now() + '-' + uploadId.slice(0, 8) + '.' + ext2
+      var result = await put(bp, assembled, { contentType: ct, access: 'public' })
+      delete tempChunks[key]
+      return NextResponse.json({ filePath: result.url, fileType: entry.fileType || ct, filename: fileName, size: totalSize, done: true })
+    }
+    return NextResponse.json({ message: 'Chunk ' + (chunkIndex + 1) + '/' + totalChunks, done: false })
+  } catch (error: any) {
+    console.error('Upload chunk error:', error)
+    return NextResponse.json({ error: error.message || 'Upload failed' }, { status: 500 })
+  }
+}
