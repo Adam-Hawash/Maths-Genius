@@ -564,33 +564,22 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
   }
 
   return (
-    <div className="space-y-3">
-      {exams.map((exam) => {
-        const examResult = results.find(r => r.examId === exam.id)
-        let hasMCQ = false
-
-        const startExam = async () => {
-          try {
-            const res = await fetch(`/api/exams/${exam.id}`)
-            const data = await res.json()
-            if (data.questions && data.questions.length > 0) {
-              hasMCQ = true
-              setExamQuestions(data.questions)
-              setTakingExam(exam.id)
-            } else {
-              toast.info('لا توجد أسئلة لهذا الامتحان')
-            }
-          } catch { toast.error('خطأ في تحميل الامتحان') }
-        }
-
-        return (
-          <Card key={exam.id} className={examResult ? (examResult.passed ? 'border-emerald-500/30' : 'border-destructive/30') : ''}>
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <FileText className="h-4 w-4 text-purple-500" />
-                  </div>
+              <div className="flex items-center gap-1 px-4 py-3 bg-gradient-to-t from-black/80 to-transparent">
+                <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={togglePlay} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); togglePlay() }}>
+                  {playing ? (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                  ) : (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  )}
+                </button>
+                <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={handleFullscreen} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                  </svg>
+                </button>
+                <div className="flex-1" />
+                <span className="text-white text-sm tabular-nums" dir="ltr">{formatTime(currentTime)} / {formatTime(duration)}</span>
+              </div>
                   <div className="min-w-0 space-y-1">
                     <h3 className="font-semibold text-sm">{exam.title}</h3>
                     {exam.description && <p className="text-xs text-muted-foreground line-clamp-2">{exam.description}</p>}
