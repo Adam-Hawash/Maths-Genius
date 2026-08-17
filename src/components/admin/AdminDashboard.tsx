@@ -470,9 +470,13 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
       const params = new URLSearchParams({ pageSize: '100' })
       if (filterGrade) params.set('grade', filterGrade)
       const res = await fetch(`/api/videos?${params}`)
-      const data = await res.json()
-      setVideos(data.videos || [])
-    } catch { toast.error('خطأ في تحميل الفيديوهات') }
+      if (!res.ok) {
+        try { const errData = await res.json(); toast.error('خطأ في تحميل الفيديوهات: ' + (errData.error || ''), { duration: 8000 }) } catch { toast.error('خطأ في السيرفر', { duration: 8000 }) }
+      } else {
+        const data = await res.json()
+        setVideos(data.videos || [])
+      }
+    } catch (err: any) { toast.error('خطأ: ' + (err.message || ''), { duration: 8000 }) }
     setLoading(false)
   }
 
@@ -530,10 +534,10 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
         loadVideos(false)
         onStatsRefresh()
       } else {
-        try { const d = await res.json(); toast.error(d.error || 'خطأ في الإضافة') } catch { toast.error('خطأ في السيرفر - حاول تاني') }
+        try { const d = await res.json(); toast.error(d.error || 'خطأ في الإضافة', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر - حاول تاني', { duration: 8000 }) }
       }
     } catch (err: any) {
-      toast.error(err.message || 'خطأ في الاتصال')
+      toast.error('خطأ في الاتصال: ' + (err.message || ''), { duration: 8000 })
     }
     setSubmitting(false)
     setUploading(false)
@@ -747,9 +751,13 @@ function ExamTrackingPanel() {
     setLoading(true)
     try {
       const res = await fetch('/api/exams?pageSize=100')
-      const data = await res.json()
-      setExams(data.exams || [])
-    } catch { toast.error('خطأ في تحميل الامتحانات') }
+      if (!res.ok) {
+        try { const errData = await res.json(); toast.error('خطأ في تحميل الامتحانات: ' + (errData.error || ''), { duration: 8000 }) } catch { toast.error('خطأ في السيرفر', { duration: 8000 }) }
+      } else {
+        const data = await res.json()
+        setExams(data.exams || [])
+      }
+    } catch (err: any) { toast.error('خطأ: ' + (err.message || ''), { duration: 8000 }) }
     setLoading(false)
   }
 
@@ -855,8 +863,8 @@ function ExamTrackingPanel() {
       const res = await fetch('/api/exams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (res.ok) {
         toast.success('تم إضافة الامتحان'); setShowForm(false); setFormTitle(''); setFormContent(''); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileType(''); setFormFileUrl(''); setFormQuestions([]); setFormPassScore(50); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyType(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); loadExams()
-      } else { try { const d = await res.json(); toast.error(d.error || 'خطأ') } catch { toast.error('خطأ في السيرفر - حاول تاني') } }
-    } catch { toast.error('خطأ في الاتصال') }
+      } else { try { const d = await res.json(); toast.error(d.error || 'خطأ', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر - حاول تاني', { duration: 8000 }) } }
+    } catch (err: any) { toast.error('خطأ في الاتصال: ' + (err.message || ''), { duration: 8000 }) }
     setSubmitting(false)
   }
 
@@ -1563,9 +1571,13 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       const params = new URLSearchParams({ pageSize: '100' })
       if (filterGrade) params.set('grade', filterGrade)
       const res = await fetch(`${apiPath}?${params}`)
-      const data = await res.json()
-      setItems(data[itemName] || [])
-    } catch { toast.error('خطأ في تحميل البيانات') }
+      if (!res.ok) {
+        try { const errData = await res.json(); toast.error('خطأ في تحميل: ' + (errData.error || ''), { description: apiPath, duration: 8000 }) } catch { toast.error('خطأ في السيرفر', { description: apiPath, duration: 8000 }) }
+      } else {
+        const data = await res.json()
+        setItems(data[itemName] || [])
+      }
+    } catch (err: any) { toast.error('خطأ في تحميل البيانات: ' + (err.message || ''), { description: apiPath, duration: 6000 }) }
     setLoading(false)
   }
 
@@ -1683,8 +1695,8 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       const res = await fetch(apiPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (res.ok) {
         toast.success('تم الإضافة بنجاح'); setShowForm(false); setFormValues({}); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setMcqQuestions([]); loadItems(false); onRefresh()
-      } else { try { const d = await res.json(); toast.error(d.error || 'خطأ') } catch { toast.error('خطأ في السيرفر - حاول تاني') } }
-    } catch { toast.error('خطأ في الاتصال') }
+      } else { try { const d = await res.json(); toast.error(d.error || 'خطأ', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر - حاول تاني', { duration: 8000 }) } }
+    } catch (err: any) { toast.error('خطأ في الاتصال: ' + (err.message || ''), { duration: 8000 }) }
     setSubmitting(false)
   }
 
