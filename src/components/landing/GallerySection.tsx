@@ -2,7 +2,7 @@
 
 import { useAppStore } from '@/stores/app-store'
 import { Badge } from '@/components/ui/badge'
-import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X, Loader2 } from 'lucide-react'
+import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X, Loader2, Maximize } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import type { GalleryImage } from '@/stores/app-store'
@@ -95,6 +95,7 @@ export default function GallerySection() {
   var imageCount = onlyImages.length
   var videoCount = onlyVideos.length
 
+  // Show placeholder when no items
   if (!loading && images.length === 0) {
     return (
       <section className="py-16 sm:py-20 bg-muted/30" dir="rtl">
@@ -130,6 +131,7 @@ export default function GallerySection() {
   return (
     <section className="py-16 sm:py-20 bg-muted/30" dir="rtl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        {/* Header */}
         <div className="text-center mb-12 space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
             <Camera className="h-4 w-4" />
@@ -153,6 +155,7 @@ export default function GallerySection() {
           </div>
         ) : (
           <>
+            {/* ========== قسم الصور ========== */}
             {imageCount > 0 && (
               <div className="mb-12">
                 <div className="flex items-center gap-3 mb-6">
@@ -203,6 +206,7 @@ export default function GallerySection() {
               </div>
             )}
 
+            {/* ========== قسم الفيديوهات (شورتس) ========== */}
             {videoCount > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-6">
@@ -277,6 +281,7 @@ export default function GallerySection() {
           </>
         )}
 
+        {/* Stats */}
         {!loading && images.length > 0 && (
           <div className="flex items-center justify-center gap-4 mt-8 text-muted-foreground text-sm">
             <span className="flex items-center gap-1.5"><ImagePlus className="h-4 w-4" />{imageCount} صورة</span>
@@ -286,6 +291,7 @@ export default function GallerySection() {
         )}
       </div>
 
+      {/* Video Modal */}
       {videoModal && (
         <GalleryVideoModal url={videoModal} onClose={function() { setVideoModal(null) }} />
       )}
@@ -293,7 +299,7 @@ export default function GallerySection() {
   )
 }
 
-/* ========== Gallery Video Modal ========== */
+/* ========== Gallery Video Modal (بدون 3-dot menu / بدون تحميل) ========== */
 function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
@@ -378,6 +384,7 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
       onContextMenu={function(e) { e.preventDefault() }}
     >
       <div className="relative w-full max-w-5xl aspect-video" onClick={function(e) { e.stopPropagation() }}>
+        {/* زرار إغلاق */}
         <button
           className="absolute -top-10 left-0 text-white hover:text-white/80 flex items-center gap-1 text-sm z-30"
           onClick={onClose}
@@ -437,6 +444,9 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
                 onClick={handleSeek}
                 onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleSeek(e) }}
               >
+                <div className="absolute top-0 left-0 h-full bg-white/40 pointer-events-none" style={{ width: buffered + '%' }} />
+                <div className="absolute top-0 left-0 h-full bg-primary group-hover:h-2 transition-all pointer-events-none" style={{ width: progressPercent + '%' }} />
+              </div>
               <div className="flex items-center gap-1 px-4 py-3 bg-gradient-to-t from-black/80 to-transparent">
                 <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={togglePlay} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); togglePlay() }}>
                   {playing ? (
@@ -445,14 +455,13 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                   )}
                 </button>
-                <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={handleFullscreen} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
-                  </svg>
-                </button>
-                <div className="flex-1" />
                 <span className="text-white text-sm tabular-nums" dir="ltr">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                <button className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={handleFullscreen} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}>
+                  <Maximize className="w-5 h-5" />
+                </button>
               </div>
+            </div>
+          </div>
         ) : (
           <iframe
             src={getVideoEmbedUrl(url)}
