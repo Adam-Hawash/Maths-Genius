@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// POST /api/exams/submit - Auto-grade exam submission
+// POST /api/exams/submit - Auto-grade exam submission (NO immediate per-question feedback)
 export async function POST(request: NextRequest) {
   try {
-    const { studentId, examId, answers } = await request.json() // answers: { [questionIndex]: selectedOptionIndex }
+    const { studentId, examId, answers } = await request.json()
 
     if (!studentId || !examId) {
       return NextResponse.json({ error: 'studentId and examId required' }, { status: 400 })
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     let score = 0
     let maxScore = 100
-    let details: { question: string; correct: boolean; points: number }[] = []
+    let details: { question: string; correct: boolean; points: number; studentAnswer: number; correctAnswer: number }[] = []
 
     if (exam.questions) {
       try {
@@ -35,7 +35,13 @@ export async function POST(request: NextRequest) {
           const selectedAnswer = answers?.[String(idx)] ?? answers?.[idx]
           const isCorrect = selectedAnswer === q.correct
           if (isCorrect) earnedPoints += points
-          details.push({ question: q.q, correct: isCorrect, points })
+          details.push({
+            question: q.q || q.question,
+            correct: isCorrect,
+            points,
+            studentAnswer: selectedAnswer ?? -1,
+            correctAnswer: q.correct,
+          })
         })
 
         maxScore = totalPoints
@@ -51,6 +57,8 @@ export async function POST(request: NextRequest) {
         studentId,
         score,
         maxScore,
+        answers: JSON.stringify(answers),
+        details: JSON.stringify(details),
         submittedAt: new Date(),
       },
     })
