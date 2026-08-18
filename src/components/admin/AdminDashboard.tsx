@@ -1058,9 +1058,7 @@ function ExamTrackingPanel() {
       </CardContent>
     </Card>
   )
-}
-
-/* ========== GALLERY MANAGER ========== */
+}/* ========== GALLERY MANAGER ========== */
 function GalleryManager() {
   var [images, setImages] = useState<GalleryImage[]>([])
   var [loading, setLoading] = useState(true)
@@ -1068,6 +1066,9 @@ function GalleryManager() {
   var [uploading, setUploading] = useState(false)
   var [saving, setSaving] = useState(false)
   var fileRef = useRef<HTMLInputElement>(null)
+  var vidFileRef = useRef<HTMLInputElement>(null)
+  var [vidFile, setVidFile] = useState<File | null>(null)
+  var [vidUploading, setVidUploading] = useState(false)
   var [imgUrl, setImgUrl] = useState('')
   var [imgOrder, setImgOrder] = useState('0')
   var [vidUrl, setVidUrl] = useState('')
@@ -1089,6 +1090,7 @@ function GalleryManager() {
   var resetAll = function() {
     setImgUrl(''); setImgOrder('0')
     setVidUrl(''); setVidThumb(''); setVidOrder('0')
+    setVidFile(null); setVidUploading(false)
     setUploading(false); setSaving(false)
   }
 
@@ -1132,6 +1134,28 @@ function GalleryManager() {
       } else { toast.error('خطأ في الإضافة') }
     } catch { toast.error('خطأ في الاتصال') }
     setSaving(false)
+  }
+
+  var handleVidUpload = async function(file: File) {
+    setVidUploading(true)
+    try {
+      var upData = await chunkedUpload(file, 'gallery')
+      var body: any = {
+        title: file.name,
+        videoUrl: upData.filePath,
+        type: 'video',
+        sortOrder: parseInt(vidOrder) || 0
+      }
+      if (vidThumb.trim()) { body.filePath = vidThumb.trim() }
+      await fetch('/api/gallery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      toast.success('تم رفع الفيديو بنجاح')
+      resetAll(); loadGallery()
+    } catch (err: any) { toast.error(err.message || 'خطأ في رفع الفيديو') }
+    setVidUploading(false)
   }
 
   var handleVidAdd = async function() {
@@ -1188,7 +1212,6 @@ function GalleryManager() {
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* ===== ADD FORMS ===== */}
         {showForm && (
           <div className="space-y-4 p-4 rounded-xl border bg-muted/30">
             {/* === صورة === */}
@@ -1197,8 +1220,6 @@ function GalleryManager() {
                 <ImagePlus className="h-4 w-4 text-emerald-600" />
                 إضافة صورة
               </h3>
-
-              {/* رفع ملف */}
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">رفع صورة من الجهاز</Label>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={function(e) { var f = e.target.files?.[0]; if (f) handleImgUpload(f); e.target.value = '' }} />
@@ -1207,15 +1228,11 @@ function GalleryManager() {
                   {uploading ? 'جاري الرفع...' : 'اختر صورة للرفع'}
                 </Button>
               </div>
-
-              {/* فاصل */}
               <div className="flex items-center gap-3">
                 <div className="flex-grow h-px bg-border" />
                 <span className="text-[11px] text-muted-foreground">أو</span>
                 <div className="flex-grow h-px bg-border" />
               </div>
-
-              {/* لينك صورة + ترتيب */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1 sm:col-span-2">
                   <Label className="text-xs text-muted-foreground">رابط الصورة</Label>
@@ -1226,7 +1243,6 @@ function GalleryManager() {
                   <Input type="number" placeholder="0" value={imgOrder} onChange={function(e) { setImgOrder(e.target.value) }} />
                 </div>
               </div>
-
               <Button size="sm" onClick={handleImgLink} disabled={saving || !imgUrl.trim()}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <Plus className="h-4 w-4 ml-1" />}
                 إضافة الصورة بالرابط
@@ -1239,6 +1255,29 @@ function GalleryManager() {
                 <PlayCircle className="h-4 w-4 text-blue-600" />
                 إضافة فيديو
               </h3>
+
+              {/* رفع فيديو من الجهاز */}
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">رفع فيديو من الجهاز</Label>
+                <input ref={vidFileRef} type="file" accept="video/*" className="hidden" onChange={function(e) { var f = e.target.files?.[0]; if (f) { setVidFile(f) } }} />
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="border-dashed" onClick={function() { vidFileRef.current?.click() }} disabled={vidUploading}>
+                    {vidUploading ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <Upload className="h-4 w-4 ml-1" />}
+                    {vidFile ? vidFile.name : 'اختر فيديو للرفع'}
+                  </Button>
+                  {vidFile && <span className="text-xs text-muted-foreground">{(vidFile.size / 1024 / 1024).toFixed(1)} MB</span>}
+                  {vidFile && <Button size="sm" onClick={function() { if (vidFile) handleVidUpload(vidFile) }} disabled={vidUploading}>
+                    {vidUploading ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <Plus className="h-4 w-4 ml-1" />}
+                    رفع الفيديو
+                  </Button>}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-grow h-px bg-border" />
+                <span className="text-[11px] text-muted-foreground">أو</span>
+                <div className="flex-grow h-px bg-border" />
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -1259,7 +1298,7 @@ function GalleryManager() {
 
               <Button size="sm" variant="outline" onClick={handleVidAdd} disabled={saving || !vidUrl.trim()}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <Plus className="h-4 w-4 ml-1" />}
-                إضافة الفيديو
+                إضافة الفيديو بالرابط
               </Button>
             </div>
           </div>
