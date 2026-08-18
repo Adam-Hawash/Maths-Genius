@@ -7,8 +7,7 @@ import { Award, GraduationCap, Users, BookOpen, Clock } from 'lucide-react'
 
 export default function HeroSection() {
   const {
-    setShowStudentRegister,
-    setShowStudentLogin,
+    setView,
     siteConfig,
     setSiteConfig,
     configLoaded,
@@ -39,6 +38,7 @@ export default function HeroSection() {
     if (!hasDbBg) {
       var img = new Image()
       img.onload = function () { setFallbackBgExists(true) }
+      img.onerror = function () { setFallbackBgExists(false) }
       img.src = '/images/hero-bg.jpg'
     } else {
       setFallbackBgExists(false)
@@ -46,6 +46,7 @@ export default function HeroSection() {
     if (!hasDbPhoto) {
       var img2 = new Image()
       img2.onload = function () { setFallbackPhotoExists(true) }
+      img2.onerror = function () { setFallbackPhotoExists(false) }
       img2.src = '/images/instructor.jpg'
     } else {
       setFallbackPhotoExists(false)
@@ -128,7 +129,7 @@ export default function HeroSection() {
               <Button
                 size="lg"
                 className="text-base px-8 py-6 min-h-[44px] bg-[#C49A38] hover:bg-[#D4A843] text-white font-semibold transition-colors duration-200"
-                onClick={() => setShowStudentRegister(true)}
+                onClick={() => setView('auth-register')}
               >
                 سجّل الآن | Register Now
               </Button>
@@ -136,7 +137,7 @@ export default function HeroSection() {
                 variant="outline"
                 size="lg"
                 className="text-base px-8 py-6 min-h-[44px] border-[#C49A38]/40 text-[#E5BE5A] hover:bg-[#C49A38]/10 hover:text-[#E5BE5A] transition-colors duration-200"
-                onClick={() => setShowStudentLogin(true)}
+                onClick={() => setView('auth-login')}
               >
                 لديّ حساب | I Have an Account
               </Button>
