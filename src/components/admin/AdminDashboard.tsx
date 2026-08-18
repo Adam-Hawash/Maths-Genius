@@ -1,713 +1,4 @@
-'use client'
-
-import { useAppStore, GRADES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
-import { chunkedUpload } from '@/lib/chunked-upload'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Users, UserCheck, Clock, Video, ClipboardList, FileText,
-  Megaphone, Plus, Check, X, Trash2, LogOut, Loader2,
-  BarChart3, RefreshCw, Settings, Upload, MessageSquare,
-  Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
-  PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save
-} from 'lucide-react'
-import { CMSPanel } from './CMSPanel'
-import { SocialLinksPanel } from './SocialLinksPanel'
-import { CommunityPanel } from './CommunityPanel'
-import { ActivityPanel } from './ActivityPanel'
-import { useState, useEffect, useRef } from 'react'
-import Image from 'next/image'
-import { toast } from 'sonner'
-
-export function AdminDashboard() {
-  const { adminTab, setAdminTab, logout, currentAdmin, setCurrentAdmin } = useAppStore()
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [settingsOldPass, setSettingsOldPass] = useState('')
-  const [settingsEmail, setSettingsEmail] = useState('')
-  const [settingsNewPass, setSettingsNewPass] = useState('')
-  const [settingsSaving, setSettingsSaving] = useState(false)
-  const [settingsLoading, setSettingsLoading] = useState(false)
-  const [resendApiKey, setResendApiKey] = useState('')
-  const [resendSaving, setResendSaving] = useState(false)
-  const [heroDevUrl, setHeroDevUrl] = useState('')
-  const [heroDevSaving, setHeroDevSaving] = useState(false)
-
-  const fetchStats = async () => {
-    try {
-      const res = await fetch('/api/stats')
-      const data = await res.json()
-      setStats(data)
-    } catch { /* silent */ }
-  }
-
-  useEffect(() => { fetchStats() }, [])
-
-  const openSettings = async () => {
-    setShowSettings(true)
-    setSettingsLoading(true)
-    try {
-      const res = await fetch('/api/admin/settings')
-      const data = await res.json()
-      if (data.admin) {
-        setSettingsEmail(data.admin.email || '')
-        if (data.admin.email && setCurrentAdmin) setCurrentAdmin({ ...currentAdmin!, email: data.admin.email })
-      }
-      // Load Resend API key
-      try {
-        const cfgRes = await fetch('/api/config')
-        const cfgData = await cfgRes.json()
-        setResendApiKey(cfgData.resend_api_key || '')
-        setHeroDevUrl(cfgData.hero_developer_url || '')
-      } catch { /* silent */ }
-    } catch { /* silent */ }
-    setSettingsLoading(false)
-  }
-
-  const saveSettings = async () => {
-    if (!settingsOldPass) { toast.error('أدخل كلمة المرور الحالية'); return }
-    setSettingsSaving(true)
-    try {
-      const res = await fetch('/api/admin/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldPassword: settingsOldPass, newEmail: settingsEmail, newPassword: settingsNewPass }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        toast.success('تم تحديث الإعدادات')
-        if (data.admin && setCurrentAdmin) setCurrentAdmin(data.admin)
-        setSettingsOldPass(''); setSettingsNewPass(''); setShowSettings(false)
-      } else {
-        try { const d = await res.json(); toast.error(d.error || 'خطأ') } catch { toast.error('خطأ في السيرفر') }
-      }
-    } catch { toast.error('خطأ في الاتصال') }
-    setSettingsSaving(false)
-  }
-
-  return (
-    <div className="flex-1 py-6 px-4 sm:px-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold">لوحة التحكم | Admin Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-1">إدارة المنصة التعليمية بالكامل</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={fetchStats}><RefreshCw className="h-4 w-4 ml-1" />تحديث</Button>
-            <Button variant="outline" size="sm" onClick={openSettings}><Settings className="h-4 w-4 ml-1" />الإعدادات</Button>
-            <Button variant="outline" size="sm" onClick={logout}><LogOut className="h-4 w-4 ml-1" />خروج</Button>
-          </div>
-        </div>
-
-        {stats && (
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4 mb-6">
-            <StatCard icon={Users} label="إجمالي الطلاب" value={stats.totalStudents} color="bg-[#C49A38]/10 text-[#C49A38]" />
-            <StatCard icon={Clock} label="بانتظار الموافقة" value={stats.pendingStudents} color="bg-amber-500/10 text-amber-600 dark:text-amber-400" />
-            <StatCard icon={UserCheck} label="طلاب مفعلين" value={stats.approvedStudents} color="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
-            <StatCard icon={Video} label="إجمالي الفيديوهات" value={stats.totalVideos} color="bg-purple-500/10 text-purple-600 dark:text-purple-400" />
-          </div>
-        )}
-
-        <Tabs value={adminTab} onValueChange={setAdminTab} className="space-y-6">
-          <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
-            <TabsTrigger value="students" className="text-xs sm:text-sm gap-1"><Users className="h-4 w-4" /><span className="hidden sm:inline">الطلاب</span></TabsTrigger>
-            <TabsTrigger value="my-students" className="text-xs sm:text-sm gap-1"><BarChart3 className="h-4 w-4" /><span className="hidden sm:inline">طلابي</span></TabsTrigger>
-            <TabsTrigger value="videos" className="text-xs sm:text-sm gap-1"><Video className="h-4 w-4" /><span className="hidden sm:inline">الفيديوهات</span></TabsTrigger>
-            <TabsTrigger value="homework" className="text-xs sm:text-sm gap-1"><ClipboardList className="h-4 w-4" /><span className="hidden sm:inline">الواجبات</span></TabsTrigger>
-            <TabsTrigger value="exams" className="text-xs sm:text-sm gap-1"><FileText className="h-4 w-4" /><span className="hidden sm:inline">الامتحانات</span></TabsTrigger>
-            <TabsTrigger value="announcements" className="text-xs sm:text-sm gap-1"><Megaphone className="h-4 w-4" /><span className="hidden sm:inline">الإعلانات</span></TabsTrigger>
-            <TabsTrigger value="community" className="text-xs sm:text-sm gap-1"><MessageSquare className="h-4 w-4" /><span className="hidden sm:inline">المجتمعات</span></TabsTrigger>
-            <TabsTrigger value="activity" className="text-xs sm:text-sm gap-1"><Activity className="h-4 w-4" /><span className="hidden sm:inline">المتابعة</span></TabsTrigger>
-            <TabsTrigger value="gallery" className="text-xs sm:text-sm gap-1"><Camera className="h-4 w-4" /><span className="hidden sm:inline">معرض الصور</span></TabsTrigger>
-            <TabsTrigger value="cms" className="text-xs sm:text-sm gap-1"><Settings className="h-4 w-4" /><span className="hidden sm:inline">المحتوى</span></TabsTrigger>
-            <TabsTrigger value="social" className="text-xs sm:text-sm gap-1"><Link2 className="h-4 w-4" /><span className="hidden sm:inline">الروابط</span></TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="students"><StudentsManager onStatsRefresh={fetchStats} /></TabsContent>
-          <TabsContent value="my-students"><MyStudentsPanel /></TabsContent>
-          <TabsContent value="videos"><VideoManager onStatsRefresh={fetchStats} /></TabsContent>
-          <TabsContent value="homework">
-            <ContentManager<Homework> title="إدارة الواجبات | Homework" apiPath="/api/homework" itemName="homework"
-              fields={{ title: { label: 'عنوان الواجب | HW Title', type: 'text' }, content: { label: 'المحتوى | Content', type: 'textarea' } }}
-              renderTitle={(item) => item.title} renderSubtitle={(item) => item.content?.substring(0, 80) || (item.filePath ? `📎 ${item.fileType}` : '')}
-              supportFileUpload fileCategory="homework" acceptedTypes=".pdf,.doc,.docx,image/*" supportAnswerKey supportThumbnail supportMCQ onRefresh={fetchStats} />
-          </TabsContent>
-          <TabsContent value="exams"><ExamTrackingPanel /></TabsContent>
-          <TabsContent value="announcements">
-            <ContentManager<Announcement> title="إدارة الإعلانات | Announcements" apiPath="/api/announcements" itemName="announcements"
-              fields={{ title: { label: 'عنوان | Title', type: 'text' }, content: { label: 'المحتوى | Content', type: 'textarea' } }}
-              renderTitle={(item) => item.title} renderSubtitle={(item) => item.content?.substring(0, 100) + '...'} onRefresh={fetchStats} />
-          </TabsContent>
-          <TabsContent value="community"><CommunityPanel /></TabsContent>
-          <TabsContent value="activity"><ActivityPanel /></TabsContent>
-          <TabsContent value="gallery"><GalleryManager /></TabsContent>
-          <TabsContent value="cms"><CMSPanel /></TabsContent>
-          <TabsContent value="social"><SocialLinksPanel /></TabsContent>
-        </Tabs>
-
-        {/* Admin Settings Dialog */}
-        {showSettings && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
-            <div className="bg-card border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold flex items-center gap-2"><Settings className="h-5 w-5 text-primary" />إعدادات الحساب</h3>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowSettings(false)}><X className="h-4 w-4" /></Button>
-              </div>
-              {settingsLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">البريد الإلكتروني الجديد</Label>
-                    <Input value={settingsEmail} onChange={(e) => setSettingsEmail(e.target.value)} placeholder="admin@example.com" dir="ltr" type="email" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">كلمة المرور الجديدة (اختياري)</Label>
-                    <Input value={settingsNewPass} onChange={(e) => setSettingsNewPass(e.target.value)} placeholder="6 حروف على الأقل" type="password" />
-                  </div>
-                  <div className="border-t pt-4">
-                    <p className="text-[10px] text-muted-foreground mb-2">لكي تحفظ التغييرات، أدخل كلمة المرور الحالية:</p>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">كلمة المرور الحالية *</Label>
-                      <Input value={settingsOldPass} onChange={(e) => setSettingsOldPass(e.target.value)} placeholder="أدخل كلمة المرور الحالية" type="password" className="border-destructive/30 focus-visible:ring-destructive/30" />
-                    </div>
-                  </div>
-                  {/* Resend API Key */}
-                  <div className="border-t pt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-muted-foreground">مفتاح Resend API للإيميلات</p>
-                      <Button size="sm" variant="outline" onClick={async () => {
-                        setResendSaving(true)
-                        try {
-                          await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resend_api_key: resendApiKey }) })
-                          toast.success('تم حفظ مفتاح Resend')
-                        } catch { toast.error('خطأ في الحفظ') }
-                        setResendSaving(false)
-                      }} disabled={resendSaving}>
-                        {resendSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                      </Button>
-                    </div>
-                    <Input value={resendApiKey} onChange={(e) => setResendApiKey(e.target.value)} placeholder="re_xxxxxxxxxxxx" dir="ltr" type="password" className="font-mono text-xs" />
-                    <p className="text-[10px] text-muted-foreground">يُستخدم لإرسال إشعارات بالبريد للطلاب. احصل عليه من resend.com</p>
-                  </div>
-                  {/* Hero Developer Portfolio URL */}
-                  <div className="border-t pt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-muted-foreground">رابط Hero Developer Portfolio</p>
-                      <Button size="sm" variant="outline" onClick={async () => {
-                        setHeroDevSaving(true)
-                        try {
-                          const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hero_developer_url: heroDevUrl }) })
-                          if (res.ok) {
-                            // Update siteConfig in store so footer/hero reflect instantly
-                            const store = await import('@/stores/app-store')
-                            const cfg = store.useAppStore.getState().siteConfig
-                            store.useAppStore.getState().setSiteConfig({ ...cfg, hero_developer_url: heroDevUrl })
-                            toast.success('تم حفظ رابط Hero Developer')
-                          } else { toast.error('خطأ في الحفظ') }
-                        } catch { toast.error('خطأ في الحفظ') }
-                        setHeroDevSaving(false)
-                      }} disabled={heroDevSaving}>
-                        {heroDevSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                      </Button>
-                    </div>
-                    <Input value={heroDevUrl} onChange={(e) => setHeroDevUrl(e.target.value)} placeholder="https://hero-developer-portfolio-11.vercel.app" dir="ltr" type="url" className="font-mono text-xs" />
-                    <p className="text-[10px] text-muted-foreground">الرابط يظهر في الهيدر (Hero Developer) والفوتر (Made by Adam Hawash). غيّره في أي وقت وبيتنعكس فوراً.</p>
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <Button onClick={saveSettings} disabled={settingsSaving || !settingsOldPass} className="flex-1">
-                      {settingsSaving ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Save className="h-4 w-4 ml-1" />}
-                      {settingsSaving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
-                    </Button>
-                    <Button variant="outline" onClick={() => { setShowSettings(false); setSettingsOldPass(''); setSettingsNewPass('') }}>إلغاء</Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/* ========== STAT CARD ========== */
-function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: number; color: string }) {
-  return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${color}`}><Icon className="h-5 w-5" /></div>
-        <div><p className="text-2xl font-bold">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div>
-      </CardContent>
-    </Card>
-  )
-}
-
-/* ========== STUDENTS MANAGER ========== */
-function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
-  const [students, setStudents] = useState<Student[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending')
-  const [filterGrade, setFilterGrade] = useState('')
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
-  const [studentProgress, setStudentProgress] = useState<any>(null)
-  const [loadingProgress, setLoadingProgress] = useState(false)
-
-  const loadStudents = async (showLoader = true) => {
-    if (showLoader) setLoading(true)
-    try {
-      const params = new URLSearchParams({ pageSize: '100' })
-      if (filter !== 'all') params.set('status', filter)
-      if (filterGrade) params.set('grade', filterGrade)
-      const res = await fetch(`/api/students?${params}`)
-      const data = await res.json()
-      setStudents(data.students || [])
-    } catch { toast.error('خطأ في تحميل الطلاب') }
-    setLoading(false)
-  }
-
-  useEffect(() => { loadStudents() }, [filter, filterGrade])
-
-  const loadStudentProgress = async (studentId: string) => {
-    setSelectedStudentId(studentId)
-    setLoadingProgress(true)
-    try {
-      const res = await fetch(`/api/students/${studentId}/progress`)
-      const data = await res.json()
-      setStudentProgress(data)
-    } catch { toast.error('خطأ في تحميل بيانات الطالب') }
-    setLoadingProgress(false)
-  }
-
-  const closeStudentDetails = () => {
-    setSelectedStudentId(null)
-    setStudentProgress(null)
-  }
-
-  const handleAction = async (id: string, status: 'approved' | 'rejected') => {
-    try {
-      await fetch(`/api/students/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
-      toast.success(status === 'approved' ? 'تم قبول الطالب' : 'تم رفض الطالب')
-      loadStudents(false); onStatsRefresh()
-    } catch { toast.error('خطأ في تحديث حالة الطالب') }
-  }
-
-  const handleDelete = async (id: string) => {
-    try { await fetch(`/api/students/${id}`, { method: 'DELETE' }); toast.success('تم حذف الطالب'); loadStudents(false); onStatsRefresh() }
-    catch { toast.error('خطأ في حذف الطالب') }
-  }
-
-  const statusColors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
-  const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض' }
-
-  // Student Details Panel
-  if (selectedStudentId && studentProgress) {
-    const { summary, videoProgress: vp, examResults: er } = studentProgress
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">تفاصيل الطالب: {studentProgress.student.name}</CardTitle>
-            <Button variant="outline" size="sm" onClick={closeStudentDetails}>رجوع</Button>
-          </div>
-          <p className="text-xs text-muted-foreground">الصف: {studentProgress.student.grade}</p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Summary Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="text-center p-3 rounded-lg bg-purple-500/10"><p className="text-xl font-bold text-purple-600 dark:text-purple-400">{summary.totalVideosWatched}</p><p className="text-[10px] text-muted-foreground">فيديو شاهده</p></div>
-            <div className="text-center p-3 rounded-lg bg-blue-500/10"><p className="text-xl font-bold text-blue-600 dark:text-blue-400">{summary.avgWatchPercent}%</p><p className="text-[10px] text-muted-foreground">متوسط المشاهدة</p></div>
-            <div className="text-center p-3 rounded-lg bg-emerald-500/10"><p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{summary.avgExamScore}</p><p className="text-[10px] text-muted-foreground">متوسط الامتحانات</p></div>
-            <div className="text-center p-3 rounded-lg bg-amber-500/10"><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{summary.examsPassed}/{summary.totalExamsTaken}</p><p className="text-[10px] text-muted-foreground">ناجح/إجمالي</p></div>
-          </div>
-
-          {/* Video Progress */}
-          <div>
-            <h4 className="font-semibold text-sm mb-3 flex items-center gap-2"><PlayCircle className="h-4 w-4 text-purple-500" />تقدم الفيديوهات ({summary.completedVideos} مكتمل من {summary.totalVideosWatched})</h4>
-            {vp.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">لم يشاهد أي فيديو بعد</p>
-            ) : (
-              <div className="space-y-2 max-h-[250px] overflow-y-auto custom-scrollbar">
-                {vp.map((v: any) => (
-                  <div key={v.id} className="flex items-center gap-3 p-2 rounded-lg border bg-card">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium truncate">{v.videoTitle}</p>
-                      <p className="text-[10px] text-muted-foreground">{v.videoGrade} | آخر مشاهدة: {new Date(v.lastWatchedAt).toLocaleDateString('ar-EG')}</p>
-                    </div>
-                    <div className="shrink-0 text-left" style={{ minWidth: '60px' }}>
-                      <div className={`text-xs font-bold ${v.percent >= 90 ? 'text-emerald-600' : v.percent >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{v.percent}%</div>
-                      <div className="h-1.5 w-full bg-muted rounded-full mt-1"><div className={`h-full rounded-full ${v.percent >= 90 ? 'bg-emerald-500' : v.percent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${v.percent}%` }} /></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Exam Results */}
-          <div>
-            <h4 className="font-semibold text-sm mb-3 flex items-center gap-2"><Trophy className="h-4 w-4 text-amber-500" />نتائج الامتحانات</h4>
-            {er.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">لم يؤدِ أي امتحان بعد</p>
-            ) : (
-              <div className="space-y-2 max-h-[250px] overflow-y-auto custom-scrollbar">
-                {er.map((e: any) => (
-                  <div key={e.id} className="flex items-center gap-3 p-2 rounded-lg border bg-card">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium truncate">{e.examTitle}</p>
-                      <p className="text-[10px] text-muted-foreground">{e.examGrade} | {new Date(e.submittedAt).toLocaleDateString('ar-EG')}</p>
-                    </div>
-                    <div className="shrink-0 text-left" style={{ minWidth: '60px' }}>
-                      <div className={`text-xs font-bold ${e.passed ? 'text-emerald-600' : 'text-red-500'}`}>{e.score}/{e.maxScore}</div>
-                      <Badge className={`text-[9px] mt-1 ${e.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{e.passed ? 'ناجح' : 'راسب'}</Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  // Loading student details
-  if (selectedStudentId && loadingProgress) {
-    return (
-      <Card>
-        <CardContent className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <CardTitle className="text-lg">إدارة الطلاب</CardTitle>
-          <div className="flex gap-1 flex-wrap items-center">
-            <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-8 rounded-md border border-input bg-transparent px-2 text-xs">
-              <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
-            <div className="flex gap-1 bg-muted rounded-lg p-1">
-              {(['pending', 'all', 'approved', 'rejected'] as const).map((f) => (
-                <Button key={f} variant={filter === f ? 'default' : 'ghost'} size="sm" className="text-xs h-7 px-2" onClick={() => setFilter(f)}>
-                  {f === 'pending' ? 'بانتظار' : f === 'approved' ? 'مقبول' : f === 'rejected' ? 'مرفوض' : 'الكل'}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : students.length === 0 ? (
-          <p className="text-center text-muted-foreground py-10 text-sm">لا يوجد طلاب</p>
-        ) : (
-          <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
-            {students.map((s) => (
-              <div key={s.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-lg border bg-card">
-                <div className="space-y-1 min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm">{s.name}</span>
-                    <Badge variant="secondary" className={`text-[10px] ${statusColors[s.status]}`}>{statusLabels[s.status]}</Badge>
-                    {s.loginCount > 0 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Eye className="h-3 w-3" />{s.loginCount} دخول</span>}
-                    {(s as any).watchedVideoCount > 0 && <span className="text-[10px] text-purple-600 dark:text-purple-400 flex items-center gap-0.5"><Video className="h-3 w-3" />{(s as any).watchedVideoCount} فيديو</span>}
-                  </div>
-                  <p className="text-xs text-muted-foreground" dir="ltr">{s.phone}</p>
-                  <p className="text-xs text-muted-foreground">ولي الأمر: {s.parentName} <span dir="ltr">({s.parentPhone})</span></p>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Badge variant="outline" className="text-[10px]">{s.grade}</Badge>
-                    {s.lastLogin && <p className="text-[10px] text-muted-foreground">آخر دخول: {new Date(s.lastLogin).toLocaleDateString('ar-EG')}</p>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => loadStudentProgress(s.id)} title="تفاصيل"><BarChart3 className="h-4 w-4" /></Button>
-                  {s.status === 'pending' && (<>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')}><Check className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')}><X className="h-4 w-4" /></Button>
-                  </>)}
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(s.id)}><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-/* ========== VIDEO MANAGER (with REAL XHR upload progress) ========== */
-function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
-  const [videos, setVideos] = useState<Video[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [formGrade, setFormGrade] = useState('')
-  const [formTitle, setFormTitle] = useState('')
-  const [formUrl, setFormUrl] = useState('')
-  const [formFile, setFormFile] = useState<File | null>(null)
-  const [formThumbnail, setFormThumbnail] = useState<File | null>(null)
-  const [formThumbnailUrl, setFormThumbnailUrl] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
-  const [uploading, setUploading] = useState(false)
-  const [uploadStatus, setUploadStatus] = useState('')
-  const [filterGrade, setFilterGrade] = useState('')
-  const videoFileRef = useRef<HTMLInputElement>(null)
-  const thumbFileRef = useRef<HTMLInputElement>(null)
-
-  const loadVideos = async (showLoader = true) => {
-    if (showLoader) setLoading(true)
-    try {
-      const params = new URLSearchParams({ pageSize: '100' })
-      if (filterGrade) params.set('grade', filterGrade)
-      const res = await fetch(`/api/videos?${params}`)
-      if (!res.ok) {
-        try { const errData = await res.json(); toast.error('خطأ في تحميل الفيديوهات: ' + (errData.error || ''), { duration: 8000 }) } catch { toast.error('خطأ في السيرفر', { duration: 8000 }) }
-      } else {
-        const data = await res.json()
-        setVideos(data.videos || [])
-      }
-    } catch (err: any) { toast.error('خطأ: ' + (err.message || ''), { duration: 8000 }) }
-    setLoading(false)
-  }
-
-  useEffect(() => { loadVideos() }, [filterGrade])
-
-  // Upload using shared chunked upload utility
-  const uploadFileWithProgress = async (file: File, category: string, onProgress: (pct: number) => void, statusMsg: (msg: string) => void): Promise<string> => {
-    const result = await chunkedUpload(file, category, onProgress, statusMsg)
-    return result.filePath
-  }
-
-  const handleSubmit = async () => {
-    if (!formTitle.trim() || !formGrade) { toast.error('أدخل العنوان واختر الصف'); return }
-    if (!formUrl && !formFile) { toast.error('أدخل رابط YouTube أو ارفع ملف فيديو'); return }
-    setSubmitting(true)
-    setUploading(true)
-    try {
-      let videoPath = ''
-      let videoType = ''
-      let thumbnailPath = ''
-
-      if (formFile) {
-        setUploadStatus('جاري رفع الفيديو...')
-        videoPath = await uploadFileWithProgress(formFile, 'videos', setUploadProgress, setUploadStatus)
-        videoType = formFile.type
-      }
-
-      if (formThumbnail) {
-        setUploadStatus('جاري رفع الصورة المصغرة...')
-        setUploadProgress(0)
-        thumbnailPath = await uploadFileWithProgress(formThumbnail, 'thumbnails', setUploadProgress, setUploadStatus)
-      }
-
-      setUploadStatus('جاري الحفظ...')
-      const body: Record<string, string> = {
-        title: formTitle.trim(),
-        grade: formGrade,
-        url: formUrl.trim(),
-      }
-      if (videoPath) { body.filePath = videoPath; body.fileType = videoType }
-      if (thumbnailPath) { body.thumbnail = thumbnailPath }
-      else if (formThumbnailUrl.trim()) { body.thumbnail = formThumbnailUrl.trim() }
-
-      const res = await fetch('/api/videos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-
-      if (res.ok) {
-        toast.success('تم إضافة الفيديو بنجاح! سيظهر للصف ' + formGrade)
-        setShowForm(false)
-        setFormTitle(''); setFormUrl(''); setFormGrade('')
-        setFormFile(null); setFormThumbnail(null); setFormThumbnailUrl('')
-        loadVideos(false)
-        onStatsRefresh()
-      } else {
-        try { const d = await res.json(); toast.error(d.error || 'خطأ في الإضافة', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر - حاول تاني', { duration: 8000 }) }
-      }
-    } catch (err: any) {
-      toast.error('خطأ في الاتصال: ' + (err.message || ''), { duration: 8000 })
-    }
-    setSubmitting(false)
-    setUploading(false)
-    setUploadProgress(0)
-    setUploadStatus('')
-  }
-
-  const handleDelete = async (id: string) => {
-    try {
-      await fetch(`/api/videos/${id}`, { method: 'DELETE' })
-      toast.success('تم حذف الفيديو')
-      loadVideos(false)
-      onStatsRefresh()
-    } catch { toast.error('خطأ في الحذف') }
-  }
-
-  const getYouTubeId = (url: string) => {
-    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([\w-]{11})/)
-    return match ? match[1] : null
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <CardTitle className="text-lg flex items-center gap-2"><Film className="h-5 w-5 text-primary" />إدارة الفيديوهات</CardTitle>
-          <div className="flex gap-2 items-center flex-wrap">
-            <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-              <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
-            <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4 ml-1" />إضافة فيديو</Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Add Video Form */}
-        {showForm && (
-          <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
-            <h4 className="font-semibold text-sm flex items-center gap-2"><Plus className="h-4 w-4" />إضافة فيديو جديد</h4>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs">الصف الدراسي *</Label>
-                <select value={formGrade} onChange={(e) => setFormGrade(e.target.value)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                  <option value="">اختر الصف</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">عنوان الدرس *</Label>
-                <Input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} placeholder="مثال: الباب الأول - الكسور" />
-              </div>
-            </div>
-
-            {/* YouTube URL */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">رابط YouTube (اختياري - أو ارفع ملف فيديو)</Label>
-              <Input value={formUrl} onChange={(e) => setFormUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." dir="ltr" />
-              {formUrl && getYouTubeId(formUrl) && (
-                <div className="mt-2 w-40 aspect-video rounded-lg overflow-hidden border relative">
-                  <Image src={`https://img.youtube.com/vi/${getYouTubeId(formUrl)}/mqdefault.jpg`} alt="thumbnail" fill className="object-cover" sizes="400px" unoptimized />
-                </div>
-              )}
-            </div>
-
-            {/* Video File Upload */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">أو ارفع ملف فيديو</Label>
-              <div className="flex items-center gap-2">
-                <input ref={videoFileRef} type="file" accept="video/*" className="hidden" onChange={(e) => { setFormFile(e.target.files?.[0] || null) }} />
-                <Button type="button" variant="outline" size="sm" onClick={() => videoFileRef.current?.click()}>
-                  <Upload className="h-4 w-4 ml-1" />{formFile ? formFile.name : 'اختر فيديو'}
-                </Button>
-                {formFile && <span className="text-xs text-muted-foreground">{(formFile.size / 1024 / 1024).toFixed(1)} MB</span>}
-              </div>
-            </div>
-
-            {/* Thumbnail Upload */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">صورة مصغرة للفيديو (اختياري)</Label>
-              <div className="flex items-center gap-3">
-                <input ref={thumbFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { setFormThumbnail(e.target.files?.[0] || null) }} />
-                <Button type="button" variant="outline" size="sm" onClick={() => thumbFileRef.current?.click()}>
-                  <PictureInPicture2 className="h-4 w-4 ml-1" />{formThumbnail ? formThumbnail.name : 'اختر صورة'}
-                </Button>
-                {formThumbnail && (
-                  <div className="w-16 h-10 rounded border overflow-hidden relative">
-                    <Image src={URL.createObjectURL(formThumbnail)} alt="thumb" fill className="object-cover" unoptimized />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Thumbnail URL */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">أو رابط صورة مصغرة (اختياري)</Label>
-              <Input value={formThumbnailUrl} onChange={(e) => setFormThumbnailUrl(e.target.value)} placeholder="https://example.com/thumbnail.jpg" dir="ltr" />
-              {formThumbnailUrl && (
-                <div className="mt-2 w-40 aspect-video rounded-lg overflow-hidden border relative">
-                  <Image src={formThumbnailUrl} alt="thumbnail" fill className="object-cover" sizes="400px" unoptimized />
-                </div>
-              )}
-            </div>
-
-            {/* Upload Progress */}
-            {uploading && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  {uploadStatus || 'جاري الرفع...'} {uploadProgress}%
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-all duration-200" style={{ width: `${uploadProgress}%` }} />
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleSubmit} disabled={submitting || uploading}>
-                {submitting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ ونشر'}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormTitle(''); setFormUrl(''); setFormGrade(''); setFormFile(null); setFormThumbnail(null); setFormThumbnailUrl('') }}>إلغاء</Button>
-            </div>
-          </div>
-        )}
-
-        {/* Video List */}
-        {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : videos.length === 0 ? (
-          <p className="text-center text-muted-foreground py-10 text-sm">لا توجد فيديوهات. أضف أول فيديو!</p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {videos.map((v) => {
-              const ytId = getYouTubeId(v.url)
-              const thumb = v.thumbnail || (ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : null)
-              return (
-                <div key={v.id} className="rounded-lg border bg-card overflow-hidden group">
-                  <div className="relative aspect-video bg-black">
-                    {thumb ? (
-                      <Image src={thumb} alt={v.title} fill className="object-cover" sizes="200px" unoptimized />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center"><Video className="h-8 w-8 text-white/30" /></div>
-                    )}
-                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <PlayCircle className="h-10 w-10 text-white" />
-                    </div>
-                  </div>
-                  <div className="p-3 space-y-1.5">
-                    <p className="font-semibold text-sm truncate">{v.title}</p>
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-[10px]">{v.grade}</Badge>
-                      <div className="flex items-center gap-1">
-                        {v.filePath && <Badge variant="secondary" className="text-[10px]">📎 ملف</Badge>}
-                        {v.url && !v.filePath && <Badge variant="secondary" className="text-[10px]">▶ YouTube</Badge>}
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">{new Date(v.createdAt).toLocaleDateString('ar-EG')}</p>
-                    <Button size="sm" variant="ghost" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-xs h-7" onClick={() => handleDelete(v.id)}>
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />حذف
-                    </Button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-/* ========== EXAM TRACKING PANEL ========== */
+/* ========== EXAM TRACKING PANEL (with Most Missed Questions) ========== */
 interface MCQQuestion {
   q: string
   options: string[]
@@ -720,6 +11,7 @@ function ExamTrackingPanel() {
   const [selectedExam, setSelectedExam] = useState<string>('')
   const [results, setResults] = useState<ExamResult[]>([])
   const [notTaken, setNotTaken] = useState<any[]>([])
+  const [mostMissed, setMostMissed] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [formGrade, setFormGrade] = useState('')
@@ -764,12 +56,13 @@ function ExamTrackingPanel() {
   useEffect(() => { loadExams() }, [])
 
   const loadExamResults = async (examId: string) => {
-    if (!examId) { setResults([]); setNotTaken([]); return }
+    if (!examId) { setResults([]); setNotTaken([]); setMostMissed([]); return }
     try {
       const res = await fetch(`/api/exam-results?examId=${examId}`)
       const data = await res.json()
       setResults(data.results || [])
       setNotTaken(data.notTaken || [])
+      setMostMissed(data.mostMissed || [])
     } catch { toast.error('خطأ في تحميل النتائج') }
   }
 
@@ -782,75 +75,45 @@ function ExamTrackingPanel() {
     if (!formTitle.trim() || !formGrade) { toast.error('أدخل العنوان واختر الصف'); return }
     setSubmitting(true)
     try {
-      // Use local variables to avoid React state batching issues
       let localFilePath = formFilePath || ''
       let localFileType = formFileType || ''
       let localAnswerKeyPath = answerKeyPath || ''
       let localAnswerKeyType = answerKeyType || ''
       let localThumbnailPath = thumbnailPath || ''
 
-      // Upload question paper (URL fallback or file upload)
       if (!localFilePath && (formFile || formFileUrl.trim())) {
         if (formFileUrl.trim()) {
-          localFilePath = formFileUrl.trim()
-          localFileType = ''
-          setFormFilePath(localFilePath)
-          setFormFileType('')
+          localFilePath = formFileUrl.trim(); localFileType = ''; setFormFilePath(localFilePath); setFormFileType('')
         } else if (formFile) {
-          setUploading(true)
-          setUploadStatusMsg('جاري رفع نموذج الأسئلة...')
+          setUploading(true); setUploadStatusMsg('جاري رفع نموذج الأسئلة...')
           try {
             const upData = await chunkedUpload(formFile, 'exams', undefined, (msg) => setUploadStatusMsg(msg))
-            localFilePath = upData.filePath
-            localFileType = upData.fileType
-            setFormFilePath(upData.filePath)
-            setFormFileType(upData.fileType)
-          } catch (err: any) {
-            toast.error(err.message || 'فشل رفع نموذج الأسئلة')
-            setUploading(false); setUploadStatusMsg(''); setSubmitting(false); return
-          }
+            localFilePath = upData.filePath; localFileType = upData.fileType; setFormFilePath(upData.filePath); setFormFileType(upData.fileType)
+          } catch (err: any) { toast.error(err.message || 'فشل رفع نموذج الأسئلة'); setUploading(false); setUploadStatusMsg(''); setSubmitting(false); return }
           setUploading(false)
         }
       }
-      // Upload answer key (URL fallback or file upload)
       if (!localAnswerKeyPath && (answerKeyFile || answerKeyUrl.trim())) {
         if (answerKeyUrl.trim()) {
-          localAnswerKeyPath = answerKeyUrl.trim()
-          localAnswerKeyType = ''
-          setAnswerKeyPath(localAnswerKeyPath)
-          setAnswerKeyType('')
+          localAnswerKeyPath = answerKeyUrl.trim(); localAnswerKeyType = ''; setAnswerKeyPath(localAnswerKeyPath); setAnswerKeyType('')
         } else if (answerKeyFile) {
-          setUploadingAnswerKey(true)
-          setUploadStatusMsg('جاري رفع نموذج الإجابة...')
+          setUploadingAnswerKey(true); setUploadStatusMsg('جاري رفع نموذج الإجابة...')
           try {
             const upData = await chunkedUpload(answerKeyFile, 'exams', undefined, (msg) => setUploadStatusMsg(msg))
-            localAnswerKeyPath = upData.filePath
-            localAnswerKeyType = upData.fileType
-            setAnswerKeyPath(upData.filePath)
-            setAnswerKeyType(upData.fileType)
-          } catch (err: any) {
-            toast.error(err.message || 'فشل رفع نموذج الإجابة')
-            setUploadingAnswerKey(false); setUploadStatusMsg(''); setSubmitting(false); return
-          }
+            localAnswerKeyPath = upData.filePath; localAnswerKeyType = upData.fileType; setAnswerKeyPath(upData.filePath); setAnswerKeyType(upData.fileType)
+          } catch (err: any) { toast.error(err.message || 'فشل رفع نموذج الإجابة'); setUploadingAnswerKey(false); setUploadStatusMsg(''); setSubmitting(false); return }
           setUploadingAnswerKey(false)
         }
       }
-      // Upload thumbnail (URL fallback or file upload)
       if (!localThumbnailPath && (thumbnailFile || thumbnailUrl.trim())) {
         if (thumbnailUrl.trim()) {
-          localThumbnailPath = thumbnailUrl.trim()
-          setThumbnailPath(localThumbnailPath)
+          localThumbnailPath = thumbnailUrl.trim(); setThumbnailPath(localThumbnailPath)
         } else if (thumbnailFile) {
-          setUploading(true)
-          setUploadStatusMsg('جاري رفع الصورة المصغرة...')
+          setUploading(true); setUploadStatusMsg('جاري رفع الصورة المصغرة...')
           try {
             const upData = await chunkedUpload(thumbnailFile, 'exams', undefined, (msg) => setUploadStatusMsg(msg))
-            localThumbnailPath = upData.filePath
-            setThumbnailPath(upData.filePath)
-          } catch (err: any) {
-            toast.error(err.message || 'فشل رفع الصورة المصغرة')
-            setUploading(false); setUploadStatusMsg(''); setSubmitting(false); return
-          }
+            localThumbnailPath = upData.filePath; setThumbnailPath(upData.filePath)
+          } catch (err: any) { toast.error(err.message || 'فشل رفع الصورة المصغرة'); setUploading(false); setUploadStatusMsg(''); setSubmitting(false); return }
           setUploading(false)
         }
       }
@@ -869,7 +132,7 @@ function ExamTrackingPanel() {
   }
 
   const handleDeleteExam = async (id: string) => {
-    try { await fetch(`/api/exams/${id}`, { method: 'DELETE' }); toast.success('تم حذف الامتحان'); loadExams(); if (selectedExam === id) { setSelectedExam(''); setResults([]); setNotTaken([]) } } catch { toast.error('خطأ') }
+    try { await fetch(`/api/exams/${id}`, { method: 'DELETE' }); toast.success('تم حذف الامتحان'); loadExams(); if (selectedExam === id) { setSelectedExam(''); setResults([]); setNotTaken([]); setMostMissed([]) } } catch { toast.error('خطأ') }
   }
 
   const avgScore = results.length > 0 ? (results.reduce((sum, r) => sum + r.score, 0) / results.length).toFixed(1) : '—'
@@ -1050,6 +313,27 @@ function ExamTrackingPanel() {
                       </div>
                     </div>
                   )}
+
+                  {/* Most Missed Questions - NEW */}
+                  {mostMissed.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-red-500 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />أكتر الأسئلة اللي غلط فيها</p>
+                      <div className="space-y-1.5">
+                        {mostMissed.map((q: any, i: number) => (
+                          <div key={i} className="p-2.5 rounded-lg border border-red-200 dark:border-red-900/30 bg-red-50/50 dark:bg-red-900/10">
+                            <p className="text-xs font-medium truncate">{q.question}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] text-red-600 dark:text-red-400 font-bold">{q.wrong} غلط من {q.total}</span>
+                              <div className="flex-1 h-1.5 bg-muted rounded-full">
+                                <div className="h-full bg-red-500 rounded-full" style={{ width: `${(q.wrong / q.total) * 100}%` }} />
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">{Math.round((q.wrong / q.total) * 100)}%</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1058,344 +342,25 @@ function ExamTrackingPanel() {
       </CardContent>
     </Card>
   )
-}/* ========== GALLERY MANAGER ========== */
-function GalleryManager() {
-  var [images, setImages] = useState<GalleryImage[]>([])
-  var [loading, setLoading] = useState(true)
-  var [showForm, setShowForm] = useState(false)
-  var [uploading, setUploading] = useState(false)
-  var [saving, setSaving] = useState(false)
-  var fileRef = useRef<HTMLInputElement>(null)
-  var vidFileRef = useRef<HTMLInputElement>(null)
-  var [vidFile, setVidFile] = useState<File | null>(null)
-  var [vidUploading, setVidUploading] = useState(false)
-  var [imgUrl, setImgUrl] = useState('')
-  var [imgOrder, setImgOrder] = useState('0')
-  var [vidUrl, setVidUrl] = useState('')
-  var [vidThumb, setVidThumb] = useState('')
-  var [vidOrder, setVidOrder] = useState('0')
-
-  var loadGallery = async function() {
-    setLoading(true)
-    try {
-      var res = await fetch('/api/gallery')
-      var data = await res.json()
-      setImages(data.images || [])
-    } catch { toast.error('خطأ في تحميل المعرض') }
-    setLoading(false)
-  }
-
-  useEffect(function() { loadGallery() }, [])
-
-  var resetAll = function() {
-    setImgUrl(''); setImgOrder('0')
-    setVidUrl(''); setVidThumb(''); setVidOrder('0')
-    setVidFile(null); setVidUploading(false)
-    setUploading(false); setSaving(false)
-  }
-
-  var handleImgUpload = async function(file: File) {
-    setUploading(true)
-    try {
-      var upData = await chunkedUpload(file, 'gallery')
-      await fetch('/api/gallery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: file.name,
-          filePath: upData.filePath,
-          type: 'image',
-          sortOrder: parseInt(imgOrder) || 0
-        })
-      })
-      toast.success('تم رفع الصورة بنجاح')
-      resetAll(); loadGallery()
-    } catch (err: any) { toast.error(err.message || 'خطأ في رفع الصورة') }
-    setUploading(false)
-  }
-
-  var handleImgLink = async function() {
-    if (!imgUrl.trim()) { toast.error('الرجاء إدخال رابط الصورة'); return }
-    setSaving(true)
-    try {
-      var res = await fetch('/api/gallery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'صورة',
-          filePath: imgUrl.trim(),
-          type: 'image',
-          sortOrder: parseInt(imgOrder) || 0
-        })
-      })
-      if (res.ok) {
-        toast.success('تم إضافة الصورة بنجاح')
-        setImgUrl(''); loadGallery()
-      } else { toast.error('خطأ في الإضافة') }
-    } catch { toast.error('خطأ في الاتصال') }
-    setSaving(false)
-  }
-
-  var handleVidUpload = async function(file: File) {
-    setVidUploading(true)
-    try {
-      var upData = await chunkedUpload(file, 'gallery')
-      var body: any = {
-        title: file.name,
-        videoUrl: upData.filePath,
-        type: 'video',
-        sortOrder: parseInt(vidOrder) || 0
-      }
-      if (vidThumb.trim()) { body.filePath = vidThumb.trim() }
-      await fetch('/api/gallery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      toast.success('تم رفع الفيديو بنجاح')
-      resetAll(); loadGallery()
-    } catch (err: any) { toast.error(err.message || 'خطأ في رفع الفيديو') }
-    setVidUploading(false)
-  }
-
-  var handleVidAdd = async function() {
-    if (!vidUrl.trim()) { toast.error('الرجاء إدخال رابط الفيديو'); return }
-    setSaving(true)
-    try {
-      var body: any = {
-        title: 'فيديو',
-        videoUrl: vidUrl.trim(),
-        type: 'video',
-        sortOrder: parseInt(vidOrder) || 0
-      }
-      if (vidThumb.trim()) { body.filePath = vidThumb.trim() }
-      var res = await fetch('/api/gallery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      if (res.ok) {
-        toast.success('تم إضافة الفيديو بنجاح')
-        setVidUrl(''); setVidThumb(''); loadGallery()
-      } else { toast.error('خطأ في الإضافة') }
-    } catch { toast.error('خطأ في الاتصال') }
-    setSaving(false)
-  }
-
-  var handleDelete = async function(id: string) {
-    try {
-      await fetch('/api/gallery/' + id, { method: 'DELETE' })
-      toast.success('تم الحذف')
-      loadGallery()
-    } catch { toast.error('خطأ') }
-  }
-
-  var getVideoThumb = function(url: string) {
-    var yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/)
-    if (yt) return 'https://img.youtube.com/vi/' + yt[1] + '/mqdefault.jpg'
-    return ''
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Camera className="h-5 w-5 text-primary" />
-            المعرض | Gallery
-          </CardTitle>
-          <Button size="sm" onClick={function() { setShowForm(!showForm) }}>
-            {showForm ? <X className="h-4 w-4 ml-1" /> : <Plus className="h-4 w-4 ml-1" />}
-            {showForm ? 'إغلاق' : 'إضافة'}
-          </Button>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-6">
-        {showForm && (
-          <div className="space-y-4 p-4 rounded-xl border bg-muted/30">
-            {/* === صورة === */}
-            <div className="space-y-3 p-4 rounded-lg border bg-card">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <ImagePlus className="h-4 w-4 text-emerald-600" />
-                إضافة صورة
-              </h3>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">رفع صورة من الجهاز</Label>
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={function(e) { var f = e.target.files?.[0]; if (f) handleImgUpload(f); e.target.value = '' }} />
-                <Button variant="outline" size="sm" className="border-dashed w-full" onClick={function() { fileRef.current?.click() }} disabled={uploading}>
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Upload className="h-4 w-4 ml-2" />}
-                  {uploading ? 'جاري الرفع...' : 'اختر صورة للرفع'}
-                </Button>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex-grow h-px bg-border" />
-                <span className="text-[11px] text-muted-foreground">أو</span>
-                <div className="flex-grow h-px bg-border" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1 sm:col-span-2">
-                  <Label className="text-xs text-muted-foreground">رابط الصورة</Label>
-                  <Input placeholder="https://example.com/image.jpg" value={imgUrl} onChange={function(e) { setImgUrl(e.target.value) }} dir="ltr" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">الترتيب</Label>
-                  <Input type="number" placeholder="0" value={imgOrder} onChange={function(e) { setImgOrder(e.target.value) }} />
-                </div>
-              </div>
-              <Button size="sm" onClick={handleImgLink} disabled={saving || !imgUrl.trim()}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <Plus className="h-4 w-4 ml-1" />}
-                إضافة الصورة بالرابط
-              </Button>
-            </div>
-
-            {/* === فيديو === */}
-            <div className="space-y-3 p-4 rounded-lg border bg-card">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <PlayCircle className="h-4 w-4 text-blue-600" />
-                إضافة فيديو
-              </h3>
-
-              {/* رفع فيديو من الجهاز */}
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">رفع فيديو من الجهاز</Label>
-                <input ref={vidFileRef} type="file" accept="video/*" className="hidden" onChange={function(e) { var f = e.target.files?.[0]; if (f) { setVidFile(f) } }} />
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="border-dashed" onClick={function() { vidFileRef.current?.click() }} disabled={vidUploading}>
-                    {vidUploading ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <Upload className="h-4 w-4 ml-1" />}
-                    {vidFile ? vidFile.name : 'اختر فيديو للرفع'}
-                  </Button>
-                  {vidFile && <span className="text-xs text-muted-foreground">{(vidFile.size / 1024 / 1024).toFixed(1)} MB</span>}
-                  {vidFile && <Button size="sm" onClick={function() { if (vidFile) handleVidUpload(vidFile) }} disabled={vidUploading}>
-                    {vidUploading ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <Plus className="h-4 w-4 ml-1" />}
-                    رفع الفيديو
-                  </Button>}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex-grow h-px bg-border" />
-                <span className="text-[11px] text-muted-foreground">أو</span>
-                <div className="flex-grow h-px bg-border" />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">رابط الفيديو</Label>
-                  <Input placeholder="https://youtube.com/watch?v=..." value={vidUrl} onChange={function(e) { setVidUrl(e.target.value) }} dir="ltr" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">رابط صورة مصغرة (اختياري)</Label>
-                  <Input placeholder="https://example.com/thumb.jpg" value={vidThumb} onChange={function(e) { setVidThumb(e.target.value) }} dir="ltr" />
-                </div>
-              </div>
-
-              <div className="space-y-1 w-full sm:w-1/3">
-                <Label className="text-xs text-muted-foreground">الترتيب</Label>
-                <Input type="number" placeholder="0" value={vidOrder} onChange={function(e) { setVidOrder(e.target.value) }} />
-                <p className="text-[10px] text-muted-foreground">كلما كان الرقم أصغر، كلما ظهر أولاً</p>
-              </div>
-
-              <Button size="sm" variant="outline" onClick={handleVidAdd} disabled={saving || !vidUrl.trim()}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <Plus className="h-4 w-4 ml-1" />}
-                إضافة الفيديو بالرابط
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* ===== GALLERY GRID ===== */}
-        {loading ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          </div>
-        ) : images.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Camera className="h-10 w-10 text-muted-foreground/30 mb-3" />
-            <p className="text-sm text-muted-foreground">لا توجد صور أو فيديوهات بعد. اضغط &quot;إضافة&quot; للبدء!</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto custom-scrollbar">
-            {images.map(function(img) {
-              var isVideo = img.type === 'video'
-              var thumb = isVideo ? (getVideoThumb(img.videoUrl) || img.filePath || '') : img.filePath
-              var src = isVideo ? thumb : img.filePath
-              return (
-                <div key={img.id} className="relative group rounded-lg overflow-hidden border bg-card aspect-square">
-                  {src ? (
-                    <Image src={src} alt={img.title} fill className="object-cover" sizes="200px" unoptimized />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-muted">
-                      <PlayCircle className="h-8 w-8 text-muted-foreground/30" />
-                    </div>
-                  )}
-                  {isVideo && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
-                        <PlayCircle className="h-5 w-5 text-white" />
-                      </div>
-                    </div>
-                  )}
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Badge variant="secondary" className="bg-black/50 text-white border-0 text-[10px] backdrop-blur-sm">
-                      {isVideo ? 'فيديو' : 'صورة'}
-                    </Badge>
-                  </div>
-                  <div className="absolute bottom-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Badge variant="secondary" className="bg-black/50 text-white border-0 text-[10px] backdrop-blur-sm">
-                      ترتيب: {img.sortOrder}
-                    </Badge>
-                  </div>
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Button size="icon" variant="destructive" className="h-8 w-8" onClick={function() { handleDelete(img.id) }}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
 }
 
-/* ========== MY STUDENTS PANEL (طلابي) ========== */
-interface StudentAnalytics {
-  id: string; name: string; phone: string; grade: string
-  loginCount: number; lastLogin: string | null; createdAt: string
-  watchedVideos: number; completedVideos: number; totalVideos: number
-  avgWatchPercent: number
-  examsTaken: number; examsPassed: number; totalExams: number
-  avgExamScore: number; activityScore: number
-}
-
+/* ========== MY STUDENTS PANEL ========== */
 function MyStudentsPanel() {
-  const [grade, setGrade] = useState('')
-  const [students, setStudents] = useState<StudentAnalytics[]>([])
-  const [summary, setSummary] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
-  const [selectedStudent, setSelectedStudent] = useState<StudentAnalytics | null>(null)
+  const [students, setStudents] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedStudent, setSelectedStudent] = useState<string>('')
   const [detail, setDetail] = useState<any>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
+  const [filterGrade, setFilterGrade] = useState('')
 
-  const loadData = async () => {
-    if (!grade) { setStudents([]); setSummary(null); return }
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/students/analytics?grade=${encodeURIComponent(grade)}`)
-      const data = await res.json()
-      setStudents(data.students || [])
-      setSummary(data.gradeSummary)
-    } catch { toast.error('خطأ في تحميل البيانات') }
-    setLoading(false)
-  }
-
-  useEffect(() => { loadData() }, [grade])
+  useEffect(() => {
+    const params = new URLSearchParams({ status: 'approved', pageSize: '200' })
+    if (filterGrade) params.set('grade', filterGrade)
+    fetch(`/api/students?${params}`).then(r => r.json()).then(data => { setStudents(data.students || []); setLoading(false) }).catch(() => setLoading(false))
+  }, [filterGrade])
 
   const loadDetail = async (studentId: string) => {
-    setSelectedStudent(students.find(s => s.id === studentId) || null)
+    setSelectedStudent(studentId)
     setLoadingDetail(true)
     try {
       const res = await fetch(`/api/students/${studentId}/progress`)
@@ -1405,168 +370,455 @@ function MyStudentsPanel() {
     setLoadingDetail(false)
   }
 
-  const getActivityColor = (score: number) => {
-    if (score >= 70) return 'text-emerald-600 dark:text-emerald-400'
-    if (score >= 40) return 'text-amber-600 dark:text-amber-400'
-    return 'text-red-500'
-  }
-
-  const getActivityBg = (score: number) => {
-    if (score >= 70) return 'bg-emerald-500/10'
-    if (score >= 40) return 'bg-amber-500/10'
-    return 'bg-red-500/10'
-  }
-
   return (
-    <div className="space-y-4">
+    <div className="grid gap-4 lg:grid-cols-3">
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <CardTitle className="text-lg flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" />طلابي | My Students</CardTitle>
-            <select value={grade} onChange={(e) => setGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm min-w-[200px]">
-              <option value="">اختر الصف لعرض التحليلات</option>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-lg">طلابي</CardTitle>
+            <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-8 rounded-md border border-input bg-transparent px-2 text-xs">
+              <option value="">كل الصفوف</option>
               {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
         </CardHeader>
         <CardContent>
-          {!grade ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <BarChart3 className="h-10 w-10 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">اختر صفًا دراسيًا لعرض تحليلات الطلاب</p>
-            </div>
-          ) : loading ? (
-            <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-          ) : students.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Users className="h-10 w-10 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">لا يوجد طلاب مفعلون في هذا الصف</p>
-            </div>
+          {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : students.length === 0 ? (
+            <p className="text-center text-muted-foreground py-10 text-sm">لا يوجد طلاب مفعلين</p>
           ) : (
-            <>
-              {/* Grade Summary Cards */}
-              {summary && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                  <div className="text-center p-3 rounded-lg bg-primary/10"><p className="text-xl font-bold text-primary">{summary.totalStudents}</p><p className="text-[10px] text-muted-foreground">طلاب مفعلون</p></div>
-                  <div className="text-center p-3 rounded-lg bg-emerald-500/10"><p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{summary.avgWatchPercent}%</p><p className="text-[10px] text-muted-foreground">متوسط المشاهدة</p></div>
-                  <div className="text-center p-3 rounded-lg bg-amber-500/10"><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{summary.avgExamScore}</p><p className="text-[10px] text-muted-foreground">متوسط الدرجات</p></div>
-                  <div className="text-center p-3 rounded-lg bg-purple-500/10"><p className="text-xl font-bold text-purple-600 dark:text-purple-400">{summary.avgActivity}%</p><p className="text-[10px] text-muted-foreground">متوسط النشاط</p></div>
+            <div className="space-y-1.5 max-h-[500px] overflow-y-auto custom-scrollbar">
+              {students.map((s) => (
+                <div key={s.id} className={`p-2.5 rounded-lg border cursor-pointer transition-colors hover:bg-muted/50 ${selectedStudent === s.id ? 'border-primary bg-primary/5' : 'bg-card'}`}
+                  onClick={() => loadDetail(s.id)}>
+                  <p className="font-medium text-sm">{s.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{s.grade}</p>
                 </div>
-              )}
-
-              {/* Student Analytics Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-xs text-muted-foreground">
-                    <th className="text-right py-2 px-2 font-medium">الطالب</th>
-                    <th className="text-center py-2 px-1 font-medium">المشاهدة</th>
-                    <th className="text-center py-2 px-1 font-medium">الامتحانات</th>
-                    <th className="text-center py-2 px-1 font-medium">الدرجة</th>
-                    <th className="text-center py-2 px-1 font-medium">النشاط</th>
-                    <th className="text-center py-2 px-1 font-medium">آخر دخول</th>
-                    <th className="text-center py-2 px-1 font-medium">تفاصيل</th>
-                  </tr></thead>
-                  <tbody>
-                    {students.map((s) => (
-                      <tr key={s.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => loadDetail(s.id)}>
-                        <td className="py-2.5 px-2">
-                          <p className="font-medium text-xs truncate max-w-[150px]">{s.name}</p>
-                          <p className="text-[10px] text-muted-foreground" dir="ltr">{s.phone}</p>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <div className={`text-xs font-bold ${s.avgWatchPercent >= 70 ? 'text-emerald-600' : s.avgWatchPercent >= 40 ? 'text-amber-600' : 'text-red-500'}`}>{s.avgWatchPercent}%</div>
-                          <p className="text-[9px] text-muted-foreground">{s.watchedVideos}/{s.totalVideos}</p>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <div className="text-xs font-medium">{s.examsTaken}/{s.totalExams}</div>
-                          <p className={`text-[9px] ${s.examsPassed === s.examsTaken && s.examsTaken > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>{s.examsPassed} نجح</p>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <span className={`text-xs font-bold ${s.avgExamScore >= 50 ? 'text-emerald-600' : s.avgExamScore > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>{s.avgExamScore || '—'}</span>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full text-xs font-bold ${getActivityColor(s.activityScore)} ${getActivityBg(s.activityScore)}`}>{s.activityScore}</div>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <span className="text-[10px] text-muted-foreground">{s.lastLogin ? new Date(s.lastLogin).toLocaleDateString('ar-EG') : 'لم يسجل'}</span>
-                        </td>
-                        <td className="text-center py-2 px-1">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); loadDetail(s.id) }}><Eye className="h-3.5 w-3.5" /></Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Student Detail Panel */}
-      {selectedStudent && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm">تحليلات: {selectedStudent.name}</CardTitle>
-              <Button size="sm" variant="ghost" onClick={() => { setSelectedStudent(null); setDetail(null) }}><X className="h-4 w-4" /></Button>
+      <Card className="lg:col-span-2">
+        <CardContent className="p-4">
+          {!selectedStudent ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Users className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">اختر طالب لعرض تفاصيله</p>
             </div>
-          </CardHeader>
-          <CardContent>
-            {loadingDetail ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-            ) : detail ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-primary">{detail.summary?.totalVideosWatched || 0}</p><p className="text-[10px] text-muted-foreground">فيديوهات شاهدها</p></div>
-                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{detail.summary?.avgWatchPercent || 0}%</p><p className="text-[10px] text-muted-foreground">متوسط المشاهدة</p></div>
-                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-amber-600 dark:text-amber-400">{detail.summary?.avgExamScore || 0}</p><p className="text-[10px] text-muted-foreground">متوسط الدرجات</p></div>
-                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-purple-600 dark:text-purple-400">{detail.summary?.examsPassed || 0}/{detail.summary?.totalExamsTaken || 0}</p><p className="text-[10px] text-muted-foreground">نجح/قدم</p></div>
+          ) : loadingDetail ? (
+            <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          ) : detail ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-lg">{detail.student.name}</h3>
+                  <p className="text-xs text-muted-foreground">{detail.student.grade} | {detail.student.phone}</p>
+                </div>
+                <Badge variant={detail.student.status === 'approved' ? 'default' : 'secondary'} className="text-xs">{detail.student.status === 'approved' ? 'مقبول' : detail.student.status}</Badge>
+              </div>
 
-                {/* Video Progress Detail */}
-                {detail.videoProgress && detail.videoProgress.length > 0 && (
-                  <div className="sm:col-span-2">
-                    <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><Video className="h-3.5 w-3.5" />تقدم الفيديوهات</h4>
-                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
-                      {detail.videoProgress.slice(0, 10).map((vp: any) => (
-                        <div key={vp.id} className="flex items-center gap-2 p-1.5 rounded border bg-card">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-medium truncate">{vp.videoTitle}</p>
-                          </div>
-                          <div className="shrink-0" style={{ minWidth: '50px' }}>
-                            <span className={`text-[11px] font-bold ${vp.percent >= 90 ? 'text-emerald-600' : vp.percent >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{vp.percent}%</span>
-                          </div>
-                          <div className="h-1.5 w-16 bg-muted rounded-full shrink-0"><div className={`h-full rounded-full ${vp.percent >= 90 ? 'bg-emerald-500' : vp.percent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${vp.percent}%` }} /></div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="text-center p-3 rounded-lg bg-purple-500/10"><p className="text-xl font-bold text-purple-600 dark:text-purple-400">{detail.summary.totalVideosWatched}</p><p className="text-[10px] text-muted-foreground">فيديو شاهده</p></div>
+                <div className="text-center p-3 rounded-lg bg-blue-500/10"><p className="text-xl font-bold text-blue-600 dark:text-blue-400">{detail.summary.avgWatchPercent}%</p><p className="text-[10px] text-muted-foreground">متوسط المشاهدة</p></div>
+                <div className="text-center p-3 rounded-lg bg-emerald-500/10"><p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{detail.summary.avgExamScore}</p><p className="text-[10px] text-muted-foreground">متوسط الامتحانات</p></div>
+                <div className="text-center p-3 rounded-lg bg-amber-500/10"><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{detail.summary.examsPassed}/{detail.summary.totalExamsTaken}</p><p className="text-[10px] text-muted-foreground">ناجح/إجمالي</p></div>
+              </div>
+
+              {detail.videoProgress && detail.videoProgress.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><PlayCircle className="h-3.5 w-3.5 text-purple-500" />تقدم الفيديوهات</h4>
+                  <div className="space-y-1.5 max-h-[150px] overflow-y-auto custom-scrollbar">
+                    {detail.videoProgress.map((vp: any) => (
+                      <div key={vp.id} className="flex items-center justify-between p-1.5 rounded border bg-card">
+                        <p className="text-[11px] font-medium truncate max-w-[200px]">{vp.videoTitle}</p>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold ${vp.percent >= 90 ? 'text-emerald-600' : vp.percent >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{vp.percent}%</span>
+                          <div className="h-1.5 w-12 bg-muted rounded-full"><div className={`h-full rounded-full ${vp.percent >= 90 ? 'bg-emerald-500' : vp.percent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${vp.percent}%` }} /></div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Exam Results Detail */}
-                {detail.examResults && detail.examResults.length > 0 && (
-                  <div className="sm:col-span-2">
-                    <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><Trophy className="h-3.5 w-3.5 text-amber-500" />نتائج الامتحانات</h4>
-                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
-                      {detail.examResults.map((er: any) => (
-                        <div key={er.id} className="flex items-center justify-between p-1.5 rounded border bg-card">
-                          <p className="text-[11px] font-medium truncate max-w-[200px]">{er.examTitle}</p>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold ${er.passed ? 'text-emerald-600' : 'text-red-500'}`}>{er.score}/{er.maxScore}</span>
-                            <Badge variant={er.passed ? 'default' : 'destructive'} className="text-[9px] h-5">{er.passed ? 'ناجح' : 'راسب'}</Badge>
-                          </div>
+              {detail.examResults && detail.examResults.length > 0 && (
+                <div className="sm:col-span-2">
+                  <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><Trophy className="h-3.5 w-3.5 text-amber-500" />نتائج الامتحانات</h4>
+                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
+                    {detail.examResults.map((er: any) => (
+                      <div key={er.id} className="flex items-center justify-between p-1.5 rounded border bg-card">
+                        <p className="text-[11px] font-medium truncate max-w-[200px]">{er.examTitle}</p>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold ${er.passed ? 'text-emerald-600' : 'text-red-500'}`}>{er.score}/{er.maxScore}</span>
+                          <Badge variant={er.passed ? 'default' : 'destructive'} className="text-[9px] h-5">{er.passed ? 'ناجح' : 'راسب'}</Badge>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-6 text-sm">لم يتم تحميل البيانات</p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+/* ========== GALLERY MANAGER ========== */
+function GalleryManager() {
+  const [items, setItems] = useState<GalleryImage[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [formTitle, setFormTitle] = useState('')
+  const [formType, setFormType] = useState<'image' | 'video'>('image')
+  const [formImage, setFormImage] = useState<File | null>(null)
+  const [formImageUrl, setFormImageUrl] = useState('')
+  const [formVideoUrl, setFormVideoUrl] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadMsg, setUploadMsg] = useState('')
+  const imageRef = useRef<HTMLInputElement>(null)
+
+  const loadItems = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/gallery?pageSize=100')
+      const data = await res.json()
+      setItems(data.images || [])
+    } catch { toast.error('خطأ في تحميل المعرض') }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadItems() }, [])
+
+  const handleAdd = async () => {
+    if (formType === 'image' && !formImage && !formImageUrl.trim()) { toast.error('اختر صورة أو أدخل رابط'); return }
+    if (formType === 'video' && !formVideoUrl.trim()) { toast.error('أدخل رابط الفيديو'); return }
+    setSubmitting(true); setUploading(true)
+    try {
+      let filePath = formImageUrl.trim()
+      if (formType === 'image' && formImage && !filePath) {
+        setUploadMsg('جاري رفع الصورة...')
+        const data = await chunkedUpload(formImage, 'gallery', undefined, (msg) => setUploadMsg(msg))
+        filePath = data.filePath
+      }
+      const res = await fetch('/api/gallery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: formTitle, type: formType, filePath, videoUrl: formVideoUrl.trim(), sortOrder: items.length }),
+      })
+      if (res.ok) { toast.success('تم الإضافة'); setShowForm(false); setFormTitle(''); setFormImage(null); setFormImageUrl(''); setFormVideoUrl(''); loadItems() }
+      else { try { const d = await res.json(); toast.error(d.error || 'خطأ') } catch { toast.error('خطأ') } }
+    } catch (err: any) { toast.error('خطأ: ' + (err.message || '')) }
+    setSubmitting(false); setUploading(false); setUploadMsg('')
+  }
+
+  const handleDelete = async (id: string) => {
+    try { await fetch(`/api/gallery/${id}`, { method: 'DELETE' }); toast.success('تم الحذف'); loadItems() } catch { toast.error('خطأ') }
+  }
+
+  const handleSort = async (id: string, newOrder: number) => {
+    try { await fetch(`/api/gallery/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sortOrder: newOrder }) }) } catch {}
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2"><Camera className="h-5 w-5 text-primary" />معرض الصور والفيديوهات</CardTitle>
+          <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4 ml-1" />إضافة</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {showForm && (
+          <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
+            <h4 className="font-semibold text-sm">إضافة عنصر جديد</h4>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5"><Label className="text-xs">العنوان</Label><Input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} placeholder="عنوان الصورة أو الفيديو" /></div>
+              <div className="space-y-1.5"><Label className="text-xs">النوع</Label>
+                <select value={formType} onChange={(e) => setFormType(e.target.value as any)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+                  <option value="image">صورة</option><option value="video">فيديو</option>
+                </select>
+              </div>
+            </div>
+            {formType === 'image' ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={(e) => { setFormImage(e.target.files?.[0] || null); setFormImageUrl('') }} />
+                  <Button type="button" variant="outline" size="sm" onClick={() => imageRef.current?.click()}><Upload className="h-4 w-4 ml-1" />{formImage ? formImage.name : 'اختر صورة'}</Button>
+                  {formImage && <span className="text-xs text-muted-foreground">{(formImage.size / 1024).toFixed(0)} KB</span>}
+                  {uploading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                </div>
+                {uploadMsg && <p className="text-xs text-primary animate-pulse">{uploadMsg}</p>}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground shrink-0">أو رابط صورة:</span>
+                  <Input placeholder="https://..." value={formImageUrl} onChange={(e) => { setFormImageUrl(e.target.value); if (e.target.value.trim()) setFormImage(null) }} dir="ltr" className="h-8 text-xs" />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5"><Label className="text-xs">رابط الفيديو</Label><Input placeholder="https://youtube.com/watch?v=..." value={formVideoUrl} onChange={(e) => setFormVideoUrl(e.target.value)} dir="ltr" /></div>
+            )}
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleAdd} disabled={submitting || uploading}>{submitting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ'}</Button>
+              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormTitle(''); setFormImage(null); setFormImageUrl(''); setFormVideoUrl('') }}>إلغاء</Button>
+            </div>
+          </div>
+        )}
+        {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : items.length === 0 ? (
+          <p className="text-center text-muted-foreground py-10 text-sm">المعرض فارغ</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((item, idx) => (
+              <div key={item.id} className="rounded-lg border bg-card overflow-hidden group">
+                <div className="relative aspect-video bg-black">
+                  {item.type === 'video' && item.videoUrl ? (
+                    <iframe src={item.videoUrl.replace('watch?v=', 'embed/')} className="w-full h-full" allowFullScreen />
+                  ) : item.filePath ? (
+                    <Image src={item.filePath} alt={item.title} fill className="object-cover" sizes="200px" unoptimized />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white/30"><Camera className="h-8 w-8" /></div>
+                  )}
+                </div>
+                <div className="p-2 flex items-center justify-between">
+                  <p className="text-xs font-medium truncate">{item.title || 'بدون عنوان'}</p>
+                  <div className="flex items-center gap-1">
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { handleSort(item.id, Math.max(0, item.sortOrder - 1)); loadItems() }} disabled={idx === 0}><ChevronLeft className="h-3 w-3" /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { handleSort(item.id, item.sortOrder + 1); loadItems() }} disabled={idx === items.length - 1}><ChevronIcon className="h-3 w-3" /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => handleDelete(item.id)}><Trash2 className="h-3 w-3" /></Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+const ChevronIcon = ChevronLeft
+
+/* ========== PAYMENTS PANEL ========== */
+function PaymentsPanel() {
+  const [payments, setPayments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('pending')
+
+  const loadPayments = async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (filter !== 'all') params.set('status', filter)
+      const res = await fetch(`/api/payments?${params}`)
+      const data = await res.json()
+      setPayments(data.payments || [])
+    } catch { toast.error('خطأ في تحميل المدفوعات') }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadPayments() }, [filter])
+
+  const handleAction = async (id: string, status: 'approved' | 'rejected') => {
+    try {
+      const res = await fetch(`/api/payments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (res.ok) {
+        toast.success(status === 'approved' ? 'تم قبول الدفع وفتح المحتوى للطالب' : 'تم رفض الدفع')
+        loadPayments()
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'خطأ')
+      }
+    } catch { toast.error('خطأ في الاتصال') }
+  }
+
+  const methodLabels: Record<string, string> = {
+    fawry: 'فوري (Fawry)',
+    instapay: 'تحويل بنكي / InstaPay',
+    vodafone_cash: 'فودافون كاش (Vodafone Cash)',
+  }
+
+  const statusColors: Record<string, string> = {
+    pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  }
+
+  const statusLabels: Record<string, string> = {
+    pending: 'في الانتظار',
+    approved: 'مقبول',
+    rejected: 'مرفوض',
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <CardTitle className="text-lg flex items-center gap-2"><Wallet className="h-5 w-5 text-primary" />إدارة المدفوعات</CardTitle>
+          <div className="flex gap-1 bg-muted rounded-lg p-1">
+            {(['pending', 'all', 'approved', 'rejected'] as const).map((f) => (
+              <Button key={f} variant={filter === f ? 'default' : 'ghost'} size="sm" className="text-xs h-7 px-2" onClick={() => setFilter(f)}>
+                {f === 'pending' ? 'في الانتظار' : f === 'approved' ? 'مقبول' : f === 'rejected' ? 'مرفوض' : 'الكل'}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : payments.length === 0 ? (
+          <p className="text-center text-muted-foreground py-10 text-sm">لا توجد مدفوعات</p>
+        ) : (
+          <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
+            {payments.map((p) => (
+              <div key={p.id} className="flex flex-col sm:flex-row items-start gap-3 p-3 rounded-lg border bg-card">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm">{p.studentName}</span>
+                    <Badge className={`text-[10px] ${statusColors[p.status]}`}>{statusLabels[p.status]}</Badge>
+                    <span className="text-[10px] text-muted-foreground" dir="ltr">{p.studentPhone}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">الصف: {p.studentGrade} | {methodLabels[p.method] || p.method}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-primary">{p.amount} جنيه</span>
+                    {p.videoTitle && <Badge variant="outline" className="text-[10px]">{p.videoTitle}</Badge>}
+                  </div>
+                  {p.receiptPath && (
+                    <a href={p.receiptPath} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      <EyeIcon className="h-3 w-3" />عرض صورة الوصل
+                    </a>
+                  )}
+                  {p.note && <p className="text-[10px] text-muted-foreground">ملاحظة: {p.note}</p>}
+                  <p className="text-[10px] text-muted-foreground">{new Date(p.createdAt).toLocaleDateString('ar-EG')} {new Date(p.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+                {p.status === 'pending' && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button size="sm" className="h-8 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => handleAction(p.id, 'approved')}>
+                      <ShieldCheck className="h-3.5 w-3.5 ml-1" />قبول
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-destructive hover:bg-destructive/10" onClick={() => handleAction(p.id, 'rejected')}>
+                      <ShieldX className="h-3.5 w-3.5 ml-1" />رفض
+                    </Button>
                   </div>
                 )}
               </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-6 text-sm">لم يتم تحميل البيانات</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ========== QUESTION ANALYTICS PANEL ========== */
+function QuestionAnalyticsPanel() {
+  const [exams, setExams] = useState<Exam[]>([])
+  const [homework, setHomework] = useState<Homework[]>([])
+  const [selectedId, setSelectedId] = useState('')
+  const [selectedType, setSelectedType] = useState<'exam' | 'homework'>('exam')
+  const [mostMissed, setMostMissed] = useState<any[]>([])
+  const [results, setResults] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/exams?pageSize=100').then(r => r.json()),
+      fetch('/api/homework?pageSize=100').then(r => r.json()),
+    ]).then(([examData, hwData]) => {
+      setExams(examData.exams || [])
+      setHomework(hwData.homework || [])
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [])
+
+  const loadAnalytics = async (id: string, type: 'exam' | 'homework') => {
+    setSelectedId(id)
+    setSelectedType(type)
+    try {
+      const endpoint = type === 'exam' ? `/api/exam-results?examId=${id}` : `/api/homework/submit?homeworkId=${id}`
+      const res = await fetch(endpoint)
+      const data = await res.json()
+      setMostMissed(data.mostMissed || [])
+      setResults(data.results || [])
+    } catch { toast.error('خطأ في تحميل التحليل') }
+  }
+
+  const items = selectedType === 'exam' ? exams : homework
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <CardTitle className="text-lg flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" />تحليل الأسئلة</CardTitle>
+          <div className="flex gap-1 bg-muted rounded-lg p-1">
+            <Button size="sm" variant={selectedType === 'exam' ? 'default' : 'ghost'} className="text-xs h-7" onClick={() => { setSelectedType('exam'); setSelectedId('') }}>امتحانات</Button>
+            <Button size="sm" variant={selectedType === 'homework' ? 'default' : 'ghost'} className="text-xs h-7" onClick={() => { setSelectedType('homework'); setSelectedId('') }}>واجبات</Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : (
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar lg:col-span-1">
+              <p className="text-xs font-medium text-muted-foreground mb-2">اختر {selectedType === 'exam' ? 'امتحان' : 'واجب'} لعرض التحليل</p>
+              {items.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">لا يوجد عناصر</p> : items.map((item: any) => (
+                <div
+                  key={item.id}
+                  className={`p-3 rounded-lg border cursor-pointer transition-colors hover:bg-muted/50 ${selectedId === item.id ? 'border-primary bg-primary/5' : 'bg-card'}`}
+                  onClick={() => loadAnalytics(item.id, selectedType)}
+                >
+                  <p className="font-medium text-sm truncate">{item.title}</p>
+                  <p className="text-[10px] text-muted-foreground">{item.grade}</p>
+                </div>
+              ))}
+            </div>
+            <div className="lg:col-span-2">
+              {!selectedId ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <BarChart3 className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm text-muted-foreground">اختر {selectedType === 'exam' ? 'امتحان' : 'واجب'} لعرض تحليل الأسئلة</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-4 flex-wrap mb-4">
+                    <div className="text-center px-4 py-2 rounded-lg bg-blue-500/10"><p className="text-lg font-bold text-blue-600">{results.length}</p><p className="text-[10px] text-muted-foreground">قدموا</p></div>
+                    <div className="text-center px-4 py-2 rounded-lg bg-red-500/10"><p className="text-lg font-bold text-red-600">{mostMissed.length}</p><p className="text-[10px] text-muted-foreground">أسئلة صعبة</p></div>
+                  </div>
+                  {mostMissed.length === 0 ? (
+                    <p className="text-center text-sm text-muted-foreground py-8">لا توجد بيانات كافية للتحليل</p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-red-500 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />الأسئلة الأكثر غلقاً (مرتبة من الأصعب)</p>
+                      {mostMissed.map((q: any, i: number) => (
+                        <div key={i} className="p-3 rounded-lg border bg-card space-y-2">
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs font-bold text-red-500 bg-red-100 dark:bg-red-900/30 rounded px-1.5 py-0.5 shrink-0">#{i + 1}</span>
+                            <p className="text-sm">{q.question}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-red-600 dark:text-red-400 font-bold">{q.wrong} غلط من {q.total} طالب</span>
+                            <div className="flex-1 h-2 bg-muted rounded-full">
+                              <div className="h-full bg-gradient-to-r from-amber-500 to-red-500 rounded-full transition-all" style={{ width: `${(q.wrong / q.total) * 100}%` }} />
+                            </div>
+                            <span className="text-xs font-bold text-red-500">{Math.round((q.wrong / q.total) * 100)}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -1623,79 +875,36 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
   useEffect(() => { loadItems() }, [apiPath, itemName, filterGrade])
 
   const handleFileUpload = async (localPath: { val: string }, localType: { val: string }): Promise<boolean> => {
-    // URL fallback: if URL is provided, use it directly instead of uploading
-    if (formFileUrl.trim()) {
-      localPath.val = formFileUrl.trim()
-      localType.val = ''
-      setFormFilePath(localPath.val)
-      return true
-    }
+    if (formFileUrl.trim()) { localPath.val = formFileUrl.trim(); localType.val = ''; setFormFilePath(localPath.val); return true }
     if (!formFile || !fileCategory) return true
-    setUploading(true)
-    setUploadMsg('جاري رفع نموذج الأسئلة...')
+    setUploading(true); setUploadMsg('جاري رفع نموذج الأسئلة...')
     try {
       const data = await chunkedUpload(formFile, fileCategory, undefined, (msg) => setUploadMsg(msg))
-      localPath.val = data.filePath
-      localType.val = data.fileType
-      setFormFilePath(data.filePath)
-      return true
-    } catch (err: any) {
-      toast.error(err.message || 'خطأ في رفع الملف')
-      return false
-    } finally {
-      setUploading(false)
-      setUploadMsg('')
-    }
+      localPath.val = data.filePath; localType.val = data.fileType; setFormFilePath(data.filePath); return true
+    } catch (err: any) { toast.error(err.message || 'خطأ في رفع الملف'); return false }
+    finally { setUploading(false); setUploadMsg('') }
   }
 
   const handleAnswerKeyUpload = async (localPath: { val: string }, localType: { val: string }): Promise<boolean> => {
-    // URL fallback
-    if (answerKeyUrl.trim()) {
-      localPath.val = answerKeyUrl.trim()
-      localType.val = ''
-      setAnswerKeyPath(localPath.val)
-      return true
-    }
+    if (answerKeyUrl.trim()) { localPath.val = answerKeyUrl.trim(); localType.val = ''; setAnswerKeyPath(localPath.val); return true }
     if (!answerKeyFile || !fileCategory) return true
-    setUploading(true)
-    setUploadMsg('جاري رفع نموذج الإجابة...')
+    setUploading(true); setUploadMsg('جاري رفع نموذج الإجابة...')
     try {
       const data = await chunkedUpload(answerKeyFile, fileCategory, undefined, (msg) => setUploadMsg(msg))
-      localPath.val = data.filePath
-      localType.val = data.fileType
-      setAnswerKeyPath(data.filePath)
-      return true
-    } catch (err: any) {
-      toast.error(err.message || 'خطأ في رفع نموذج الإجابة')
-      return false
-    } finally {
-      setUploading(false)
-      setUploadMsg('')
-    }
+      localPath.val = data.filePath; localType.val = data.fileType; setAnswerKeyPath(data.filePath); return true
+    } catch (err: any) { toast.error(err.message || 'خطأ في رفع نموذج الإجابة'); return false }
+    finally { setUploading(false); setUploadMsg('') }
   }
 
   const handleThumbnailUpload = async (localPath: { val: string }): Promise<boolean> => {
-    // URL fallback
-    if (thumbnailUrl.trim()) {
-      localPath.val = thumbnailUrl.trim()
-      setThumbnailPath(localPath.val)
-      return true
-    }
+    if (thumbnailUrl.trim()) { localPath.val = thumbnailUrl.trim(); setThumbnailPath(localPath.val); return true }
     if (!thumbnailFile || !fileCategory) return true
-    setUploading(true)
-    setUploadMsg('جاري رفع الصورة المصغرة...')
+    setUploading(true); setUploadMsg('جاري رفع الصورة المصغرة...')
     try {
       const data = await chunkedUpload(thumbnailFile, fileCategory, undefined, (msg) => setUploadMsg(msg))
-      localPath.val = data.filePath
-      setThumbnailPath(data.filePath)
-      return true
-    } catch (err: any) {
-      toast.error(err.message || 'خطأ في رفع الصورة المصغرة')
-      return false
-    } finally {
-      setUploading(false)
-      setUploadMsg('')
-    }
+      localPath.val = data.filePath; setThumbnailPath(data.filePath); return true
+    } catch (err: any) { toast.error(err.message || 'خطأ في رفع الصورة المصغرة'); return false }
+    finally { setUploading(false); setUploadMsg('') }
   }
 
   const handleSubmit = async () => {
@@ -1704,24 +913,20 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
     if (!formGrade) { toast.error('اختر الصف'); return }
     setSubmitting(true)
     try {
-      // Use local refs to avoid React state batching issues
       const filePathRef = { val: formFilePath || '' }
       const fileTypeRef = { val: formFile?.type || '' }
       const answerKeyPathRef = { val: answerKeyPath || '' }
       const answerKeyTypeRef = { val: '' }
       const thumbnailPathRef = { val: thumbnailPath || '' }
 
-      // Upload question paper
       if (supportFileUpload && !filePathRef.val && (formFile || formFileUrl.trim())) {
         const ok = await handleFileUpload(filePathRef, fileTypeRef)
         if (!ok) { setSubmitting(false); return }
       }
-      // Upload answer key
       if (supportAnswerKey && !answerKeyPathRef.val && (answerKeyFile || answerKeyUrl.trim())) {
         const ok = await handleAnswerKeyUpload(answerKeyPathRef, answerKeyTypeRef)
         if (!ok) { setSubmitting(false); return }
       }
-      // Upload thumbnail
       if (supportThumbnail && !thumbnailPathRef.val && (thumbnailFile || thumbnailUrl.trim())) {
         const ok = await handleThumbnailUpload(thumbnailPathRef)
         if (!ok) { setSubmitting(false); return }
