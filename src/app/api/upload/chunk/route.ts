@@ -34,6 +34,7 @@ async function ensureDataColumn() {
 export async function POST(request: NextRequest) {
   try {
     await ensureDataColumn()
+
     var formData = await request.formData()
     var file = formData.get('file') as File | null
     var uploadId = formData.get('uploadId') as string || ''
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
     if (totalChunks <= 1) {
       var buffer = Buffer.from(await file.arrayBuffer())
       var base64 = buffer.toString('base64')
+      var ext = fileName.split('.').pop() || ''
       var contentType = getContentType(fileName, file.type || 'application/octet-stream')
 
       var media = await db.media.create({
@@ -80,6 +82,7 @@ export async function POST(request: NextRequest) {
       for (var i = 0; i < entry.parts.length; i++) { assembled.set(new Uint8Array(entry.parts[i]), off); off += entry.parts[i].byteLength }
 
       var base64Data = Buffer.from(assembled).toString('base64')
+      var ext2 = fileName.split('.').pop() || ''
       var ct = getContentType(fileName, entry.fileType || 'application/octet-stream')
 
       var mediaRecord = await db.media.create({
