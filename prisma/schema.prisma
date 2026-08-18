@@ -130,6 +130,7 @@ model Media {
   fileType  String
   fileSize  String   @default("")
   category  String   @default("general")
+  data      String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
