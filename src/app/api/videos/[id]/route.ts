@@ -1,76 +1,61 @@
-
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/videos/[id] - 获取单个视频
+// GET /api/videos/[id]
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
-    const { id } = await params
     const video = await db.video.findUnique({ where: { id } })
-
-    if (!video) {
-      return NextResponse.json({ error: '视频不存在' }, { status: 404 })
-    }
-
+    if (!video) return NextResponse.json({ error: 'Video not found' }, { status: 404 })
     return NextResponse.json({ video })
   } catch (error) {
-    console.error('获取视频详情失败:', error)
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 })
+    console.error('Video get error:', error)
+    return NextResponse.json({ error: 'Failed to fetch video' }, { status: 500 })
   }
 }
 
-// PUT /api/videos/[id] - 更新视频
+// PUT /api/videos/[id] - Update video (including price)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
-    const { id } = await params
     const body = await request.json()
-    const { title, url, grade } = body
+    const video = await db.video.findUnique({ where: { id } })
+    if (!video) return NextResponse.json({ error: 'Video not found' }, { status: 404 })
 
-    const existing = await db.video.findUnique({ where: { id } })
-    if (!existing) {
-      return NextResponse.json({ error: '视频不存在' }, { status: 404 })
-    }
+    const updateData: any = {}
+    if (body.title !== undefined) updateData.title = body.title
+    if (body.url !== undefined) updateData.url = body.url
+    if (body.filePath !== undefined) updateData.filePath = body.filePath
+    if (body.fileType !== undefined) updateData.fileType = body.fileType
+    if (body.thumbnail !== undefined) updateData.thumbnail = body.thumbnail
+    if (body.grade !== undefined) updateData.grade = body.grade
+    if (body.price !== undefined) updateData.price = parseFloat(body.price) || 0
 
-    const video = await db.video.update({
-      where: { id },
-      data: {
-        ...(title && { title }),
-        ...(url && { url }),
-        ...(grade && { grade }),
-      },
-    })
-
-    return NextResponse.json({ message: '视频更新成功', video })
+    const updated = await db.video.update({ where: { id }, data: updateData })
+    return NextResponse.json({ video: updated })
   } catch (error) {
-    console.error('更新视频失败:', error)
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 })
+    console.error('Video update error:', error)
+    return NextResponse.json({ error: 'Failed to update video' }, { status: 500 })
   }
 }
 
-// DELETE /api/videos/[id] - 删除视频
+// DELETE /api/videos/[id]
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
-    const { id } = await params
-
-    const existing = await db.video.findUnique({ where: { id } })
-    if (!existing) {
-      return NextResponse.json({ error: '视频不存在' }, { status: 404 })
-    }
-
     await db.video.delete({ where: { id } })
-
-    return NextResponse.json({ message: '视频删除成功' })
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('删除视频失败:', error)
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 })
+    console.error('Video delete error:', error)
+    return NextResponse.json({ error: 'Failed to delete video' }, { status: 500 })
   }
 }
