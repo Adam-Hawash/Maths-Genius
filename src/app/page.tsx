@@ -4,6 +4,7 @@ import { useAppStore } from '@/stores/app-store'
 import { Navbar } from '@/components/landing/Navbar'
 import { Footer } from '@/components/landing/Footer'
 import { StudentPendingView } from '@/components/landing/StudentPendingView'
+import { StudentPaymentPendingView } from '@/components/landing/StudentPaymentPendingView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
@@ -129,6 +130,7 @@ export default function HomePage() {
       )}
 
       {currentView === 'student-pending' && <StudentPendingView />}
+      {currentView === 'student-payment-pending' && <StudentPaymentPendingView />}
       {currentView === 'student-portal' && <StudentPortal />}
       {currentView === 'admin-dashboard' && <AdminDashboard />}
 
