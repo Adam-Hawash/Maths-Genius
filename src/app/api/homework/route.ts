@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
@@ -16,7 +15,7 @@ export async function GET(request: NextRequest) {
       where.OR = [{ title: { contains: keyword } }]
     }
 
-    const [homeworks, total] = await Promise.all([
+    const [homework, total] = await Promise.all([
       db.homework.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -26,7 +25,7 @@ export async function GET(request: NextRequest) {
       db.homework.count({ where }),
     ])
 
-    return NextResponse.json({ homeworks, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
+    return NextResponse.json({ homework, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
   } catch (error: any) {
     console.error('Homework fetch error:', error)
     return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
