@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { put } from '@vercel/blob'
+import { db } from '@/lib/db'
 
 var CONTENT_TYPES: Record<string, string> = {
   'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime', 'avi': 'video/x-msvideo',
@@ -14,9 +14,27 @@ function getContentType(filename: string, fallback: string): string {
 }
 
 var tempChunks: Record<string, { parts: ArrayBuffer[]; fileName: string; fileType: string; totalChunks: number; received: number }> = {}
+var columnReady = false
+
+async function ensureDataColumn() {
+  if (columnReady) return
+  try {
+    await db.$executeRawUnsafe('ALTER TABLE Media ADD COLUMN data TEXT DEFAULT ""')
+    columnReady = true
+  } catch (e: any) {
+    if (e.message && e.message.indexOf('duplicate column') !== -1) {
+      columnReady = true
+    } else {
+      console.error('Failed to add data column:', e)
+      throw e
+    }
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
+    await ensureDataColumn()
+
     var formData = await request.formData()
     var file = formData.get('file') as File | null
     var uploadId = formData.get('uploadId') as string || ''
@@ -28,11 +46,28 @@ export async function POST(request: NextRequest) {
 
     if (totalChunks <= 1) {
       var buffer = Buffer.from(await file.arrayBuffer())
+      var base64 = buffer.toString('base64')
       var ext = fileName.split('.').pop() || ''
       var contentType = getContentType(fileName, file.type || 'application/octet-stream')
-      var blobPath = category + '/' + Date.now() + '-' + uploadId.slice(0, 8) + '.' + ext
-      var blob = await put(blobPath, buffer, { contentType: contentType, access: 'public' })
-      return NextResponse.json({ filePath: blob.url, fileType: file.type || contentType, filename: fileName, size: file.size, done: true })
+
+      var media = await db.media.create({
+        data: {
+          filename: fileName,
+          filePath: '/api/files/',
+          fileType: contentType,
+          fileSize: String(file.size),
+          category: category,
+          data: base64,
+        },
+      })
+
+      return NextResponse.json({
+        filePath: '/api/files/' + media.id,
+        fileType: contentType,
+        filename: fileName,
+        size: file.size,
+        done: true,
+      })
     }
 
     var key = uploadId
@@ -45,12 +80,30 @@ export async function POST(request: NextRequest) {
       var assembled = new Uint8Array(totalSize)
       var off = 0
       for (var i = 0; i < entry.parts.length; i++) { assembled.set(new Uint8Array(entry.parts[i]), off); off += entry.parts[i].byteLength }
+
+      var base64Data = Buffer.from(assembled).toString('base64')
       var ext2 = fileName.split('.').pop() || ''
       var ct = getContentType(fileName, entry.fileType || 'application/octet-stream')
-      var bp = category + '/' + Date.now() + '-' + uploadId.slice(0, 8) + '.' + ext2
-      var result = await put(bp, assembled, { contentType: ct, access: 'public' })
+
+      var mediaRecord = await db.media.create({
+        data: {
+          filename: fileName,
+          filePath: '/api/files/',
+          fileType: ct,
+          fileSize: String(totalSize),
+          category: category,
+          data: base64Data,
+        },
+      })
+
       delete tempChunks[key]
-      return NextResponse.json({ filePath: result.url, fileType: entry.fileType || ct, filename: fileName, size: totalSize, done: true })
+      return NextResponse.json({
+        filePath: '/api/files/' + mediaRecord.id,
+        fileType: ct,
+        filename: fileName,
+        size: totalSize,
+        done: true,
+      })
     }
     return NextResponse.json({ message: 'Chunk ' + (chunkIndex + 1) + '/' + totalChunks, done: false })
   } catch (error: any) {
