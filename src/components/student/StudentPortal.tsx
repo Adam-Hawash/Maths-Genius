@@ -6,26 +6,39 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Video, ClipboardList, FileText, Megaphone, MessageSquare, Send,
   LogOut, Loader2, FileDown, Bell, PlayCircle, CheckCircle2,
   BookOpen, Target, TrendingUp, GraduationCap, ChevronLeft, ExternalLink,
-  User, Phone, Award, Maximize, Minimize,
+  User, Phone, Award, Maximize, Minimize, CreditCard, Lock, X, Image as ImageIcon
 } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
-import type { Video as VideoType, Homework, Exam, Announcement, Discussion, ExamResult } from '@/stores/app-store'
+import type { Video as VideoType, Homework, Exam, Announcement, Discussion, ExamResult, HomeworkResult } from '@/stores/app-store'
+
+/* ========== SHUFFLE UTILITY ========== */
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
 
 export function StudentPortal() {
-  const { currentStudent, logout } = useAppStore()
+  const { currentStudent, logout, setView } = useAppStore()
   const [dashboardData, setDashboardData] = useState<{
     videos: VideoType[]
     homework: Homework[]
     exams: Exam[]
     announcements: Announcement[]
     examResults: ExamResult[]
+    homeworkResults: HomeworkResult[]
     watchedIds: Set<string>
+    videoAccessIds: Set<string>
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [showFullPortal, setShowFullPortal] = useState(false)
@@ -47,6 +60,30 @@ export function StudentPortal() {
           fetch(`/api/activities?studentId=${studentId}&action=watched_video&pageSize=200`).then(r => r.json()),
         ])
         if (cancelled) return
+
+        // Fetch homework results
+        let homeworkResults: HomeworkResult[] = []
+        try {
+          const hwResultsPromises = (hwRes.homework || []).map((hw: any) =>
+            fetch(`/api/homework/submit?homeworkId=${hw.id}`).then(r => r.json()).catch(() => ({ results: [] }))
+          )
+          const hwResultsArr = await Promise.all(hwResultsPromises)
+          hwResultsArr.forEach((data: any) => {
+            const myResults = (data.results || []).filter((r: any) => r.studentId === studentId)
+            homeworkResults.push(...myResults)
+          })
+        } catch {}
+
+        // Fetch video access
+        let videoAccessIds = new Set<string>()
+        try {
+          const accessRes = await fetch(`/api/video-access?studentId=${studentId}`)
+          const accessData = await accessRes.json()
+          if (accessData.accesses) {
+            videoAccessIds = new Set(accessData.accesses.map((a: any) => a.videoId))
+          }
+        } catch {}
+
         const videos = videosRes.videos || []
         const watchedIds = new Set<string>((actRes.activities || []).map((a: any) => a.details?.replace('Watched: ', '')))
         setDashboardData({
@@ -55,7 +92,9 @@ export function StudentPortal() {
           exams: examsRes.exams || [],
           announcements: annRes.announcements || [],
           examResults: resultsRes.results || [],
+          homeworkResults,
           watchedIds,
+          videoAccessIds,
         })
       } catch { /* silent */ }
       if (!cancelled) setLoading(false)
@@ -65,9 +104,10 @@ export function StudentPortal() {
 
   const stats = useMemo(() => {
     if (!dashboardData) return { completedLessons: 0, pendingHomework: 0, lastScore: null, progress: 0, lastVideo: null, upcomingTasks: [] as any[] }
-    const { videos, homework, exams, examResults, watchedIds, announcements } = dashboardData
+    const { videos, homework, exams, examResults, watchedIds, announcements, homeworkResults } = dashboardData
     const completedLessons = watchedIds.size
-    const pendingHomework = homework.length
+    const submittedHwIds = new Set(homeworkResults.map(r => r.homeworkId))
+    const pendingHomework = homework.filter(h => !submittedHwIds.has(h.id)).length
     const lastScore = examResults.length > 0 ? examResults[0] : null
     const progress = videos.length > 0 ? Math.round((watchedIds.size / videos.length) * 100) : 0
     const lastVideo = videos.find(v => !watchedIds.has(v.id)) || videos[0] || null
@@ -94,7 +134,7 @@ export function StudentPortal() {
         <div className="flex items-center justify-between mb-8">
           <div className="space-y-1">
             <h1 className="text-2xl sm:text-3xl font-bold">
-              مرحباً، {currentStudent?.name} 👋
+              مرحباً، {currentStudent?.name}
             </h1>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <GraduationCap className="h-4 w-4" />
@@ -132,81 +172,26 @@ export function StudentPortal() {
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-3">
                 <PlayCircle className="h-5 w-5 text-primary" />
-                <h2 className="font-bold text-lg">متابعة التعلم</h2>
+                <span className="text-sm font-semibold">أكمل تعلمك</span>
               </div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                {stats.lastVideo.thumbnail ? (
-                  <div className="w-full sm:w-40 aspect-video rounded-lg overflow-hidden bg-muted shrink-0 relative">
-                    <Image src={stats.lastVideo.thumbnail} alt="" fill className="object-cover" sizes="300px" unoptimized />
-                  </div>
-                ) : stats.lastVideo.filePath ? (
-                  <div className="w-full sm:w-40 aspect-video rounded-lg overflow-hidden bg-black/80 flex items-center justify-center shrink-0">
-                    <Video className="h-10 w-10 text-white/60" />
-                  </div>
-                ) : null}
-                <div className="flex-1 min-w-0 space-y-2">
-                  <p className="font-semibold truncate">{stats.lastVideo.title}</p>
-                  <p className="text-sm text-muted-foreground">{stats.lastVideo.grade}</p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 max-w-[200px]">
-                      <Progress value={stats.progress} className="h-1.5" />
-                    </div>
-                    <span className="text-xs text-muted-foreground">{stats.progress}% مشاهدة</span>
-                  </div>
-                  <Button size="sm" className="mt-1" onClick={() => setShowFullPortal(true)}>
-                    متابعة <ChevronLeft className="h-4 w-4 mr-1" />
-                  </Button>
-                </div>
-              </div>
+              <p className="font-medium mb-3">{stats.lastVideo.title}</p>
+              <Button size="sm" onClick={() => { setShowFullPortal(true); setTimeout(() => useAppStore.getState().setStudentTab('videos'), 100) }}>
+                متابعة المشاهدة
+              </Button>
             </CardContent>
           </Card>
         )}
 
         {/* Upcoming Tasks */}
-        <Card className="mb-8">
-          <CardContent className="p-4 sm:p-6">
-            <h2 className="font-bold text-lg mb-4">المهام القادمة</h2>
-            <div className="space-y-3">
-              {stats.upcomingTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">لا توجد مهام قادمة 🎉</p>
-              ) : (
-                stats.upcomingTasks.map((task, i) => {
-                  const Icon = task.icon
-                  const typeLabels: Record<string, string> = { homework: 'واجب', exam: 'Quiz', lesson: 'درس جديد', important: 'مهم' }
-                  return (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${task.color} bg-current/10`}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{task.title}</p>
-                      </div>
-                      <Badge variant="secondary" className="text-xs shrink-0">{typeLabels[task.type] || task.type}</Badge>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Quick Notifications */}
-        {dashboardData && dashboardData.announcements.length > 0 && (
-          <Card>
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Bell className="h-5 w-5 text-primary" />
-                <h2 className="font-bold">إشعارات مهمة</h2>
-                <Badge variant="destructive" className="text-[10px]">{dashboardData.announcements.length} جديد</Badge>
-              </div>
+        {stats.upcomingTasks.length > 0 && (
+          <Card className="mb-8">
+            <CardContent className="p-4">
+              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><BookOpen className="h-4 w-4 text-primary" />مهام قادمة</h3>
               <div className="space-y-2">
-                {dashboardData.announcements.slice(0, 3).map((ann, i) => (
-                  <div key={ann.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                    <Megaphone className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{ann.title}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{ann.content}</p>
-                    </div>
+                {stats.upcomingTasks.map((task, i) => (
+                  <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
+                    <task.icon className={`h-4 w-4 ${task.color}`} />
+                    <span className="text-sm">{task.title}</span>
                   </div>
                 ))}
               </div>
@@ -214,13 +199,9 @@ export function StudentPortal() {
           </Card>
         )}
 
-        {/* Browse All Button */}
-        <div className="mt-6 text-center">
-          <Button variant="outline" onClick={() => setShowFullPortal(true)} className="gap-2">
-            <BookOpen className="h-4 w-4" />
-            تصفح جميع الدروس والمحتوى
-          </Button>
-        </div>
+        <Button className="w-full" onClick={() => setShowFullPortal(true)}>
+          الدخول للبوابة الكاملة
+        </Button>
       </div>
     </div>
   )
@@ -230,167 +211,228 @@ function StatCard({ icon: Icon, label, value, color }: { icon: any; label: strin
   return (
     <Card>
       <CardContent className="p-4 flex items-center gap-3">
-        <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-xl font-bold truncate">{value}</p>
-          <p className="text-xs text-muted-foreground truncate">{label}</p>
-        </div>
+        <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${color}`}><Icon className="h-5 w-5" /></div>
+        <div><p className="text-2xl font-bold">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div>
       </CardContent>
     </Card>
   )
 }
 
-/* ========== FULL PORTAL (all tabs) ========== */
-function FullPortal({ initialData, onBack }: { initialData: PortalData; onBack: () => void }) {
-  return <FullPortalContent initialData={initialData} onBack={onBack} />
+function EmptyState({ message }: { message: string }) {
+  return <div className="text-center py-12 text-muted-foreground"><p className="text-sm">{message}</p></div>
 }
 
-type PortalData = {
-  videos: VideoType[]
-  homework: Homework[]
-  exams: Exam[]
-  announcements: Announcement[]
-  examResults: ExamResult[]
-  watchedIds: Set<string>
+function FileAttachment({ filePath, fileType }: { filePath: string; fileType: string }) {
+  if (!filePath) return null
+  const isImage = fileType?.startsWith('image/')
+  if (isImage) {
+    return <div className="relative w-16 h-12 rounded border overflow-hidden shrink-0"><Image src={filePath} alt="file" fill className="object-cover" sizes="64px" unoptimized /></div>
+  }
+  return (
+    <a href={filePath} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0">
+      <FileDown className="h-3.5 w-3.5" />فتح الملف
+    </a>
+  )
 }
 
-function FullPortalContent({ initialData, onBack }: { initialData: PortalData; onBack: () => void }) {
-  const { currentStudent } = useAppStore()
-  const grade = currentStudent?.grade || ''
+/* ========== FULL PORTAL ========== */
+function FullPortal({ initialData, onBack }: { initialData: any; onBack: () => void }) {
+  const { studentTab, setStudentTab, currentStudent } = useAppStore()
   const studentId = currentStudent?.id || ''
-  const [activeTab, setActiveTab] = useState('videos')
+
+  const tabs = [
+    { id: 'videos', label: 'الدروس', icon: Video },
+    { id: 'homework', label: 'الواجبات', icon: ClipboardList },
+    { id: 'exams', label: 'الامتحانات', icon: FileText },
+    { id: 'announcements', label: 'الإعلانات', icon: Megaphone },
+    { id: 'discussions', label: 'المجتمع', icon: MessageSquare },
+    { id: 'payments', label: 'الدفع', icon: CreditCard },
+  ]
 
   return (
-    <div className="flex-1 py-6 px-4 sm:px-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex items-center gap-3 mb-6">
-          <Button variant="ghost" size="sm" onClick={onBack}><ChevronLeft className="h-4 w-4 mr-1" />الرئيسية</Button>
-          <div className="flex-1" />
-          <Button variant="outline" size="sm" onClick={useAppStore.getState().logout}>
-            <LogOut className="h-4 w-4 ml-1" />خروج
-          </Button>
+    <div className="flex-1 flex flex-col">
+      {/* Top Bar */}
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b px-4 py-3">
+        <div className="mx-auto max-w-4xl flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}><ChevronLeft className="h-5 w-5" /></Button>
+            <h2 className="font-bold text-sm sm:text-base">بوابة الطالب</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground hidden sm:inline">{currentStudent?.name}</span>
+          </div>
         </div>
+      </div>
 
-        {/* Tab Buttons */}
-        <div className="flex gap-1 flex-wrap bg-muted/50 p-1 rounded-lg mb-6">
-          {[
-            { key: 'videos', icon: Video, label: 'الدروس' },
-            { key: 'homework', icon: ClipboardList, label: 'الواجبات' },
-            { key: 'exams', icon: FileText, label: 'الامتحانات' },
-            { key: 'announcements', icon: Megaphone, label: 'الإعلانات' },
-            { key: 'discussions', icon: MessageSquare, label: 'النقاشات' },
-          ].map(tab => (
+      {/* Tab Bar */}
+      <div className="sticky top-[57px] z-20 bg-background/95 backdrop-blur border-b px-4">
+        <div className="mx-auto max-w-4xl flex gap-1 overflow-x-auto py-2 no-scrollbar">
+          {tabs.map((tab) => (
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === tab.key ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+              key={tab.id}
+              onClick={() => setStudentTab(tab.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                studentTab === tab.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
               }`}
             >
-              <tab.icon className="h-4 w-4" />
+              <tab.icon className="h-3.5 w-3.5" />
               {tab.label}
             </button>
           ))}
         </div>
+      </div>
 
-        {activeTab === 'videos' && <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} studentId={studentId} />}
-        {activeTab === 'homework' && <HomeworkTab homework={initialData.homework} />}
-        {activeTab === 'exams' && <ExamsTab exams={initialData.exams} results={initialData.examResults} studentId={studentId} />}
-        {activeTab === 'announcements' && <AnnouncementsTab announcements={initialData.announcements} />}
-        {activeTab === 'discussions' && <DiscussionsTab grade={grade} studentId={studentId} studentName={currentStudent?.name || ''} />}
+      {/* Tab Content */}
+      <div className="flex-1 px-4 py-4 overflow-y-auto">
+        <div className="mx-auto max-w-4xl">
+          {studentTab === 'videos' && <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} videoAccessIds={initialData.videoAccessIds} />}
+          {studentTab === 'homework' && <HomeworkTab homework={initialData.homework} studentId={studentId} />}
+          {studentTab === 'exams' && <ExamsTab exams={initialData.exams} results={initialData.examResults} studentId={studentId} />}
+          {studentTab === 'announcements' && <AnnouncementsTab announcements={initialData.announcements} />}
+          {studentTab === 'discussions' && <DiscussionsTab grade={currentStudent?.grade || ''} studentId={studentId} studentName={currentStudent?.name || ''} />}
+          {studentTab === 'payments' && <PaymentsTab studentId={studentId} />}
+        </div>
       </div>
     </div>
   )
 }
 
-/* ========== VIDEOS TAB ========== */
-function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; watchedIds: Set<string>; studentId: string }) {
-  const [localWatched, setLocalWatched] = useState(watchedIds)
+/* ========== VIDEOS TAB (with access control) ========== */
+function VideosTab({ videos, watchedIds, videoAccessIds }: { videos: VideoType[]; watchedIds: Set<string>; videoAccessIds: Set<string> }) {
+  const { currentStudent } = useAppStore()
+  const studentId = currentStudent?.id || ''
+  const [playingVideo, setPlayingVideo] = useState<VideoType | null>(null)
+  const [paymentVideo, setPaymentVideo] = useState<VideoType | null>(null)
 
-  const trackVideoWatch = (videoId: string) => {
-    if (!studentId || localWatched.has(videoId)) return
-    setLocalWatched(prev => new Set([...prev, videoId]))
-    fetch('/api/activities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentId, action: 'watched_video', details: `Watched: ${videoId}` }),
-    }).catch(() => {})
+  if (playingVideo) {
+    const isYouTube = playingVideo.url && !playingVideo.filePath
+    const ytId = isYouTube ? (playingVideo.url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([\w-]{11})/) || [])[1] : null
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-sm">{playingVideo.title}</h3>
+          <Button variant="outline" size="sm" onClick={() => setPlayingVideo(null)}>رجوع</Button>
+        </div>
+        <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden">
+          {isYouTube && ytId ? (
+            <iframe
+              src={`https://www.youtube.com/embed/${ytId}?autoplay=1&controls=0&rel=0&modestbranding=1`}
+              className="w-full h-full"
+              allow="autoplay; encrypted-media"
+              allowFullScreen
+            />
+          ) : playingVideo.filePath ? (
+            <CustomVideoPlayer
+              src={playingVideo.filePath}
+              poster={playingVideo.thumbnail}
+              videoId={playingVideo.id}
+              studentId={studentId}
+              onWatch={() => { watchedIds.add(playingVideo.id) }}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-white/30"><Video className="h-12 w-12" /></div>
+          )}
+        </div>
+      </div>
+    )
   }
 
-  const getYouTubeId = (url: string) => {
-    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([\w-]{11})/)
-    return match ? match[1] : null
+  if (paymentVideo) {
+    return (
+      <PaymentFlow
+        video={paymentVideo}
+        studentId={studentId}
+        onBack={() => setPaymentVideo(null)}
+        onSuccess={() => {
+          setPaymentVideo(null)
+          // Refresh access
+          fetch(`/api/video-access?studentId=${studentId}`).then(r => r.json()).then(data => {
+            if (data.accesses) {
+              const ids = new Set(data.accesses.map((a: any) => a.videoId))
+              videoAccessIds = ids as any // update locally
+              // Force re-render by triggering state
+              setPaymentVideo(null)
+            }
+          })
+        }}
+      />
+    )
   }
 
-  const getYouTubeThumbnail = (url: string) => {
-    const id = getYouTubeId(url)
-    return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null
-  }
-
-  if (videos.length === 0) return <EmptyState message="لا توجد دروس حالياً" />
+  if (videos.length === 0) return <EmptyState message="لا توجد فيديوهات حالياً" />
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {videos.map((video) => {
-        const ytId = getYouTubeId(video.url)
-        const isVideoFile = video.filePath && (video.fileType?.startsWith('video/') || video.filePath.match(/\.(mp4|webm|mov|avi)$/i))
-        const isWatched = localWatched.has(video.id)
-        const thumbSrc = video.thumbnail || getYouTubeThumbnail(video.url) || null
+    <div className="space-y-3">
+      {videos.map((v) => {
+        const isYouTube = v.url && !v.filePath
+        const ytId = isYouTube ? (v.url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([\w-]{11})/) || [])[1] : null
+        const thumb = v.thumbnail || (ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : null)
+        const isPaid = v.price && v.price > 0
+        const hasAccess = !isPaid || videoAccessIds.has(v.id)
 
         return (
-          <Card key={video.id} className={`overflow-hidden transition-all ${isWatched ? 'border-emerald-500/30' : ''}`}>
-            <div className="relative aspect-video bg-black">
-              {ytId ? (
-                /* YouTube: controls=0 يخفي الـ 3-dot menu بالكامل */
-                <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
-                  <iframe
-                    src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1&controls=0&showinfo=0&iv_load_policy=3`}
-                    title={video.title}
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; encrypted-media; gyroscope"
-                    allowFullScreen
-                    loading="lazy"
-                  />
-                </div>
-              ) : isVideoFile ? (
-                /* MP4: كنترولات مخصصة — مفيش controls يعني مفيش 3-dot menu */
-                <CustomVideoPlayer
-                  videoId={video.id}
-                  src={video.filePath}
-                  poster={thumbSrc || undefined}
-                  studentId={studentId}
-                  onWatch={() => {
-                    trackVideoWatch(video.id)
-                    setLocalWatched(prev => new Set([...prev, video.id]))
-                  }}
-                />
-              ) : thumbSrc ? (
-                <div className="w-full h-full relative">
-                  <Image src={thumbSrc} alt={video.title} fill className="object-cover" sizes="(max-width: 640px) 100vw, 50vw" unoptimized loading="eager" fetchPriority="high" />
-                </div>
-              ) : video.url ? (
-                <a href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full h-full text-white/70 hover:text-white transition-colors">
-                  <ExternalLink className="h-6 w-6" />
-                  <span className="text-sm">فتح الرابط</span>
-                </a>
-              ) : (
-                <div className="flex items-center justify-center w-full h-full">
-                  <Video className="h-10 w-10 text-white/30" />
-                </div>
-              )}
-              {isWatched && (
-                <div className="absolute top-2 right-2 z-30">
-                  <Badge className="bg-emerald-500 text-white text-[10px] gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> تمت المشاهدة
-                  </Badge>
-                </div>
-              )}
-            </div>
+          <Card key={v.id} className={watchedIds.has(v.id) ? 'border-emerald-500/30' : ''}>
             <CardContent className="p-3">
-              <h3 className="font-semibold text-sm truncate">{video.title}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{new Date(video.createdAt).toLocaleDateString('ar-EG')}</p>
+              <div className="flex items-start gap-3">
+                <div
+                  className="relative w-28 sm:w-36 aspect-video rounded-lg overflow-hidden bg-black shrink-0 cursor-pointer"
+                  onClick={() => {
+                    if (!hasAccess) {
+                      setPaymentVideo(v)
+                      return
+                    }
+                    setPlayingVideo(v)
+                  }}
+                >
+                  {thumb ? (
+                    <Image src={thumb} alt={v.title} fill className="object-cover" sizes="150px" unoptimized />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center"><Video className="h-6 w-6 text-white/30" /></div>
+                  )}
+                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                    {hasAccess ? (
+                      <PlayCircle className="h-8 w-8 text-white" />
+                    ) : (
+                      <Lock className="h-8 w-8 text-white" />
+                    )}
+                  </div>
+                </div>
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <h3 className="font-semibold text-sm">{v.title}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className="text-[10px]">{v.grade}</Badge>
+                    {isPaid && !hasAccess && (
+                      <Badge className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                        <Lock className="h-3 w-3 ml-1" />{v.price} جنيه
+                      </Badge>
+                    )}
+                    {hasAccess && isPaid && (
+                      <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <CheckCircle2 className="h-3 w-3 ml-1" />مفتوح
+                      </Badge>
+                    )}
+                    {watchedIds.has(v.id) && (
+                      <Badge className="text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">تمت المشاهدة</Badge>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">{new Date(v.createdAt).toLocaleDateString('ar-EG')}</p>
+                  <Button
+                    size="sm"
+                    className="text-xs h-7"
+                    variant={hasAccess ? 'default' : 'outline'}
+                    onClick={() => {
+                      if (!hasAccess) {
+                        setPaymentVideo(v)
+                        return
+                      }
+                      setPlayingVideo(v)
+                    }}
+                  >
+                    {hasAccess ? 'مشاهدة' : 'ادفع للمشاهدة'}
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )
@@ -399,53 +441,210 @@ function VideosTab({ videos, watchedIds, studentId }: { videos: VideoType[]; wat
   )
 }
 
-/* ========== CUSTOM VIDEO PLAYER (لا يوجد 3-dot menu / لا يوجد تحميل) ========== */
-function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
-  videoId: string
-  src: string
-  poster?: string
-  studentId: string
-  onWatch: () => void
-}) {
+/* ========== PAYMENT FLOW ========== */
+function PaymentFlow({ video, studentId, onBack, onSuccess }: { video: VideoType; studentId: string; onBack: () => void; onSuccess: () => void }) {
+  const [method, setMethod] = useState('')
+  const [receipt, setReceipt] = useState<File | null>(null)
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const receiptRef = useRef<HTMLInputElement>(null)
+
+  const methods = [
+    { id: 'fawry', label: 'فوري (Fawry)', icon: '💳' },
+    { id: 'instapay', label: 'تحويل بنكي / InstaPay', icon: '🏦' },
+    { id: 'vodafone_cash', label: 'فودافون كاش', icon: '📱' },
+  ]
+
+  const handleSubmit = async () => {
+    if (!method) { toast.error('اختر طريقة الدفع'); return }
+    if (!receipt) { toast.error('ارفع صورة الوصل'); return }
+    setSubmitting(true)
+    try {
+      const formData = new FormData()
+      formData.append('studentId', studentId)
+      formData.append('method', method)
+      formData.append('amount', String(video.price || 0))
+      formData.append('videoId', video.id)
+      formData.append('videoTitle', video.title)
+      formData.append('note', note)
+      formData.append('receipt', receipt)
+
+      const res = await fetch('/api/payments', { method: 'POST', body: formData })
+      if (res.ok) {
+        toast.success('تم إرسال إيصال الدفع بنجاح! انتظر موافقة الأدمن.')
+        useAppStore.getState().setView('student-payment-pending')
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'خطأ في إرسال الدفع')
+      }
+    } catch {
+      toast.error('خطأ في الاتصال')
+    }
+    setSubmitting(false)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-sm">الدفع: {video.title}</h3>
+        <Button variant="outline" size="sm" onClick={onBack}>رجوع</Button>
+      </div>
+
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-4 text-center">
+          <p className="text-sm text-muted-foreground">المبلغ المطلوب</p>
+          <p className="text-3xl font-bold text-primary mt-1">{video.price || 0} جنيه</p>
+        </CardContent>
+      </Card>
+
+      {/* Payment Methods */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">اختر طريقة الدفع</Label>
+        {methods.map((m) => (
+          <button
+            key={m.id}
+            onClick={() => setMethod(m.id)}
+            className={`w-full flex items-center gap-3 p-3 rounded-lg border text-sm transition-colors ${
+              method === m.id ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
+            }`}
+          >
+            <span className="text-xl">{m.icon}</span>
+            <span>{m.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Receipt Upload */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">ارفع صورة الوصل *</Label>
+        <input
+          ref={receiptRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => setReceipt(e.target.files?.[0] || null)}
+        />
+        <div
+          className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => receiptRef.current?.click()}
+        >
+          {receipt ? (
+            <div className="space-y-2">
+              <div className="relative w-24 h-24 mx-auto rounded-lg overflow-hidden border">
+                <Image src={URL.createObjectURL(receipt)} alt="receipt" fill className="object-cover" unoptimized />
+              </div>
+              <p className="text-xs text-muted-foreground">{receipt.name}</p>
+              <Button variant="ghost" size="sm" className="text-xs text-destructive" onClick={(e) => { e.stopPropagation(); setReceipt(null) }}>
+                <X className="h-3 w-3 ml-1" />إزالة
+              </Button>
+            </div>
+          ) : (
+            <>
+              <ImageIcon className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">اضغط لرفع صورة الوصل</p>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Note */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">ملاحظات (اختياري)</Label>
+        <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="مثال: رقم الفاتورة أو أي تفاصيل" />
+      </div>
+
+      <Button
+        className="w-full"
+        disabled={!method || !receipt || submitting}
+        onClick={handleSubmit}
+      >
+        {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4 ml-1" />}
+        {submitting ? 'جاري الإرسال...' : 'إرسال إيصال الدفع'}
+      </Button>
+    </div>
+  )
+}
+
+/* ========== PAYMENTS TAB ========== */
+function PaymentsTab({ studentId }: { studentId: string }) {
+  const [payments, setPayments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/my-payments?studentId=${studentId}`)
+      .then(r => r.json())
+      .then(data => { setPayments(data.payments || []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [studentId])
+
+  const methodLabels: Record<string, string> = {
+    fawry: 'فوري (Fawry)',
+    instapay: 'تحويل بنكي / InstaPay',
+    vodafone_cash: 'فودافون كاش',
+  }
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+  if (payments.length === 0) return <EmptyState message="لا توجد مدفوعات" />
+
+  return (
+    <div className="space-y-3">
+      {payments.map((p) => (
+        <Card key={p.id}>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1.5">
+                <p className="font-semibold text-sm">{p.videoTitle || 'دفع'}</p>
+                <p className="text-xs text-muted-foreground">{methodLabels[p.method] || p.method}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold">{p.amount} جنيه</span>
+                  <Badge className={`text-[10px] ${
+                    p.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                    p.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                    'bg-amber-100 text-amber-700'
+                  }`}>
+                    {p.status === 'approved' ? 'مقبول' : p.status === 'rejected' ? 'مرفوض' : 'في الانتظار'}
+                  </Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground">{new Date(p.createdAt).toLocaleDateString('ar-EG')}</p>
+              </div>
+              {p.receiptPath && (
+                <a href={p.receiptPath} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                  عرض الوصل
+                </a>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+/* ========== CUSTOM VIDEO PLAYER ========== */
+function CustomVideoPlayer({ src, poster, videoId, studentId, onWatch }: { src: string; poster: string; videoId: string; studentId: string; onWatch: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
   const [playing, setPlaying] = useState(false)
+  const [showControls, setShowControls] = useState(true)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [buffered, setBuffered] = useState(0)
-  const [showControls, setShowControls] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const hideTimerRef = useRef<any>(null)
+  var controlsTimer = useRef<any>(null)
 
-  useEffect(() => {
-    var onFsChange = function() {
-      setIsFullscreen(!!document.fullscreenElement)
-    }
-    document.addEventListener('fullscreenchange', onFsChange)
-    document.addEventListener('webkitfullscreenchange', onFsChange)
-    return function() {
-      document.removeEventListener('fullscreenchange', onFsChange)
-      document.removeEventListener('webkitfullscreenchange', onFsChange)
-    }
-  }, [])
-
-  // إخفاء الكنترولات بعد 3 ثواني من التشغيل
-  useEffect(() => {
-    if (playing) {
-      hideTimerRef.current = setTimeout(() => setShowControls(false), 3000)
-    } else {
-      setShowControls(true)
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
-    }
-    return () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current) }
-  }, [playing, showControls])
-
-  var togglePlay = function(e?: React.MouseEvent | React.TouchEvent) {
-    if (e) { e.preventDefault(); e.stopPropagation() }
+  var togglePlay = function() {
     var v = videoRef.current
     if (!v) return
     if (v.paused) { v.play().catch(function(){}) } else { v.pause() }
   }
+
+  useEffect(function() {
+    var handler = function() {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', handler)
+    return function() { document.removeEventListener('fullscreenchange', handler) }
+  }, [])
 
   var handleTimeUpdate = function() {
     var v = videoRef.current
@@ -488,9 +687,7 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
 
   var handleFullscreen = function(e: React.MouseEvent | React.TouchEvent) {
     if (e) { e.preventDefault(); e.stopPropagation() }
-    // لو Already في fullscreen → خرج
     if (document.fullscreenElement) { document.exitFullscreen().catch(function(){}) ; return }
-    if ((document as any).webkitFullscreenElement) { (document as any).webkitExitFullscreen() ; return }
     var v = videoRef.current
     if (!v) return
     v.play().then(function() {
@@ -521,7 +718,6 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
       onTouchStart={function() { setShowControls(true) }}
       onContextMenu={function(e) { e.preventDefault() }}
     >
-      {/* فيديو بدون controls — مفيش 3-dot menu أصلاً */}
       <video
         ref={videoRef}
         className="w-full h-full object-contain"
@@ -538,7 +734,6 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
         onLoadedMetadata={function() { if (videoRef.current) setDuration(videoRef.current.duration) }}
       />
 
-      {/* أيقونة Play في النصف */}
       {!playing && (
         <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
           <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-2xl">
@@ -549,7 +744,6 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
         </div>
       )}
 
-      {/* شريط الكنترولات السفلي */}
       <div
         className={
           'absolute bottom-0 left-0 right-0 z-20 transition-opacity duration-300 ' +
@@ -557,7 +751,6 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
         }
         onClick={function(e) { e.stopPropagation() }}
       >
-        {/* Progress bar */}
         <div
           ref={progressRef}
           className="w-full h-1 bg-white/30 cursor-pointer group"
@@ -567,33 +760,16 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
           <div className="absolute top-0 left-0 h-full bg-white/40 pointer-events-none" style={{ width: buffered + '%' }} />
           <div className="absolute top-0 left-0 h-full bg-primary group-hover:h-1.5 transition-all pointer-events-none" style={{ width: progressPercent + '%' }} />
         </div>
-
-        {/* أزرار الكنترول */}
         <div className="flex items-center gap-1 px-3 py-2 bg-gradient-to-t from-black/80 to-transparent">
-          {/* Play / Pause */}
-          <button
-            className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
-            onClick={togglePlay}
-            onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); togglePlay() }}
-          >
+          <button className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={togglePlay} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); togglePlay() }}>
             {playing ? (
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
             ) : (
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             )}
           </button>
-
-          <span className="text-white text-xs tabular-nums" dir="ltr">
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </span>
-
-          {/* زرار التكبير جنب الوقت */}
-          <button
-            className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
-            onClick={handleFullscreen}
-            onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}
-            aria-label="تكبير"
-          >
+          <span className="text-white text-xs tabular-nums" dir="ltr">{formatTime(currentTime)} / {formatTime(duration)}</span>
+          <button className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0" onClick={handleFullscreen} onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}>
             {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
           </button>
         </div>
@@ -602,31 +778,76 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
   )
 }
 
-/* ========== HOMEWORK TAB ========== */
-function HomeworkTab({ homework }: { homework: Homework[] }) {
+/* ========== HOMEWORK TAB (HIDDEN ANSWERS, SHUFFLED, SERVER-SIDE GRADING) ========== */
+function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId: string }) {
   const [expandedHw, setExpandedHw] = useState<string | null>(null)
   const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number>>>({})
   const [hwSubmitted, setHwSubmitted] = useState<Record<string, boolean>>({})
+  const [hwResults, setHwResults] = useState<Record<string, { score: number; maxScore: number; details: any[] }>>({})
+  const [submitting, setSubmitting] = useState<string | null>(null)
 
   if (homework.length === 0) return <EmptyState message="لا توجد واجبات حالياً" />
   return (
     <div className="space-y-3">
       {homework.map((hw) => {
-        var mcq = (hw as any).questions ? JSON.parse((hw as any).questions) : []
+        var mcq: any[] = []
+        try { if ((hw as any).questions) mcq = JSON.parse((hw as any).questions) } catch {}
         var hasMCQ = Array.isArray(mcq) && mcq.length > 0
         var isExpanded = expandedHw === hw.id
         var isSubmitted = !!hwSubmitted[hw.id]
         var myAnswers = hwAnswers[hw.id] || {}
+        var result = hwResults[hw.id]
 
-        var score = 0
-        if (isSubmitted && hasMCQ) {
-          mcq.forEach(function(q: any, i: number) { if (myAnswers[i] === q.correct) score++ })
+        // Shuffle questions for display (only once when expanding)
+        const [shuffledQuestions, setShuffledQuestions] = useState<any[]>([])
+        const [originalIndices, setOriginalIndices] = useState<number[]>([])
+        useEffect(() => {
+          if (isExpanded && hasMCQ && shuffledQuestions.length === 0) {
+            const indices = mcq.map((_, i) => i)
+            const shuffled = shuffleArray(indices)
+            setOriginalIndices(shuffled)
+            setShuffledQuestions(shuffled.map(i => mcq[i]))
+          }
+        }, [isExpanded, hw.id])
+
+        const handleSubmitHw = async () => {
+          if (!hasMCQ || !studentId) return
+          setSubmitting(hw.id)
+          try {
+            // Map shuffled answers back to original indices
+            const originalAnswers: Record<number, number> = {}
+            Object.keys(myAnswers).forEach(shuffledIdx => {
+              const origIdx = originalIndices[parseInt(shuffledIdx)]
+              if (origIdx !== undefined) {
+                originalAnswers[origIdx] = myAnswers[parseInt(shuffledIdx)]
+              }
+            })
+
+            const res = await fetch('/api/homework/submit', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ studentId, homeworkId: hw.id, answers: originalAnswers }),
+            })
+            const data = await res.json()
+            if (res.ok) {
+              setHwSubmitted(prev => ({ ...prev, [hw.id]: true }))
+              setHwResults(prev => ({ ...prev, [hw.id]: { score: data.result.score, maxScore: data.result.maxScore, details: data.details || [] } }))
+              toast.success('تم تسليم الواجب بنجاح!')
+            } else {
+              if (data.alreadySubmitted) {
+                toast.error('لقد قدمت هذا الواجب بالفعل')
+              } else {
+                toast.error(data.error || 'خطأ في التقديم')
+              }
+            }
+          } catch { toast.error('خطأ في الاتصال') }
+          setSubmitting(null)
         }
 
         return (
           <Card key={hw.id} className={hasMCQ ? 'cursor-pointer' : ''}>
             <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-3" onClick={hasMCQ ? function() { setExpandedHw(isExpanded ? null : hw.id) } : undefined}>
+              <div className="flex items-start justify-between gap-3" onClick={hasMCQ ? function() { setExpandedHw(isExpanded ? null : hw.id); if (!isExpanded) { setShuffledQuestions([]); setOriginalIndices([]) } } : undefined}>
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (hasMCQ ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
                     <ClipboardList className={"h-4 w-4 " + (hasMCQ ? 'text-emerald-500' : 'text-blue-500')} />
@@ -637,7 +858,7 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-[10px] text-muted-foreground">{new Date(hw.createdAt).toLocaleDateString('ar-EG')}</p>
                       {hasMCQ && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">{mcq.length} سؤال</Badge>}
-                      {isSubmitted && hasMCQ && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {score}/{mcq.length}</Badge>}
+                      {isSubmitted && result && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {result.score}/{result.maxScore}</Badge>}
                     </div>
                   </div>
                 </div>
@@ -647,41 +868,81 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
 
               {isExpanded && hasMCQ && (
                 <div className="mt-4 pt-4 border-t space-y-4">
-                  {mcq.map(function(q: any, qi: number) {
-                    return (
-                      <div key={qi} className="space-y-2">
-                        <p className="font-medium text-sm">{qi + 1}. {q.question}</p>
-                        <div className="space-y-1.5">
-                          {q.options.map(function(opt: string, oi: number) {
-                            var isSelected = myAnswers[qi] === oi
-                            var isCorrect = isSubmitted && oi === q.correct
-                            var isWrong = isSubmitted && isSelected && oi !== q.correct
-                            return (
+                  {isSubmitted && result ? (
+                    /* RESULTS VIEW - show all questions with correct/wrong */
+                    <>
+                      <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 mb-4">
+                        <p className="text-sm font-bold text-emerald-700">نتيجتك: {result.score} من {result.maxScore} {result.score === result.maxScore ? '— ممتاز!' : ''}</p>
+                      </div>
+                      {(result.details || []).map((d: any, qi: number) => {
+                        const q = mcq[qi]
+                        if (!q) return null
+                        return (
+                          <div key={qi} className="space-y-2">
+                            <p className="font-medium text-sm">{qi + 1}. {d.question}</p>
+                            <div className="space-y-1.5">
+                              {q.options.map((opt: string, oi: number) => {
+                                const isCorrect = oi === d.correctAnswer
+                                const isMyWrong = oi === d.studentAnswer && !d.correct
+                                const isMyCorrect = oi === d.studentAnswer && d.correct
+                                return (
+                                  <div
+                                    key={oi}
+                                    className={`w-full text-right p-3 rounded-lg border text-sm ${
+                                      isMyCorrect ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 font-medium' :
+                                      isMyWrong ? 'border-destructive bg-destructive/10 text-destructive' :
+                                      isCorrect ? 'border-emerald-500/50 bg-emerald-500/5 text-emerald-600' :
+                                      'border-border'
+                                    }`}
+                                  >
+                                    <span className="ml-2">{String.fromCharCode(65 + oi)})</span>{opt}
+                                    {isCorrect && <span className="float-left text-emerald-500">✓</span>}
+                                    {isMyWrong && <span className="float-left text-destructive">✗</span>}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </>
+                  ) : (
+                    /* SOLVING VIEW - NO immediate feedback, shuffled order */
+                    <>
+                      {shuffledQuestions.map((q, si) => (
+                        <div key={si} className="space-y-2">
+                          <p className="font-medium text-sm">{si + 1}. {q.q}</p>
+                          <div className="space-y-1.5">
+                            {q.options.map((opt: string, oi: number) => (
                               <button
                                 key={oi}
-                                disabled={isSubmitted}
-                                onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [qi]: oi }; return a }) }}
-                                className={"w-full text-right p-3 rounded-lg border text-sm transition-colors " + (
-                                  isCorrect ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 font-medium' :
-                                  isWrong ? 'border-destructive bg-destructive/10 text-destructive' :
-                                  isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
-                                  'border-border hover:bg-muted/50'
-                                )}
+                                disabled={!!submitting}
+                                onClick={function() {
+                                  setHwAnswers(function(prev) {
+                                    var a = { ...prev }
+                                    a[hw.id] = { ...(a[hw.id] || {}), [si]: oi }
+                                    return a
+                                  })
+                                }}
+                                className={`w-full text-right p-3 rounded-lg border text-sm transition-colors ${
+                                  myAnswers[si] === oi ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
+                                }`}
                               >
                                 <span className="ml-2">{String.fromCharCode(65 + oi)})</span>{opt}
                               </button>
-                            )
-                          })}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                  {!isSubmitted ? (
-                    <Button size="sm" onClick={function() { setHwSubmitted(function(prev) { var n = { ...prev }; n[hw.id] = true; return n }) }} disabled={Object.keys(myAnswers).length === 0}>تسليم الإجابات</Button>
-                  ) : (
-                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-                      <p className="text-sm font-medium text-emerald-700">نتيجتك: {score} من {mcq.length} {score === mcq.length ? '— ممتاز! 🎉' : ''}</p>
-                    </div>
+                      ))}
+                      <Button
+                        size="sm"
+                        onClick={handleSubmitHw}
+                        disabled={Object.keys(myAnswers).length === 0 || !!submitting}
+                      >
+                        {submitting === hw.id ? <Loader2 className="h-4 w-4 animate-spin" : null}
+                        {submitting === hw.id ? 'جاري التسليم...' : 'تسليم الإجابات'}
+                      </Button>
+                    </>
                   )}
                 </div>
               )}
@@ -693,28 +954,98 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
   )
 }
 
-/* ========== EXAMS TAB ========== */
+/* ========== EXAMS TAB (HIDDEN ANSWERS, SHUFFLED, FINAL SCORE) ========== */
 function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamResult[]; studentId: string }) {
   const [takingExam, setTakingExam] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [submitting, setSubmitting] = useState(false)
   const [examQuestions, setExamQuestions] = useState<any[]>([])
+  const [showResult, setShowResult] = useState<any>(null)
 
   if (exams.length === 0) return <EmptyState message="لا توجد امتحانات حالياً" />
 
-  // Exam Taking Mode
+  // Result Display after submission
+  if (showResult) {
+    const exam = exams.find(e => e.id === showResult.examId)
+    const allQuestions: any[] = []
+    try { if (exam?.questions) { const p = JSON.parse(exam.questions); allQuestions.push(...p) } } catch {}
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold">{exam?.title} - النتيجة</h3>
+          <Button variant="outline" size="sm" onClick={() => { setShowResult(null); setAnswers({}); setExamQuestions([]) }}>رجوع</Button>
+        </div>
+
+        {/* Score Card */}
+        <Card className={`border-2 ${showResult.passed ? 'border-emerald-500' : 'border-red-500'}`}>
+          <CardContent className="p-6 text-center">
+            <p className="text-4xl font-bold mb-2">{showResult.score}/{showResult.maxScore}</p>
+            <p className={`text-lg font-semibold ${showResult.passed ? 'text-emerald-600' : 'text-red-600'}`}>
+              {showResult.passed ? 'ناجح' : 'راسب'}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Per-question review */}
+        <div className="space-y-3">
+          <h4 className="font-semibold text-sm">مراجعة الأسئلة</h4>
+          {(showResult.details || []).map((d: any, qi: number) => {
+            const q = allQuestions[qi]
+            if (!q) return null
+            return (
+              <Card key={qi}>
+                <CardContent className="p-4 space-y-3">
+                  <p className="font-medium text-sm">{qi + 1}. {d.question}</p>
+                  <div className="space-y-1.5">
+                    {q.options.map((opt: string, oi: number) => {
+                      const isCorrect = oi === d.correctAnswer
+                      const isMyWrong = oi === d.studentAnswer && !d.correct
+                      const isMyCorrect = oi === d.studentAnswer && d.correct
+                      return (
+                        <div
+                          key={oi}
+                          className={`w-full text-right p-3 rounded-lg border text-sm ${
+                            isMyCorrect ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 font-medium' :
+                            isMyWrong ? 'border-destructive bg-destructive/10 text-destructive' :
+                            isCorrect ? 'border-emerald-500/50 bg-emerald-500/5 text-emerald-600' :
+                            'border-border'
+                          }`}
+                        >
+                          <span className="ml-2">{String.fromCharCode(65 + oi)})</span>{opt}
+                          {isCorrect && <span className="float-left text-emerald-500">✓</span>}
+                          {isMyWrong && <span className="float-left text-destructive">✗</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // Exam Taking Mode - NO feedback during solving
   if (takingExam) {
     const exam = exams.find(e => e.id === takingExam)
     if (!exam || examQuestions.length === 0) {
       setTakingExam(null)
       return null
     }
+
+    const allAnswered = Object.keys(answers).length >= examQuestions.length
+
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-bold">{exam.title}</h3>
           <Button variant="outline" size="sm" onClick={() => { setTakingExam(null); setAnswers({}); setExamQuestions([]) }}>رجوع</Button>
         </div>
+        <p className="text-xs text-muted-foreground">أجب عن جميع الأسئلة ثم اضغط "تقديم الامتحان". لن تظهر النتيجة إلا بعد التقديم.</p>
+
         {examQuestions.map((q, qi) => (
           <Card key={qi}>
             <CardContent className="p-4 space-y-3">
@@ -735,25 +1066,53 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
             </CardContent>
           </Card>
         ))}
+
         <Button
           className="w-full"
-          disabled={Object.keys(answers).length < examQuestions.length || submitting}
+          disabled={!allAnswered || submitting}
           onClick={async () => {
             setSubmitting(true)
             try {
+              // Map shuffled answers back to original indices
+              const originalExam = exam
+              let originalMCQ: any[] = []
+              try { originalMCQ = JSON.parse((originalExam as any).questions || '[]') } catch {}
+
+              // examQuestions is already shuffled, answers are indexed by shuffled position
+              // We need to map back: find where each shuffled question came from
+              const originalAnswers: Record<number, number> = {}
+              examQuestions.forEach((sq, si) => {
+                const origIdx = originalMCQ.findIndex((oq: any) => oq.q === sq.q && oq.correct === sq.correct)
+                if (origIdx !== -1 && answers[si] !== undefined) {
+                  originalAnswers[origIdx] = answers[si]
+                }
+              })
+
               const res = await fetch('/api/exams/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentId, examId: takingExam, answers }),
+                body: JSON.stringify({ studentId, examId: takingExam, answers: originalAnswers }),
               })
               const data = await res.json()
               if (res.ok) {
-                toast.success(`الدرجة: ${data.result.score}/${data.result.maxScore} ${data.passed ? '✅ ناجح' : '❌ راسب'}`)
-                setTakingExam(null); setAnswers({}); setExamQuestions([])
-                // Refresh the page data
-                window.location.reload()
+                toast.success('تم تقديم الامتحان بنجاح!')
+                setShowResult({
+                  examId: takingExam,
+                  score: data.result.score,
+                  maxScore: data.result.maxScore,
+                  passed: data.passed,
+                  details: data.details,
+                })
+                setTakingExam(null)
+                setAnswers({})
+                setExamQuestions([])
               } else {
-                toast.error(data.error || 'خطأ في التقديم')
+                if (data.alreadySubmitted) {
+                  toast.error('لقد قدمت هذا الامتحان بالفعل')
+                  setTakingExam(null); setAnswers({}); setExamQuestions([])
+                } else {
+                  toast.error(data.error || 'خطأ في التقديم')
+                }
               }
             } catch { toast.error('خطأ في الاتصال') }
             setSubmitting(false)
@@ -790,7 +1149,9 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
                       <Button size="sm" onClick={() => {
                         try {
                           const parsed = JSON.parse((exam as any).questions)
-                          setExamQuestions(parsed)
+                          // SHUFFLE questions for this student
+                          const shuffled = shuffleArray(parsed)
+                          setExamQuestions(shuffled)
                           setTakingExam(exam.id)
                           setAnswers({})
                         } catch { toast.error('خطأ في تحميل الأسئلة') }
@@ -848,111 +1209,63 @@ function DiscussionsTab({ grade, studentId, studentName }: { grade: string; stud
       const res = await fetch(`/api/discussions?grade=${encodeURIComponent(grade)}&pageSize=100`)
       const data = await res.json()
       setItems(data.discussions || [])
-    } catch { toast.error('خطأ في تحميل النقاشات') }
+    } catch {}
+    setLoading(false)
   }
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch(`/api/discussions?grade=${encodeURIComponent(grade)}&pageSize=100`)
-        const data = await res.json()
-        if (!cancelled) setItems(data.discussions || [])
-      } catch { if (!cancelled) toast.error('خطأ في تحميل النقاشات') }
-      if (!cancelled) setLoading(false)
-    })()
-    return () => { cancelled = true }
-  }, [grade])
-
-  useEffect(() => {
-    if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' })
-  }, [items])
+  useEffect(() => { fetchDiscussions() }, [grade])
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [items])
 
   const handleSend = async () => {
-    if (!newMessage.trim()) return
+    if (!newMessage.trim() || sending) return
     setSending(true)
     try {
       await fetch('/api/discussions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, studentName: currentStudent?.name || studentName, grade, content: newMessage.trim(), isAdminReply: false }),
+        body: JSON.stringify({ studentId, studentName, grade, content: newMessage.trim(), isAdminReply: false }),
       })
       setNewMessage('')
       fetchDiscussions()
-      toast.success('تم إرسال رسالتك')
-    } catch { toast.error('خطأ في إرسال الرسالة') }
+    } catch { toast.error('خطأ في الإرسال') }
     setSending(false)
   }
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-[60vh]">
+      <div className="flex-1 overflow-y-auto space-y-2 mb-3 custom-scrollbar">
+        {items.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground"><p className="text-sm">ابدأ المحادثة مع الأدمن</p></div>
+        ) : items.map((msg) => (
+          <div key={msg.id} className={`flex ${msg.isAdminReply ? 'justify-start' : 'justify-end'}`}>
+            <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${
+              msg.isAdminReply
+                ? 'bg-muted rounded-bl-none'
+                : 'bg-primary text-primary-foreground rounded-br-none'
+            }`}>
+              <p className="text-[10px] font-medium mb-0.5 opacity-70">{msg.isAdminReply ? 'الأدمن' : msg.studentName}</p>
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+              <p className="text-[9px] opacity-50 mt-0.5">{new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</p>
+            </div>
+          </div>
+        ))}
+        <div ref={chatEndRef} />
+      </div>
       <div className="flex gap-2">
         <Input
-          placeholder="اكتب رسالتك أو سؤالك هنا..."
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+          placeholder="اكتب رسالة..."
           className="flex-1"
+          disabled={sending}
         />
-        <Button onClick={handleSend} disabled={sending || !newMessage.trim()} size="icon">
+        <Button size="icon" onClick={handleSend} disabled={!newMessage.trim() || sending}>
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
-      {items.length === 0 ? (
-        <EmptyState message="ابدأ النقاش! اكتب أول رسالة" />
-      ) : (
-        <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
-          {items.map((d) => {
-            const isMe = d.studentId === (currentStudent?.id || studentId)
-            const isAdmin = d.isAdminReply
-            return (
-              <div key={d.id} className={`flex ${isAdmin ? 'justify-start' : isMe ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
-                  isAdmin ? 'bg-primary/15 dark:bg-primary/20 border border-primary/20 rounded-bl-md' :
-                  isMe ? 'bg-primary text-primary-foreground rounded-bl-md' :
-                  'bg-muted rounded-br-md'
-                }`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className={`text-xs font-medium ${isAdmin ? 'text-primary' : isMe ? 'opacity-75' : 'text-foreground'}`}>{d.studentName}</p>
-                    {isAdmin && <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/30 text-primary">المعلم</Badge>}
-                  </div>
-                  <p className="text-sm leading-relaxed">{d.content}</p>
-                  <p className={`text-[10px] mt-1 ${isAdmin ? 'text-primary/60' : isMe ? 'opacity-60' : 'text-muted-foreground'}`}>{new Date(d.createdAt).toLocaleString('ar-EG')}</p>
-                </div>
-              </div>
-            )
-          })}
-          <div ref={chatEndRef} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ========== SHARED COMPONENTS ========== */
-function FileAttachment({ filePath, fileType }: { filePath: string; fileType: string }) {
-  const isImage = fileType?.startsWith('image/')
-  const isPdf = fileType === 'application/pdf'
-  if (isImage) {
-    return <Image src={filePath} alt="Attachment" width={48} height={48} className="max-h-12 rounded-lg border" unoptimized />
-  }
-  return (
-    <a href={filePath} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs shrink-0">
-      <FileDown className="h-4 w-4" />
-      {isPdf ? 'PDF' : 'ملف'}
-    </a>
-  )
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
-        <MessageSquare className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="text-muted-foreground text-sm">{message}</p>
     </div>
   )
 }
