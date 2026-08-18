@@ -1,65 +1,53 @@
-
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+// GET /api/exam-results?examId=xxx - Get results for an exam with analytics
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const grade = searchParams.get('grade')
-    const keyword = searchParams.get('keyword')
-    const page = parseInt(searchParams.get('page') || '1')
-    const pageSize = parseInt(searchParams.get('pageSize') || '20')
+  const { searchParams } = new URL(request.url)
+  const examId = searchParams.get('examId')
 
-    const where: Record<string, unknown> = {}
-    if (grade) where.grade = grade
-    if (keyword) {
-      where.OR = [{ title: { contains: keyword } }]
-    }
-
-    const [exams, total] = await Promise.all([
-      db.exam.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      db.exam.count({ where }),
-    ])
-
-    return NextResponse.json({ exams, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
-  } catch (error: any) {
-    console.error('Exams fetch error:', error)
-    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
+  if (!examId) {
+    return NextResponse.json({ error: 'examId required' }, { status: 400 })
   }
-}
 
-export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { title, content, grade, filePath, fileType, questions, passScore, answerKeyPath, answerKeyType, thumbnail } = body
-
-    if (!title || !grade) {
-      return NextResponse.json({ error: 'Title and grade are required' }, { status: 400 })
-    }
-
-    const exam = await db.exam.create({
-      data: {
-        title,
-        content: content || '',
-        grade,
-        filePath: filePath || '',
-        fileType: fileType || '',
-        answerKeyPath: answerKeyPath || '',
-        answerKeyType: answerKeyType || '',
-        thumbnail: thumbnail || '',
-        questions: questions || '',
-        passScore: passScore || 50,
-      },
+    const results = await db.examResult.findMany({
+      where: { examId },
+      include: { student: { select: { name: true, phone: true, grade: true, status: true } } },
+      orderBy: { submittedAt: 'desc' },
     })
 
-    return NextResponse.json({ message: 'Exam added', exam }, { status: 201 })
-  } catch (error: any) {
-    console.error('Exam create error:', error)
-    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
+    // Get all approved students in the exam's grade who haven't submitted
+    const exam = await db.exam.findUnique({ where: { id: examId } })
+    const submittedStudentIds = new Set(results.map((r: any) => r.studentId))
+    const notTaken = exam ? await db.student.findMany({
+      where: { grade: exam.grade, status: 'approved', id: { not: { in: Array.from(submittedStudentIds) } } },
+      select: { id: true, name: true, phone: true },
+    }) : []
+
+    // Analyze most-missed questions
+    const questionMisses: Record<number, { question: string; total: number; wrong: number }> = {}
+    results.forEach((r: any) => {
+      if (r.details) {
+        try {
+          const dets = JSON.parse(r.details)
+          dets.forEach((d: any, idx: number) => {
+            if (!questionMisses[idx]) {
+              questionMisses[idx] = { question: d.question, total: 0, wrong: 0 }
+            }
+            questionMisses[idx].total++
+            if (!d.correct) questionMisses[idx].wrong++
+          })
+        } catch {}
+      }
+    })
+    const mostMissed = Object.values(questionMisses)
+      .filter(q => q.wrong > 0)
+      .sort((a, b) => b.wrong - a.wrong)
+
+    return NextResponse.json({ results, notTaken, mostMissed })
+  } catch (error) {
+    console.error('Exam results error:', error)
+    return NextResponse.json({ error: 'Failed to fetch results' }, { status: 500 })
   }
 }
