@@ -6,6 +6,7 @@ export type AppView =
   | 'auth-register'
   | 'student-pending'
   | 'student-portal'
+  | 'student-payment-pending'
   | 'admin-dashboard'
 
 export interface Student {
@@ -30,7 +31,40 @@ export interface ExamResult {
   score: number
   maxScore: number
   submittedAt: string
+  answers?: string
+  details?: string
   student?: { name: string; phone: string; grade: string; status: string }
+}
+
+export interface HomeworkResult {
+  id: string
+  homeworkId: string
+  studentId: string
+  score: number
+  maxScore: number
+  submittedAt: string
+  answers?: string
+  details?: string
+  student?: { name: string; phone: string; grade: string; status: string }
+}
+
+export interface Payment {
+  id: string
+  studentId: string
+  studentName: string
+  studentPhone: string
+  studentGrade: string
+  method: string
+  receiptPath: string
+  receiptType: string
+  status: string
+  amount: number
+  videoId: string
+  videoTitle: string
+  note: string
+  reviewedAt: string | null
+  reviewedBy: string
+  createdAt: string
 }
 
 export interface GalleryImage {
@@ -59,6 +93,7 @@ export interface Video {
   fileType: string
   thumbnail: string
   grade: string
+  price?: number
   createdAt: string
 }
 
@@ -70,6 +105,7 @@ export interface Homework {
   fileType: string
   thumbnail: string
   grade: string
+  questions?: string
   createdAt: string
 }
 
@@ -81,6 +117,8 @@ export interface Exam {
   fileType: string
   thumbnail: string
   grade: string
+  questions?: string
+  passScore?: number
   createdAt: string
 }
 
