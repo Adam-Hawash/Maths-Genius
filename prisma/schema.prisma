@@ -17,19 +17,21 @@ model Admin {
 }
 
 model Student {
-  id          String            @id @default(cuid())
-  name        String
-  phone       String            @unique
-  grade       String
-  status      String            @default("pending")
-  parentName  String
-  parentPhone String
-  loginCount  Int               @default(0)
-  lastLogin   DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  examResults ExamResult[]
-  activities  StudentActivity[]
+  id           String            @id @default(cuid())
+  name         String
+  phone        String            @unique
+  grade        String
+  status       String            @default("pending")
+  parentName   String
+  parentPhone  String
+  loginCount   Int               @default(0)
+  lastLogin    DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  examResults  ExamResult[]
+  homeworkResults HomeworkResult[]
+  payments     Payment[]
+  activities   StudentActivity[]
 }
 
 model StudentActivity {
@@ -49,8 +51,20 @@ model Video {
   fileType  String   @default("")
   thumbnail String   @default("")
   grade     String
+  price     Float    @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  access    VideoAccess[]
+}
+
+model VideoAccess {
+  id        String   @id @default(cuid())
+  videoId   String
+  studentId String
+  grantedBy String   @default("")
+  createdAt DateTime @default(now())
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  @@unique([videoId, studentId])
 }
 
 model Homework {
@@ -66,6 +80,7 @@ model Homework {
   questions     String   @default("")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  results       HomeworkResult[]
 }
 
 model Exam {
@@ -91,9 +106,45 @@ model ExamResult {
   studentId   String
   score       Float
   maxScore    Float    @default(100)
+  answers     String   @default("")
+  details     String   @default("")
   submittedAt DateTime @default(now())
   student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+}
+
+model HomeworkResult {
+  id          String   @id @default(cuid())
+  homeworkId  String
+  studentId   String
+  score       Float
+  maxScore    Float    @default(100)
+  answers     String   @default("")
+  details     String   @default("")
+  submittedAt DateTime @default(now())
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  homework    Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  studentId   String
+  studentName String   @default("")
+  studentPhone String  @default("")
+  studentGrade String  @default("")
+  method      String   @default("")
+  receiptPath String   @default("")
+  receiptType String   @default("")
+  status      String   @default("pending")
+  amount      Float    @default(0)
+  videoId     String   @default("")
+  videoTitle  String   @default("")
+  note        String   @default("")
+  reviewedAt  DateTime?
+  reviewedBy  String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
 model Announcement {
