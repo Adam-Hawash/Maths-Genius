@@ -1,3 +1,6 @@
+// This is your Prisma schema file.
+// Learn more: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,205 +10,175 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Admin {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String   @default("Admin")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+// ===== المستخدمين =====
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          String    @default("student") // "admin" or "student"
+  phone         String?
+  grade         String?   // الصف الدراسي
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-model Student {
-  id           String            @id @default(cuid())
-  name         String
-  phone        String            @unique
-  grade        String
-  status       String            @default("pending")
-  parentName   String
-  parentPhone  String
-  loginCount   Int               @default(0)
-  lastLogin    DateTime?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  examResults  ExamResult[]
   homeworkResults HomeworkResult[]
-  payments     Payment[]
-  activities   StudentActivity[]
+  examResults     ExamResult[]
+  payments        Payment[]
+  videoAccess     VideoAccess[]
+
+  @@index([email])
+  @@index([role])
 }
 
-model StudentActivity {
-  id        String   @id @default(cuid())
-  studentId String
-  action    String
-  details   String   @default("")
-  createdAt DateTime @default(now())
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-}
-
+// ===== الفيديوهات =====
 model Video {
-  id        String   @id @default(cuid())
-  title     String
-  url       String   @default("")
-  filePath  String   @default("")
-  fileType  String   @default("")
-  thumbnail String   @default("")
-  grade     String
-  price     Float    @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  access    VideoAccess[]
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  url         String   // رابط YouTube أو أي رابط
+  thumbnailUrl String?
+  subject     String?  // المادة
+  grade       String?  // الصف
+  order       Int      @default(0)
+  isPublished Boolean  @default(false)
+  price       Float?   @default(0) // السعر — null أو 0 = مجاني
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  payments    Payment[]
+  videoAccess VideoAccess[]
 }
 
-model VideoAccess {
-  id        String   @id @default(cuid())
-  videoId   String
-  studentId String
-  grantedBy String   @default("")
-  createdAt DateTime @default(now())
-  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  @@unique([videoId, studentId])
-}
-
+// ===== الواجبات =====
 model Homework {
-  id            String   @id @default(cuid())
-  title         String
-  content       String
-  filePath      String   @default("")
-  fileType      String   @default("")
-  thumbnail     String   @default("")
-  answerKeyPath String   @default("")
-  answerKeyType String   @default("")
-  grade         String
-  questions     String   @default("")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  results       HomeworkResult[]
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  subject     String?
+  grade       String?
+  dueDate     DateTime?
+  isPublished Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  questions       Question[]
+  homeworkResults HomeworkResult[]
 }
 
+// ===== الامتحانات =====
 model Exam {
-  id            String       @id @default(cuid())
-  title         String
-  content       String
-  filePath      String       @default("")
-  fileType      String       @default("")
-  thumbnail     String       @default("")
-  answerKeyPath String       @default("")
-  answerKeyType String       @default("")
-  grade         String
-  questions     String       @default("")
-  passScore     Float        @default(50)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  results       ExamResult[]
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  subject     String?
+  grade       String?
+  duration    Int?       // المدة بالدقائق
+  isPublished Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  questions    Question[]
+  examResults  ExamResult[]
 }
 
-model ExamResult {
-  id          String   @id @default(cuid())
-  examId      String
-  studentId   String
-  score       Float
-  maxScore    Float    @default(100)
-  answers     String   @default("")
-  details     String   @default("")
-  submittedAt DateTime @default(now())
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+// ===== الأسئلة =====
+model Question {
+  id            String    @id @default(cuid())
+  text          String
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctAnswer String
+  explanation   String?   // شرح الحل — من الذكاء الاصطناعي
+  homeworkId    String?
+  examId        String?
+  homework      Homework? @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  exam          Exam?     @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([homeworkId])
+  @@index([examId])
 }
 
+// ===== نتائج الواجبات =====
 model HomeworkResult {
-  id          String   @id @default(cuid())
-  homeworkId  String
-  studentId   String
-  score       Float
-  maxScore    Float    @default(100)
-  answers     String   @default("")
-  details     String   @default("")
-  submittedAt DateTime @default(now())
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  homework    Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  studentId       String
+  homeworkId      String
+  score           Int
+  totalQuestions  Int
+  questionDetails String   // JSON: تفاصيل كل سؤال
+  createdAt       DateTime @default(now())
+
+  student  User     @relation(fields: [studentId], references: [id])
+  homework Homework @relation(fields: [homeworkId], references: [id])
+
+  @@unique([studentId, homeworkId])
+  @@index([studentId])
+  @@index([homeworkId])
 }
 
+// ===== نتائج الامتحانات =====
+model ExamResult {
+  id              String   @id @default(cuid())
+  studentId       String
+  examId          String
+  score           Int
+  totalQuestions  Int
+  questionDetails String   // JSON: تفاصيل كل سؤال
+  createdAt       DateTime @default(now())
+
+  student User @relation(fields: [studentId], references: [id])
+  exam    Exam @relation(fields: [examId], references: [id])
+
+  @@unique([studentId, examId])
+  @@index([studentId])
+  @@index([examId])
+}
+
+// ===== المدفوعات =====
 model Payment {
   id          String   @id @default(cuid())
   studentId   String
-  studentName String   @default("")
-  studentPhone String  @default("")
-  studentGrade String  @default("")
-  method      String   @default("")
-  receiptPath String   @default("")
-  receiptType String   @default("")
-  status      String   @default("pending")
-  amount      Float    @default(0)
-  videoId     String   @default("")
-  videoTitle  String   @default("")
-  note        String   @default("")
-  reviewedAt  DateTime?
-  reviewedBy  String   @default("")
+  videoId     String
+  method      String   // "fawry" | "instapay" | "vodafone_cash"
+  amount      Float
+  receiptPath String?  // مسار صورة الإيصال
+  status      String   @default("pending") // "pending" | "approved" | "rejected"
+  adminNote   String?  // ملاحظات الأدمن
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  student User  @relation(fields: [studentId], references: [id])
+  video   Video @relation(fields: [videoId], references: [id])
+
+  @@index([studentId])
+  @@index([videoId])
+  @@index([status])
 }
 
-model Announcement {
+// ===== صلاحية الوصول للفيديو =====
+model VideoAccess {
   id        String   @id @default(cuid())
-  title     String
-  content   String
-  grade     String
+  studentId String
+  videoId   String
+  grantedBy String?  // email الأدمن اللي منح الوصول
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
 
-model Discussion {
-  id           String   @id @default(cuid())
-  studentId    String
-  studentName  String
-  grade        String
-  content      String
-  isAdminReply Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
-model SiteConfig {
-  id        String   @id @default(cuid())
-  key       String   @unique
-  value     String   @default("")
-  updatedAt DateTime @updatedAt
-}
-
-model Media {
-  id        String   @id @default(cuid())
-  filename  String
-  filePath  String
-  fileType  String
-  fileSize  String   @default("")
-  category  String   @default("general")
-  data      String   @default("")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model VideoProgress {
-  id             String   @id @default(cuid())
-  studentId      String
-  videoId        String
-  watchedSeconds Float    @default(0)
-  totalSeconds   Float    @default(0)
-  completed      Boolean  @default(false)
-  lastWatchedAt  DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  student User  @relation(fields: [studentId], references: [id])
+  video   Video @relation(fields: [videoId], references: [id])
 
   @@unique([studentId, videoId])
+  @@index([studentId])
+  @@index([videoId])
 }
 
-model GalleryImage {
-  id        String   @id @default(cuid())
-  title     String   @default("")
-  filePath  String   @default("")
-  type      String   @default("image")
-  videoUrl  String   @default("")
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ===== إعدادات الموقع =====
+model SiteConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+
+  @@index([key])
 }
