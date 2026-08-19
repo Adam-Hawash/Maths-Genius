@@ -62,7 +62,7 @@ model Video {
   subject     String   @default("")
   order       Int      @default(0)
   isPublished Boolean  @default(false)
-  price       Float?   @default(null)
+  price       Float?
   videoAccess  VideoAccess[]
   payments     Payment[]
 }
@@ -107,7 +107,7 @@ model Exam {
   // New fields
   description  String       @default("")
   subject     String       @default("")
-  duration    Int?         @default(null)
+    duration    Int?
   isPublished  Boolean      @default(false)
   questionList Question[]
 }
