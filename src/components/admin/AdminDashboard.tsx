@@ -36,7 +36,9 @@ import {
   Smartphone,
   ChevronDown,
   ChevronUp,
-  Image as ImageIcon,
+    Image as ImageIcon,
+  Menu,
+} from 'lucide-react';
 } from 'lucide-react';
 
 // ===== Types =====
