@@ -79,8 +79,8 @@ interface QuestionForm {
 }
 
 // ===== Main Component =====
-export default function AdminDashboard() {
-  const { user, setView, logout } = useAppStore();
+export function AdminDashboard()
+const { user, setView, logout } = useAppStore();
 
   // ===== Navigation State =====
   const [activeTab, setActiveTab] = useState('videos');
