@@ -51,7 +51,7 @@ export async function GET() {
       ['description', 'TEXT DEFAULT ""'],
       ['thumbnailUrl', 'TEXT DEFAULT ""'],
       ['subject', 'TEXT DEFAULT ""'],
-      ['order', 'INTEGER DEFAULT 0'],
+     ['"order"', 'INTEGER DEFAULT 0'],
       ['isPublished', 'BOOLEAN DEFAULT 0'],
       ['price', 'REAL'],
     ]
