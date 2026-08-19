@@ -6,7 +6,7 @@ import { Footer } from '@/components/landing/Footer'
 import { StudentPendingView } from '@/components/landing/StudentPendingView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { GraduationCap, Loader2 } from 'lucide-react'
 
 const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
@@ -33,7 +33,7 @@ const WhatsAppButton = dynamic(() => import('@/components/landing/WhatsAppButton
 const VideoProtection = dynamic(() => import('@/components/landing/VideoProtection').then(m => ({ default: m.VideoProtection })), {
   ssr: false,
 })
-const StudentPortal = dynamic(() => import('@/components/student/StudentPortal').then(m => ({ default: m.StudentPortal })), {
+const StudentPortal = dynamic(() => import('@/components/student/StudentPortal').then(m => ({ default: m.default || m.StudentPortal })), {
   loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
 })
 const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard').then(m => ({ default: m.default || m.AdminDashboard })), {
@@ -44,13 +44,16 @@ export default function HomePage() {
   var store = useAppStore()
   var currentView = store.currentView || 'landing'
   var setGalleryImages = (store as any).setGalleryImages || function(){}
+  var siteConfig = store.siteConfig || {}
   var configLoaded = store.configLoaded
   var setSiteConfig = store.setSiteConfig
   var setConfigLoaded = store.setConfigLoaded
   var setStats = store.setStats
 
+  const [appReady, setAppReady] = useState(false)
+
+  // Load config + gallery + stats on mount
   useEffect(function() {
-    if (configLoaded) return
     Promise.all([
       fetch('/api/config').then(function(r) { return r.json() }).catch(function() { return {} }),
       fetch('/api/gallery').then(function(r) { return r.json() }).catch(function() { return {} }),
@@ -66,14 +69,18 @@ export default function HomePage() {
       if (gal && gal.images) {
         setGalleryImages(gal.images)
       }
-      if (sta) {
-        setStats(sta)
+      if (sta && sta.stats) {
+        setStats(sta.stats)
       }
+      setAppReady(true)
     })
   }, [])
 
-  // Landing page: show loading ONLY until config is ready
-  if (currentView === 'landing' && !configLoaded) {
+  const showFooter = currentView === 'landing'
+  const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
+
+  // Full-page loading screen
+  if (!appReady) {
     return (
       <div className="fixed inset-0 z-[9999] bg-[#0F0D0A] flex flex-col items-center justify-center gap-6">
         <div className="relative">
@@ -94,10 +101,6 @@ export default function HomePage() {
       </div>
     )
   }
-
-  // All other views render IMMEDIATELY - no waiting
-  const showFooter = currentView === 'landing'
-  const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
 
   return (
     <div className="min-h-screen flex flex-col">
