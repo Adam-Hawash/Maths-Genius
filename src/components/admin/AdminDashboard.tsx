@@ -36,9 +36,8 @@ import {
   Smartphone,
   ChevronDown,
   ChevronUp,
-    Image as ImageIcon,
+  Image as ImageIcon,
   Menu,
-} from 'lucide-react';
 } from 'lucide-react';
 
 // ===== Types =====
@@ -251,7 +250,6 @@ export default function AdminDashboard() {
     fetchConfigs();
   }, []);
 
-  // Re-fetch payments when filter changes
   useEffect(() => {
     fetchPayments();
   }, [paymentFilter]);
@@ -483,23 +481,41 @@ export default function AdminDashboard() {
   };
 
   // ==========================================
+  // ===== GRADE OPTIONS =====================
+  // ==========================================
+
+  const gradeOptions = [
+    'الصف الأول الابتدائي',
+    'الصف الثاني الابتدائي',
+    'الصف الثالث الابتدائي',
+    'الصف الرابع الابتدائي',
+    'الصف الخامس الابتدائي',
+    'الصف السادس الابتدائي',
+  ];
+
+  const gradeSelect = (value: string, onChange: (v: string) => void) => (
+    <select value={value} onChange={(e) => onChange(e.target.value)} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
+      <option value="">اختر الصف</option>
+      {gradeOptions.map((g) => (
+        <option key={g} value={g}>{g}</option>
+      ))}
+    </select>
+  );
+
+  // ==========================================
   // ===== RENDER ============================
   // ==========================================
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950" dir="rtl">
-      {/* Toast Notification */}
+      {/* Toast */}
       {toast && (
-        <div
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg text-white font-medium transition-all ${
-            toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-          }`}
-        >
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg text-white font-medium ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
           {toast.message}
         </div>
       )}
 
-      {/* ===== Top Header Bar ===== */}
+      {/* Header */}
       <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -508,28 +524,22 @@ export default function AdminDashboard() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-gray-900 dark:text-white">لوحة التحكم</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Maths Genius — أدم هوش</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Maths Genius</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setView?.('landing')}
-              className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white flex items-center gap-1"
-            >
+            <button onClick={() => setView?.('landing')} className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white flex items-center gap-1">
               <ExternalLink className="h-4 w-4" />
               الموقع
             </button>
-            <button
-              onClick={logout}
-              className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/30 flex items-center gap-1"
-            >
+            <button onClick={logout} className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/30 flex items-center gap-1">
               <LogOut className="h-4 w-4" />
               خروج
             </button>
           </div>
         </div>
       </header>
-            {/* ===== Sidebar + Content ===== */}
+            {/* Sidebar + Content */}
       <div className="flex">
         {/* Sidebar */}
         <aside className={`fixed inset-y-0 right-0 top-16 w-64 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 transform transition-transform z-30 lg:translate-x-0 lg:static lg:inset-auto ${sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}`}>
@@ -546,11 +556,7 @@ export default function AdminDashboard() {
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
               >
                 <tab.icon className="h-5 w-5" />
                 {tab.label}
@@ -559,12 +565,10 @@ export default function AdminDashboard() {
           </nav>
         </aside>
 
-        {/* Mobile sidebar overlay */}
         {sidebarOpen && (
           <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
         )}
 
-        {/* Mobile menu button */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="lg:hidden fixed bottom-4 left-4 z-50 w-12 h-12 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center"
@@ -572,8 +576,9 @@ export default function AdminDashboard() {
           <Menu className="h-6 w-6" />
         </button>
 
-        {/* ===== Main Content Area ===== */}
+        {/* Main Content */}
         <main className="flex-1 p-4 lg:p-6">
+
           {/* ===== VIDEOS TAB ===== */}
           {activeTab === 'videos' && (
             <div>
@@ -582,30 +587,18 @@ export default function AdminDashboard() {
                   <Video className="h-6 w-6 text-blue-600" />
                   إدارة الفيديوهات
                 </h2>
-                <button
-                  onClick={() => { setEditingVideo(null); setVideoForm({ title: '', url: '', description: '', subject: '', grade: '', isPublished: false, price: '' }); }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-1"
-                >
+                <button onClick={() => { setEditingVideo(null); setVideoForm({ title: '', url: '', description: '', subject: '', grade: '', isPublished: false, price: '' }); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-1">
                   <Plus className="h-4 w-4" /> إضافة فيديو
                 </button>
               </div>
 
-              {/* Video Form */}
-              {(videoForm.title || editingVideo) && (
+              {videoForm.title || editingVideo ? (
                 <form onSubmit={editingVideo ? handleUpdateVideo : handleCreateVideo} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 mb-6 space-y-3">
                   <h3 className="font-semibold text-gray-900 dark:text-white">{editingVideo ? 'تعديل فيديو' : 'إضافة فيديو جديد'}</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <input type="text" placeholder="عنوان الفيديو" value={videoForm.title} onChange={(e) => setVideoForm({ ...videoForm, title: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
                     <input type="text" placeholder="رابط الفيديو (YouTube)" value={videoForm.url} onChange={(e) => setVideoForm({ ...videoForm, url: e.target.value })} required dir="ltr" className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                    <select value={videoForm.grade} onChange={(e) => setVideoForm({ ...videoForm, grade: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
-                      <option value="">اختر الصف</option>
-                      <option value="الصف الأول الابتدائي">الصف الأول الابتدائي</option>
-                      <option value="الصف الثاني الابتدائي">الصف الثاني الابتدائي</option>
-                      <option value="الصف الثالث الابتدائي">الصف الثالث الابتدائي</option>
-                      <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
-                      <option value="الصف الخامس الابتدائي">الصف الخامس الابتدائي</option>
-                      <option value="الصف السادس الابتدائي">الصف السادس الابتدائي</option>
-                    </select>
+                    {gradeSelect(videoForm.grade, (v) => setVideoForm({ ...videoForm, grade: v }))}
                     <select value={videoForm.subject} onChange={(e) => setVideoForm({ ...videoForm, subject: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
                       <option value="">اختر المادة</option>
                       <option value="رياضيات">رياضيات</option>
@@ -613,63 +606,38 @@ export default function AdminDashboard() {
                     <input type="text" placeholder="السعر (اتركه فارغ = مجاني)" value={videoForm.price} onChange={(e) => setVideoForm({ ...videoForm, price: e.target.value })} dir="ltr" className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
                   </div>
                   <textarea placeholder="وصف الفيديو..." value={videoForm.description} onChange={(e) => setVideoForm({ ...videoForm, description: e.target.value })} rows={2} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                      <input type="checkbox" checked={videoForm.isPublished} onChange={(e) => setVideoForm({ ...videoForm, isPublished: e.target.checked })} className="rounded" />
-                      منشور
-                    </label>
-                  </div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input type="checkbox" checked={videoForm.isPublished} onChange={(e) => setVideoForm({ ...videoForm, isPublished: e.target.checked })} className="rounded" />
+                    منشور
+                  </label>
                   <div className="flex gap-2">
                     <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">{editingVideo ? 'تحديث' : 'إضافة'}</button>
                     <button type="button" onClick={() => { setEditingVideo(null); setVideoForm({ title: '', url: '', description: '', subject: '', grade: '', isPublished: false, price: '' }); }} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm">إلغاء</button>
                   </div>
                 </form>
-              )}
+              ) : null}
 
-              {/* Search */}
-              <div className="mb-4">
-                <div className="relative">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="بحث في الفيديوهات..."
-                    value={videoSearch}
-                    onChange={(e) => setVideoSearch(e.target.value)}
-                    className="pr-10 pl-4 py-2 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+              <div className="mb-4 relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input type="text" placeholder="بحث في الفيديوهات..." value={videoSearch} onChange={(e) => setVideoSearch(e.target.value)} className="pr-10 pl-4 py-2 w-full border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
-              {/* Videos List */}
-              {videos.filter(
-                (v) =>
-                  !videoSearch ||
-                  v.title.toLowerCase().includes(videoSearch.toLowerCase()) ||
-                  v.subject?.toLowerCase().includes(videoSearch.toLowerCase())
-              ).length === 0 ? (
+              {videos.filter((v) => !videoSearch || v.title.toLowerCase().includes(videoSearch.toLowerCase()) || v.subject?.toLowerCase().includes(videoSearch.toLowerCase())).length === 0 ? (
                 <p className="text-center text-gray-500 py-8">لا توجد فيديوهات</p>
               ) : (
                 <div className="space-y-3">
-                  {videos
-                    .filter(
-                      (v) =>
-                        !videoSearch ||
-                        v.title.toLowerCase().includes(videoSearch.toLowerCase()) ||
-                        v.subject?.toLowerCase().includes(videoSearch.toLowerCase())
-                    )
-                    .map((video) => (
-                      <div key={video.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-gray-900 dark:text-white truncate">{video.title}</h4>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{video.grade} • {video.subject} • {video.isPublished ? '🟢 منشور' : '🔴 مسودة'}{video.price ? ` • ${video.price} جنيه` : ' • مجاني'}</p>
-                          {video.description && <p className="text-xs text-gray-400 mt-1 line-clamp-1">{video.description}</p>}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button onClick={() => { setEditingVideo(video.id); setVideoForm({ title: video.title, url: video.url, description: video.description || '', subject: video.subject, grade: video.grade, isPublished: video.isPublished, price: video.price?.toString() || '' }); }} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"><Pencil className="h-4 w-4" /></button>
-                          <button onClick={() => handleDeleteVideo(video.id)} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><Trash2 className="h-4 w-4" /></button>
-                        </div>
+                  {videos.filter((v) => !videoSearch || v.title.toLowerCase().includes(videoSearch.toLowerCase()) || v.subject?.toLowerCase().includes(videoSearch.toLowerCase())).map((video) => (
+                    <div key={video.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-gray-900 dark:text-white truncate">{video.title}</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{video.grade} - {video.subject} - {video.isPublished ? 'منشور' : 'مسودة'}{video.price ? ' - ' + video.price + ' جنيه' : ' - مجاني'}</p>
                       </div>
-                    ))}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={() => { setEditingVideo(video.id); setVideoForm({ title: video.title, url: video.url, description: video.description || '', subject: video.subject, grade: video.grade, isPublished: video.isPublished, price: video.price?.toString() || '' }); }} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"><Pencil className="h-4 w-4" /></button>
+                        <button onClick={() => handleDeleteVideo(video.id)} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -683,63 +651,16 @@ export default function AdminDashboard() {
                   <ClipboardList className="h-6 w-6 text-green-600" />
                   إدارة الواجبات
                 </h2>
-                <button
-                  onClick={() => { setEditingHomework(null); setHomeworkForm({ title: '', description: '', subject: '', grade: '', dueDate: '', isPublished: false }); setSelectedHomework(null); }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 flex items-center gap-1"
-                >
+                <button onClick={() => { setEditingHomework(null); setHomeworkForm({ title: '', description: '', subject: '', grade: '', dueDate: '', isPublished: false }); setSelectedHomework(null); }} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 flex items-center gap-1">
                   <Plus className="h-4 w-4" /> إضافة واجب
                 </button>
               </div>
 
-              {/* Homework Form */}
-              {(homeworkForm.title || editingHomework) && (
-                <form onSubmit={editingHomework ? handleUpdateHomework : handleCreateHomework} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 mb-6 space-y-3">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">{editingHomework ? 'تعديل واجب' : 'إضافة واجب جديد'}</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input type="text" placeholder="عنوان الواجب" value={homeworkForm.title} onChange={(e) => setHomeworkForm({ ...homeworkForm, title: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                    <select value={homeworkForm.grade} onChange={(e) => setHomeworkForm({ ...homeworkForm, grade: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
-                      <option value="">اختر الصف</option>
-                      <option value="الصف الأول الابتدائي">الصف الأول الابتدائي</option>
-                      <option value="الصف الثاني الابتدائي">الصف الثاني الابتدائي</option>
-                      <option value="الصف الثالث الابتدائي">الصف الثالث الابتدائي</option>
-                      <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
-                      <option value="الصف الخامس الابتدائي">الصف الخامس الابتدائي</option>
-                      <option value="الصف السادس الابتدائي">الصف السادس الابتدائي</option>
-                    </select>
-                    <select value={homeworkForm.subject} onChange={(e) => setHomeworkForm({ ...homeworkForm, subject: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
-                      <option value="">اختر المادة</option>
-                      <option value="رياضيات">رياضيات</option>
-                    </select>
-                    <input type="date" value={homeworkForm.dueDate} onChange={(e) => setHomeworkForm({ ...homeworkForm, dueDate: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                  </div>
-                  <textarea placeholder="وصف الواجب..." value={homeworkForm.description} onChange={(e) => setHomeworkForm({ ...homeworkForm, description: e.target.value })} rows={2} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input type="checkbox" checked={homeworkForm.isPublished} onChange={(e) => setHomeworkForm({ ...homeworkForm, isPublished: e.target.checked })} className="rounded" />
-                    منشور
-                  </label>
-                  <div className="flex gap-2">
-                    <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">{editingHomework ? 'تحديث' : 'إضافة'}</button>
-                    <button type="button" onClick={() => { setEditingHomework(null); setHomeworkForm({ title: '', description: '', subject: '', grade: '', dueDate: '', isPublished: false }); }} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm">إلغاء</button>
-                  </div>
-                </form>
-              )}
-
-              {/* Homework List */}
               {selectedHomework ? (
                 <div className="space-y-4">
-                  <button onClick={() => { setSelectedHomework(null); setHomeworkQuestions([]); }} className="text-sm text-blue-600 hover:underline flex items-center gap-1">← العودة للقائمة</button>
+                  <button onClick={() => { setSelectedHomework(null); setHomeworkQuestions([]); }} className="text-sm text-blue-600 hover:underline">العودة للقائمة</button>
                   <h3 className="font-bold text-gray-900 dark:text-white">أسئلة: {selectedHomework.title}</h3>
-
-                  {/* AI Extraction */}
-                  <AiExtractionPanel
-                    onExtract={(e) => handleAiExtract(e, selectedHomework.id)}
-                    isExtracting={aiExtracting}
-                    questions={aiQuestionsPreview}
-                    error={aiError}
-                    successMsg={aiSuccessMsg}
-                  />
-
-                  {/* Questions List */}
+                  <AiExtractionPanel onExtract={(e) => handleAiExtract(e, selectedHomework.id)} isExtracting={aiExtracting} questions={aiQuestionsPreview} error={aiError} successMsg={aiSuccessMsg} />
                   <div className="space-y-3">
                     {homeworkQuestions.map((q, idx) => (
                       <div key={idx} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 space-y-2">
@@ -749,10 +670,10 @@ export default function AdminDashboard() {
                         </div>
                         <input type="text" placeholder="نص السؤال" value={q.text} onChange={(e) => updateQuestion(idx, 'text', e.target.value, 'homework')} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
                         <div className="grid grid-cols-2 gap-2">
-                          <input type="text" placeholder="أ) الخيار" value={q.optionA} onChange={(e) => updateQuestion(idx, 'optionA', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                          <input type="text" placeholder="ب) الخيار" value={q.optionB} onChange={(e) => updateQuestion(idx, 'optionB', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                          <input type="text" placeholder="ج) الخيار" value={q.optionC} onChange={(e) => updateQuestion(idx, 'optionC', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                          <input type="text" placeholder="د) الخيار" value={q.optionD} onChange={(e) => updateQuestion(idx, 'optionD', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                          <input type="text" placeholder="أ)" value={q.optionA} onChange={(e) => updateQuestion(idx, 'optionA', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                          <input type="text" placeholder="ب)" value={q.optionB} onChange={(e) => updateQuestion(idx, 'optionB', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                          <input type="text" placeholder="ج)" value={q.optionC} onChange={(e) => updateQuestion(idx, 'optionC', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                          <input type="text" placeholder="د)" value={q.optionD} onChange={(e) => updateQuestion(idx, 'optionD', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <select value={q.correctAnswer} onChange={(e) => updateQuestion(idx, 'correctAnswer', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
@@ -762,23 +683,47 @@ export default function AdminDashboard() {
                             <option value="C">ج</option>
                             <option value="D">د</option>
                           </select>
-                          <input type="text" placeholder="شرح الإجابة" value={q.explanation} onChange={(e) => updateQuestion(idx, 'explanation', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                          <input type="text" placeholder="شرح" value={q.explanation} onChange={(e) => updateQuestion(idx, 'explanation', e.target.value, 'homework')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
                         </div>
                       </div>
                     ))}
-                    <button onClick={() => addQuestion('homework')} className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl text-gray-500 text-sm hover:border-blue-400 hover:text-blue-500">+ إضافة سؤال</button>
+                    <button onClick={() => addQuestion('homework')} className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl text-gray-500 text-sm hover:border-green-400 hover:text-green-500">+ إضافة سؤال</button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {homeworks.length === 0 ? (
-                    <p className="text-center text-gray-500 py-8">لا توجد واجبات</p>
-                  ) : (
-                    homeworks.map((hw: any) => (
+                <div>
+                  {homeworkForm.title || editingHomework ? (
+                    <form onSubmit={editingHomework ? handleUpdateHomework : handleCreateHomework} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 mb-6 space-y-3">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">{editingHomework ? 'تعديل واجب' : 'إضافة واجب جديد'}</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input type="text" placeholder="عنوان الواجب" value={homeworkForm.title} onChange={(e) => setHomeworkForm({ ...homeworkForm, title: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                        {gradeSelect(homeworkForm.grade, (v) => setHomeworkForm({ ...homeworkForm, grade: v }))}
+                        <select value={homeworkForm.subject} onChange={(e) => setHomeworkForm({ ...homeworkForm, subject: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
+                          <option value="">اختر المادة</option>
+                          <option value="رياضيات">رياضيات</option>
+                        </select>
+                        <input type="date" value={homeworkForm.dueDate} onChange={(e) => setHomeworkForm({ ...homeworkForm, dueDate: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                      </div>
+                      <textarea placeholder="وصف الواجب..." value={homeworkForm.description} onChange={(e) => setHomeworkForm({ ...homeworkForm, description: e.target.value })} rows={2} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <input type="checkbox" checked={homeworkForm.isPublished} onChange={(e) => setHomeworkForm({ ...homeworkForm, isPublished: e.target.checked })} className="rounded" />
+                        منشور
+                      </label>
+                      <div className="flex gap-2">
+                        <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">{editingHomework ? 'تحديث' : 'إضافة'}</button>
+                        <button type="button" onClick={() => { setEditingHomework(null); setHomeworkForm({ title: '', description: '', subject: '', grade: '', dueDate: '', isPublished: false }); }} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm">إلغاء</button>
+                      </div>
+                    </form>
+                  ) : null}
+
+                  <div className="space-y-3">
+                    {homeworks.length === 0 ? (
+                      <p className="text-center text-gray-500 py-8">لا توجد واجبات</p>
+                    ) : homeworks.map((hw: any) => (
                       <div key={hw.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-gray-900 dark:text-white truncate">{hw.title}</h4>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{hw.grade} • {hw.subject} • {hw.isPublished ? '🟢 منشور' : '🔴 مسودة'}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{hw.grade} - {hw.subject} - {hw.isPublished ? 'منشور' : 'مسودة'}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <button onClick={() => { setSelectedHomework(hw); fetchHomeworkQuestions(hw.id); }} className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg"><BookOpen className="h-4 w-4" /></button>
@@ -786,8 +731,8 @@ export default function AdminDashboard() {
                           <button onClick={() => handleDeleteHomework(hw.id)} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><Trash2 className="h-4 w-4" /></button>
                         </div>
                       </div>
-                    ))
-                  )}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -801,61 +746,16 @@ export default function AdminDashboard() {
                   <FileText className="h-6 w-6 text-orange-600" />
                   إدارة الامتحانات
                 </h2>
-                <button
-                  onClick={() => { setEditingExam(null); setExamForm({ title: '', description: '', subject: '', grade: '', duration: '', isPublished: false }); setSelectedExam(null); }}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 flex items-center gap-1"
-                >
+                <button onClick={() => { setEditingExam(null); setExamForm({ title: '', description: '', subject: '', grade: '', duration: '', isPublished: false }); setSelectedExam(null); }} className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 flex items-center gap-1">
                   <Plus className="h-4 w-4" /> إضافة امتحان
                 </button>
               </div>
 
-              {/* Exam Form */}
-              {(examForm.title || editingExam) && (
-                <form onSubmit={editingExam ? handleUpdateExam : handleCreateExam} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 mb-6 space-y-3">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">{editingExam ? 'تعديل امتحان' : 'إضافة امتحان جديد'}</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input type="text" placeholder="عنوان الامتحان" value={examForm.title} onChange={(e) => setExamForm({ ...examForm, title: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                    <select value={examForm.grade} onChange={(e) => setExamForm({ ...examForm, grade: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
-                      <option value="">اختر الصف</option>
-                      <option value="الصف الأول الابتدائي">الصف الأول الابتدائي</option>
-                      <option value="الصف الثاني الابتدائي">الصف الثاني الابتدائي</option>
-                      <option value="الصف الثالث الابتدائي">الصف الثالث الابتدائي</option>
-                      <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
-                      <option value="الصف الخامس الابتدائي">الصف الخامس الابتدائي</option>
-                      <option value="الصف السادس الابتدائي">الصف السادس الابتدائي</option>
-                    </select>
-                    <select value={examForm.subject} onChange={(e) => setExamForm({ ...examForm, subject: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
-                      <option value="">اختر المادة</option>
-                      <option value="رياضيات">رياضيات</option>
-                    </select>
-                    <input type="text" placeholder="مدة الامتحان (بالدقائق)" value={examForm.duration} onChange={(e) => setExamForm({ ...examForm, duration: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                  </div>
-                  <textarea placeholder="وصف الامتحان..." value={examForm.description} onChange={(e) => setExamForm({ ...examForm, description: e.target.value })} rows={2} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input type="checkbox" checked={examForm.isPublished} onChange={(e) => setExamForm({ ...examForm, isPublished: e.target.checked })} className="rounded" />
-                    منشور
-                  </label>
-                  <div className="flex gap-2">
-                    <button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700">{editingExam ? 'تحديث' : 'إضافة'}</button>
-                    <button type="button" onClick={() => { setEditingExam(null); setExamForm({ title: '', description: '', subject: '', grade: '', duration: '', isPublished: false }); }} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm">إلغاء</button>
-                  </div>
-                </form>
-              )}
-
-              {/* Exam List */}
               {selectedExam ? (
                 <div className="space-y-4">
-                  <button onClick={() => { setSelectedExam(null); setExamQuestions([]); }} className="text-sm text-blue-600 hover:underline flex items-center gap-1">← العودة للقائمة</button>
+                  <button onClick={() => { setSelectedExam(null); setExamQuestions([]); }} className="text-sm text-blue-600 hover:underline">العودة للقائمة</button>
                   <h3 className="font-bold text-gray-900 dark:text-white">أسئلة: {selectedExam.title}</h3>
-
-                  <AiExtractionPanel
-                    onExtract={(e) => handleAiExtract(e, undefined, selectedExam.id)}
-                    isExtracting={aiExtracting}
-                    questions={aiQuestionsPreview}
-                    error={aiError}
-                    successMsg={aiSuccessMsg}
-                  />
-
+                  <AiExtractionPanel onExtract={(e) => handleAiExtract(e, undefined, selectedExam.id)} isExtracting={aiExtracting} questions={aiQuestionsPreview} error={aiError} successMsg={aiSuccessMsg} />
                   <div className="space-y-3">
                     {examQuestions.map((q, idx) => (
                       <div key={idx} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 space-y-2">
@@ -865,10 +765,10 @@ export default function AdminDashboard() {
                         </div>
                         <input type="text" placeholder="نص السؤال" value={q.text} onChange={(e) => updateQuestion(idx, 'text', e.target.value, 'exam')} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
                         <div className="grid grid-cols-2 gap-2">
-                          <input type="text" placeholder="أ) الخيار" value={q.optionA} onChange={(e) => updateQuestion(idx, 'optionA', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                          <input type="text" placeholder="ب) الخيار" value={q.optionB} onChange={(e) => updateQuestion(idx, 'optionB', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                          <input type="text" placeholder="ج) الخيار" value={q.optionC} onChange={(e) => updateQuestion(idx, 'optionC', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
-                          <input type="text" placeholder="د) الخيار" value={q.optionD} onChange={(e) => updateQuestion(idx, 'optionD', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                          <input type="text" placeholder="أ)" value={q.optionA} onChange={(e) => updateQuestion(idx, 'optionA', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                          <input type="text" placeholder="ب)" value={q.optionB} onChange={(e) => updateQuestion(idx, 'optionB', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                          <input type="text" placeholder="ج)" value={q.optionC} onChange={(e) => updateQuestion(idx, 'optionC', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                          <input type="text" placeholder="د)" value={q.optionD} onChange={(e) => updateQuestion(idx, 'optionD', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <select value={q.correctAnswer} onChange={(e) => updateQuestion(idx, 'correctAnswer', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
@@ -878,7 +778,7 @@ export default function AdminDashboard() {
                             <option value="C">ج</option>
                             <option value="D">د</option>
                           </select>
-                          <input type="text" placeholder="شرح الإجابة" value={q.explanation} onChange={(e) => updateQuestion(idx, 'explanation', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                          <input type="text" placeholder="شرح" value={q.explanation} onChange={(e) => updateQuestion(idx, 'explanation', e.target.value, 'exam')} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
                         </div>
                       </div>
                     ))}
@@ -886,15 +786,39 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {exams.length === 0 ? (
-                    <p className="text-center text-gray-500 py-8">لا توجد امتحانات</p>
-                  ) : (
-                    exams.map((exam: any) => (
+                <div>
+                  {examForm.title || editingExam ? (
+                    <form onSubmit={editingExam ? handleUpdateExam : handleCreateExam} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 mb-6 space-y-3">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">{editingExam ? 'تعديل امتحان' : 'إضافة امتحان جديد'}</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input type="text" placeholder="عنوان الامتحان" value={examForm.title} onChange={(e) => setExamForm({ ...examForm, title: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                        {gradeSelect(examForm.grade, (v) => setExamForm({ ...examForm, grade: v }))}
+                        <select value={examForm.subject} onChange={(e) => setExamForm({ ...examForm, subject: e.target.value })} required className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
+                          <option value="">اختر المادة</option>
+                          <option value="رياضيات">رياضيات</option>
+                        </select>
+                        <input type="text" placeholder="مدة الامتحان (دقائق)" value={examForm.duration} onChange={(e) => setExamForm({ ...examForm, duration: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                      </div>
+                      <textarea placeholder="وصف الامتحان..." value={examForm.description} onChange={(e) => setExamForm({ ...examForm, description: e.target.value })} rows={2} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm" />
+                      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <input type="checkbox" checked={examForm.isPublished} onChange={(e) => setExamForm({ ...examForm, isPublished: e.target.checked })} className="rounded" />
+                        منشور
+                      </label>
+                      <div className="flex gap-2">
+                        <button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700">{editingExam ? 'تحديث' : 'إضافة'}</button>
+                        <button type="button" onClick={() => { setEditingExam(null); setExamForm({ title: '', description: '', subject: '', grade: '', duration: '', isPublished: false }); }} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm">إلغاء</button>
+                      </div>
+                    </form>
+                  ) : null}
+
+                  <div className="space-y-3">
+                    {exams.length === 0 ? (
+                      <p className="text-center text-gray-500 py-8">لا توجد امتحانات</p>
+                    ) : exams.map((exam: any) => (
                       <div key={exam.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-gray-900 dark:text-white truncate">{exam.title}</h4>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{exam.grade} • {exam.subject} • {exam.duration} دقيقة • {exam.isPublished ? '🟢 منشور' : '🔴 مسودة'}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{exam.grade} - {exam.subject} - {exam.duration} دقيقة - {exam.isPublished ? 'منشور' : 'مسودة'}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <button onClick={() => { setSelectedExam(exam); fetchExamQuestions(exam.id); }} className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg"><BookOpen className="h-4 w-4" /></button>
@@ -902,8 +826,8 @@ export default function AdminDashboard() {
                           <button onClick={() => handleDeleteExam(exam.id)} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><Trash2 className="h-4 w-4" /></button>
                         </div>
                       </div>
-                    ))
-                  )}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -919,31 +843,18 @@ export default function AdminDashboard() {
               {students.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">لا يوجد طلاب مسجلين</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-800">
-                        <th className="text-right py-3 px-2 text-gray-500 font-medium">الاسم</th>
-                        <th className="text-right py-3 px-2 text-gray-500 font-medium">الصف</th>
-                        <th className="text-right py-3 px-2 text-gray-500 font-medium">الحالة</th>
-                        <th className="text-right py-3 px-2 text-gray-500 font-medium">التسجيل</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {students.map((s: any) => (
-                        <tr key={s.id} className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                          <td className="py-3 px-2 font-medium text-gray-900 dark:text-white">{s.name}</td>
-                          <td className="py-3 px-2 text-gray-600 dark:text-gray-400">{s.grade}</td>
-                          <td className="py-3 px-2">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.status === 'approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : s.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>
-                              {s.status === 'approved' ? 'مقبول' : s.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-2 text-gray-500 text-xs">{s.createdAt ? new Date(s.createdAt).toLocaleDateString('ar-EG') : '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-3">
+                  {students.map((s: any) => (
+                    <div key={s.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-gray-900 dark:text-white">{s.name}</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{s.grade} - {s.status === 'approved' ? 'مقبول' : s.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}</p>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.status === 'approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : s.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>
+                        {s.status === 'approved' ? 'مقبول' : s.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -970,16 +881,14 @@ export default function AdminDashboard() {
               ) : (
                 <div className="space-y-3">
                   {payments.map((p: any) => (
-                    <div key={p.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                        <div>
-                          <h4 className="font-semibold text-gray-900 dark:text-white">{p.studentName || p.studentId}</h4>
-                          <p className="text-xs text-gray-500">{p.method || 'Unknown'} • {p.amount ? `${p.amount} جنيه` : ''}</p>
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'completed' ? 'bg-green-100 text-green-700' : p.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
-                          {p.status === 'completed' ? 'مكتمل' : p.status === 'pending' ? 'معلق' : 'فشل'}
-                        </span>
+                    <div key={p.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                      <div>
+                        <h4 className="font-semibold text-gray-900 dark:text-white">{p.studentName || p.studentId}</h4>
+                        <p className="text-xs text-gray-500">{p.method || 'Unknown'}{p.amount ? ' - ' + p.amount + ' جنيه' : ''}</p>
                       </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'completed' ? 'bg-green-100 text-green-700' : p.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                        {p.status === 'completed' ? 'مكتمل' : p.status === 'pending' ? 'معلق' : 'فشل'}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -994,13 +903,7 @@ export default function AdminDashboard() {
                 <Sparkles className="h-6 w-6 text-purple-600" />
                 استخراج الأسئلة بالذكاء الاصطناعي
               </h2>
-              <AiExtractionPanel
-                onExtract={handleAiExtract}
-                isExtracting={aiExtracting}
-                questions={aiQuestionsPreview}
-                error={aiError}
-                successMsg={aiSuccessMsg}
-              />
+              <AiExtractionPanel onExtract={handleAiExtract} isExtracting={aiExtracting} questions={aiQuestionsPreview} error={aiError} successMsg={aiSuccessMsg} />
             </div>
           )}
 
@@ -1015,12 +918,13 @@ export default function AdminDashboard() {
                 <div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">مفتاح Resend API</h3>
                   <input type="password" value={configs.resend_api_key || ''} onChange={(e) => setConfigs({ ...configs, resend_api_key: e.target.value })} placeholder="re_xxxxxxxxxxxx" dir="ltr" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-mono" />
-                  <p className="text-xs text-gray-400 mt-1">يُستخدم لإرسال إشعارات البريد الإلكتروني</p>
+                  <p className="text-xs text-gray-400 mt-1">يستخدم لإرسال إشعارات البريد الإلكتروني</p>
                 </div>
                 <button onClick={async () => { try { await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(configs) }); showToast('تم حفظ الإعدادات'); } catch { showToast('خطأ في الحفظ', 'error'); } }} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">حفظ الإعدادات</button>
               </div>
             </div>
           )}
+
         </main>
       </div>
     </div>
@@ -1031,13 +935,7 @@ export default function AdminDashboard() {
 // ===== AI EXTRACTION PANEL ================
 // ==========================================
 
-function AiExtractionPanel({
-  onExtract,
-  isExtracting,
-  questions,
-  error,
-  successMsg,
-}: {
+function AiExtractionPanel({ onExtract, isExtracting, questions, error, successMsg }: {
   onExtract: (e: React.FormEvent) => void;
   isExtracting: boolean;
   questions: { text: string; options: string[]; correct: string; explanation: string }[];
