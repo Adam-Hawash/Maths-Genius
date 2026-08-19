@@ -196,7 +196,7 @@ const { user, setView, logout } = useAppStore();
     try {
       const res = await fetch('/api/videos');
       const data = await res.json();
-      setVideos(data);
+   setVideos(data.videos || []);
     } catch (err) {
       console.error('Failed to fetch videos:', err);
     }
@@ -206,7 +206,7 @@ const { user, setView, logout } = useAppStore();
     try {
       const res = await fetch('/api/homework');
       const data = await res.json();
-      setHomeworks(data);
+      setHomeworks(data.homework || data.homeworks || []);
     } catch (err) {
       console.error('Failed to fetch homeworks:', err);
     }
@@ -226,7 +226,7 @@ const { user, setView, logout } = useAppStore();
     try {
       const res = await fetch('/api/exams');
       const data = await res.json();
-      setExams(data);
+    setExams(data.exams || []);
     } catch (err) {
       console.error('Failed to fetch exams:', err);
     }
