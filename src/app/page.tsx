@@ -16,10 +16,10 @@ const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
 const FeaturesGuideSection = dynamic(() => import('@/components/landing/FeaturesGuideSection'), {
   loading: () => <div className="h-20" />,
 })
-const FeaturesSection = dynamic(() => import('@/components/landing/FeaturesSection').then(function(m) { return { default: m.FeaturesSection } }), {
+const FeaturesSection = dynamic(() => import('@/components/landing/FeaturesSection').then(function(m) { return { default: m.FeaturesSection || m.default } }), {
   loading: () => <div className="h-20" />,
 })
-const GradesSection = dynamic(() => import('@/components/landing/GradesSection').then(function(m) { return { default: m.GradesSection } }), {
+const GradesSection = dynamic(() => import('@/components/landing/GradesSection').then(function(m) { return { default: m.GradesSection || m.default } }), {
   loading: () => <div className="h-20" />,
 })
 const TipsSection = dynamic(() => import('@/components/landing/TipsSection'), {
@@ -28,16 +28,16 @@ const TipsSection = dynamic(() => import('@/components/landing/TipsSection'), {
 const GallerySection = dynamic(() => import('@/components/landing/GallerySection'), {
   loading: () => <div className="h-20" />,
 })
-const WhatsAppButton = dynamic(() => import('@/components/landing/WhatsAppButton').then(m => ({ default: m.WhatsAppButton })), {
+const WhatsAppButton = dynamic(() => import('@/components/landing/WhatsAppButton').then(m => ({ default: m.WhatsAppButton || m.default })), {
   ssr: false,
 })
-const VideoProtection = dynamic(() => import('@/components/landing/VideoProtection').then(m => ({ default: m.VideoProtection })), {
+const VideoProtection = dynamic(() => import('@/components/landing/VideoProtection').then(m => ({ default: m.VideoProtection || m.default })), {
   ssr: false,
 })
-const StudentPortal = dynamic(() => import('@/components/student/StudentPortal').then(m => ({ default: m.StudentPortal })), {
+const StudentPortal = dynamic(() => import('@/components/student/StudentPortal').then(m => ({ default: m.default || m.StudentPortal })), {
   loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
 })
-const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })), {
+const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard').then(m => ({ default: m.default || m.AdminDashboard })), {
   loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
 })
 
@@ -45,15 +45,13 @@ export default function HomePage() {
   var store = useAppStore()
   var currentView = store.currentView || 'landing'
   var setGalleryImages = (store as any).setGalleryImages || function(){}
-  var siteConfig = store.siteConfig || {}
-  var configLoaded = store.configLoaded
   var setSiteConfig = store.setSiteConfig
   var setConfigLoaded = store.setConfigLoaded
   var setStats = store.setStats
-
-  const [appReady, setAppReady] = useState(false)
+  var configLoaded = store.configLoaded
 
   useEffect(function() {
+    if (configLoaded) return
     Promise.all([
       fetch('/api/config').then(function(r) { return r.json() }).catch(function() { return {} }),
       fetch('/api/gallery').then(function(r) { return r.json() }).catch(function() { return {} }),
@@ -72,14 +70,13 @@ export default function HomePage() {
       if (sta && sta.stats) {
         setStats(sta.stats)
       }
-      setTimeout(function() { setAppReady(true) }, 400)
     })
-  }, [])
+  }, [configLoaded])
 
   const showFooter = currentView === 'landing'
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
 
-  if (!appReady) {
+  if (!configLoaded && currentView === 'landing') {
     return (
       <div className="fixed inset-0 z-[9999] bg-[#0F0D0A] flex flex-col items-center justify-center gap-6">
         <div className="relative">
