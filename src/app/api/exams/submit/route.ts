@@ -1,84 +1,181 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
 
-// POST /api/exams/submit - Auto-grade exam submission (NO immediate per-question feedback)
+const prisma = new PrismaClient();
+
+// ===== POST: تسليم امتحان + تصحيح تلقائي =====
 export async function POST(request: NextRequest) {
   try {
-    const { studentId, examId, answers } = await request.json()
+    const body = await request.json();
+    const { studentId, examId, answers } = body;
 
-    if (!studentId || !examId) {
-      return NextResponse.json({ error: 'studentId and examId required' }, { status: 400 })
+    if (!studentId || !examId || !answers) {
+      return NextResponse.json(
+        { error: 'بيانات مفقودة' },
+        { status: 400 }
+      );
     }
 
-    const exam = await db.exam.findUnique({ where: { id: examId } })
-    if (!exam) return NextResponse.json({ error: 'Exam not found' }, { status: 404 })
+    // منع التسليم مرتين
+    const existing = await prisma.examResult.findUnique({
+      where: {
+        studentId_examId: { studentId, examId },
+      },
+    });
 
-    // Check if already submitted
-    const existing = await db.examResult.findFirst({ where: { examId, studentId } })
     if (existing) {
-      return NextResponse.json({ error: 'لقد قدمت هذا الامتحان بالفعل', alreadySubmitted: true }, { status: 400 })
+      return NextResponse.json(
+        { error: 'تم تقديم هذا الامتحان بالفعل' },
+        { status: 400 }
+      );
     }
 
-    let score = 0
-    let maxScore = 100
-    let details: { question: string; correct: boolean; points: number; studentAnswer: number; correctAnswer: number }[] = []
+    // جلب الأسئلة
+    const questions = await prisma.question.findMany({
+      where: { examId },
+      orderBy: { id: 'asc' },
+    });
 
-    if (exam.questions) {
-      try {
-        const questions = JSON.parse(exam.questions)
-        let totalPoints = 0
-        let earnedPoints = 0
-
-        questions.forEach((q: any, idx: number) => {
-          const points = q.points || Math.floor(100 / questions.length)
-          totalPoints += points
-          const selectedAnswer = answers?.[String(idx)] ?? answers?.[idx]
-          const isCorrect = selectedAnswer === q.correct
-          if (isCorrect) earnedPoints += points
-          details.push({
-            question: q.q || q.question,
-            correct: isCorrect,
-            points,
-            studentAnswer: selectedAnswer ?? -1,
-            correctAnswer: q.correct,
-          })
-        })
-
-        maxScore = totalPoints
-        score = earnedPoints
-      } catch {
-        // If questions JSON is invalid, score stays 0
-      }
+    if (questions.length === 0) {
+      return NextResponse.json(
+        { error: 'لا توجد أسئلة في هذا الامتحان' },
+        { status: 400 }
+      );
     }
 
-    const result = await db.examResult.create({
+    // التصحيح التلقائي
+    let score = 0;
+    const questionDetails = questions.map((q) => {
+      const studentAnswer = answers[q.id] || null;
+      const isCorrect = studentAnswer === q.correctAnswer;
+      if (isCorrect) score++;
+
+      return {
+        questionId: q.id,
+        questionText: q.text,
+        optionA: q.optionA,
+        optionB: q.optionB,
+        optionC: q.optionC,
+        optionD: q.optionD,
+        correctAnswer: q.correctAnswer,
+        studentAnswer,
+        isCorrect,
+        explanation: q.explanation || null,
+      };
+    });
+
+    // حفظ النتيجة
+    const result = await prisma.examResult.create({
       data: {
+        studentId,
         examId,
-        studentId,
         score,
-        maxScore,
-        answers: JSON.stringify(answers),
-        details: JSON.stringify(details),
-        submittedAt: new Date(),
+        totalQuestions: questions.length,
+        questionDetails: JSON.stringify(questionDetails),
       },
-    })
-
-    // Log activity
-    await db.studentActivity.create({
-      data: {
-        studentId,
-        action: 'exam_submit',
-        details: `قدم امتحان "${exam.title}" - الدرجة: ${score}/${maxScore}`,
-      },
-    })
+    });
 
     return NextResponse.json({
-      result: { id: result.id, score, maxScore, submittedAt: result.submittedAt },
-      passed: score >= (exam.passScore || 50),
-      details,
-    })
-  } catch (error) {
-    console.error('Exam submit error:', error)
-    return NextResponse.json({ error: 'Failed to submit exam' }, { status: 500 })
+      success: true,
+      result: {
+        id: result.id,
+        studentId: result.studentId,
+        examId: result.examId,
+        score: result.score,
+        totalQuestions: result.totalQuestions,
+        questionDetails,
+        createdAt: result.createdAt,
+      },
+    });
+  } catch (error: any) {
+    console.error('Exam submit error:', error);
+    return NextResponse.json(
+      { error: 'حدث خطأ أثناء تسليم الامتحان' },
+      { status: 500 }
+    );
+  }
+}
+
+// ===== GET: نتائج الامتحانات + التحليلات =====
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const examId = searchParams.get('examId');
+
+    if (!examId) {
+      return NextResponse.json(
+        { error: 'examId مطلوب' },
+        { status: 400 }
+      );
+    }
+
+    // جلب النتائج
+    const results = await prisma.examResult.findMany({
+      where: { examId },
+      include: { student: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // الطلاب اللي لم يسلموا بعد
+    const takenStudentIds = results.map((r) => r.studentId);
+    const allStudents = await prisma.user.findMany({
+      where: { role: 'student' },
+    });
+    const notTaken = allStudents.filter(
+      (s) => !takenStudentIds.includes(s.id)
+    );
+
+    // الأسئلة الأكثر خطأ
+    const questions = await prisma.question.findMany({
+      where: { examId },
+    });
+
+    const questionStats: Record<
+      string,
+      {
+        wrongCount: number;
+        totalAttempts: number;
+        questionText: string;
+        correctAnswer: string;
+      }
+    > = {};
+
+    questions.forEach((q) => {
+      questionStats[q.id] = {
+        wrongCount: 0,
+        totalAttempts: 0,
+        questionText: q.text,
+        correctAnswer: q.correctAnswer,
+      };
+    });
+
+    results.forEach((result) => {
+      try {
+        const details: any[] = JSON.parse(result.questionDetails);
+        details.forEach((d) => {
+          if (questionStats[d.questionId]) {
+            questionStats[d.questionId].totalAttempts++;
+            if (!d.isCorrect) {
+              questionStats[d.questionId].wrongCount++;
+            }
+          }
+        });
+      } catch {}
+    });
+
+    const mostMissed = Object.values(questionStats)
+      .filter((s) => s.totalAttempts > 0)
+      .sort(
+        (a, b) =>
+          b.wrongCount / b.totalAttempts - a.wrongCount / a.totalAttempts
+      );
+
+    return NextResponse.json({ results, notTaken, mostMissed });
+  } catch (error: any) {
+    console.error('Exam results error:', error);
+    return NextResponse.json(
+      { error: 'فشل في جلب النتائج' },
+      { status: 500 }
+    );
   }
 }
