@@ -1,5 +1,14 @@
 import { create } from 'zustand';
 
+// ===== Grades Data =====
+export const GRADES = [
+  'الصف السادس الابتدائي',
+  'الصف الأول الإعدادي',
+  'الصف الثاني الإعدادي',
+  'الصف الثالث الإعدادي',
+  'اولي بكالوريا',
+];
+
 // ===== Types =====
 export type AppView =
   | 'landing'
