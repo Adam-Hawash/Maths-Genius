@@ -1,277 +1,136 @@
-import { create } from 'zustand'
+import { create } from 'zustand';
 
+// ===== Types =====
 export type AppView =
   | 'landing'
-  | 'auth-login'
-  | 'auth-register'
-  | 'student-pending'
+  | 'login'
+  | 'admin'
   | 'student-portal'
-  | 'student-payment-pending'
-  | 'admin-dashboard'
+  | 'student-payment-pending';
 
-export interface Student {
-  id: string
-  name: string
-  phone: string
-  grade: string
-  status: string
-  parentName: string
-  parentPhone: string
-  loginCount: number
-  lastLogin: string | null
-  watchedVideoCount?: number
-  createdAt: string
-  updatedAt: string
-}
-
-export interface ExamResult {
-  id: string
-  examId: string
-  studentId: string
-  score: number
-  maxScore: number
-  submittedAt: string
-  answers?: string
-  details?: string
-  student?: { name: string; phone: string; grade: string; status: string }
-}
-
-export interface HomeworkResult {
-  id: string
-  homeworkId: string
-  studentId: string
-  score: number
-  maxScore: number
-  submittedAt: string
-  answers?: string
-  details?: string
-  student?: { name: string; phone: string; grade: string; status: string }
-}
-
-export interface Payment {
-  id: string
-  studentId: string
-  studentName: string
-  studentPhone: string
-  studentGrade: string
-  method: string
-  receiptPath: string
-  receiptType: string
-  status: string
-  amount: number
-  videoId: string
-  videoTitle: string
-  note: string
-  reviewedAt: string | null
-  reviewedBy: string
-  createdAt: string
-}
-
-export interface GalleryImage {
-  id: string
-  title: string
-  filePath: string
-  type: string
-  videoUrl: string
-  sortOrder: number
-  createdAt: string
-}
-
-export interface Admin {
-  id: string
-  email: string
-  name: string
-  createdAt: string
-  updatedAt: string
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  phone?: string;
+  grade?: string;
+  createdAt?: string;
 }
 
 export interface Video {
-  id: string
-  title: string
-  url: string
-  filePath: string
-  fileType: string
-  thumbnail: string
-  grade: string
-  price?: number
-  createdAt: string
+  id: string;
+  title: string;
+  description?: string;
+  url: string;
+  thumbnailUrl?: string;
+  subject?: string;
+  grade?: string;
+  order: number;
+  isPublished: boolean;
+  price?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Question {
+  id: string;
+  text: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  correctAnswer: string;
+  explanation?: string;
+  homeworkId?: string;
+  examId?: string;
 }
 
 export interface Homework {
-  id: string
-  title: string
-  content: string
-  filePath: string
-  fileType: string
-  thumbnail: string
-  grade: string
-  questions?: string
-  createdAt: string
+  id: string;
+  title: string;
+  description?: string;
+  subject?: string;
+  grade?: string;
+  dueDate?: string;
+  isPublished: boolean;
+  questions?: Question[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Exam {
-  id: string
-  title: string
-  content: string
-  filePath: string
-  fileType: string
-  thumbnail: string
-  grade: string
-  questions?: string
-  passScore?: number
-  createdAt: string
+  id: string;
+  title: string;
+  description?: string;
+  subject?: string;
+  grade?: string;
+  duration?: number;
+  isPublished: boolean;
+  questions?: Question[];
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface Announcement {
-  id: string
-  title: string
-  content: string
-  grade: string
-  createdAt: string
+export interface HomeworkResult {
+  id: string;
+  studentId: string;
+  homeworkId: string;
+  score: number;
+  totalQuestions: number;
+  questionDetails: string;
+  createdAt: string;
+  student?: User;
 }
 
-export interface Discussion {
-  id: string
-  studentId: string
-  studentName: string
-  grade: string
-  content: string
-  isAdminReply: boolean
-  createdAt: string
+export interface ExamResult {
+  id: string;
+  studentId: string;
+  examId: string;
+  score: number;
+  totalQuestions: number;
+  questionDetails: string;
+  createdAt: string;
+  student?: User;
 }
 
-export interface StudentActivity {
-  id: string
-  studentId: string
-  action: string
-  details: string
-  createdAt: string
-  student?: { name: string; grade: string; phone: string; status: string }
-}
-
-export const GRADES = [
-  'الصف السادس الابتدائي',
-  'الصف الأول الاعدادي',
-  'الصف الثاني الاعدادي',
-  'الصف الثالث الاعدادي',
-  'أولى بكالوريا',
-] as const
-
-export interface Stats {
-  totalStudents: number
-  pendingStudents: number
-  approvedStudents: number
-  totalVideos: number
-  totalHomework: number
-  totalExams: number
-  totalAnnouncements: number
-  totalDiscussions: number
-  grades: string[]
+export interface Payment {
+  id: string;
+  studentId: string;
+  videoId: string;
+  method: string;
+  amount: number;
+  receiptPath?: string;
+  status: string;
+  adminNote?: string;
+  createdAt: string;
+  updatedAt: string;
+  student?: User;
+  video?: Video;
 }
 
 export interface SiteConfig {
-  [key: string]: string
+  id: string;
+  key: string;
+  value: string;
 }
 
-export interface SocialLinks {
-  social_facebook: string
-  social_whatsapp_channel: string
-  social_instagram: string
-  social_youtube: string
-}
-
+// ===== Store Interface =====
 interface AppState {
-  currentView: AppView
-  setView: (view: AppView) => void
+  user: User | null;
+  view: AppView;
 
-  currentStudent: Student | null
-  setCurrentStudent: (student: Student | null) => void
-  currentAdmin: Admin | null
-  setCurrentAdmin: (admin: Admin | null) => void
-  isAdminLoggedIn: boolean
-  setAdminLoggedIn: (v: boolean) => void
-
-  showStudentLogin: boolean
-  setShowStudentLogin: (v: boolean) => void
-  showStudentRegister: boolean
-  setShowStudentRegister: (v: boolean) => void
-  showAdminLogin: boolean
-  setShowAdminLogin: (v: boolean) => void
-
-  adminTab: string
-  setAdminTab: (tab: string) => void
-  studentTab: string
-  setStudentTab: (tab: string) => void
-
-  siteConfig: SiteConfig
-  setSiteConfig: (config: SiteConfig) => void
-  configLoaded: boolean
-  setConfigLoaded: (v: boolean) => void
-
-  socialLinks: SocialLinks
-  setSocialLinks: (links: SocialLinks) => void
-
-  stats: Stats | null
-  setStats: (stats: Stats | null) => void
-
-  galleryImages: GalleryImage[]
-  setGalleryImages: (images: GalleryImage[]) => void
-
-  logout: () => void
+  setUser: (user: User | null) => void;
+  setView: (view: AppView) => void;
+  logout: () => void;
 }
 
+// ===== Store =====
 export const useAppStore = create<AppState>((set) => ({
-  currentView: 'landing',
-  setView: (view) => set({ currentView: view }),
+  user: null,
+  view: 'landing',
 
-  currentStudent: null,
-  setCurrentStudent: (student) => set({ currentStudent: student }),
-  currentAdmin: null,
-  setCurrentAdmin: (admin) => set({ currentAdmin: admin }),
-  isAdminLoggedIn: false,
-  setAdminLoggedIn: (v) => set({ isAdminLoggedIn: v }),
-
-  showStudentLogin: false,
-  setShowStudentLogin: (v) => set({ showStudentLogin: v }),
-  showStudentRegister: false,
-  setShowStudentRegister: (v) => set({ showStudentRegister: v }),
-  showAdminLogin: false,
-  setShowAdminLogin: (v) => set({ showAdminLogin: v }),
-
-  adminTab: 'students',
-  setAdminTab: (tab) => set({ adminTab: tab }),
-  studentTab: 'videos',
-  setStudentTab: (tab) => set({ studentTab: tab }),
-
-  siteConfig: {},
-  setSiteConfig: (config) => set({ siteConfig: config }),
-  configLoaded: false,
-  setConfigLoaded: (v) => set({ configLoaded: v }),
-
-  socialLinks: {
-    social_facebook: '',
-    social_whatsapp_channel: '',
-    social_instagram: '',
-    social_youtube: '',
-  },
-  setSocialLinks: (links) => set({ socialLinks: links }),
-
-  stats: null,
-  setStats: (stats) => set({ stats }),
-
-  galleryImages: [],
-  setGalleryImages: (images) => set({ galleryImages: images }),
-
-  logout: () =>
-    set({
-      currentStudent: null,
-      currentAdmin: null,
-      isAdminLoggedIn: false,
-      currentView: 'landing',
-      adminTab: 'students',
-      studentTab: 'videos',
-      showStudentLogin: false,
-      showStudentRegister: false,
-      showAdminLogin: false,
-    }),
-}))
+  setUser: (user) => set({ user }),
+  setView: (view) => set({ view }),
+  logout: () => set({ user: null, view: 'landing' }),
+}));
