@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAppStore } from '@/stores/app-store';
+import { useAppStore } from '@/stores/app-store'; 
 import {
   Video,
   Plus,
