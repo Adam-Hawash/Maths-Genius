@@ -3,137 +3,142 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 export async function GET() {
+  var results = []
+
   try {
-    var results = []
-
-    // Add missing columns to Homework
-    var hwCols = [
-      ['description', 'TEXT DEFAULT ""'],
-      ['subject', 'TEXT DEFAULT ""'],
-      ['dueDate', 'TEXT'],
-      ['isPublished', 'BOOLEAN DEFAULT 0'],
-    ]
-    for (var c of hwCols) {
-      try {
-        await db.$executeRawUnsafe('ALTER TABLE Homework ADD COLUMN ' + c[0] + ' ' + c[1])
-        results.push('Added Homework.' + c[0])
-      } catch (e: any) {
-        if (e.message && e.message.includes('duplicate column')) {
-          results.push('Homework.' + c[0] + ' already exists')
-        } else {
-          results.push('Homework.' + c[0] + ': ' + (e.message || 'error'))
-        }
-      }
-    }
-
-    // Add missing columns to Exam
-    var examCols = [
-      ['description', 'TEXT DEFAULT ""'],
-      ['subject', 'TEXT DEFAULT ""'],
-      ['duration', 'INTEGER'],
-      ['isPublished', 'BOOLEAN DEFAULT 0'],
-    ]
-    for (var c of examCols) {
-      try {
-        await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN ' + c[0] + ' ' + c[1])
-        results.push('Added Exam.' + c[0])
-      } catch (e: any) {
-        if (e.message && e.message.includes('duplicate column')) {
-          results.push('Exam.' + c[0] + ' already exists')
-        } else {
-          results.push('Exam.' + c[0] + ': ' + (e.message || 'error'))
-        }
-      }
-    }
-
-    // Add missing columns to Video
-    var vidCols = [
-      ['description', 'TEXT DEFAULT ""'],
-      ['thumbnailUrl', 'TEXT DEFAULT ""'],
-      ['subject', 'TEXT DEFAULT ""'],
-      ['"order"', 'INTEGER DEFAULT 0'],
-      ['isPublished', 'BOOLEAN DEFAULT 0'],
-      ['price', 'REAL'],
-    ]
-    for (var c of vidCols) {
-      try {
-        await db.$executeRawUnsafe('ALTER TABLE Video ADD COLUMN ' + c[0] + ' ' + c[1])
-        results.push('Added Video.' + c[0])
-      } catch (e: any) {
-        if (e.message && e.message.includes('duplicate column')) {
-          results.push('Video.' + c[0] + ' already exists')
-        } else {
-          results.push('Video.' + c[0] + ': ' + (e.message || 'error'))
-        }
-      }
-    }
-
-    // Add missing columns to Student
-    var stuCols = [
-      ['grade', 'TEXT DEFAULT ""'],
-    ]
-    for (var c of stuCols) {
-      try {
-        await db.$executeRawUnsafe('ALTER TABLE Student ADD COLUMN ' + c[0] + ' ' + c[1])
-        results.push('Added Student.' + c[0])
-      } catch (e: any) {
-        if (e.message && e.message.includes('duplicate column')) {
-          results.push('Student.' + c[0] + ' already exists')
-        } else {
-          results.push('Student.' + c[0] + ': ' + (e.message || 'error'))
-        }
-      }
-    }
-
-    // Add missing columns to ExamResult
-    var erCols = [
-      ['questionDetails', 'TEXT DEFAULT ""'],
-      ['totalQuestions', 'INTEGER DEFAULT 0'],
-    ]
-    for (var c of erCols) {
-      try {
-        await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN ' + c[0] + ' ' + c[1])
-        results.push('Added ExamResult.' + c[0])
-      } catch (e: any) {
-        if (e.message && e.message.includes('duplicate column')) {
-          results.push('ExamResult.' + c[0] + ' already exists')
-        } else {
-          results.push('ExamResult.' + c[0] + ': ' + (e.message || 'error'))
-        }
-      }
-    }
-
-    // Create new tables if they don't exist
+    // 1) Homework columns
     try {
-      await db.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS Question (id TEXT PRIMARY KEY, text TEXT NOT NULL DEFAULT "", optionA TEXT NOT NULL DEFAULT "", optionB TEXT NOT NULL DEFAULT "", optionC TEXT NOT NULL DEFAULT "", optionD TEXT NOT NULL DEFAULT "", correctAnswer TEXT NOT NULL DEFAULT "", explanation TEXT NOT NULL DEFAULT "", homeworkId TEXT, examId TEXT, createdAt DATETIME DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (homeworkId) REFERENCES Homework(id) ON DELETE CASCADE, FOREIGN KEY (examId) REFERENCES Exam(id) ON DELETE CASCADE)')
+      await db.$executeRawUnsafe(`ALTER TABLE Homework ADD COLUMN content TEXT DEFAULT ''`)
+      results.push('Homework.content added')
+    } catch(e) { results.push('Homework.content: ' + (e.message || 'skip')) }
+
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Homework ADD COLUMN thumbnail TEXT DEFAULT ''`)
+      results.push('Homework.thumbnail added')
+    } catch(e) { results.push('Homework.thumbnail: ' + (e.message || 'skip')) }
+
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Homework ADD COLUMN answerKeyPath TEXT DEFAULT ''`)
+      results.push('Homework.answerKeyPath added')
+    } catch(e) { results.push('Homework.answerKeyPath: ' + (e.message || 'skip')) }
+
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Homework ADD COLUMN answerKeyType TEXT DEFAULT ''`)
+      results.push('Homework.answerKeyType added')
+    } catch(e) { results.push('Homework.answerKeyType: ' + (e.message || 'skip')) }
+
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Homework ADD COLUMN questions TEXT DEFAULT ''`)
+      results.push('Homework.questions added')
+    } catch(e) { results.push('Homework.questions: ' + (e.message || 'skip')) }
+
+    // 2) Exam columns
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Exam ADD COLUMN content TEXT DEFAULT ''`)
+      results.push('Exam.content added')
+    } catch(e) { results.push('Exam.content: ' + (e.message || 'skip')) }
+
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Exam ADD COLUMN thumbnail TEXT DEFAULT ''`)
+      results.push('Exam.thumbnail added')
+    } catch(e) { results.push('Exam.thumbnail: ' + (e.message || 'skip')) }
+
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Exam ADD COLUMN answerKeyPath TEXT DEFAULT ''`)
+      results.push('Exam.answerKeyPath added')
+    } catch(e) { results.push('Exam.answerKeyPath: ' + (e.message || 'skip')) }
+
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Exam ADD COLUMN answerKeyType TEXT DEFAULT ''`)
+      results.push('Exam.answerKeyType added')
+    } catch(e) { results.push('Exam.answerKeyType: ' + (e.message || 'skip')) }
+
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Exam ADD COLUMN questions TEXT DEFAULT ''`)
+      results.push('Exam.questions added')
+    } catch(e) { results.push('Exam.questions: ' + (e.message || 'skip')) }
+
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Exam ADD COLUMN passScore REAL DEFAULT 50`)
+      results.push('Exam.passScore added')
+    } catch(e) { results.push('Exam.passScore: ' + (e.message || 'skip')) }
+
+    // 3) Video order column (quoted - reserved SQL word)
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Video ADD COLUMN "order" INTEGER DEFAULT 0`)
+      results.push('Video.order added')
+    } catch(e) { results.push('Video.order: ' + (e.message || 'skip')) }
+
+    // 4) Question table
+    try {
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS Question (
+          id TEXT PRIMARY KEY,
+          examId TEXT NOT NULL,
+          question TEXT DEFAULT '',
+          options TEXT DEFAULT '',
+          correctIndex INTEGER DEFAULT 0,
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (examId) REFERENCES Exam(id) ON DELETE CASCADE
+        )
+      `)
       results.push('Question table ready')
-    } catch (e: any) {
-      results.push('Question table: ' + (e.message || 'error'))
-    }
+    } catch(e) { results.push('Question table: ' + (e.message || 'skip')) }
 
+    // 5) HomeworkResult table
     try {
-      await db.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS HomeworkResult (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, homeworkId TEXT NOT NULL, score REAL DEFAULT 0, totalQuestions INTEGER DEFAULT 0, questionDetails TEXT NOT NULL DEFAULT "", createdAt DATETIME DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE, FOREIGN KEY (homeworkId) REFERENCES Homework(id) ON DELETE CASCADE)')
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS HomeworkResult (
+          id TEXT PRIMARY KEY,
+          homeworkId TEXT NOT NULL,
+          studentId TEXT NOT NULL,
+          score REAL DEFAULT 0,
+          maxScore REAL DEFAULT 100,
+          submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (homeworkId) REFERENCES Homework(id) ON DELETE CASCADE,
+          FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE
+        )
+      `)
       results.push('HomeworkResult table ready')
-    } catch (e: any) {
-      results.push('HomeworkResult table: ' + (e.message || 'error'))
-    }
+    } catch(e) { results.push('HomeworkResult table: ' + (e.message || 'skip')) }
 
+    // 6) Payment table
     try {
-      await db.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS Payment (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, method TEXT NOT NULL DEFAULT "", amount REAL DEFAULT 0, receiptPath TEXT DEFAULT "", receiptType TEXT DEFAULT "", status TEXT NOT NULL DEFAULT "pending", videoId TEXT DEFAULT "", videoTitle TEXT DEFAULT "", note TEXT DEFAULT "", studentName TEXT DEFAULT "", studentPhone TEXT DEFAULT "", studentGrade TEXT DEFAULT "", adminNote TEXT DEFAULT "", createdAt DATETIME DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE, FOREIGN KEY (videoId) REFERENCES Video(id) ON DELETE SET NULL)')
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS Payment (
+          id TEXT PRIMARY KEY,
+          studentId TEXT NOT NULL,
+          amount REAL DEFAULT 0,
+          method TEXT DEFAULT '',
+          status TEXT DEFAULT 'pending',
+          month TEXT DEFAULT '',
+          receiptPath TEXT DEFAULT '',
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE
+        )
+      `)
       results.push('Payment table ready')
-    } catch (e: any) {
-      results.push('Payment table: ' + (e.message || 'error'))
-    }
+    } catch(e) { results.push('Payment table: ' + (e.message || 'skip')) }
 
+    // 7) VideoAccess table
     try {
-      await db.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS VideoAccess (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, videoId TEXT NOT NULL, createdAt DATETIME DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE, FOREIGN KEY (videoId) REFERENCES Video(id) ON DELETE CASCADE)')
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS VideoAccess (
+          id TEXT PRIMARY KEY,
+          studentId TEXT NOT NULL,
+          videoId TEXT NOT NULL,
+          grantedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE,
+          FOREIGN KEY (videoId) REFERENCES Video(id) ON DELETE CASCADE,
+          UNIQUE(studentId, videoId)
+        )
+      `)
       results.push('VideoAccess table ready')
-    } catch (e: any) {
-      results.push('VideoAccess table: ' + (e.message || 'error'))
-    }
+    } catch(e) { results.push('VideoAccess table: ' + (e.message || 'skip')) }
 
-    return NextResponse.json({ success: true, results: results })
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true, results })
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error.message, results }, { status: 500 })
   }
 }
