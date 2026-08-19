@@ -1,246 +1,46 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
-
-// ===== Original Models (DO NOT MODIFY) =====
-
-model Admin {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String   @default("Admin")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Student {
-  id             String            @id @default(cuid())
-  name           String
-  phone          String            @unique
-  grade          String
-  status         String            @default("pending")
-  parentName     String
-  parentPhone    String
-  loginCount     Int               @default(0)
-  lastLogin      DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  examResults    ExamResult[]
-  activities     StudentActivity[]
-  homeworkResults HomeworkResult[]
-  payments       Payment[]
-  videoAccess    VideoAccess[]
-}
-
-model StudentActivity {
-  id        String   @id @default(cuid())
-  studentId String
-  action    String
-  details   String   @default("")
-  createdAt DateTime @default(now())
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-}
-
-model Video {
-  id          String   @id @default(cuid())
-  title       String
-  url         String   @default("")
-  filePath    String   @default("")
-  fileType    String   @default("")
-  thumbnail   String   @default("")
-  grade       String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  // New fields for the homework/exam system
-  description  String   @default("")
-  thumbnailUrl String   @default("")
-  subject     String   @default("")
-  order       Int      @default(0)
-  isPublished Boolean  @default(false)
-  price       Float?   @default(null)
-  videoAccess  VideoAccess[]
-  payments     Payment[]
-}
-
-model Homework {
-  id            String     @id @default(cuid())
-  title         String
-  content       String     @default("")
-  filePath      String     @default("")
-  fileType      String     @default("")
-  thumbnail     String     @default("")
-  answerKeyPath String     @default("")
-  answerKeyType String     @default("")
-  grade         String
-  questions     String     @default("")
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  // New fields
-  description  String     @default("")
-  subject     String     @default("")
-  dueDate     String?
-  isPublished  Boolean    @default(false)
-  questionList Question[]
-  results      HomeworkResult[]
-}
-
-model Exam {
-  id            String       @id @default(cuid())
-  title         String
-  content       String
-  filePath      String       @default("")
-  fileType      String       @default("")
-  thumbnail     String       @default("")
-  answerKeyPath String       @default("")
-  answerKeyType String       @default("")
-  grade         String
-  questions     String       @default("")
-  passScore     Float        @default(50)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  results       ExamResult[]
-  // New fields
-  description  String       @default("")
-  subject     String       @default("")
-  duration    Int?         @default(null)
-  isPublished  Boolean      @default(false)
-  questionList Question[]
-}
-
-model ExamResult {
-  id            String   @id @default(cuid())
-  examId        String
-  studentId     String
-  score         Float    @default(0)
-  maxScore      Float    @default(100)
-  submittedAt   DateTime @default(now())
-  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  exam         Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
-  // New field for question-based results
-  questionDetails String   @default("")
-  totalQuestions  Int      @default(0)
-}
-
-model Announcement {
-  id        String   @id @default(cuid())
-  title     String
-  content   String
-  grade     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Discussion {
-  id           String   @id @default(cuid())
-  studentId    String
-  studentName  String
-  grade        String
-  content      String
-  isAdminReply Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
-model SiteConfig {
-  id        String   @id @default(cuid())
-  key       String   @unique
-  value     String   @default("")
-  updatedAt DateTime @updatedAt
-}
-
-model Media {
-  id        String   @id @default(cuid())
-  filename  String
-  filePath  String
-  fileType  String
-  fileSize  String   @default("")
-  category  String   @default("general")
-  data      String   @default("")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model VideoProgress {
-  id             String   @id @default(cuid())
-  studentId      String
-  videoId        String
-  watchedSeconds Float   @default(0)
-  totalSeconds   Float   @default(0)
-  completed      Boolean @default(false)
-  lastWatchedAt  DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  @@unique([studentId, videoId])
-}
-
-model GalleryImage {
-  id        String   @id @default(cuid())
-  title     String   @default("")
-  filePath  String   @default("")
-  type      String   @default("image")
-  videoUrl  String   @default("")
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// ===== New Models (Homework/Exam/Payment System) =====
-
-model Question {
-  id            String   @id @default(cuid())
-  text          String
-  optionA       String   @default("")
-  optionB       String   @default("")
-  optionC       String   @default("")
-  optionD       String   @default("")
-  correctAnswer String   @default("A")
-  explanation   String   @default("")
-  homeworkId    String?
-  examId        String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  homework      Homework? @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
-  exam          Exam?     @relation(fields: [examId], references: [id], onDelete: Cascade)
-}
-
-model HomeworkResult {
-  id             String   @id @default(cuid())
-  studentId      String
-  homeworkId     String
-  score          Int      @default(0)
-  totalQuestions  Int      @default(0)
-  questionDetails String   @default("")
-  createdAt      DateTime @default(now())
-  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  homework       Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
-}
-
-model Payment {
-  id        String   @id @default(cuid())
-  studentId String
-  videoId   String
-  method    String   @default("")
-  amount    Float    @default(0)
-  receiptPath String  @default("")
-  status    String   @default("pending")
-  adminNote String   @default("")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  video    Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-}
-
-model VideoAccess {
-  id        String   @id @default(cuid())
-  studentId String
-  videoId   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  video    Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  @@unique([studentId, videoId])
+{
+  "name": "maths-genius",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "next": "16.3.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "@prisma/client": "^6.19.3",
+    "@prisma/adapter-libsql": "^6.19.3",
+    "@google/generative-ai": "^0.24.0",
+    "@vercel/blob": "^1.0.1",
+    "zustand": "^5.0.5",
+    "framer-motion": "^12.6.3",
+    "next-themes": "^0.4.6",
+    "resend": "^4.4.1",
+    "tw-animate-css": "^1.2.4",
+    "tailwindcss-animate": "^1.0.7",
+    "lucide-react": "^0.511.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.3.0",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-dialog": "^1.1.14",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-tabs": "^1.1.12",
+    "@radix-ui/react-select": "^2.2.5",
+    "@radix-ui/react-switch": "^1.2.5",
+    "@radix-ui/react-dropdown-menu": "^2.1.15"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3",
+    "tailwindcss": "^4.1.8",
+    "@tailwindcss/postcss": "^4.1.8",
+    "typescript": "^5.8.3",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.6",
+    "@types/node": "^22.15.21"
+  }
 }
