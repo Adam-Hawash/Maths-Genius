@@ -1,104 +1,173 @@
 // @ts-nocheck
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { db } from '@/lib/db';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const formData = await req.formData()
-    const file = formData.get('file') as File | null
-    const type = formData.get('type') as string | null
-    const grade = formData.get('grade') as string | null
-    const fileUrl = formData.get('fileUrl') as string | null
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const homeworkId = formData.get('homeworkId') as string | null;
+    const examId = formData.get('examId') as string | null;
 
-    if (!type || (!file && !fileUrl)) {
-      return NextResponse.json({ error: 'الملف أو الرابط ونوع المحتوى مطلوبان' }, { status: 400 })
+    if (!file) {
+      return NextResponse.json({ error: 'لم يتم رفع ملف' }, { status: 400 });
     }
 
-    let ZAI: any
-    try {
-      const mod = await import('z-ai-web-dev-sdk')
-      ZAI = mod.default || mod
-    } catch {
-      return NextResponse.json({ error: 'ميزة الاستخراج بالذكاء الاصطناعي غير متاحة حالياً' }, { status: 503 })
+    if (!homeworkId && !examId) {
+      return NextResponse.json(
+        { error: 'يجب تحديد واجب أو امتحان' },
+        { status: 400 }
+      );
     }
 
-    let base64Data = ''
-    let mimeType = ''
-
-    if (file) {
-      const bytes = await file.arrayBuffer()
-      base64Data = Buffer.from(bytes).toString('base64')
-      mimeType = file.type || 'application/octet-stream'
+    if (file.type !== 'application/pdf') {
+      return NextResponse.json({ error: 'يجب رفع ملف PDF فقط' }, { status: 400 });
     }
 
-    const typeLabel = type === 'homework' ? 'واجب' : 'امتحان'
-    const prompt = `أنت مساعد تعليمي متخصص في استخراج المحتوى من الملفات. هذا ${typeLabel} للصف ${grade || 'غير محدد'}.
-
-المطلوب:
-1. استخرج عنوان مناسب لل${typeLabel}
-2. استخرج كل الأسئلة الموجودة بالترتيب مع خياراتها إذا كانت اختيار من متعدد
-3. حدد الإجابة الصحيحة لكل سؤال إذا كانت موجودة
-4. إذا كان هناك نموذج إجابة، استخرجه بشكل منفصل
-
-أجب بصيغة JSON التالية فقط بدون أي نص إضافي:
-{
-  "title": "عنوان مناسب",
-  "content": "وصف مختصر للمحتوى",
-  "questions": [
-    {
-      "question": "نص السؤال",
-      "options": ["أ", "ب", "ج", "د"],
-      "correct": 0,
-      "points": 1
+    if (file.size > 20 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: 'حجم الملف كبير جداً (الحد الأقصى 20 ميجابايت)' },
+        { status: 400 }
+      );
     }
-  ],
-  "answerKey": "نص نموذج الإجابة إذا وجد أو فارغ"
-}`
 
-    const zai = await ZAI.create()
+    const bytes = await file.arrayBuffer();
+    const base64 = Buffer.from(bytes).toString('base64');
 
-    let content: any[] = [{ type: 'text', text: prompt }]
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'مفتاح Gemini API غير موجود. أضف GEMINI_API_KEY في متغيرات البيئة.' },
+        { status: 500 }
+      );
+    }
 
-    if (base64Data && mimeType) {
-      content.push({
-        type: 'image_url',
-        image_url: { url: `data:${mimeType};base64,${base64Data}` }
-      })
-    } else if (fileUrl) {
-      const isPdf = fileUrl.toLowerCase().endsWith('.pdf')
-      if (isPdf) {
-        content.push({ type: 'file_url', file_url: { url: fileUrl } })
-      } else {
-        content.push({ type: 'image_url', image_url: { url: fileUrl } })
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    const prompt = `You are an expert mathematics teacher assistant. Analyze this solved exam/homework PDF carefully.
+
+Your task:
+1. Identify ALL multiple-choice questions in the document
+2. For each question, extract:
+   - The complete question text (preserve original language - Arabic or English)
+   - All answer options labeled as A, B, C, D
+   - The correct answer (determined from the solution shown in the PDF)
+   - A detailed step-by-step explanation of how to solve the question and WHY the answer is correct
+
+IMPORTANT RULES:
+- Each question MUST have exactly 4 options (A, B, C, D). If fewer exist, put empty string for missing ones
+- correctAnswer must be exactly one letter: "A", "B", "C", or "D"
+- The explanation must be educational — explain the solving steps clearly so a student can learn
+- Keep the ORIGINAL language of the questions (Arabic stays Arabic, English stays English)
+- For mathematical expressions and equations, use clear readable text
+- If the PDF has solutions marked, use them to determine correct answers
+- If a question has no clear solution in the PDF, make your best educational judgment
+
+Return ONLY a valid JSON array. No extra text, no markdown, no code blocks.
+Example format:
+[{"text":"سؤال","optionA":"أ","optionB":"ب","optionC":"ج","optionD":"د","correctAnswer":"B","explanation":"الشرح هنا"}]`;
+
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          mimeType: 'application/pdf',
+          data: base64,
+        },
+      },
+      { text: prompt },
+    ]);
+
+    const responseText = result.response.text();
+
+    let jsonStr = responseText.trim();
+
+    const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim();
+    } else {
+      const arrayMatch = responseText.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        jsonStr = arrayMatch[0];
       }
     }
 
-    const response = await zai.chat.completions.createVision({
-      messages: [{ role: 'user', content }],
-      thinking: { type: 'disabled' }
-    })
-
-    let resultText = response.choices[0]?.message?.content || ''
-
-    const jsonMatch = resultText.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      resultText = jsonMatch[1].trim()
-    }
-
-    let extracted
+    let questions;
     try {
-      extracted = JSON.parse(resultText)
+      questions = JSON.parse(jsonStr);
     } catch {
-      extracted = {
-        title: `${typeLabel} - مستخرج بالذكاء الاصطناعي`,
-        content: resultText,
-        questions: [],
-        answerKey: ''
-      }
+      console.error('Failed to parse Gemini response:', responseText.substring(0, 500));
+      return NextResponse.json(
+        { error: 'فشل في تحليل استجابة الذكاء الاصطناعي. حاول ملف PDF آخر.' },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ success: true, type, grade: grade || '', extracted })
-  } catch (err: any) {
-    console.error('AI extraction error:', err)
-    return NextResponse.json({ error: 'خطأ في استخراج المحتوى: ' + (err.message || 'خطأ غير معروف') }, { status: 500 })
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return NextResponse.json(
+        { error: 'لم يتم العثور على أسئلة في الملف. تأكد أن الملف يحتوي على أسئلة اختيار من متعدد.' },
+        { status: 400 }
+      );
+    }
+
+    const validQuestions = questions.map(function(q, index) {
+      return {
+        text: String(q.text || 'سؤال ' + (index + 1)),
+        optionA: String(q.optionA || ''),
+        optionB: String(q.optionB || ''),
+        optionC: String(q.optionC || ''),
+        optionD: String(q.optionD || ''),
+        correctAnswer: ['A', 'B', 'C', 'D'].indexOf(String(q.correctAnswer || '').toUpperCase()) !== -1
+          ? String(q.correctAnswer).toUpperCase()
+          : 'A',
+        explanation: String(q.explanation || ''),
+      };
+    });
+
+    var createData = validQuestions.map(function(q) {
+      var obj = {
+        text: q.text,
+        optionA: q.optionA,
+        optionB: q.optionB,
+        optionC: q.optionC,
+        optionD: q.optionD,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+      };
+      if (homeworkId) { obj.homeworkId = homeworkId; }
+      if (examId) { obj.examId = examId; }
+      return obj;
+    });
+
+    await db.question.createMany({ data: createData });
+
+    return NextResponse.json({
+      success: true,
+      count: validQuestions.length,
+      questions: validQuestions,
+    });
+  } catch (error) {
+    console.error('AI extraction error:', error);
+
+    var msg = error && error.message || '';
+    if (msg.indexOf('API_KEY') !== -1 || msg.indexOf('401') !== -1) {
+      return NextResponse.json(
+        { error: 'مفتاح Gemini API غير صالح. تحقق من GEMINI_API_KEY.' },
+        { status: 401 }
+      );
+    }
+
+    if (msg.indexOf('QUOTA') !== -1 || msg.indexOf('429') !== -1) {
+      return NextResponse.json(
+        { error: 'تم تجاوز حصة API. حاول لاحقاً.' },
+        { status: 429 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'حدث خطأ أثناء تحليل الملف: ' + (msg || 'خطأ غير معروف') },
+      { status: 500 }
+    );
   }
 }
