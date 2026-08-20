@@ -6,7 +6,7 @@ export async function GET() {
   var results = []
 
   try {
-    // 1) Homework columns
+    // 1) Add missing columns to Homework
     try {
       await db.$executeRawUnsafe(`ALTER TABLE Homework ADD COLUMN content TEXT DEFAULT ''`)
       results.push('Homework.content added')
@@ -32,7 +32,7 @@ export async function GET() {
       results.push('Homework.questions added')
     } catch(e) { results.push('Homework.questions: ' + (e.message || 'skip')) }
 
-    // 2) Exam columns
+    // 2) Add missing columns to Exam
     try {
       await db.$executeRawUnsafe(`ALTER TABLE Exam ADD COLUMN content TEXT DEFAULT ''`)
       results.push('Exam.content added')
@@ -63,88 +63,31 @@ export async function GET() {
       results.push('Exam.passScore added')
     } catch(e) { results.push('Exam.passScore: ' + (e.message || 'skip')) }
 
-    // 3) Video columns
+    // 3) Add order column to Video
     try {
       await db.$executeRawUnsafe(`ALTER TABLE Video ADD COLUMN "order" INTEGER DEFAULT 0`)
       results.push('Video.order added')
     } catch(e) { results.push('Video.order: ' + (e.message || 'skip')) }
 
+    // 4) Add price column to Video
     try {
       await db.$executeRawUnsafe(`ALTER TABLE Video ADD COLUMN price REAL DEFAULT 0`)
       results.push('Video.price added')
     } catch(e) { results.push('Video.price: ' + (e.message || 'skip')) }
 
-    // 4) Student columns
+    // 5) Add isPaidAccess column to Student
     try {
-      await db.$executeRawUnsafe(`ALTER TABLE Student ADD COLUMN isFreeAccess BOOLEAN DEFAULT 1`)
-      results.push('Student.isFreeAccess added')
-    } catch(e) { results.push('Student.isFreeAccess: ' + (e.message || 'skip')) }
+      await db.$executeRawUnsafe(`ALTER TABLE Student ADD COLUMN isPaidAccess BOOLEAN DEFAULT 0`)
+      results.push('Student.isPaidAccess added')
+    } catch(e) { results.push('Student.isPaidAccess: ' + (e.message || 'skip')) }
 
-    // 5) Discussion columns
+    // 6) Add likes column to Discussion
     try {
       await db.$executeRawUnsafe(`ALTER TABLE Discussion ADD COLUMN likes INTEGER DEFAULT 0`)
       results.push('Discussion.likes added')
     } catch(e) { results.push('Discussion.likes: ' + (e.message || 'skip')) }
 
-    // 6) Payment table
-    try {
-      await db.$executeRawUnsafe(`
-        CREATE TABLE IF NOT EXISTS Payment (
-          id TEXT PRIMARY KEY,
-          studentId TEXT NOT NULL,
-          studentName TEXT DEFAULT '',
-          studentPhone TEXT DEFAULT '',
-          studentGrade TEXT DEFAULT '',
-          videoId TEXT DEFAULT '',
-          videoTitle TEXT DEFAULT '',
-          amount REAL DEFAULT 0,
-          method TEXT DEFAULT '',
-          receiptPath TEXT DEFAULT '',
-          receiptType TEXT DEFAULT '',
-          note TEXT DEFAULT '',
-          status TEXT DEFAULT 'pending',
-          reviewedAt DATETIME,
-          reviewedBy TEXT DEFAULT '',
-          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE
-        )
-      `)
-      results.push('Payment table ready')
-    } catch(e) { results.push('Payment table: ' + (e.message || 'skip')) }
-
-    // Add missing Payment columns (if table exists but missing columns)
-    try { await db.$executeRawUnsafe(`ALTER TABLE Payment ADD COLUMN studentName TEXT DEFAULT ''`) } catch(e) {}
-    try { await db.$executeRawUnsafe(`ALTER TABLE Payment ADD COLUMN studentPhone TEXT DEFAULT ''`) } catch(e) {}
-    try { await db.$executeRawUnsafe(`ALTER TABLE Payment ADD COLUMN studentGrade TEXT DEFAULT ''`) } catch(e) {}
-    try { await db.$executeRawUnsafe(`ALTER TABLE Payment ADD COLUMN videoId TEXT DEFAULT ''`) } catch(e) {}
-    try { await db.$executeRawUnsafe(`ALTER TABLE Payment ADD COLUMN videoTitle TEXT DEFAULT ''`) } catch(e) {}
-    try { await db.$executeRawUnsafe(`ALTER TABLE Payment ADD COLUMN receiptType TEXT DEFAULT ''`) } catch(e) {}
-    try { await db.$executeRawUnsafe(`ALTER TABLE Payment ADD COLUMN note TEXT DEFAULT ''`) } catch(e) {}
-    try { await db.$executeRawUnsafe(`ALTER TABLE Payment ADD COLUMN reviewedAt DATETIME`) } catch(e) {}
-    try { await db.$executeRawUnsafe(`ALTER TABLE Payment ADD COLUMN reviewedBy TEXT DEFAULT ''`) } catch(e) {}
-
-    // 7) VideoAccess table
-    try {
-      await db.$executeRawUnsafe(`
-        CREATE TABLE IF NOT EXISTS VideoAccess (
-          id TEXT PRIMARY KEY,
-          studentId TEXT NOT NULL,
-          videoId TEXT NOT NULL,
-          grantedBy TEXT DEFAULT '',
-          grantedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE,
-          FOREIGN KEY (videoId) REFERENCES Video(id) ON DELETE CASCADE,
-          UNIQUE(studentId, videoId)
-        )
-      `)
-      results.push('VideoAccess table ready')
-    } catch(e) { results.push('VideoAccess table: ' + (e.message || 'skip')) }
-
-    // Add grantedBy to VideoAccess if missing
-    try { await db.$executeRawUnsafe(`ALTER TABLE VideoAccess ADD COLUMN grantedBy TEXT DEFAULT ''`) } catch(e) {}
-
-    // 8) Question table
+    // 7) Create Question table
     try {
       await db.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS Question (
@@ -160,7 +103,7 @@ export async function GET() {
       results.push('Question table ready')
     } catch(e) { results.push('Question table: ' + (e.message || 'skip')) }
 
-    // 9) HomeworkResult table
+    // 8) Create HomeworkResult table
     try {
       await db.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS HomeworkResult (
@@ -176,6 +119,44 @@ export async function GET() {
       `)
       results.push('HomeworkResult table ready')
     } catch(e) { results.push('HomeworkResult table: ' + (e.message || 'skip')) }
+
+    // 9) Create Payment table
+    try {
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS Payment (
+          id TEXT PRIMARY KEY,
+          studentId TEXT NOT NULL,
+          studentName TEXT DEFAULT '',
+          videoId TEXT DEFAULT '',
+          videoTitle TEXT DEFAULT '',
+          amount REAL DEFAULT 0,
+          method TEXT DEFAULT '',
+          receiptPath TEXT DEFAULT '',
+          status TEXT DEFAULT 'pending',
+          note TEXT DEFAULT '',
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE
+        )
+      `)
+      results.push('Payment table ready')
+    } catch(e) { results.push('Payment table: ' + (e.message || 'skip')) }
+
+    // 10) Create VideoAccess table
+    try {
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS VideoAccess (
+          id TEXT PRIMARY KEY,
+          studentId TEXT NOT NULL,
+          videoId TEXT NOT NULL,
+          grantedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE,
+          FOREIGN KEY (videoId) REFERENCES Video(id) ON DELETE CASCADE,
+          UNIQUE(studentId, videoId)
+        )
+      `)
+      results.push('VideoAccess table ready')
+    } catch(e) { results.push('VideoAccess table: ' + (e.message || 'skip')) }
 
     return NextResponse.json({ success: true, results })
   } catch (error) {
