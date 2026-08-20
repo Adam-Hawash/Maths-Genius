@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useSyncExternalStore } from 'react'
+import Image from 'next/image'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,6 +25,7 @@ import {
   LayoutDashboard,
   Shield,
   Youtube,
+  Settings,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -88,9 +90,11 @@ export function Navbar() {
             className="flex items-center gap-2 transition-opacity hover:opacity-80 cursor-pointer"
           >
             {instructorPhoto ? (
-              <img
+              <Image
                 src={instructorPhoto}
                 alt="Mr Wael Khodier"
+                width={36}
+                height={36}
                 className="h-9 w-9 rounded-lg object-cover border border-primary/30"
               />
             ) : (
@@ -168,13 +172,15 @@ export function Navbar() {
                   <UserPlus className="h-4 w-4 ml-1" />
                   حساب جديد
                 </Button>
+                {/* Discreet Admin Entry - hidden for auth pages */}
                 {!isAuthPage && (
                   <button
                     onClick={() => setShowAdminLogin(true)}
-                    className="text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors cursor-pointer px-1"
-                    aria-label="Admin"
+                    className="text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors cursor-pointer px-1 flex items-center gap-1"
+                    aria-label="الإعدادات"
                   >
-                    Admin
+                    <Settings className="h-3 w-3" />
+                    <span>إعدادات</span>
                   </button>
                 )}
               </>
@@ -298,9 +304,10 @@ export function Navbar() {
                       setShowAdminLogin(true)
                       setMobileMenu(false)
                     }}
-                    className="w-full text-center text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 py-2 transition-colors cursor-pointer"
+                    className="w-full text-center text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 py-2 transition-colors cursor-pointer flex items-center justify-center gap-1"
                   >
-                    Admin
+                    <Settings className="h-3 w-3" />
+                    <span>إعدادات</span>
                   </button>
                 )}
               </>
@@ -334,12 +341,12 @@ function AdminLoginDialog() {
       toast.error('الرجاء إدخال البريد وكلمة المرور')
       return
     }
-    if (loading) return
+    if (loading) return // Prevent double-submit
     setLoading(true)
     setStatusMsg('جاري الاتصال بالسيرفر...')
 
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 15000)
+    const timeout = setTimeout(() => controller.abort(), 15000) // 15s hard timeout
 
     try {
       setStatusMsg('جاري التحقق من البيانات...')
