@@ -53,7 +53,6 @@ export default function HomePage() {
 
   const [appReady, setAppReady] = useState(false)
 
-  // Load config + gallery + stats on mount
   useEffect(function() {
     Promise.all([
       fetch('/api/config').then(function(r) { return r.json() }).catch(function() { return {} }),
@@ -80,7 +79,6 @@ export default function HomePage() {
   const showFooter = currentView === 'landing'
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
 
-  // Full-page loading screen
   if (!appReady) {
     return (
       <div className="fixed inset-0 z-[9999] bg-[#0F0D0A] flex flex-col items-center justify-center gap-6">
