@@ -15,7 +15,7 @@ import {
   Megaphone, Plus, Check, X, Trash2, LogOut, Loader2,
   BarChart3, RefreshCw, Settings, Upload, MessageSquare,
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
-  PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles
+  PlayCircle, Film, FileDown, PictureInPicture2, Save, Sparkles
 } from 'lucide-react'
 import { CMSPanel } from './CMSPanel'
 import { SocialLinksPanel } from './SocialLinksPanel'
