@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { title, url, grade, filePath, fileType, thumbnail } = body
+    const { title, url, grade, filePath, fileType, thumbnail, price } = body
 
     if (!title || !grade) {
       return NextResponse.json({ error: 'Title and grade are required' }, { status: 400 })
@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
         filePath: filePath || '',
         fileType: fileType || '',
         thumbnail: thumbnail || '',
+        price: typeof price === 'number' ? price : 0,
       },
     })
 
