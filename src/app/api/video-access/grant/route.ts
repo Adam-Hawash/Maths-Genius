@@ -2,29 +2,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// POST - Admin grants access
+// POST /api/video-access/grant - Admin grants free access to a student for a video
 export async function POST(request: NextRequest) {
   try {
-    const { videoId, studentId, grantedBy } = await request.json()
+    const { videoId, studentId } = await request.json()
 
     if (!videoId || !studentId) {
       return NextResponse.json({ error: 'videoId and studentId required' }, { status: 400 })
     }
 
-    const access = await db.videoAccess.upsert({
-      where: { studentId_videoId: { studentId, videoId } },
-      create: { studentId, videoId, grantedBy: grantedBy || 'admin' },
-      update: {},
-    })
+    await db.$executeRawUnsafe(
+      `INSERT OR IGNORE INTO VideoAccess (id, studentId, videoId, grantedAt) VALUES (?, ?, ?, datetime('now'))`,
+      'va_' + videoId + '_' + studentId, studentId, videoId
+    )
 
-    return NextResponse.json({ access, success: true })
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Grant access error:', error)
     return NextResponse.json({ error: 'Failed to grant access' }, { status: 500 })
   }
 }
 
-// DELETE - Admin removes access
+// DELETE /api/video-access/grant - Admin removes access
 export async function DELETE(request: NextRequest) {
   try {
     const { videoId, studentId } = await request.json()
@@ -33,7 +32,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'videoId and studentId required' }, { status: 400 })
     }
 
-    await db.videoAccess.deleteMany({ where: { videoId, studentId } })
+    await db.$executeRawUnsafe(
+      `DELETE FROM VideoAccess WHERE studentId = ? AND videoId = ?`,
+      studentId, videoId
+    )
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Remove access error:', error)
