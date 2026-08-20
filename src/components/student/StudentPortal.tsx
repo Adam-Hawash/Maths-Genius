@@ -1,1290 +1,1002 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useAppStore } from '@/stores/app-store';
+import { useAppStore } from '@/stores/app-store'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { Input } from '@/components/ui/input'
 import {
-  Video,
-  BookOpen,
-  ClipboardList,
-  Wallet,
-  LogOut,
-  Play,
-  Lock,
-  Check,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  CreditCard,
-  Smartphone,
-  DollarSign,
-  Upload,
-  Loader2,
-  Clock,
-  AlertTriangle,
-  ShieldCheck,
-  ShieldX,
-  RefreshCw,
-  Eye,
-} from 'lucide-react';
+  Video, ClipboardList, FileText, Megaphone, MessageSquare, Send,
+  LogOut, Loader2, FileDown, Bell, PlayCircle, CheckCircle2,
+  BookOpen, Target, TrendingUp, GraduationCap, ChevronLeft, ExternalLink,
+  User, Phone, Award, Maximize, Minimize, Lock, DollarSign,
+} from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import Image from 'next/image'
+import { toast } from 'sonner'
+import type { Video as VideoType, Homework, Exam, Announcement, Discussion, ExamResult } from '@/stores/app-store'
 
-// ===== Utility: خلط المصفوفة =====
-function shuffleArray<T>(array: T[]): T[] {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+export function StudentPortal() {
+  const { currentStudent, logout } = useAppStore()
+  const [dashboardData, setDashboardData] = useState<{
+    videos: VideoType[]
+    homework: Homework[]
+    exams: Exam[]
+    announcements: Announcement[]
+    examResults: ExamResult[]
+    watchedIds: Set<string>
+  } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [showFullPortal, setShowFullPortal] = useState(false)
+
+  const grade = currentStudent?.grade || ''
+  const studentId = currentStudent?.id || ''
+
+  useEffect(() => {
+    if (!grade || !studentId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes] = await Promise.all([
+          fetch(`/api/videos?grade=${encodeURIComponent(grade)}&pageSize=100`).then(r => r.json()),
+          fetch(`/api/homework?grade=${encodeURIComponent(grade)}&pageSize=50`).then(r => r.json()),
+          fetch(`/api/exams?grade=${encodeURIComponent(grade)}&pageSize=50`).then(r => r.json()),
+          fetch(`/api/announcements?grade=${encodeURIComponent(grade)}&pageSize=10`).then(r => r.json()),
+          fetch(`/api/exam-results?grade=${encodeURIComponent(grade)}`).then(r => r.json()),
+          fetch(`/api/activities?studentId=${studentId}&action=watched_video&pageSize=200`).then(r => r.json()),
+        ])
+        if (cancelled) return
+        const videos = videosRes.videos || []
+        const watchedIds = new Set<string>((actRes.activities || []).map((a: any) => a.details?.replace('Watched: ', '')))
+        setDashboardData({
+          videos,
+          homework: hwRes.homework || [],
+          exams: examsRes.exams || [],
+          announcements: annRes.announcements || [],
+          examResults: resultsRes.results || [],
+          watchedIds,
+        })
+      } catch { /* silent */ }
+      if (!cancelled) setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [grade, studentId])
+
+  const stats = useMemo(() => {
+    if (!dashboardData) return { completedLessons: 0, pendingHomework: 0, lastScore: null, progress: 0, lastVideo: null, upcomingTasks: [] as any[] }
+    const { videos, homework, exams, examResults, watchedIds, announcements } = dashboardData
+    const completedLessons = watchedIds.size
+    const pendingHomework = homework.length
+    const lastScore = examResults.length > 0 ? examResults[0] : null
+    const progress = videos.length > 0 ? Math.round((watchedIds.size / videos.length) * 100) : 0
+    const lastVideo = videos.find(v => !watchedIds.has(v.id)) || videos[0] || null
+    const upcomingTasks: any[] = []
+    homework.slice(0, 2).forEach(hw => upcomingTasks.push({ type: 'homework', title: hw.title, icon: ClipboardList, color: 'text-blue-500' }))
+    exams.slice(0, 2).forEach(ex => upcomingTasks.push({ type: 'exam', title: ex.title, icon: FileText, color: 'text-orange-500' }))
+    if (lastVideo && !watchedIds.has(lastVideo.id)) upcomingTasks.push({ type: 'lesson', title: lastVideo.title, icon: Video, color: 'text-purple-500' })
+    if (announcements.length > 0) upcomingTasks.push({ type: 'important', title: announcements[0].title, icon: Bell, color: 'text-red-500' })
+    return { completedLessons, pendingHomework, lastScore, progress, lastVideo, upcomingTasks: upcomingTasks.slice(0, 4) }
+  }, [dashboardData])
+
+  if (loading) return (
+    <div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+  )
+
+  if (showFullPortal) {
+    return <FullPortal initialData={dashboardData!} onBack={() => setShowFullPortal(false)} />
   }
-  return shuffled;
+
+  return (
+    <div className="flex-1 py-6 px-4 sm:px-6">
+      <div className="mx-auto max-w-4xl">
+        {/* Welcome Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl font-bold">
+              مرحباً، {currentStudent?.name} 👋
+            </h1>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <GraduationCap className="h-4 w-4" />
+              <span>{grade}</span>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={logout}>
+            <LogOut className="h-4 w-4 ml-1" />
+            خروج
+          </Button>
+        </div>
+
+        {/* 4 Stats Cards */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-8">
+          <StatCard icon={CheckCircle2} label="الدروس المكتملة" value={stats.completedLessons} color="text-emerald-500 bg-emerald-500/10" />
+          <StatCard icon={ClipboardList} label="الواجبات المطلوبة" value={stats.pendingHomework} color="text-blue-500 bg-blue-500/10" />
+          <StatCard icon={Target} label="آخر درجة" value={stats.lastScore ? `${stats.lastScore.score}/${stats.lastScore.maxScore}` : '—'} color="text-orange-500 bg-orange-500/10" />
+          <StatCard icon={TrendingUp} label="نسبة التقدم" value={`${stats.progress}%`} color="text-purple-500 bg-purple-500/10" />
+        </div>
+
+        {/* Progress Bar */}
+        <Card className="mb-8">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">تقدمك في الكورس</span>
+              <span className="text-sm text-primary font-bold">{stats.progress}%</span>
+            </div>
+            <Progress value={stats.progress} className="h-2" />
+          </CardContent>
+        </Card>
+
+        {/* Continue Learning */}
+        {stats.lastVideo && (
+          <Card className="mb-8 border-primary/20 bg-gradient-to-l from-primary/5 to-transparent">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <PlayCircle className="h-5 w-5 text-primary" />
+                <h2 className="font-bold text-lg">متابعة التعلم</h2>
+              </div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                {stats.lastVideo.thumbnail ? (
+                  <div className="w-full sm:w-40 aspect-video rounded-lg overflow-hidden bg-muted shrink-0 relative">
+                    <Image src={stats.lastVideo.thumbnail} alt="" fill className="object-cover" sizes="300px" unoptimized />
+                  </div>
+                ) : stats.lastVideo.filePath ? (
+                  <div className="w-full sm:w-40 aspect-video rounded-lg overflow-hidden bg-black/80 flex items-center justify-center shrink-0">
+                    <Video className="h-10 w-10 text-white/60" />
+                  </div>
+                ) : null}
+                <div className="flex-1 min-w-0 space-y-2">
+                  <p className="font-semibold truncate">{stats.lastVideo.title}</p>
+                  <p className="text-sm text-muted-foreground">{stats.lastVideo.grade}</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 max-w-[200px]">
+                      <Progress value={stats.progress} className="h-1.5" />
+                    </div>
+                    <span className="text-xs text-muted-foreground">{stats.progress}% مشاهدة</span>
+                  </div>
+                  <Button size="sm" className="mt-1" onClick={() => setShowFullPortal(true)}>
+                    متابعة <ChevronLeft className="h-4 w-4 mr-1" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Upcoming Tasks */}
+        <Card className="mb-8">
+          <CardContent className="p-4 sm:p-6">
+            <h2 className="font-bold text-lg mb-4">المهام القادمة</h2>
+            <div className="space-y-3">
+              {stats.upcomingTasks.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">لا توجد مهام قادمة 🎉</p>
+              ) : (
+                stats.upcomingTasks.map((task, i) => {
+                  const Icon = task.icon
+                  const typeLabels: Record<string, string> = { homework: 'واجب', exam: 'Quiz', lesson: 'درس جديد', important: 'مهم' }
+                  return (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${task.color} bg-current/10`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{task.title}</p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs shrink-0">{typeLabels[task.type] || task.type}</Badge>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Notifications */}
+        {dashboardData && dashboardData.announcements.length > 0 && (
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Bell className="h-5 w-5 text-primary" />
+                <h2 className="font-bold">إشعارات مهمة</h2>
+                <Badge variant="destructive" className="text-[10px]">{dashboardData.announcements.length} جديد</Badge>
+              </div>
+              <div className="space-y-2">
+                {dashboardData.announcements.slice(0, 3).map((ann, i) => (
+                  <div key={ann.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                    <Megaphone className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{ann.title}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{ann.content}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Browse All Button */}
+        <div className="mt-6 text-center">
+          <Button variant="outline" onClick={() => setShowFullPortal(true)} className="gap-2">
+            <BookOpen className="h-4 w-4" />
+            تصفح جميع الدروس والمحتوى
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
-// ===== Types =====
-interface ShuffledQuestion {
-  id: string;
-  originalIndex: number;
-  text: string;
-  shuffledOptions: Array<{
-    label: string;
-    text: string;
-    originalLetter: string;
-  }>;
-  optionMap: Record<string, string>;
-  correctAnswer: string;
-  explanation?: string;
+function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string | number; color: string }) {
+  return (
+    <Card>
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xl font-bold truncate">{value}</p>
+          <p className="text-xs text-muted-foreground truncate">{label}</p>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
-// ===== Main Component =====
-export default function StudentPortal() {
-  const { user, setView, logout } = useAppStore();
+/* ========== FULL PORTAL (all tabs) ========== */
+function FullPortal({ initialData, onBack }: { initialData: PortalData; onBack: () => void }) {
+  return <FullPortalContent initialData={initialData} onBack={onBack} />
+}
 
-  // ===== Navigation =====
-  const [activeTab, setActiveTab] = useState('videos');
+type PortalData = {
+  videos: VideoType[]
+  homework: Homework[]
+  exams: Exam[]
+  announcements: Announcement[]
+  examResults: ExamResult[]
+  watchedIds: Set<string>
+}
 
-  // ===== Videos State =====
-  const [videos, setVideos] = useState<any[]>([]);
-  const [videoAccessMap, setVideoAccessMap] = useState<Record<string, boolean>>({});
-  const [playingVideo, setPlayingVideo] = useState<any>(null);
+function FullPortalContent({ initialData, onBack }: { initialData: PortalData; onBack: () => void }) {
+  const { currentStudent } = useAppStore()
+  const grade = currentStudent?.grade || ''
+  const studentId = currentStudent?.id || ''
+  const [activeTab, setActiveTab] = useState('videos')
 
-  // ===== Homework State =====
-  const [homeworks, setHomeworks] = useState<any[]>([]);
-  const [currentHomework, setCurrentHomework] = useState<any>(null);
-  const [shuffledHwQuestions, setShuffledHwQuestions] = useState<ShuffledQuestion[]>([]);
-  const [hwAnswers, setHwAnswers] = useState<Record<number, string>>({});
-  const [hwSubmitted, setHwSubmitted] = useState(false);
-  const [hwResult, setHwResult] = useState<any>(null);
-  const [hwLoading, setHwLoading] = useState(false);
+  return (
+    <div className="flex-1 py-6 px-4 sm:px-6">
+      <div className="mx-auto max-w-7xl">
+        <div className="flex items-center gap-3 mb-6">
+          <Button variant="ghost" size="sm" onClick={onBack}><ChevronLeft className="h-4 w-4 mr-1" />الرئيسية</Button>
+          <div className="flex-1" />
+          <Button variant="outline" size="sm" onClick={useAppStore.getState().logout}>
+            <LogOut className="h-4 w-4 ml-1" />خروج
+          </Button>
+        </div>
 
-  // ===== Exams State =====
-  const [exams, setExams] = useState<any[]>([]);
-  const [currentExam, setCurrentExam] = useState<any>(null);
-  const [shuffledExamQuestions, setShuffledExamQuestions] = useState<ShuffledQuestion[]>([]);
-  const [examAnswers, setExamAnswers] = useState<Record<number, string>>({});
-  const [examSubmitted, setExamSubmitted] = useState(false);
-  const [examResult, setExamResult] = useState<any>(null);
-  const [examLoading, setExamLoading] = useState(false);
-  const [examTimeLeft, setExamTimeLeft] = useState<number>(0);
-  const examTimerRef = useRef<NodeJS.Timeout | null>(null);
+        {/* Tab Buttons */}
+        <div className="flex gap-1 flex-wrap bg-muted/50 p-1 rounded-lg mb-6">
+          {[
+            { key: 'videos', icon: Video, label: 'الدروس' },
+            { key: 'homework', icon: ClipboardList, label: 'الواجبات' },
+            { key: 'exams', icon: FileText, label: 'الامتحانات' },
+            { key: 'announcements', icon: Megaphone, label: 'الإعلانات' },
+            { key: 'discussions', icon: MessageSquare, label: 'النقاشات' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === tab.key ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-  // ===== Payments State =====
-  const [payments, setPayments] = useState<any[]>([]);
+        {activeTab === 'videos' && <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} studentId={studentId} isFreeAccess={currentStudent?.isFreeAccess ?? true} />}
+        {activeTab === 'homework' && <HomeworkTab homework={initialData.homework} />}
+        {activeTab === 'exams' && <ExamsTab exams={initialData.exams} results={initialData.examResults} studentId={studentId} />}
+        {activeTab === 'announcements' && <AnnouncementsTab announcements={initialData.announcements} />}
+        {activeTab === 'discussions' && <DiscussionsTab grade={grade} studentId={studentId} studentName={currentStudent?.name || ''} />}
+      </div>
+    </div>
+  )
+}
 
-  // ===== Payment Flow State =====
-  const [payingFor, setPayingFor] = useState<any>(null);
-  const [paymentMethod, setPaymentMethod] = useState('');
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [paymentUploading, setPaymentUploading] = useState(false);
-  const [paymentError, setPaymentError] = useState('');
+/* ========== VIDEOS TAB ========== */
+function VideosTab({ videos, watchedIds, studentId, isFreeAccess }: { videos: VideoType[]; watchedIds: Set<string>; studentId: string; isFreeAccess: boolean }) {
+  const [localWatched, setLocalWatched] = useState(watchedIds)
 
-  // ===== Notification =====
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  // ==========================================
-  // ===== DATA FETCHING ======================
-  // ==========================================
-
-  const fetchVideos = async () => {
-    try {
-      const res = await fetch('/api/videos');
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : [];
-      setVideos(list);
-
-      // Check access for each video
-      const accessMap: Record<string, boolean> = {};
-      for (const v of list) {
-        if (!v.price || v.price === 0) {
-          accessMap[v.id] = true;
-        } else {
-          try {
-            const accessRes = await fetch(`/api/video-access?videoId=${v.id}`);
-            const accessData = await accessRes.json();
-            accessMap[v.id] = accessData.hasAccess === true;
-          } catch {
-            accessMap[v.id] = false;
-          }
-        }
-      }
-      setVideoAccessMap(accessMap);
-    } catch (err) {
-      console.error('Failed to fetch videos:', err);
-    }
-  };
-
-  const fetchHomeworks = async () => {
-    try {
-      const res = await fetch('/api/homework');
-      const data = await res.json();
-      setHomeworks(Array.isArray(data) ? data.filter((h: any) => h.isPublished) : []);
-    } catch (err) {
-      console.error('Failed to fetch homeworks:', err);
-    }
-  };
-
-  const fetchExams = async () => {
-    try {
-      const res = await fetch('/api/exams');
-      const data = await res.json();
-      setExams(Array.isArray(data) ? data.filter((e: any) => e.isPublished) : []);
-    } catch (err) {
-      console.error('Failed to fetch exams:', err);
-    }
-  };
-
-  const fetchPayments = async () => {
-    try {
-      const res = await fetch('/api/my-payments');
-      const data = await res.json();
-      setPayments(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to fetch payments:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchVideos();
-    fetchHomeworks();
-    fetchExams();
-    fetchPayments();
-  }, []);
-
-  // ===== Exam Timer =====
-  useEffect(() => {
-    if (currentExam && !examSubmitted && examTimeLeft > 0) {
-      examTimerRef.current = setInterval(() => {
-        setExamTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(examTimerRef.current!);
-            handleExamSubmit();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (examTimerRef.current) clearInterval(examTimerRef.current);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentExam, examSubmitted, examTimeLeft]);
-
-  // ==========================================
-  // ===== HOMEWORK HANDLERS ==================
-  // ==========================================
-
-  const startHomework = async (hw: any) => {
-    try {
-      const res = await fetch(`/api/homework/${hw.id}`);
-      const data = await res.json();
-      const questions = data.questions || [];
-
-      // Shuffle questions + options
-      const shuffled = shuffleArray(questions).map((q: any, idx: number) => {
-        const options = [
-          { text: q.optionA, letter: 'A' },
-          { text: q.optionB, letter: 'B' },
-          { text: q.optionC, letter: 'C' },
-          { text: q.optionD, letter: 'D' },
-        ];
-        const shuffledOpts = shuffleArray(options).map((opt, i) => ({
-          label: String.fromCharCode(65 + i),
-          text: opt.text,
-          originalLetter: opt.letter,
-        }));
-        return {
-          id: q.id,
-          originalIndex: idx,
-          text: q.text,
-          shuffledOptions: shuffledOpts,
-          optionMap: Object.fromEntries(shuffledOpts.map((o) => [o.label, o.letter])),
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation || null,
-        };
-      });
-
-      setCurrentHomework(hw);
-      setShuffledHwQuestions(shuffled);
-      setHwAnswers({});
-      setHwSubmitted(false);
-      setHwResult(null);
-    } catch (err) {
-      showToast('فشل في تحميل الأسئلة', 'error');
-    }
-  };
-
-  const handleHwAnswer = (questionIndex: number, displayLabel: string) => {
-    if (hwSubmitted) return;
-    setHwAnswers((prev) => ({ ...prev, [questionIndex]: displayLabel }));
-  };
-
-  const handleHwSubmit = async () => {
-    if (!currentHomework || !user) return;
-
-    const unansweredCount = shuffledHwQuestions.length - Object.keys(hwAnswers).length;
-    if (unansweredCount > 0) {
-      if (!confirm(`لديك ${unansweredCount} سؤال بدون إجابة. هل تريد التسليم؟`)) return;
-    }
-
-    setHwLoading(true);
-    try {
-      // Map shuffled answers back to original question IDs
-      const submitAnswers: Record<string, string> = {};
-      Object.entries(hwAnswers).forEach(([idx, displayLabel]) => {
-        const q = shuffledHwQuestions[parseInt(idx)];
-        if (q) {
-          submitAnswers[q.id] = q.optionMap[displayLabel] || displayLabel;
-        }
-      });
-
-      const res = await fetch('/api/homework/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: user.id,
-          homeworkId: currentHomework.id,
-          answers: submitAnswers,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'فشل في التسليم');
-
-      setHwResult(data.result);
-      setHwSubmitted(true);
-      showToast('تم تسليم الواجب بنجاح!');
-    } catch (err: any) {
-      showToast(err.message || 'حدث خطأ', 'error');
-    } finally {
-      setHwLoading(false);
-    }
-  };
-
-  // ==========================================
-  // ===== EXAM HANDLERS ======================
-  // ==========================================
-
-  const startExam = async (exam: any) => {
-    try {
-      const res = await fetch(`/api/exams/${exam.id}`);
-      const data = await res.json();
-      const questions = data.questions || [];
-
-      const shuffled = shuffleArray(questions).map((q: any, idx: number) => {
-        const options = [
-          { text: q.optionA, letter: 'A' },
-          { text: q.optionB, letter: 'B' },
-          { text: q.optionC, letter: 'C' },
-          { text: q.optionD, letter: 'D' },
-        ];
-        const shuffledOpts = shuffleArray(options).map((opt, i) => ({
-          label: String.fromCharCode(65 + i),
-          text: opt.text,
-          originalLetter: opt.letter,
-        }));
-        return {
-          id: q.id,
-          originalIndex: idx,
-          text: q.text,
-          shuffledOptions: shuffledOpts,
-          optionMap: Object.fromEntries(shuffledOpts.map((o) => [o.label, o.letter])),
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation || null,
-        };
-      });
-
-      setCurrentExam(exam);
-      setShuffledExamQuestions(shuffled);
-      setExamAnswers({});
-      setExamSubmitted(false);
-      setExamResult(null);
-
-      // Timer
-      const duration = exam.duration ? exam.duration * 60 : 0;
-      setExamTimeLeft(duration);
-    } catch (err) {
-      showToast('فشل في تحميل الامتحان', 'error');
-    }
-  };
-
-  const handleExamAnswer = (questionIndex: number, displayLabel: string) => {
-    if (examSubmitted) return;
-    setExamAnswers((prev) => ({ ...prev, [questionIndex]: displayLabel }));
-  };
-
-  const handleExamSubmit = async () => {
-    if (!currentExam || !user || examSubmitted) return;
-
-    if (examTimeLeft > 0) {
-      const unansweredCount = shuffledExamQuestions.length - Object.keys(examAnswers).length;
-      if (unansweredCount > 0) {
-        if (!confirm(`لديك ${unansweredCount} سؤال بدون إجابة. هل تريد التسليم؟`)) return;
-      }
-    }
-
-    setExamLoading(true);
-    try {
-      const submitAnswers: Record<string, string> = {};
-      Object.entries(examAnswers).forEach(([idx, displayLabel]) => {
-        const q = shuffledExamQuestions[parseInt(idx)];
-        if (q) {
-          submitAnswers[q.id] = q.optionMap[displayLabel] || displayLabel;
-        }
-      });
-
-      const res = await fetch('/api/exams/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: user.id,
-          examId: currentExam.id,
-          answers: submitAnswers,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'فشل في التسليم');
-
-      setExamResult(data.result);
-      setExamSubmitted(true);
-      setExamTimeLeft(0);
-      if (examTimerRef.current) clearInterval(examTimerRef.current);
-      showToast('تم تسليم الامتحان بنجاح!');
-    } catch (err: any) {
-      showToast(err.message || 'حدث خطأ', 'error');
-    } finally {
-      setExamLoading(false);
-    }
-  };
-
-  // ==========================================
-  // ===== PAYMENT HANDLERS ===================
-  // ==========================================
-
-  const handlePaymentSubmit = async () => {
-    if (!payingFor || !user || !paymentMethod || !receiptFile) {
-      setPaymentError('يرجى اختيار طريقة الدفع ورفع صورة الإيصال');
-      return;
-    }
-
-    setPaymentUploading(true);
-    setPaymentError('');
-
-    try {
-      const formData = new FormData();
-      formData.append('studentId', user.id);
-      formData.append('videoId', payingFor.id);
-      formData.append('method', paymentMethod);
-      formData.append('amount', String(payingFor.price || 0));
-      formData.append('receipt', receiptFile);
-
-      const res = await fetch('/api/payments', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'فشل في إرسال الدفعة');
-
-      showToast('تم إرسال الدفعة بنجاح! انتظر موافقة الأدمن.');
-      setPayingFor(null);
-      setPaymentMethod('');
-      setReceiptFile(null);
-      fetchVideos();
-      fetchPayments();
-
-      // Redirect to pending screen
-      setView('student-payment-pending');
-    } catch (err: any) {
-      setPaymentError(err.message || 'حدث خطأ أثناء الدفع');
-    } finally {
-      setPaymentUploading(false);
-    }
-  };
-
-  // ==========================================
-  // ===== HELPERS ============================
-  // ==========================================
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
+  const trackVideoWatch = (videoId: string) => {
+    if (!studentId || localWatched.has(videoId)) return
+    setLocalWatched(prev => new Set([...prev, videoId]))
+    fetch('/api/activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studentId, action: 'watched_video', details: `Watched: ${videoId}` }),
+    }).catch(() => {})
+  }
 
   const getYouTubeId = (url: string) => {
-    const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    return match ? match[1] : null;
-  };
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([\w-]{11})/)
+    return match ? match[1] : null
+  }
 
-  // ==========================================
-  // ===== RENDER =============================
-  // ==========================================
+  const getYouTubeThumbnail = (url: string) => {
+    const id = getYouTubeId(url)
+    return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null
+  }
+
+  const needsPay = (video: VideoType) => {
+    const price = (video as any).price || 0
+    return price > 0 && !isFreeAccess
+  }
+
+  if (videos.length === 0) return <EmptyState message="لا توجد دروس حالياً" />
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950" dir="rtl">
-      {/* Toast */}
-      {toast && (
-        <div
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg text-white font-medium text-sm transition-all ${
-            toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+    <div className="grid gap-4 md:grid-cols-2">
+      {videos.map((video) => {
+        const ytId = getYouTubeId(video.url)
+        const isVideoFile = video.filePath && (video.fileType?.startsWith('video/') || video.filePath.match(/\.(mp4|webm|mov|avi)$/i))
+        const isWatched = localWatched.has(video.id)
+        const thumbSrc = video.thumbnail || getYouTubeThumbnail(video.url) || null
+        const videoPrice = (video as any).price || 0
+        const isLocked = needsPay(video)
 
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-40">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-              <BookOpen className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-gray-900 dark:text-white">Maths Genius</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">مرحباً، {user?.name}</p>
-            </div>
-          </div>
-          <button
-            onClick={logout}
-            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition"
-            title="تسجيل الخروج"
-          >
-            <LogOut className="h-5 w-5" />
-          </button>
-        </div>
-      </header>
-
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        {/* Tab Navigation */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 mb-6 overflow-hidden">
-          <div className="flex">
-            {[
-              { id: 'videos', label: 'الفيديوهات', icon: Video },
-              { id: 'homework', label: 'الواجبات', icon: BookOpen },
-              { id: 'exams', label: 'الامتحانات', icon: ClipboardList },
-              { id: 'payments', label: 'المدفوعات', icon: Wallet },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 text-sm font-medium border-b-2 transition-all ${
-                  activeTab === tab.id
-                    ? 'border-blue-600 text-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
-                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                <tab.icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* ===== TAB: Videos ===== */}
-        {activeTab === 'videos' && (
-          <div className="space-y-4">
-            {/* Video Player Modal */}
-            {playingVideo && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden mb-4">
-                <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800">
-                  <h3 className="font-bold text-gray-900 dark:text-white">{playingVideo.title}</h3>
-                  <button
-                    onClick={() => setPlayingVideo(null)}
-                    className="p-1 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-                <div className="aspect-video bg-black">
-                  {getYouTubeId(playingVideo.url) ? (
-                    <iframe
-                      src={`https://www.youtube.com/embed/${getYouTubeId(playingVideo.url)}?autoplay=1`}
-                      className="w-full h-full"
-                      allow="autoplay; encrypted-media"
-                      allowFullScreen
-                    />
-                  ) : (
-                    <video
-                      src={playingVideo.url}
-                      controls
-                      autoPlay
-                      className="w-full h-full"
-                    />
-                  )}
-                </div>
-                {playingVideo.description && (
-                  <div className="p-4 text-sm text-gray-600 dark:text-gray-400">
-                    {playingVideo.description}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Payment Flow Modal */}
-            {payingFor && (
-              <PaymentFlow
-                video={payingFor}
-                method={paymentMethod}
-                setMethod={setPaymentMethod}
-                receiptFile={receiptFile}
-                setReceiptFile={setReceiptFile}
-                uploading={paymentUploading}
-                error={paymentError}
-                onSubmit={handlePaymentSubmit}
-                onCancel={() => { setPayingFor(null); setPaymentError(''); }}
-              />
-            )}
-
-            {/* Videos Grid */}
-            {videos.length === 0 ? (
-              <div className="text-center py-16">
-                <Video className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">لا توجد فيديوهات حاليًا</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {videos.map((video) => {
-                  const hasAccess = videoAccessMap[video.id];
-                  const isPaid = video.price && video.price > 0;
-                  const isLocked = isPaid && !hasAccess;
-                  const ytId = getYouTubeId(video.url);
-
-                  return (
-                    <div
-                      key={video.id}
-                      className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden hover:shadow-md transition"
-                    >
-                      {/* Thumbnail */}
-                      <div className="relative aspect-video bg-gray-200 dark:bg-gray-800">
-                        {ytId ? (
-                          <img
-                            src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
-                            alt={video.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Video className="h-12 w-12 text-gray-400" />
-                          </div>
-                        )}
-
-                        {/* Lock Overlay */}
-                        {isLocked && (
-                          <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-2">
-                            <Lock className="h-10 w-10 text-white/80" />
-                            <span className="text-white font-bold text-lg">{video.price} ج.م</span>
-                            <button
-                              onClick={() => setPayingFor(video)}
-                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium"
-                            >
-                              اشتري الآن
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Play Button */}
-                        {!isLocked && (
-                          <button
-                            onClick={() => setPlayingVideo(video)}
-                            className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition"
-                          >
-                            <div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
-                              <Play className="h-6 w-6 text-gray-900 mr-[-2px]" />
-                            </div>
-                          </button>
-                        )}
-
-                        {/* Price Badge */}
-                        {isPaid && hasAccess && (
-                          <span className="absolute top-2 left-2 px-2 py-1 bg-green-600 text-white rounded-lg text-xs font-medium flex items-center gap-1">
-                            <ShieldCheck className="h-3 w-3" />
-                            مشتري
-                          </span>
-                        )}
-                        {!isPaid && (
-                          <span className="absolute top-2 left-2 px-2 py-1 bg-purple-600 text-white rounded-lg text-xs font-medium">
-                            مجاني
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Info */}
-                      <div className="p-4">
-                        <h3 className="font-bold text-gray-900 dark:text-white text-sm line-clamp-2">{video.title}</h3>
-                        <div className="flex items-center gap-2 mt-2">
-                          {video.subject && (
-                            <span className="text-xs px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full">
-                              {video.subject}
-                            </span>
-                          )}
-                          {video.grade && (
-                            <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
-                              {video.grade}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+        return (
+          <Card key={video.id} className={`overflow-hidden transition-all ${isWatched ? 'border-emerald-500/30' : ''}`}>
+            <div className="relative aspect-video bg-black">
+              {isLocked ? (
+                /* فيديو مقفول - يدفع أولاً */
+                <div className="w-full h-full relative">
+                  {thumbSrc ? (
+                    <Image src={thumbSrc} alt={video.title} fill className="object-cover blur-sm opacity-40" sizes="(max-width: 640px) 100vw, 50vw" unoptimized loading="eager" />
+                  ) : null}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+                    <div className="h-14 w-14 rounded-full bg-black/70 flex items-center justify-center">
+                      <Lock className="h-7 w-7 text-white" />
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ===== TAB: Homework ===== */}
-        {activeTab === 'homework' && (
-          <div>
-            {/* Homework List (when no homework is active) */}
-            {!currentHomework && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-blue-600" />
-                  الواجبات المتاحة
-                </h2>
-                {homeworks.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">لا توجد واجبات حاليًا</p>
-                ) : (
-                  <div className="space-y-3">
-                    {homeworks.map((hw) => (
-                      <div
-                        key={hw.id}
-                        className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
-                        onClick={() => startHomework(hw)}
+                    <div className="bg-black/60 backdrop-blur-sm rounded-xl px-5 py-3 text-center">
+                      <p className="text-white font-bold text-lg">{videoPrice} ج.م</p>
+                      <Button
+                        className="mt-2 bg-amber-500 hover:bg-amber-600 text-white"
+                        size="sm"
+                        onClick={() => toast.info('تواصل مع الأستاذ وائل للدفع والتشغيل')}
                       >
-                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center flex-shrink-0">
-                          <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900 dark:text-white">{hw.title}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            {hw.subject && <span className="text-xs text-gray-500">{hw.subject}</span>}
-                            {hw.dueDate && (
-                              <span className="text-xs text-gray-400 flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {new Date(hw.dueDate).toLocaleDateString('ar-EG')}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <ChevronLeft className="h-5 w-5 text-gray-400" />
-                      </div>
-                    ))}
+                        <DollarSign className="h-4 w-4 ml-1" />
+                        ادفع الآن
+                      </Button>
+                    </div>
                   </div>
+                </div>
+              ) : ytId ? (
+                /* YouTube: controls=0 يخفي الـ 3-dot menu بالكامل */
+                <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
+                  <iframe
+                    src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1&controls=0&showinfo=0&iv_load_policy=3`}
+                    title={video.title}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; encrypted-media; gyroscope"
+                    allowFullScreen
+                    loading="lazy"
+                  />
+                </div>
+              ) : isVideoFile ? (
+                /* MP4: كنترولات مخصصة — مفيش controls يعني مفيش 3-dot menu */
+                <CustomVideoPlayer
+                  videoId={video.id}
+                  src={video.filePath}
+                  poster={thumbSrc || undefined}
+                  studentId={studentId}
+                  onWatch={() => {
+                    trackVideoWatch(video.id)
+                    setLocalWatched(prev => new Set([...prev, video.id]))
+                  }}
+                />
+              ) : thumbSrc ? (
+                <div className="w-full h-full relative">
+                  <Image src={thumbSrc} alt={video.title} fill className="object-cover" sizes="(max-width: 640px) 100vw, 50vw" unoptimized loading="eager" fetchPriority="high" />
+                </div>
+              ) : video.url ? (
+                <a href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full h-full text-white/70 hover:text-white transition-colors">
+                  <ExternalLink className="h-6 w-6" />
+                  <span className="text-sm">فتح الرابط</span>
+                </a>
+              ) : (
+                <div className="flex items-center justify-center w-full h-full">
+                  <Video className="h-10 w-10 text-white/30" />
+                </div>
+              )}
+              {isWatched && (
+                <div className="absolute top-2 right-2 z-30">
+                  <Badge className="bg-emerald-500 text-white text-[10px] gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> تمت المشاهدة
+                  </Badge>
+                </div>
+              )}
+              {!isLocked && videoPrice > 0 && isFreeAccess && (
+                <div className="absolute top-2 left-2 z-30">
+                  <Badge className="bg-emerald-500 text-white text-[10px] gap-1">
+                    مجاناً
+                  </Badge>
+                </div>
+              )}
+            </div>
+            <CardContent className="p-3">
+              <h3 className="font-semibold text-sm truncate">{video.title}</h3>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-xs text-muted-foreground">{new Date(video.createdAt).toLocaleDateString('ar-EG')}</p>
+                {videoPrice > 0 && (
+                  <Badge variant={isLocked ? 'destructive' : 'secondary'} className="text-[10px]">
+                    {isLocked ? videoPrice + ' ج.م' : 'مجاني' }
+                  </Badge>
                 )}
               </div>
-            )}
-
-            {/* Active Homework */}
-            {currentHomework && !hwSubmitted && (
-              <div className="space-y-4">
-                {/* Header */}
-                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => { setCurrentHomework(null); setShuffledHwQuestions([]); }}
-                      className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                    <div>
-                      <h2 className="font-bold text-gray-900 dark:text-white">{currentHomework.title}</h2>
-                      <p className="text-xs text-gray-500">{shuffledHwQuestions.length} سؤال</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleHwSubmit}
-                    disabled={hwLoading}
-                    className="px-6 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-medium text-sm disabled:opacity-50"
-                  >
-                    {hwLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم الواجب'}
-                  </button>
-                </div>
-
-                {/* Questions */}
-                {shuffledHwQuestions.map((q, idx) => (
-                  <div
-                    key={q.id}
-                    className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-5"
-                  >
-                    <div className="flex items-start gap-3 mb-4">
-                      <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full text-sm font-bold">
-                        {idx + 1}
-                      </span>
-                      <p className="text-gray-900 dark:text-white font-medium leading-relaxed pt-1">{q.text}</p>
-                    </div>
-                    <div className="space-y-2 mr-11">
-                      {q.shuffledOptions.map((opt) => {
-                        const isSelected = hwAnswers[idx] === opt.label;
-                        return (
-                          <button
-                            key={opt.label}
-                            onClick={() => handleHwAnswer(idx, opt.label)}
-                            className={`w-full text-right px-4 py-3 rounded-xl border-2 transition-all text-sm ${
-                              isSelected
-                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-medium'
-                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'
-                            }`}
-                          >
-                            <span className="inline-flex items-center gap-2">
-                              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                                isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                              }`}>
-                                {opt.label}
-                              </span>
-                              {opt.text}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Homework Results */}
-            {currentHomework && hwSubmitted && hwResult && (
-              <div className="space-y-4">
-                {/* Score Card */}
-                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 text-center">
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">نتيجة الواجب</h2>
-                  <p className="text-sm text-gray-500 mb-4">{currentHomework.title}</p>
-                  <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full text-2xl font-bold text-white ${
-                    hwResult.score / hwResult.totalQuestions >= 0.5 ? 'bg-green-500' : 'bg-red-500'
-                  }`}>
-                    {hwResult.score}/{hwResult.totalQuestions}
-                  </div>
-                  <p className={`mt-3 text-lg font-bold ${
-                    hwResult.score / hwResult.totalQuestions >= 0.5 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {Math.round((hwResult.score / hwResult.totalQuestions) * 100)}%
-                  </p>
-                  <button
-                    onClick={() => { setCurrentHomework(null); setShuffledHwQuestions([]); setHwSubmitted(false); setHwResult(null); }}
-                    className="mt-4 px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm font-medium"
-                  >
-                    العودة للواجبات
-                  </button>
-                </div>
-
-                {/* Per-Question Review */}
-                {hwResult.questionDetails && hwResult.questionDetails.map((detail: any, i: number) => (
-                  <div
-                    key={i}
-                    className={`bg-white dark:bg-gray-900 rounded-2xl shadow-sm border-2 p-5 ${
-                      detail.isCorrect
-                        ? 'border-green-200 dark:border-green-800'
-                        : 'border-red-200 dark:border-red-800'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold text-white ${
-                        detail.isCorrect ? 'bg-green-500' : 'bg-red-500'
-                      }`}>
-                        {detail.isCorrect ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
-                      </span>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900 dark:text-white mb-3">{detail.questionText}</p>
-
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          {['optionA', 'optionB', 'optionC', 'optionD'].map((key) => {
-                            const letter = key.replace('option', '');
-                            const isCorrectOption = detail.correctAnswer === letter;
-                            const isStudentChoice = detail.studentAnswer === letter;
-                            return (
-                              <div
-                                key={key}
-                                className={`px-3 py-2 rounded-lg text-sm border ${
-                                  isCorrectOption
-                                    ? 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300 font-medium'
-                                    : isStudentChoice && !isCorrectOption
-                                    ? 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300'
-                                    : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                                }`}
-                              >
-                                <span className="font-bold">{letter}.</span> {detail[key]}
-                                {isCorrectOption && <Check className="inline h-3.5 w-3.5 mr-1 text-green-600" />}
-                                {isStudentChoice && !isCorrectOption && <X className="inline h-3.5 w-3.5 mr-1 text-red-600" />}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {!detail.isCorrect && detail.studentAnswer && (
-                          <p className="text-sm text-red-600 dark:text-red-400 mb-2">
-                            إجابتك: {detail.studentAnswer} — الإجابة الصحيحة: {detail.correctAnswer}
-                          </p>
-                        )}
-                        {detail.isCorrect && (
-                          <p className="text-sm text-green-600 dark:text-green-400 mb-2">
-                            إجابة صحيحة!
-                          </p>
-                        )}
-
-                        {/* AI Explanation */}
-                        {detail.explanation && (
-                          <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                            <div className="flex items-start gap-2">
-                              <span className="text-base flex-shrink-0">💡</span>
-                              <div>
-                                <p className="text-xs font-bold text-blue-700 dark:text-blue-400 mb-1">
-                                  شرح الحل:
-                                </p>
-                                <p className="text-sm text-blue-800 dark:text-blue-300 leading-relaxed whitespace-pre-line">
-                                  {detail.explanation}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ===== TAB: Exams ===== */}
-        {activeTab === 'exams' && (
-          <div>
-            {/* Exam List */}
-            {!currentExam && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5 text-purple-600" />
-                  الامتحانات المتاحة
-                </h2>
-                {exams.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">لا توجد امتحانات حاليًا</p>
-                ) : (
-                  <div className="space-y-3">
-                    {exams.map((exam) => (
-                      <div
-                        key={exam.id}
-                        className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
-                        onClick={() => startExam(exam)}
-                      >
-                        <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center flex-shrink-0">
-                          <ClipboardList className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900 dark:text-white">{exam.title}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            {exam.subject && <span className="text-xs text-gray-500">{exam.subject}</span>}
-                            {exam.duration && (
-                              <span className="text-xs text-gray-400 flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {exam.duration} دقيقة
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <ChevronLeft className="h-5 w-5 text-gray-400" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Active Exam */}
-            {currentExam && !examSubmitted && (
-              <div className="space-y-4">
-                {/* Header with Timer */}
-                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => {
-                        if (!confirm('هل تريد الخروج؟ لن تستطيع العودة.')) return;
-                        setCurrentExam(null);
-                        setShuffledExamQuestions([]);
-                        setExamTimeLeft(0);
-                        if (examTimerRef.current) clearInterval(examTimerRef.current);
-                      }}
-                      className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                    <div>
-                      <h2 className="font-bold text-gray-900 dark:text-white">{currentExam.title}</h2>
-                      <p className="text-xs text-gray-500">{shuffledExamQuestions.length} سؤال</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {examTimeLeft > 0 && (
-                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-bold ${
-                        examTimeLeft <= 60 ? 'bg-red-100 dark:bg-red-950/30 text-red-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                      }`}>
-                        <Clock className="h-4 w-4" />
-                        {formatTime(examTimeLeft)}
-                      </div>
-                    )}
-                    <button
-                      onClick={handleExamSubmit}
-                      disabled={examLoading}
-                      className="px-6 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-medium text-sm disabled:opacity-50"
-                    >
-                      {examLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم الامتحان'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Questions */}
-                {shuffledExamQuestions.map((q, idx) => (
-                  <div
-                    key={q.id}
-                    className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-5"
-                  >
-                    <div className="flex items-start gap-3 mb-4">
-                      <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full text-sm font-bold">
-                        {idx + 1}
-                      </span>
-                      <p className="text-gray-900 dark:text-white font-medium leading-relaxed pt-1">{q.text}</p>
-                    </div>
-                    <div className="space-y-2 mr-11">
-                      {q.shuffledOptions.map((opt) => {
-                        const isSelected = examAnswers[idx] === opt.label;
-                        return (
-                          <button
-                            key={opt.label}
-                            onClick={() => handleExamAnswer(idx, opt.label)}
-                            className={`w-full text-right px-4 py-3 rounded-xl border-2 transition-all text-sm ${
-                              isSelected
-                                ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 font-medium'
-                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'
-                            }`}
-                          >
-                            <span className="inline-flex items-center gap-2">
-                              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                                isSelected ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                              }`}>
-                                {opt.label}
-                              </span>
-                              {opt.text}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Exam Results */}
-            {currentExam && examSubmitted && examResult && (
-              <div className="space-y-4">
-                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 text-center">
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">نتيجة الامتحان</h2>
-                  <p className="text-sm text-gray-500 mb-4">{currentExam.title}</p>
-                  <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full text-2xl font-bold text-white ${
-                    examResult.score / examResult.totalQuestions >= 0.5 ? 'bg-green-500' : 'bg-red-500'
-                  }`}>
-                    {examResult.score}/{examResult.totalQuestions}
-                  </div>
-                  <p className={`mt-3 text-lg font-bold ${
-                    examResult.score / examResult.totalQuestions >= 0.5 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {Math.round((examResult.score / examResult.totalQuestions) * 100)}%
-                  </p>
-                  <button
-                    onClick={() => { setCurrentExam(null); setShuffledExamQuestions([]); setExamSubmitted(false); setExamResult(null); setExamTimeLeft(0); }}
-                    className="mt-4 px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm font-medium"
-                  >
-                    العودة للامتحانات
-                  </button>
-                </div>
-
-                {examResult.questionDetails && examResult.questionDetails.map((detail: any, i: number) => (
-                  <div
-                    key={i}
-                    className={`bg-white dark:bg-gray-900 rounded-2xl shadow-sm border-2 p-5 ${
-                      detail.isCorrect ? 'border-green-200 dark:border-green-800' : 'border-red-200 dark:border-red-800'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold text-white ${
-                        detail.isCorrect ? 'bg-green-500' : 'bg-red-500'
-                      }`}>
-                        {detail.isCorrect ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
-                      </span>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900 dark:text-white mb-3">{detail.questionText}</p>
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          {['optionA', 'optionB', 'optionC', 'optionD'].map((key) => {
-                            const letter = key.replace('option', '');
-                            const isCorrectOption = detail.correctAnswer === letter;
-                            const isStudentChoice = detail.studentAnswer === letter;
-                            return (
-                              <div
-                                key={key}
-                                className={`px-3 py-2 rounded-lg text-sm border ${
-                                  isCorrectOption
-                                    ? 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300 font-medium'
-                                    : isStudentChoice && !isCorrectOption
-                                    ? 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300'
-                                    : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                                }`}
-                              >
-                                <span className="font-bold">{letter}.</span> {detail[key]}
-                                {isCorrectOption && <Check className="inline h-3.5 w-3.5 mr-1 text-green-600" />}
-                                {isStudentChoice && !isCorrectOption && <X className="inline h-3.5 w-3.5 mr-1 text-red-600" />}
-                              </div>
-                            );
-                          })}
-                        </div>
-                        {!detail.isCorrect && detail.studentAnswer && (
-                          <p className="text-sm text-red-600 dark:text-red-400 mb-2">
-                            إجابتك: {detail.studentAnswer} — الإجابة الصحيحة: {detail.correctAnswer}
-                          </p>
-                        )}
-                        {detail.isCorrect && (
-                          <p className="text-sm text-green-600 dark:text-green-400 mb-2">إجابة صحيحة!</p>
-                        )}
-                        {detail.explanation && (
-                          <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                            <div className="flex items-start gap-2">
-                              <span className="text-base flex-shrink-0">💡</span>
-                              <div>
-                                <p className="text-xs font-bold text-blue-700 dark:text-blue-400 mb-1">شرح الحل:</p>
-                                <p className="text-sm text-blue-800 dark:text-blue-300 leading-relaxed whitespace-pre-line">
-                                  {detail.explanation}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ===== TAB: Payments ===== */}
-        {activeTab === 'payments' && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-blue-600" />
-              سجل المدفوعات
-            </h2>
-            {payments.length === 0 ? (
-              <div className="text-center py-12">
-                <Wallet className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">لا توجد مدفوعات بعد</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {payments.map((payment) => {
-                  const statusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-                    pending: { label: 'قيد المراجعة', color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300', icon: <Clock className="h-4 w-4" /> },
-                    approved: { label: 'مقبول', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', icon: <ShieldCheck className="h-4 w-4" /> },
-                    rejected: { label: 'مرفوض', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', icon: <ShieldX className="h-4 w-4" /> },
-                  };
-                  const methodLabels: Record<string, string> = {
-                    fawry: 'فوري',
-                    instapay: 'إنستاباي',
-                    vodafone_cash: 'فودافون كاش',
-                  };
-                  const st = statusConfig[payment.status] || statusConfig.pending;
-
-                  return (
-                    <div key={payment.id} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                      <div className="flex items-start gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          payment.status === 'approved' ? 'bg-green-100 dark:bg-green-900/30' :
-                          payment.status === 'rejected' ? 'bg-red-100 dark:bg-red-900/30' :
-                          'bg-yellow-100 dark:bg-yellow-900/30'
-                        }`}>
-                          {st.icon}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900 dark:text-white text-sm">
-                            {payment.video?.title || 'فيديو'}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="text-xs text-gray-500">{methodLabels[payment.method] || payment.method}</span>
-                            <span className="text-xs font-bold text-green-600">{payment.amount} ج.م</span>
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.color}`}>{st.label}</span>
-                          </div>
-                          {payment.adminNote && payment.status === 'rejected' && (
-                            <p className="mt-2 text-xs text-red-600 bg-red-50 dark:bg-red-950/20 px-2 py-1 rounded">
-                              سبب الرفض: {payment.adminNote}
-                            </p>
-                          )}
-                          <p className="text-xs text-gray-400 mt-1">
-                            {new Date(payment.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+            </CardContent>
+          </Card>
+        )
+      })}
     </div>
-  );
+  )
 }
 
-// ==========================================
-// ===== PAYMENT FLOW COMPONENT =============
-// ==========================================
-
-function PaymentFlow({
-  video,
-  method,
-  setMethod,
-  receiptFile,
-  setReceiptFile,
-  uploading,
-  error,
-  onSubmit,
-  onCancel,
-}: {
-  video: any;
-  method: string;
-  setMethod: (v: string) => void;
-  receiptFile: File | null;
-  setReceiptFile: (f: File | null) => void;
-  uploading: boolean;
-  error: string;
-  onSubmit: () => void;
-  onCancel: () => void;
+/* ========== CUSTOM VIDEO PLAYER (لا يوجد 3-dot menu / لا يوجد تحميل) ========== */
+function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
+  videoId: string
+  src: string
+  poster?: string
+  studentId: string
+  onWatch: () => void
 }) {
-  const methods = [
-    { id: 'fawry', label: 'فوري', icon: <CreditCard className="h-6 w-6" />, color: 'from-blue-500 to-blue-600' },
-    { id: 'instapay', label: 'إنستاباي', icon: <Smartphone className="h-6 w-6" />, color: 'from-purple-500 to-purple-600' },
-    { id: 'vodafone_cash', label: 'فودافون كاش', icon: <DollarSign className="h-6 w-6" />, color: 'from-red-500 to-red-600' },
-  ];
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const progressRef = useRef<HTMLDivElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [buffered, setBuffered] = useState(0)
+  const [showControls, setShowControls] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const hideTimerRef = useRef<any>(null)
+
+  useEffect(() => {
+    var onFsChange = function() {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', onFsChange)
+    document.addEventListener('webkitfullscreenchange', onFsChange)
+    return function() {
+      document.removeEventListener('fullscreenchange', onFsChange)
+      document.removeEventListener('webkitfullscreenchange', onFsChange)
+    }
+  }, [])
+
+  // إخفاء الكنترولات بعد 3 ثواني من التشغيل
+  useEffect(() => {
+    if (playing) {
+      hideTimerRef.current = setTimeout(() => setShowControls(false), 3000)
+    } else {
+      setShowControls(true)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    }
+    return () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current) }
+  }, [playing, showControls])
+
+  var togglePlay = function(e?: React.MouseEvent | React.TouchEvent) {
+    if (e) { e.preventDefault(); e.stopPropagation() }
+    var v = videoRef.current
+    if (!v) return
+    if (v.paused) { v.play().catch(function(){}) } else { v.pause() }
+  }
+
+  var handleTimeUpdate = function() {
+    var v = videoRef.current
+    if (!v) return
+    setCurrentTime(v.currentTime)
+    if (v.buffered.length > 0 && v.duration > 0) {
+      setBuffered((v.buffered.end(v.buffered.length - 1) / v.duration) * 100)
+    }
+    if (v.duration && studentId && Math.floor(v.currentTime) % 5 === 0 && v.currentTime > 0) {
+      fetch('/api/video-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, videoId, watchedSeconds: v.currentTime, totalSeconds: v.duration }),
+      }).catch(function(){})
+    }
+  }
+
+  var handleEnded = function() {
+    setPlaying(false)
+    setShowControls(true)
+    if (studentId) {
+      fetch('/api/video-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, videoId, watchedSeconds: 999999, totalSeconds: 1 }),
+      }).catch(function(){})
+      onWatch()
+    }
+  }
+
+  var handleSeek = function(e: React.MouseEvent | React.TouchEvent) {
+    var bar = progressRef.current
+    var v = videoRef.current
+    if (!bar || !v || !v.duration) return
+    var rect = bar.getBoundingClientRect()
+    var clientX = 'touches' in e ? e.changedTouches[0].clientX : (e as React.MouseEvent).clientX
+    var ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    v.currentTime = ratio * v.duration
+  }
+
+  var handleFullscreen = function(e: React.MouseEvent | React.TouchEvent) {
+    if (e) { e.preventDefault(); e.stopPropagation() }
+    // لو Already في fullscreen → خرج
+    if (document.fullscreenElement) { document.exitFullscreen().catch(function(){}) ; return }
+    if ((document as any).webkitFullscreenElement) { (document as any).webkitExitFullscreen() ; return }
+    var v = videoRef.current
+    if (!v) return
+    v.play().then(function() {
+      var vv = v as any
+      if (vv.webkitEnterFullscreen) {
+        vv.webkitEnterFullscreen()
+      } else if (vv.parentElement && vv.parentElement.requestFullscreen) {
+        vv.parentElement.requestFullscreen().catch(function(){})
+      } else if (vv.requestFullscreen) {
+        vv.requestFullscreen().catch(function(){})
+      }
+    }).catch(function(){})
+  }
+
+  var formatTime = function(sec: number) {
+    if (!sec || !isFinite(sec)) return '0:00'
+    var m = Math.floor(sec / 60)
+    var s = Math.floor(sec % 60)
+    return m + ':' + String(s).padStart(2, '0')
+  }
+
+  var progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6">
-      <div className="flex items-center justify-between mb-5">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <Wallet className="h-5 w-5 text-green-600" />
-          شراء الفيديو
-        </h3>
-        <button onClick={onCancel} className="p-1 text-gray-400 hover:text-gray-600">
-          <X className="h-5 w-5" />
-        </button>
-      </div>
+    <div
+      className="video-protected w-full h-full relative select-none"
+      onClick={togglePlay}
+      onTouchStart={function() { setShowControls(true) }}
+      onContextMenu={function(e) { e.preventDefault() }}
+    >
+      {/* فيديو بدون controls — مفيش 3-dot menu أصلاً */}
+      <video
+        ref={videoRef}
+        className="w-full h-full object-contain"
+        src={src}
+        poster={poster}
+        preload="metadata"
+        playsInline
+        disablePictureInPicture
+        disableRemotePlayback
+        onPlay={function() { setPlaying(true) }}
+        onPause={function() { setPlaying(false) }}
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={handleEnded}
+        onLoadedMetadata={function() { if (videoRef.current) setDuration(videoRef.current.duration) }}
+      />
 
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{video.title}</p>
-      <p className="text-2xl font-bold text-green-600 mb-5">{video.price} ج.م</p>
-
-      {/* Payment Methods */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        {methods.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => setMethod(m.id)}
-            className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-              method === m.id
-                ? 'border-green-500 bg-green-50 dark:bg-green-950/20'
-                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-            }`}
-          >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white bg-gradient-to-br ${m.color}`}>
-              {m.icon}
-            </div>
-            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{m.label}</span>
-            {method === m.id && (
-              <div className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                <Check className="h-3 w-3 text-white" />
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Receipt Upload */}
-      <div className="mb-5">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          صورة إيصال الدفع
-        </label>
-        <label className={`flex items-center justify-center gap-2 w-full px-4 py-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
-          receiptFile ? 'border-green-400 bg-green-50 dark:bg-green-950/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
-        }`}>
-          {receiptFile ? (
-            <>
-              <Check className="h-5 w-5 text-green-600" />
-              <span className="text-sm text-green-700 dark:text-green-400">{receiptFile.name}</span>
-            </>
-          ) : (
-            <>
-              <Upload className="h-5 w-5 text-gray-400" />
-              <span className="text-sm text-gray-500">اضغط لرفع صورة الإيصال</span>
-            </>
-          )}
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-          />
-        </label>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            {error}
-          </p>
+      {/* أيقونة Play في النصف */}
+      {!playing && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+          <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-2xl">
+            <svg className="h-8 w-8 text-gray-800" style={{ marginLeft: '3px' }} fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </div>
         </div>
       )}
 
-      {/* Submit */}
-      <button
-        onClick={onSubmit}
-        disabled={uploading || !method || !receiptFile}
-        className="w-full py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      {/* شريط الكنترولات السفلي */}
+      <div
+        className={
+          'absolute bottom-0 left-0 right-0 z-20 transition-opacity duration-300 ' +
+          (showControls || !playing ? 'opacity-100' : 'opacity-0 pointer-events-none')
+        }
+        onClick={function(e) { e.stopPropagation() }}
       >
-        {uploading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            جاري الإرسال...
-          </>
-        ) : (
-          <>
-            <Wallet className="h-4 w-4" />
-            إرسال الدفعة
-          </>
-        )}
-      </button>
+        {/* Progress bar */}
+        <div
+          ref={progressRef}
+          className="w-full h-1 bg-white/30 cursor-pointer group"
+          onClick={handleSeek}
+          onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleSeek(e) }}
+        >
+          <div className="absolute top-0 left-0 h-full bg-white/40 pointer-events-none" style={{ width: buffered + '%' }} />
+          <div className="absolute top-0 left-0 h-full bg-primary group-hover:h-1.5 transition-all pointer-events-none" style={{ width: progressPercent + '%' }} />
+        </div>
+
+        {/* أزرار الكنترول */}
+        <div className="flex items-center gap-1 px-3 py-2 bg-gradient-to-t from-black/80 to-transparent">
+          {/* Play / Pause */}
+          <button
+            className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
+            onClick={togglePlay}
+            onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); togglePlay() }}
+          >
+            {playing ? (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+            ) : (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            )}
+          </button>
+
+          <span className="text-white text-xs tabular-nums" dir="ltr">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+
+          {/* زرار التكبير جنب الوقت */}
+          <button
+            className="w-9 h-9 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
+            onClick={handleFullscreen}
+            onTouchEnd={function(e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}
+            aria-label="تكبير"
+          >
+            {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
     </div>
-  );
+  )
+}
+
+/* ========== HOMEWORK TAB ========== */
+function HomeworkTab({ homework }: { homework: Homework[] }) {
+  const [expandedHw, setExpandedHw] = useState<string | null>(null)
+  const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number>>>({})
+  const [hwSubmitted, setHwSubmitted] = useState<Record<string, boolean>>({})
+
+  if (homework.length === 0) return <EmptyState message="لا توجد واجبات حالياً" />
+  return (
+    <div className="space-y-3">
+      {homework.map((hw) => {
+        var mcq = (hw as any).questions ? JSON.parse((hw as any).questions) : []
+        var hasMCQ = Array.isArray(mcq) && mcq.length > 0
+        var isExpanded = expandedHw === hw.id
+        var isSubmitted = !!hwSubmitted[hw.id]
+        var myAnswers = hwAnswers[hw.id] || {}
+
+        var score = 0
+        if (isSubmitted && hasMCQ) {
+          mcq.forEach(function(q: any, i: number) { if (myAnswers[i] === q.correct) score++ })
+        }
+
+        return (
+          <Card key={hw.id} className={hasMCQ ? 'cursor-pointer' : ''}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-3" onClick={hasMCQ ? function() { setExpandedHw(isExpanded ? null : hw.id) } : undefined}>
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (hasMCQ ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
+                    <ClipboardList className={"h-4 w-4 " + (hasMCQ ? 'text-emerald-500' : 'text-blue-500')} />
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <h3 className="font-semibold text-sm">{hw.title}</h3>
+                    {hw.content && <p className="text-xs text-muted-foreground line-clamp-2">{hw.content}</p>}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-[10px] text-muted-foreground">{new Date(hw.createdAt).toLocaleDateString('ar-EG')}</p>
+                      {hasMCQ && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">{mcq.length} سؤال</Badge>}
+                      {isSubmitted && hasMCQ && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {score}/{mcq.length}</Badge>}
+                    </div>
+                  </div>
+                </div>
+                {hw.filePath && !hasMCQ && <FileAttachment filePath={hw.filePath} fileType={hw.fileType} />}
+                {hasMCQ && <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform shrink-0 mt-1 " + (isExpanded ? 'rotate-90' : '')} />}
+              </div>
+
+              {isExpanded && hasMCQ && (
+                <div className="mt-4 pt-4 border-t space-y-4">
+                  {mcq.map(function(q: any, qi: number) {
+                    return (
+                      <div key={qi} className="space-y-2">
+                        <p className="font-medium text-sm">{qi + 1}. {q.question}</p>
+                        <div className="space-y-1.5">
+                          {q.options.map(function(opt: string, oi: number) {
+                            var isSelected = myAnswers[qi] === oi
+                            var isCorrect = isSubmitted && oi === q.correct
+                            var isWrong = isSubmitted && isSelected && oi !== q.correct
+                            return (
+                              <button
+                                key={oi}
+                                disabled={isSubmitted}
+                                onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [qi]: oi }; return a }) }}
+                                className={"w-full text-right p-3 rounded-lg border text-sm transition-colors " + (
+                                  isCorrect ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 font-medium' :
+                                  isWrong ? 'border-destructive bg-destructive/10 text-destructive' :
+                                  isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
+                                  'border-border hover:bg-muted/50'
+                                )}
+                              >
+                                <span className="ml-2">{String.fromCharCode(65 + oi)})</span>{opt}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {!isSubmitted ? (
+                    <Button size="sm" onClick={function() { setHwSubmitted(function(prev) { var n = { ...prev }; n[hw.id] = true; return n }) }} disabled={Object.keys(myAnswers).length === 0}>تسليم الإجابات</Button>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                      <p className="text-sm font-medium text-emerald-700">نتيجتك: {score} من {mcq.length} {score === mcq.length ? '— ممتاز! 🎉' : ''}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ========== EXAMS TAB ========== */
+function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamResult[]; studentId: string }) {
+  const [takingExam, setTakingExam] = useState<string | null>(null)
+  const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [submitting, setSubmitting] = useState(false)
+  const [examQuestions, setExamQuestions] = useState<any[]>([])
+
+  if (exams.length === 0) return <EmptyState message="لا توجد امتحانات حالياً" />
+
+  // Exam Taking Mode
+  if (takingExam) {
+    const exam = exams.find(e => e.id === takingExam)
+    if (!exam || examQuestions.length === 0) {
+      setTakingExam(null)
+      return null
+    }
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold">{exam.title}</h3>
+          <Button variant="outline" size="sm" onClick={() => { setTakingExam(null); setAnswers({}); setExamQuestions([]) }}>رجوع</Button>
+        </div>
+        {examQuestions.map((q, qi) => (
+          <Card key={qi}>
+            <CardContent className="p-4 space-y-3">
+              <p className="font-medium text-sm">{qi + 1}. {q.q}</p>
+              <div className="space-y-2">
+                {q.options.map((opt: string, oi: number) => (
+                  <button
+                    key={oi}
+                    onClick={() => setAnswers(prev => ({ ...prev, [qi]: oi }))}
+                    className={`w-full text-right p-3 rounded-lg border text-sm transition-colors ${
+                      answers[qi] === oi ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
+                    }`}
+                  >
+                    <span className="ml-2 font-bold">{String.fromCharCode(65 + oi)}.</span> {opt}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        <Button
+          className="w-full"
+          disabled={Object.keys(answers).length < examQuestions.length || submitting}
+          onClick={async () => {
+            setSubmitting(true)
+            try {
+              const res = await fetch('/api/exams/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ studentId, examId: takingExam, answers }),
+              })
+              const data = await res.json()
+              if (res.ok) {
+                toast.success(`الدرجة: ${data.result.score}/${data.result.maxScore} ${data.passed ? '✅ ناجح' : '❌ راسب'}`)
+                setTakingExam(null); setAnswers({}); setExamQuestions([])
+                // Refresh the page data
+                window.location.reload()
+              } else {
+                toast.error(data.error || 'خطأ في التقديم')
+              }
+            } catch { toast.error('خطأ في الاتصال') }
+            setSubmitting(false)
+          }}
+        >
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : `تقديم الامتحان (${Object.keys(answers).length}/${examQuestions.length})`}
+        </Button>
+      </div>
+    )
+  }
+
+  // Exam List Mode
+  return (
+    <div className="space-y-3">
+      {exams.map((exam) => {
+        const examResult = results.find(r => r.examId === exam.id)
+        let hasMCQ = false
+        try { if ((exam as any).questions) { const parsed = JSON.parse((exam as any).questions); hasMCQ = parsed.length > 0 } } catch {}
+        return (
+          <Card key={exam.id} className={examResult ? 'border-emerald-500/30' : ''}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className="h-9 w-9 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <FileText className="h-4 w-4 text-orange-500" />
+                  </div>
+                  <div className="min-w-0 space-y-1.5">
+                    <h3 className="font-semibold text-sm">{exam.title}</h3>
+                    {examResult ? (
+                      <Badge className={`text-xs ${examResult.score >= examResult.maxScore * 0.5 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                        الدرجة: {examResult.score}/{examResult.maxScore}
+                      </Badge>
+                    ) : hasMCQ ? (
+                      <Button size="sm" onClick={() => {
+                        try {
+                          const parsed = JSON.parse((exam as any).questions)
+                          setExamQuestions(parsed)
+                          setTakingExam(exam.id)
+                          setAnswers({})
+                        } catch { toast.error('خطأ في تحميل الأسئلة') }
+                      }}>ابدأ الامتحان</Button>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs">لم يتم بعد</Badge>
+                    )}
+                    <p className="text-[10px] text-muted-foreground">{new Date(exam.createdAt).toLocaleDateString('ar-EG')}</p>
+                  </div>
+                </div>
+                {exam.filePath && <FileAttachment filePath={exam.filePath} fileType={exam.fileType} />}
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ========== ANNOUNCEMENTS TAB ========== */
+function AnnouncementsTab({ announcements }: { announcements: Announcement[] }) {
+  if (announcements.length === 0) return <EmptyState message="لا توجد إعلانات حالياً" />
+  return (
+    <div className="space-y-3">
+      {announcements.map((ann) => (
+        <Card key={ann.id} className="border-primary/20">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <Megaphone className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+              <div className="min-w-0 space-y-1">
+                <h3 className="font-semibold text-sm">{ann.title}</h3>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{ann.content}</p>
+                <p className="text-[10px] text-muted-foreground">{new Date(ann.createdAt).toLocaleDateString('ar-EG')}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+/* ========== DISCUSSIONS TAB ========== */
+function DiscussionsTab({ grade, studentId, studentName }: { grade: string; studentId: string; studentName: string }) {
+  const { currentStudent } = useAppStore()
+  const [items, setItems] = useState<Discussion[]>([])
+  const [newMessage, setNewMessage] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  const fetchDiscussions = async () => {
+    try {
+      const res = await fetch(`/api/discussions?grade=${encodeURIComponent(grade)}&pageSize=100`)
+      const data = await res.json()
+      setItems(data.discussions || [])
+    } catch { toast.error('خطأ في تحميل النقاشات') }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/discussions?grade=${encodeURIComponent(grade)}&pageSize=100`)
+        const data = await res.json()
+        if (!cancelled) setItems(data.discussions || [])
+      } catch { if (!cancelled) toast.error('خطأ في تحميل النقاشات') }
+      if (!cancelled) setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [grade])
+
+  useEffect(() => {
+    if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' })
+  }, [items])
+
+  const handleSend = async () => {
+    if (!newMessage.trim()) return
+    setSending(true)
+    try {
+      await fetch('/api/discussions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, studentName: currentStudent?.name || studentName, grade, content: newMessage.trim(), isAdminReply: false }),
+      })
+      setNewMessage('')
+      fetchDiscussions()
+      toast.success('تم إرسال رسالتك')
+    } catch { toast.error('خطأ في إرسال الرسالة') }
+    setSending(false)
+  }
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input
+          placeholder="اكتب رسالتك أو سؤالك هنا..."
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          className="flex-1"
+        />
+        <Button onClick={handleSend} disabled={sending || !newMessage.trim()} size="icon">
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </div>
+      {items.length === 0 ? (
+        <EmptyState message="ابدأ النقاش! اكتب أول رسالة" />
+      ) : (
+        <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
+          {items.map((d) => {
+            const isMe = d.studentId === (currentStudent?.id || studentId)
+            const isAdmin = d.isAdminReply
+            return (
+              <div key={d.id} className={`flex ${isAdmin ? 'justify-start' : isMe ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                  isAdmin ? 'bg-primary/15 dark:bg-primary/20 border border-primary/20 rounded-bl-md' :
+                  isMe ? 'bg-primary text-primary-foreground rounded-bl-md' :
+                  'bg-muted rounded-br-md'
+                }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className={`text-xs font-medium ${isAdmin ? 'text-primary' : isMe ? 'opacity-75' : 'text-foreground'}`}>{d.studentName}</p>
+                    {isAdmin && <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/30 text-primary">المعلم</Badge>}
+                  </div>
+                  <p className="text-sm leading-relaxed">{d.content}</p>
+                  <p className={`text-[10px] mt-1 ${isAdmin ? 'text-primary/60' : isMe ? 'opacity-60' : 'text-muted-foreground'}`}>{new Date(d.createdAt).toLocaleString('ar-EG')}</p>
+                </div>
+              </div>
+            )
+          })}
+          <div ref={chatEndRef} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ========== SHARED COMPONENTS ========== */
+function FileAttachment({ filePath, fileType }: { filePath: string; fileType: string }) {
+  const isImage = fileType?.startsWith('image/')
+  const isPdf = fileType === 'application/pdf'
+  if (isImage) {
+    return <Image src={filePath} alt="Attachment" width={48} height={48} className="max-h-12 rounded-lg border" unoptimized />
+  }
+  return (
+    <a href={filePath} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs shrink-0">
+      <FileDown className="h-4 w-4" />
+      {isPdf ? 'PDF' : 'ملف'}
+    </a>
+  )
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+        <MessageSquare className="h-6 w-6 text-muted-foreground" />
+      </div>
+      <p className="text-muted-foreground text-sm">{message}</p>
+    </div>
+  )
 }
