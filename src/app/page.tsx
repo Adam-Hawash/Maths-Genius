@@ -34,8 +34,8 @@ const WhatsAppButton = dynamic(() => import('@/components/landing/WhatsAppButton
 const VideoProtection = dynamic(() => import('@/components/landing/VideoProtection').then(m => ({ default: m.VideoProtection })), {
   ssr: false,
 })
-const StudentPortal = dynamic(() => import('const StudentPortal = dynamic(() => import('@/components/student/StudentPortal').then(m => ({ default: m.StudentPortal })))').then(m => ({ default: m.default || m.StudentPortal })), {
-  loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
+const StudentPortal = dynamic(() => import('@/components/student/StudentPortal').then(m => ({ default: m.StudentPortal })), {
+  loading: () => <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
 })
 const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard').then(m => ({ default: m.default || m.AdminDashboard })), {
   loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
