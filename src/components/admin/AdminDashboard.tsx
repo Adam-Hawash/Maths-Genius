@@ -11,11 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  Users, UserCheck, Clock, Video, ClipboardList, FileText,
-  Megaphone, Plus, Check, X, Trash2, LogOut, Loader2,
-  BarChart3, RefreshCw, Settings, Upload, MessageSquare,
-  Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
-  PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save
+PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles
+
 } from 'lucide-react'
 import { CMSPanel } from './CMSPanel'
 import { SocialLinksPanel } from './SocialLinksPanel'
@@ -214,9 +211,9 @@ export function AdminDashboard() {
                           const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hero_developer_url: heroDevUrl }) })
                           if (res.ok) {
                             // Update siteConfig in store so footer/hero reflect instantly
-                            const store = await import('@/stores/app-store')
-                            const cfg = store.useAppStore.getState().siteConfig
-                            store.useAppStore.getState().setSiteConfig({ ...cfg, hero_developer_url: heroDevUrl })
+                              const cfg = useAppStore.getState().siteConfig
+                            useAppStore.getState().setSiteConfig({ ...cfg, hero_developer_url: heroDevUrl })
+
                             toast.success('تم حفظ رابط Hero Developer')
                           } else { toast.error('خطأ في الحفظ') }
                         } catch { toast.error('خطأ في الحفظ') }
@@ -248,9 +245,8 @@ export function AdminDashboard() {
                       try {
                         const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry }) })
                         if (res.ok) {
-                          const storeMod = await import('@/stores/app-store')
-                          const cfg = storeMod.useAppStore.getState().siteConfig
-                          storeMod.useAppStore.getState().setSiteConfig({ ...cfg, payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry })
+                          const cfg = useAppStore.getState().siteConfig
+                          useAppStore.getState().setSiteConfig({ ...cfg, payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry })
                           toast.success('تم حفظ أرقام الدفع')
                         } else { toast.error('خطأ في الحفظ') }
                       } catch { toast.error('خطأ في الحفظ') }
@@ -1604,6 +1600,8 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState('')
+   const [aiExtracting, setAiExtracting] = useState(false)
+  const aiExtractRef = useRef<HTMLInputElement>(null)
   const [filterGrade, setFilterGrade] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const answerKeyRef = useRef<HTMLInputElement>(null)
@@ -1701,6 +1699,40 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       setUploading(false)
       setUploadMsg('')
     }
+  }
+const handleAIExtract = async () => {
+    if (aiExtracting) return
+    setAiExtracting(true)
+    setUploadMsg('جاري استخراج الأسئلة بالذكاء الاصطناعي...')
+    try {
+      var formData = new FormData()
+      var hasInput = false
+      if (formFile) {
+        formData.append('file', formFile)
+        hasInput = true
+      } else if (formFileUrl.trim()) {
+        formData.append('fileUrl', formFileUrl.trim())
+        hasInput = true
+      }
+      if (!hasInput) { toast.error('ارفع ملف الأسئلة أولاً أو حط رابط'); setAiExtracting(false); setUploadMsg(''); return }
+      var controller = new AbortController()
+      var timeout = setTimeout(function() { controller.abort() }, 60000)
+      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: formData, signal: controller.signal })
+      clearTimeout(timeout)
+      var data = await res.json()
+      if (res.ok && data.questions && data.questions.length > 0) {
+        var extracted = data.questions.map(function(q: any) { return { question: q.question || '', options: (q.options || ['','','','']).slice(0, 4), correct: q.correct || 0 } })
+        setMcqQuestions(extracted)
+        toast.success('تم استخراج ' + extracted.length + ' سؤال بنجاح!')
+      } else {
+        toast.error(data.error || 'لم يتم استخراج أسئلة')
+      }
+    } catch (err: any) {
+      if (err && err.name === 'AbortError') { toast.error('انتهت مهلة الاستخراج') }
+      else { toast.error('خطأ في الاستخراج: ' + (err.message || '')) }
+    }
+    setAiExtracting(false)
+    setUploadMsg('')
   }
 
   const handleSubmit = async () => {
@@ -1829,10 +1861,17 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
             {supportMCQ && (
               <div className="space-y-3 p-3 rounded-lg border border-primary/30 bg-primary/5">
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold text-primary">أسئلة اختيار من متعدد (اختياري)</Label>
-                  <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={function() {
-                    setMcqQuestions([...mcqQuestions, { question: '', options: ['', '', '', ''], correct: 0 }])
-                  }}><Plus className="h-3 w-3 ml-1" />إضافة سؤال</Button>
+                   <Label className="text-sm font-semibold text-primary">أسئلة اختيار من متعدد (اختياري)</Label>
+                  <div className="flex gap-1">
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={function() {
+                      setMcqQuestions([...mcqQuestions, { question: '', options: ['', '', '', ''], correct: 0 }])
+                    }}><Plus className="h-3 w-3 ml-1" />إضافة سؤال</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs border-purple-500/50 text-purple-600 hover:bg-purple-500/10" onClick={handleAIExtract} disabled={aiExtracting || (!formFile && !formFileUrl.trim())}>
+                      {aiExtracting ? <Loader2 className="h-3 w-3 ml-1 animate-spin" /> : <Sparkles className="h-3 w-3 ml-1" />}
+                      استخراج بالذكاء الاصطناعي
+                    </Button>
+                  </div>
+
                 </div>
                 {mcqQuestions.length === 0 && <p className="text-[11px] text-muted-foreground text-center py-2">اضغط "إضافة سؤال" لإضافة أسئلة متعددة</p>}
                 {mcqQuestions.map(function(q, qi) {
