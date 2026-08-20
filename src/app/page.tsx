@@ -4,8 +4,8 @@ import { useAppStore } from '@/stores/app-store'
 import { Navbar } from '@/components/landing/Navbar'
 import { Footer } from '@/components/landing/Footer'
 import { StudentPendingView } from '@/components/landing/StudentPendingView'
-import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
+import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { GraduationCap, Loader2 } from 'lucide-react'
@@ -53,6 +53,7 @@ export default function HomePage() {
 
   const [appReady, setAppReady] = useState(false)
 
+  // Load config + gallery + stats on mount
   useEffect(function() {
     Promise.all([
       fetch('/api/config').then(function(r) { return r.json() }).catch(function() { return {} }),
@@ -79,6 +80,7 @@ export default function HomePage() {
   const showFooter = currentView === 'landing'
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
 
+  // Full-page loading screen
   if (!appReady) {
     return (
       <div className="fixed inset-0 z-[9999] bg-[#0F0D0A] flex flex-col items-center justify-center gap-6">
