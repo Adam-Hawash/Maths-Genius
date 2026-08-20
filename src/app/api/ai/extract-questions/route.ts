@@ -13,13 +13,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'الملف أو الرابط ونوع المحتوى مطلوبان' }, { status: 400 })
     }
 
-    // Dynamic import - won't break build if package not installed
     let ZAI: any
     try {
       const mod = await import('z-ai-web-dev-sdk')
       ZAI = mod.default || mod
     } catch {
-      return NextResponse.json({ error: 'ميزة الاستخراج بالذكاء الاصطناعي غير متاحة حالياً - الحزمة غير مثبتة' }, { status: 503 })
+      return NextResponse.json({ error: 'ميزة الاستخراج بالذكاء الاصطناعي غير متاحة حالياً' }, { status: 503 })
     }
 
     let base64Data = ''
@@ -67,15 +66,9 @@ export async function POST(req: NextRequest) {
     } else if (fileUrl) {
       const isPdf = fileUrl.toLowerCase().endsWith('.pdf')
       if (isPdf) {
-        content.push({
-          type: 'file_url',
-          file_url: { url: fileUrl }
-        })
+        content.push({ type: 'file_url', file_url: { url: fileUrl } })
       } else {
-        content.push({
-          type: 'image_url',
-          image_url: { url: fileUrl }
-        })
+        content.push({ type: 'image_url', image_url: { url: fileUrl } })
       }
     }
 
@@ -103,16 +96,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      type,
-      grade: grade || '',
-      extracted
-    })
+    return NextResponse.json({ success: true, type, grade: grade || '', extracted })
   } catch (err: any) {
     console.error('AI extraction error:', err)
-    return NextResponse.json({
-      error: 'خطأ في استخراج المحتوى: ' + (err.message || 'خطأ غير معروف')
-    }, { status: 500 })
+    return NextResponse.json({ error: 'خطأ في استخراج المحتوى: ' + (err.message || 'خطأ غير معروف') }, { status: 500 })
   }
 }
