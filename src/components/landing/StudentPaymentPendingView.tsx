@@ -16,14 +16,13 @@ export function StudentPaymentPendingView() {
     if (!currentStudent?.id) return
     const load = async () => {
       try {
-        const res = await fetch(`/api/my-payments?studentId=${currentStudent.id}`)
+        const res = await fetch(`/api/video-access/my-payments?studentId=${currentStudent.id}`)
         const data = await res.json()
         setPayments(data.payments || [])
       } catch {}
       setLoading(false)
     }
     load()
-    // Auto-refresh every 15 seconds to check for approval
     const interval = setInterval(load, 15000)
     return () => clearInterval(interval)
   }, [currentStudent?.id])
@@ -39,7 +38,6 @@ export function StudentPaymentPendingView() {
   return (
     <div className="flex-1 py-8 px-4">
       <div className="mx-auto max-w-lg space-y-6">
-        {/* Header */}
         <div className="text-center space-y-3">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/10">
             <Clock className="h-8 w-8 text-amber-500 animate-pulse" />
@@ -53,7 +51,6 @@ export function StudentPaymentPendingView() {
           )}
         </div>
 
-        {/* Payment History */}
         {loading ? (
           <div className="flex justify-center py-8">
             <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
@@ -106,7 +103,6 @@ export function StudentPaymentPendingView() {
           <p className="text-center text-sm text-muted-foreground py-4">لا توجد مدفوعات</p>
         )}
 
-        {/* Actions */}
         <div className="flex gap-3 justify-center">
           <Button variant="outline" onClick={() => setView('student-portal')}>
             <ArrowRight className="h-4 w-4 ml-1" />
