@@ -17,20 +17,20 @@ model Admin {
 }
 
 model Student {
-  id          String            @id @default(cuid())
-  name        String
-  phone       String            @unique
-  grade       String
-  status      String            @default("pending")
-  parentName  String
-  parentPhone String
-  loginCount  Int               @default(0)
-  lastLogin   DateTime?
-  isPaidAccess Boolean          @default(false)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  examResults ExamResult[]
-  activities  StudentActivity[]
+  id           String            @id @default(cuid())
+  name         String
+  phone        String            @unique
+  grade        String
+  status       String            @default("pending")
+  parentName   String
+  parentPhone  String
+  loginCount   Int               @default(0)
+  lastLogin    DateTime?
+  isPaidAccess Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  examResults  ExamResult[]
+  activities   StudentActivity[]
 }
 
 model StudentActivity {
@@ -83,7 +83,7 @@ model Exam {
   questions     String       @default("")
   passScore     Float        @default(50)
   createdAt     DateTime     @default(now())
-  updatedAt     DateTime     updatedAt
+  updatedAt     DateTime     @updatedAt
   results       ExamResult[]
 }
 
@@ -163,16 +163,16 @@ model GalleryImage {
 }
 
 model Payment {
-  id           String   @id @default(cuid())
-  studentId    String
-  studentName  String   @default("")
-  videoId      String   @default("")
-  videoTitle   String   @default("")
-  amount       Float    @default(0)
-  method       String   @default("")
-  receiptPath  String   @default("")
-  status       String   @default("pending")
-  note         String   @default("")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  studentId   String
+  studentName String   @default("")
+  videoId     String   @default("")
+  videoTitle  String   @default("")
+  amount      Float    @default(0)
+  method      String   @default("")
+  receiptPath String   @default("")
+  status      String   @default("pending")
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
