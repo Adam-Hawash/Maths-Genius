@@ -7,6 +7,7 @@ export type AppView =
   | 'student-pending'
   | 'student-portal'
   | 'admin-dashboard'
+  | 'student-payment'
 
 export interface Student {
   id: string
@@ -16,7 +17,6 @@ export interface Student {
   status: string
   parentName: string
   parentPhone: string
-  isFreeAccess: boolean
   loginCount: number
   lastLogin: string | null
   watchedVideoCount?: number
@@ -60,7 +60,6 @@ export interface Video {
   fileType: string
   thumbnail: string
   grade: string
-  price: number
   createdAt: string
 }
 
@@ -181,6 +180,9 @@ interface AppState {
   galleryImages: GalleryImage[]
   setGalleryImages: (images: GalleryImage[]) => void
 
+  pendingPaymentVideo: { id: string; title: string; price: number; grade: string } | null
+  setPendingPaymentVideo: (v: { id: string; title: string; price: number; grade: string } | null) => void
+
   logout: () => void
 }
 
@@ -221,10 +223,13 @@ export const useAppStore = create<AppState>((set) => ({
   setSocialLinks: (links) => set({ socialLinks: links }),
 
   stats: null,
-  setStats: (stats) => set({ stats: stats }),
+  setStats: (stats) => set({ stats }),
 
   galleryImages: [],
   setGalleryImages: (images) => set({ galleryImages: images }),
+
+  pendingPaymentVideo: null,
+  setPendingPaymentVideo: (v) => set({ pendingPaymentVideo: v }),
 
   logout: () =>
     set({
@@ -237,5 +242,6 @@ export const useAppStore = create<AppState>((set) => ({
       showStudentLogin: false,
       showStudentRegister: false,
       showAdminLogin: false,
+      pendingPaymentVideo: null,
     }),
 }))
