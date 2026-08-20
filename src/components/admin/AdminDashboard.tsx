@@ -11,8 +11,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import {
-PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles
-
+  Users, UserCheck, Clock, Video, ClipboardList, FileText,
+  Megaphone, Plus, Check, X, Trash2, LogOut, Loader2,
+  BarChart3, RefreshCw, Settings, Upload, MessageSquare,
+  Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
+  PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles
 } from 'lucide-react'
 import { CMSPanel } from './CMSPanel'
 import { SocialLinksPanel } from './SocialLinksPanel'
@@ -159,7 +162,7 @@ export function AdminDashboard() {
         {/* Admin Settings Dialog */}
         {showSettings && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
-           <div className="bg-card border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-card border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold flex items-center gap-2"><Settings className="h-5 w-5 text-primary" />إعدادات الحساب</h3>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowSettings(false)}><X className="h-4 w-4" /></Button>
@@ -211,9 +214,8 @@ export function AdminDashboard() {
                           const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hero_developer_url: heroDevUrl }) })
                           if (res.ok) {
                             // Update siteConfig in store so footer/hero reflect instantly
-                              const cfg = useAppStore.getState().siteConfig
+                            const cfg = useAppStore.getState().siteConfig
                             useAppStore.getState().setSiteConfig({ ...cfg, hero_developer_url: heroDevUrl })
-
                             toast.success('تم حفظ رابط Hero Developer')
                           } else { toast.error('خطأ في الحفظ') }
                         } catch { toast.error('خطأ في الحفظ') }
@@ -1600,8 +1602,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState('')
-   const [aiExtracting, setAiExtracting] = useState(false)
-  const aiExtractRef = useRef<HTMLInputElement>(null)
+  const [aiExtracting, setAiExtracting] = useState(false)
   const [filterGrade, setFilterGrade] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const answerKeyRef = useRef<HTMLInputElement>(null)
@@ -1700,36 +1701,29 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       setUploadMsg('')
     }
   }
-const handleAIExtract = async () => {
+
+  const handleAIExtract = async () => {
     if (aiExtracting) return
     setAiExtracting(true)
     setUploadMsg('جاري استخراج الأسئلة بالذكاء الاصطناعي...')
     try {
-      var formData = new FormData()
-      var hasInput = false
-      if (formFile) {
-        formData.append('file', formFile)
-        hasInput = true
-      } else if (formFileUrl.trim()) {
-        formData.append('fileUrl', formFileUrl.trim())
-        hasInput = true
-      }
-      if (!hasInput) { toast.error('ارفع ملف الأسئلة أولاً أو حط رابط'); setAiExtracting(false); setUploadMsg(''); return }
-      var controller = new AbortController()
-      var timeout = setTimeout(function() { controller.abort() }, 60000)
-      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: formData, signal: controller.signal })
-      clearTimeout(timeout)
+      var fd = new FormData()
+      if (formFile) { fd.append('file', formFile) }
+      else if (formFileUrl.trim()) { fd.append('fileUrl', formFileUrl.trim()) }
+      else { toast.error('ارفع ملف الأسئلة أولاً أو حط رابط'); setAiExtracting(false); setUploadMsg(''); return }
+      var ctrl = new AbortController()
+      var tmr = setTimeout(function() { ctrl.abort() }, 60000)
+      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd, signal: ctrl.signal })
+      clearTimeout(tmr)
       var data = await res.json()
       if (res.ok && data.questions && data.questions.length > 0) {
         var extracted = data.questions.map(function(q: any) { return { question: q.question || '', options: (q.options || ['','','','']).slice(0, 4), correct: q.correct || 0 } })
         setMcqQuestions(extracted)
         toast.success('تم استخراج ' + extracted.length + ' سؤال بنجاح!')
-      } else {
-        toast.error(data.error || 'لم يتم استخراج أسئلة')
-      }
+      } else { toast.error(data.error || 'لم يتم استخراج أسئلة') }
     } catch (err: any) {
       if (err && err.name === 'AbortError') { toast.error('انتهت مهلة الاستخراج') }
-      else { toast.error('خطأ في الاستخراج: ' + (err.message || '')) }
+      else { toast.error('خطأ: ' + (err.message || '')) }
     }
     setAiExtracting(false)
     setUploadMsg('')
@@ -1861,7 +1855,7 @@ const handleAIExtract = async () => {
             {supportMCQ && (
               <div className="space-y-3 p-3 rounded-lg border border-primary/30 bg-primary/5">
                 <div className="flex items-center justify-between">
-                   <Label className="text-sm font-semibold text-primary">أسئلة اختيار من متعدد (اختياري)</Label>
+                  <Label className="text-sm font-semibold text-primary">أسئلة اختيار من متعدد (اختياري)</Label>
                   <div className="flex gap-1">
                     <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={function() {
                       setMcqQuestions([...mcqQuestions, { question: '', options: ['', '', '', ''], correct: 0 }])
@@ -1871,7 +1865,6 @@ const handleAIExtract = async () => {
                       استخراج بالذكاء الاصطناعي
                     </Button>
                   </div>
-
                 </div>
                 {mcqQuestions.length === 0 && <p className="text-[11px] text-muted-foreground text-center py-2">اضغط "إضافة سؤال" لإضافة أسئلة متعددة</p>}
                 {mcqQuestions.map(function(q, qi) {
