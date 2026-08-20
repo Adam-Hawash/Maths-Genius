@@ -248,8 +248,9 @@ export function AdminDashboard() {
                       try {
                         const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry }) })
                         if (res.ok) {
-                          const cfg = store.useAppStore.getState().siteConfig
-                          store.useAppStore.getState().setSiteConfig({ ...cfg, payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry })
+                          const storeMod = await import('@/stores/app-store')
+                          const cfg = storeMod.useAppStore.getState().siteConfig
+                          storeMod.useAppStore.getState().setSiteConfig({ ...cfg, payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry })
                           toast.success('تم حفظ أرقام الدفع')
                         } else { toast.error('خطأ في الحفظ') }
                       } catch { toast.error('خطأ في الحفظ') }
@@ -490,6 +491,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   const [formGrade, setFormGrade] = useState('')
   const [formTitle, setFormTitle] = useState('')
   const [formUrl, setFormUrl] = useState('')
+  const [formPrice, setFormPrice] = useState('')
   const [formFile, setFormFile] = useState<File | null>(null)
   const [formThumbnail, setFormThumbnail] = useState<File | null>(null)
   const [formThumbnailUrl, setFormThumbnailUrl] = useState('')
@@ -552,6 +554,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
         title: formTitle.trim(),
         grade: formGrade,
         url: formUrl.trim(),
+        price: formPrice.trim() || '0',
       }
       if (videoPath) { body.filePath = videoPath; body.fileType = videoType }
       if (thumbnailPath) { body.thumbnail = thumbnailPath }
@@ -566,7 +569,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
       if (res.ok) {
         toast.success('تم إضافة الفيديو بنجاح! سيظهر للصف ' + formGrade)
         setShowForm(false)
-        setFormTitle(''); setFormUrl(''); setFormGrade('')
+        setFormTitle(''); setFormUrl(''); setFormGrade(''); setFormPrice('')
         setFormFile(null); setFormThumbnail(null); setFormThumbnailUrl('')
         loadVideos(false)
         onStatsRefresh()
@@ -625,6 +628,10 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
               <div className="space-y-1.5">
                 <Label className="text-xs">عنوان الدرس *</Label>
                 <Input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} placeholder="مثال: الباب الأول - الكسور" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">السعر (ج.م) — اتركه فاضي للمجاني</Label>
+                <Input value={formPrice} onChange={(e) => setFormPrice(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0" dir="ltr" type="number" min="0" step="0.01" />
               </div>
             </div>
 
