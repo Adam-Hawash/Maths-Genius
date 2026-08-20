@@ -295,7 +295,7 @@ function FullPortalContent({ initialData, onBack }: { initialData: PortalData; o
           ))}
         </div>
 
-        {activeTab === 'videos' && <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} studentId={studentId} isFreeAccess={currentStudent?.isFreeAccess ?? true} />}
+        {activeTab === 'videos' && <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} studentId={studentId} grade={grade} />}
         {activeTab === 'homework' && <HomeworkTab homework={initialData.homework} />}
         {activeTab === 'exams' && <ExamsTab exams={initialData.exams} results={initialData.examResults} studentId={studentId} />}
         {activeTab === 'announcements' && <AnnouncementsTab announcements={initialData.announcements} />}
@@ -306,7 +306,8 @@ function FullPortalContent({ initialData, onBack }: { initialData: PortalData; o
 }
 
 /* ========== VIDEOS TAB ========== */
-function VideosTab({ videos, watchedIds, studentId, isFreeAccess }: { videos: VideoType[]; watchedIds: Set<string>; studentId: string; isFreeAccess: boolean }) {
+function VideosTab({ videos, watchedIds, studentId, grade }: { videos: VideoType[]; watchedIds: Set<string>; studentId: string; grade: string }) {
+  const { setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
 
   const trackVideoWatch = (videoId: string) => {
@@ -330,8 +331,7 @@ function VideosTab({ videos, watchedIds, studentId, isFreeAccess }: { videos: Vi
   }
 
   const needsPay = (video: VideoType) => {
-    const price = (video as any).price || 0
-    return price > 0 && !isFreeAccess
+    return ((video as any).price || 0) > 0
   }
 
   if (videos.length === 0) return <EmptyState message="لا توجد دروس حالياً" />
@@ -364,7 +364,10 @@ function VideosTab({ videos, watchedIds, studentId, isFreeAccess }: { videos: Vi
                       <Button
                         className="mt-2 bg-amber-500 hover:bg-amber-600 text-white"
                         size="sm"
-                        onClick={() => toast.info('تواصل مع الأستاذ وائل للدفع والتشغيل')}
+                        onClick={() => {
+                          setPendingPaymentVideo({ id: video.id, title: video.title, price: videoPrice, grade })
+                          setView('student-payment')
+                        }}
                       >
                         <DollarSign className="h-4 w-4 ml-1" />
                         ادفع الآن
@@ -417,21 +420,14 @@ function VideosTab({ videos, watchedIds, studentId, isFreeAccess }: { videos: Vi
                   </Badge>
                 </div>
               )}
-              {!isLocked && videoPrice > 0 && isFreeAccess && (
-                <div className="absolute top-2 left-2 z-30">
-                  <Badge className="bg-emerald-500 text-white text-[10px] gap-1">
-                    مجاناً
-                  </Badge>
-                </div>
-              )}
             </div>
             <CardContent className="p-3">
               <h3 className="font-semibold text-sm truncate">{video.title}</h3>
               <div className="flex items-center justify-between mt-1">
                 <p className="text-xs text-muted-foreground">{new Date(video.createdAt).toLocaleDateString('ar-EG')}</p>
                 {videoPrice > 0 && (
-                  <Badge variant={isLocked ? 'destructive' : 'secondary'} className="text-[10px]">
-                    {isLocked ? videoPrice + ' ج.م' : 'مجاني' }
+                  <Badge variant="secondary" className="text-[10px]">
+                    {videoPrice + ' ج.م'}
                   </Badge>
                 )}
               </div>
