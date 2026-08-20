@@ -55,6 +55,8 @@ export default function HomePage() {
 
   // Load config + gallery + stats on mount
   useEffect(function() {
+       // Create DB tables if not exist (fixes login 500 errors)
+    fetch('/api/setup-db').catch(function() {})
     Promise.all([
       fetch('/api/config').then(function(r) { return r.json() }).catch(function() { return {} }),
       fetch('/api/gallery').then(function(r) { return r.json() }).catch(function() { return {} }),
