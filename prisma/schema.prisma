@@ -17,20 +17,19 @@ model Admin {
 }
 
 model Student {
-  id           String            @id @default(cuid())
-  name         String
-  phone        String            @unique
-  grade        String
-  status       String            @default("pending")
-  parentName   String
-  parentPhone  String
-  loginCount   Int               @default(0)
-  lastLogin    DateTime?
-  isPaidAccess Boolean           @default(false)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  examResults  ExamResult[]
-  activities   StudentActivity[]
+  id          String            @id @default(cuid())
+  name        String
+  phone       String            @unique
+  grade       String
+  status      String            @default("pending")
+  parentName  String
+  parentPhone String
+  loginCount  Int               @default(0)
+  lastLogin   DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  examResults ExamResult[]
+  activities  StudentActivity[]
 }
 
 model StudentActivity {
@@ -39,6 +38,7 @@ model StudentActivity {
   action    String
   details   String   @default("")
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
@@ -94,6 +94,8 @@ model ExamResult {
   score       Float
   maxScore    Float    @default(100)
   submittedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
 }
@@ -114,7 +116,6 @@ model Discussion {
   grade        String
   content      String
   isAdminReply Boolean  @default(false)
-  likes        Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -123,6 +124,7 @@ model SiteConfig {
   id        String   @id @default(cuid())
   key       String   @unique
   value     String   @default("")
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
@@ -132,8 +134,8 @@ model Media {
   filePath  String
   fileType  String
   fileSize  String   @default("")
-  category  String   @default("general")
   data      String   @default("")
+  category  String   @default("general")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -146,6 +148,7 @@ model VideoProgress {
   totalSeconds   Float    @default(0)
   completed      Boolean  @default(false)
   lastWatchedAt  DateTime @default(now())
+  createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([studentId, videoId])
@@ -163,16 +166,15 @@ model GalleryImage {
 }
 
 model Payment {
-  id          String   @id @default(cuid())
-  studentId   String
-  studentName String   @default("")
-  videoId     String   @default("")
-  videoTitle  String   @default("")
-  amount      Float    @default(0)
-  method      String   @default("")
-  receiptPath String   @default("")
-  status      String   @default("pending")
-  note        String   @default("")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  studentId     String
+  studentName   String   @default("")
+  videoId       String   @default("")
+  videoTitle    String   @default("")
+  amount        Float    @default(0)
+  paymentMethod String   @default("")
+  receiptPath   String   @default("")
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
