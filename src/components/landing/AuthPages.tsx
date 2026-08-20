@@ -12,20 +12,17 @@ import { useAppStore, GRADES } from '@/stores/app-store'
 import { ArrowRight, User, Phone, Lock, GraduationCap, Users, Loader2, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
-var fadeInUp = {
+const fadeInUp = {
   hidden: { opacity: 0, y: 30 },
   visible: { opacity: 1, y: 0 },
 }
 
-var TEXT_ONLY_REGEX = /^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFa-zA-Z\s]+$/
-var PHONE_REGEX = /^\d{11}$/
+const TEXT_ONLY_REGEX = /^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFa-zA-Z\s]+$/
+const PHONE_REGEX = /^\d{11}$/
 
-function PhoneField(props) {
-  var value = props.value
-  var onChange = props.onChange
-  var placeholder = props.placeholder
-  var id = props.id
-  var error = props.error
+function PhoneField({ value, onChange, placeholder, id, error }: {
+  value: string; onChange: (v: string) => void; placeholder: string; id: string; error?: string
+}) {
   return (
     <div className="space-y-2">
       <Label htmlFor={id} className="text-foreground">
@@ -37,12 +34,12 @@ function PhoneField(props) {
           id={id}
           placeholder={placeholder}
           value={value}
-          onChange={function (e) {
-            var v = e.target.value.replace(/[^\d]/g, '')
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^\d]/g, '')
             if (v.length <= 11) onChange(v)
           }}
           dir="ltr"
-          className={'pr-10 min-h-[44px]' + (error ? ' border-destructive focus-visible:ring-destructive' : '')}
+          className={`pr-10 min-h-[44px] ${error ? 'border-destructive focus-visible:ring-destructive' : ''}`}
           maxLength={11}
         />
       </div>
@@ -51,12 +48,9 @@ function PhoneField(props) {
   )
 }
 
-function NameField(props) {
-  var value = props.value
-  var onChange = props.onChange
-  var placeholder = props.placeholder
-  var id = props.id
-  var error = props.error
+function NameField({ value, onChange, placeholder, id, error }: {
+  value: string; onChange: (v: string) => void; placeholder: string; id: string; error?: string
+}) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id} className="text-foreground text-xs">
@@ -66,8 +60,8 @@ function NameField(props) {
         id={id}
         placeholder={placeholder}
         value={value}
-        onChange={function (e) { onChange(e.target.value) }}
-        className={'min-h-[44px]' + (error ? ' border-destructive focus-visible:ring-destructive' : '')}
+        onChange={(e) => onChange(e.target.value)}
+        className={`min-h-[44px] ${error ? 'border-destructive focus-visible:ring-destructive' : ''}`}
       />
       {error && <p className="text-[10px] text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3" />{error}</p>}
     </div>
@@ -75,34 +69,16 @@ function NameField(props) {
 }
 
 export function LoginView() {
-  var store = useAppStore()
-  var setView = store.setView
-  var setCurrentStudent = store.setCurrentStudent
-  var setCurrentAdmin = store.setCurrentAdmin
-  var setAdminLoggedIn = store.setAdminLoggedIn
-  var loginTabState = useState('student')
-  var loginTab = loginTabState[0]
-  var setLoginTab = loginTabState[1]
-  var phoneState = useState('')
-  var studentPhone = phoneState[0]
-  var setStudentPhone = phoneState[1]
-  var loadState1 = useState(false)
-  var studentLoading = loadState1[0]
-  var setStudentLoading = loadState1[1]
-  var emailState = useState('')
-  var adminEmail = emailState[0]
-  var setAdminEmail = emailState[1]
-  var passState = useState('')
-  var adminPassword = passState[0]
-  var setAdminPassword = passState[1]
-  var loadState2 = useState(false)
-  var adminLoading = loadState2[0]
-  var setAdminLoading = loadState2[1]
-  var msgState = useState('')
-  var adminStatusMsg = msgState[0]
-  var setAdminStatusMsg = msgState[1]
+  const { setView, setCurrentStudent, setCurrentAdmin, setAdminLoggedIn } = useAppStore()
+  const [loginTab, setLoginTab] = useState('student')
+  const [studentPhone, setStudentPhone] = useState('')
+  const [studentLoading, setStudentLoading] = useState(false)
+  const [adminEmail, setAdminEmail] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
+  const [adminLoading, setAdminLoading] = useState(false)
+  const [adminStatusMsg, setAdminStatusMsg] = useState('')
 
-  var handleStudentLogin = async function () {
+  const handleStudentLogin = async () => {
     if (!studentPhone.trim()) {
       toast.error('الرجاء إدخال رقم الهاتف')
       return
@@ -111,46 +87,55 @@ export function LoginView() {
       toast.error('رقم الهاتف يجب أن يكون 11 رقم')
       return
     }
+    if (studentLoading) return
     setStudentLoading(true)
+
+    var controller = new AbortController()
+    var timeout = setTimeout(function () { controller.abort() }, 15000)
+
     try {
-      var res = await fetch('/api/students?phone=' + encodeURIComponent(studentPhone.trim()))
-      var data = await res.json()
-      var students = data.students || []
-      var student = null
-      for (var i = 0; i < students.length; i++) {
-        if (students[i].phone === studentPhone.trim()) {
-          student = students[i]
-          break
-        }
-      }
+      const res = await fetch('/api/students?phone=' + encodeURIComponent(studentPhone.trim()), {
+        signal: controller.signal,
+      })
+      const data = await res.json()
+      const students: Array<{
+        id: string; name: string; phone: string; grade: string; status: string; createdAt: string; updatedAt: string
+      }> = data.students || []
+      const student = students.find((s) => s.phone === studentPhone.trim())
       if (!student) {
         toast.error('لم يتم العثور على حساب بهذا الرقم')
         setStudentLoading(false)
+        clearTimeout(timeout)
         return
       }
       if (student.status === 'pending') {
-        setCurrentStudent(student)
+        setCurrentStudent(student as any)
         setView('student-pending')
         toast.info('حسابك قيد المراجعة، انتظر موافقة المسؤول')
       } else if (student.status === 'rejected') {
         toast.error('تم رفض طلب التسجيل، تواصل مع المسؤول')
       } else if (student.status === 'approved') {
-        setCurrentStudent(student)
+        setCurrentStudent(student as any)
         setView('student-portal')
         toast.success('مرحباً ' + student.name + '!')
         fetch('/api/students/track-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ studentId: student.id }),
-        }).catch(function () {})
+        }).catch(() => {})
       }
-    } catch (e) {
-      toast.error('حدث خطأ في الاتصال')
+    } catch (err: any) {
+      if (err && err.name === 'AbortError') {
+        toast.error('انتهت مهلة الاتصال — حاول مرة أخرى')
+      } else {
+        toast.error('حدث خطأ في الاتصال')
+      }
     }
+    clearTimeout(timeout)
     setStudentLoading(false)
   }
 
-  var handleAdminLogin = async function () {
+  const handleAdminLogin = async () => {
     if (!adminEmail || !adminPassword) {
       toast.error('الرجاء إدخال البريد وكلمة المرور')
       return
@@ -158,8 +143,10 @@ export function LoginView() {
     if (adminLoading) return
     setAdminLoading(true)
     setAdminStatusMsg('جاري الاتصال بالسيرفر...')
+
     var controller = new AbortController()
     var timeout = setTimeout(function () { controller.abort() }, 15000)
+
     try {
       setAdminStatusMsg('جاري التحقق من البيانات...')
       var res = await fetch('/api/admin/login', {
@@ -178,17 +165,16 @@ export function LoginView() {
       } else {
         toast.error(data.error || 'خطأ في تسجيل الدخول')
       }
-    } catch (err) {
+    } catch (err: any) {
       if (err && err.name === 'AbortError') {
         toast.error('انتهت مهلة الاتصال — حاول مرة أخرى')
       } else {
         toast.error('حدث خطأ في الاتصال بالسيرفر')
       }
-    } finally {
-      clearTimeout(timeout)
-      setAdminLoading(false)
-      setAdminStatusMsg('')
     }
+    clearTimeout(timeout)
+    setAdminLoading(false)
+    setAdminStatusMsg('')
   }
 
   return (
@@ -221,7 +207,7 @@ export function LoginView() {
                     </Button>
                     <p className="text-center text-sm text-muted-foreground">
                       ليس لديك حساب؟{' '}
-                      <button onClick={function () { setView('auth-register') }} className="text-primary font-medium hover:underline cursor-pointer">أنشئ حساباً جديداً</button>
+                      <button onClick={() => setView('auth-register')} className="text-primary font-medium hover:underline cursor-pointer">أنشئ حساباً جديداً</button>
                     </p>
                   </div>
                 </TabsContent>
@@ -230,11 +216,11 @@ export function LoginView() {
                     <Badge variant="outline" className="mb-2 w-full justify-center py-1">دخول المشرفين فقط</Badge>
                     <div className="space-y-2">
                       <Label htmlFor="auth-admin-email" className="text-foreground">البريد الإلكتروني</Label>
-                      <Input id="auth-admin-email" type="email" placeholder="البريد الإلكتروني" value={adminEmail} onChange={function (e) { setAdminEmail(e.target.value) }} onKeyDown={function (e) { if (e.key === 'Enter' && !adminLoading) handleAdminLogin() }} dir="ltr" className="min-h-[44px]" disabled={adminLoading} autoComplete="email" />
+                      <Input id="auth-admin-email" type="email" placeholder="البريد الإلكتروني" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !adminLoading) handleAdminLogin() }} dir="ltr" className="min-h-[44px]" disabled={adminLoading} autoComplete="email" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="auth-admin-password" className="text-foreground">كلمة المرور</Label>
-                      <Input id="auth-admin-password" type="password" placeholder="كلمة المرور" value={adminPassword} onChange={function (e) { setAdminPassword(e.target.value) }} onKeyDown={function (e) { if (e.key === 'Enter' && !adminLoading) handleAdminLogin() }} dir="ltr" className="min-h-[44px]" disabled={adminLoading} autoComplete="current-password" />
+                      <Input id="auth-admin-password" type="password" placeholder="كلمة المرور" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !adminLoading) handleAdminLogin() }} dir="ltr" className="min-h-[44px]" disabled={adminLoading} autoComplete="current-password" />
                     </div>
                     {adminStatusMsg && (
                       <p className="text-xs text-center text-muted-foreground animate-pulse">{adminStatusMsg}</p>
@@ -249,7 +235,7 @@ export function LoginView() {
           </Card>
         </div>
         <div className="mt-6 text-center">
-          <button onClick={function () { setView('landing') }} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer">
+          <button onClick={() => setView('landing')} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer">
             <ArrowRight className="h-4 w-4" />العودة للرئيسية
           </button>
         </div>
@@ -259,45 +245,21 @@ export function LoginView() {
 }
 
 export function RegisterView() {
-  var store = useAppStore()
-  var setView = store.setView
-  var setCurrentStudent = store.setCurrentStudent
-  var n1s = useState('')
-  var name1 = n1s[0]
-  var setName1 = n1s[1]
-  var n2s = useState('')
-  var name2 = n2s[0]
-  var setName2 = n2s[1]
-  var n3s = useState('')
-  var name3 = n3s[0]
-  var setName3 = n3s[1]
-  var n4s = useState('')
-  var name4 = n4s[0]
-  var setName4 = n4s[1]
-  var ps = useState('')
-  var phone = ps[0]
-  var setPhone = ps[1]
-  var gs = useState('')
-  var grade = gs[0]
-  var setGrade = gs[1]
-  var p1s = useState('')
-  var parentName1 = p1s[0]
-  var setParentName1 = p1s[1]
-  var p2s = useState('')
-  var parentName2 = p2s[0]
-  var setParentName2 = p2s[1]
-  var pps = useState('')
-  var parentPhone = pps[0]
-  var setParentPhone = pps[1]
-  var ls = useState(false)
-  var loading = ls[0]
-  var setLoading = ls[1]
-  var es = useState({})
-  var errors = es[0]
-  var setErrors = es[1]
+  const { setView, setCurrentStudent } = useAppStore()
+  const [name1, setName1] = useState('')
+  const [name2, setName2] = useState('')
+  const [name3, setName3] = useState('')
+  const [name4, setName4] = useState('')
+  const [phone, setPhone] = useState('')
+  const [grade, setGrade] = useState('')
+  const [parentName1, setParentName1] = useState('')
+  const [parentName2, setParentName2] = useState('')
+  const [parentPhone, setParentPhone] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  var validate = function () {
-    var e = {}
+  const validate = (): boolean => {
+    const e: Record<string, string> = {}
     if (!name1.trim()) e.name1 = 'مطلوب'
     else if (!TEXT_ONLY_REGEX.test(name1.trim())) e.name1 = 'حروف فقط'
     if (!name2.trim()) e.name2 = 'مطلوب'
@@ -323,24 +285,18 @@ export function RegisterView() {
     return true
   }
 
-  var handleRegister = async function () {
+  const handleRegister = async () => {
     if (!validate()) return
-    var fullName = name1.trim() + ' ' + name2.trim() + ' ' + name3.trim() + ' ' + name4.trim()
-    var fullParentName = parentName1.trim() + ' ' + parentName2.trim()
+    const fullName = `${name1.trim()} ${name2.trim()} ${name3.trim()} ${name4.trim()}`
+    const fullParentName = `${parentName1.trim()} ${parentName2.trim()}`
     setLoading(true)
     try {
-      var res = await fetch('/api/students', {
+      const res = await fetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: fullName,
-          phone: phone.trim(),
-          grade: grade,
-          parentName: fullParentName,
-          parentPhone: parentPhone.trim(),
-        }),
+        body: JSON.stringify({ name: fullName, phone: phone.trim(), grade, parentName: fullParentName, parentPhone: parentPhone.trim() }),
       })
-      var data = await res.json()
+      const data = await res.json()
       if (res.ok) {
         setCurrentStudent(data.student)
         setView('student-pending')
@@ -348,9 +304,7 @@ export function RegisterView() {
       } else {
         toast.error(data.error || 'حدث خطأ في التسجيل')
       }
-    } catch (e) {
-      toast.error('حدث خطأ في الاتصال')
-    }
+    } catch { toast.error('حدث خطأ في الاتصال') }
     setLoading(false)
   }
 
@@ -387,11 +341,11 @@ export function RegisterView() {
                     <select
                       id="reg-grade"
                       value={grade}
-                      onChange={function (e) { setGrade(e.target.value) }}
-                      className={'flex h-11 w-full rounded-md border border-input bg-transparent pr-10 pl-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[44px] appearance-none cursor-pointer' + (errors.grade ? ' border-destructive' : '')}
+                      onChange={(e) => setGrade(e.target.value)}
+                      className={`flex h-11 w-full rounded-md border border-input bg-transparent pr-10 pl-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[44px] appearance-none cursor-pointer ${errors.grade ? 'border-destructive' : ''}`}
                     >
                       <option value="">اختر الصف الدراسي</option>
-                      {GRADES.map(function (g) { return <option key={g} value={g}>{g}</option> })}
+                      {GRADES.map((g) => (<option key={g} value={g}>{g}</option>))}
                     </select>
                   </div>
                   {errors.grade && <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.grade}</p>}
@@ -409,14 +363,14 @@ export function RegisterView() {
                 </Button>
                 <p className="text-center text-sm text-muted-foreground">
                   لديك حساب بالفعل؟{' '}
-                  <button onClick={function () { setView('auth-login') }} className="text-primary font-medium hover:underline cursor-pointer">سجل دخولك</button>
+                  <button onClick={() => setView('auth-login')} className="text-primary font-medium hover:underline cursor-pointer">سجل دخولك</button>
                 </p>
               </div>
             </CardContent>
           </Card>
         </div>
         <div className="mt-6 text-center">
-          <button onClick={function () { setView('landing') }} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer">
+          <button onClick={() => setView('landing')} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer">
             <ArrowRight className="h-4 w-4" />العودة للرئيسية
           </button>
         </div>
