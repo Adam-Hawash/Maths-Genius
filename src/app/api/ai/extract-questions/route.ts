@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     } else if (fileUrl) {
       var res = await fetch(fileUrl)
       if (!res.ok) {
-     return NextResponse.json({ error: 'Failed to fetch file from URL' }, { status: 400 })
+        return NextResponse.json({ error: 'Failed to fetch file from URL' }, { status: 400 })
       }
       var arrayBuf = await res.arrayBuffer()
       var buf = Buffer.from(arrayBuf)
