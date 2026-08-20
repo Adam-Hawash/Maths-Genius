@@ -12,28 +12,20 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const pageSize = parseInt(searchParams.get('pageSize') || '20')
 
-    // ========== LOGIN BY PHONE (direct lookup) ==========
+    // Direct phone lookup for student login
     if (phone) {
       try {
-        const student = await db.student.findFirst({
-          where: { phone: phone },
-          include: {
-            _count: { select: { activities: true } },
-          },
-        })
+        const student = await db.student.findFirst({ where: { phone }, include: { _count: { select: { activities: true } } } })
         if (student) {
-          const withStats = { ...student, watchedVideoCount: 0 }
-          return NextResponse.json({ students: [withStats], total: 1, page: 1, pageSize: 1, totalPages: 1 })
+          return NextResponse.json({ students: [{ ...student, watchedVideoCount: 0 }], total: 1, page: 1, pageSize: 1, totalPages: 1 })
         }
         return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0 })
       } catch (loginErr: any) {
         console.error('Student login error:', loginErr)
-        // If table doesn't exist, return empty (don't crash)
-        return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0, error: 'DB error' })
+        return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0 })
       }
     }
 
-    // ========== ADMIN LIST (with filters) ==========
     const where: Record<string, unknown> = {}
     if (grade) where.grade = grade
     if (status) where.status = status
