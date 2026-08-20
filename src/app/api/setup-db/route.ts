@@ -6,7 +6,7 @@ export async function GET() {
   var results = []
 
   try {
-    // 1) Homework columns
+    // 1) Add missing columns to Homework
     try {
       await db.$executeRawUnsafe(`ALTER TABLE Homework ADD COLUMN content TEXT DEFAULT ''`)
       results.push('Homework.content added')
@@ -32,7 +32,7 @@ export async function GET() {
       results.push('Homework.questions added')
     } catch(e) { results.push('Homework.questions: ' + (e.message || 'skip')) }
 
-    // 2) Exam columns
+    // 2) Add missing columns to Exam
     try {
       await db.$executeRawUnsafe(`ALTER TABLE Exam ADD COLUMN content TEXT DEFAULT ''`)
       results.push('Exam.content added')
@@ -63,13 +63,31 @@ export async function GET() {
       results.push('Exam.passScore added')
     } catch(e) { results.push('Exam.passScore: ' + (e.message || 'skip')) }
 
-    // 3) Video order column (quoted - reserved SQL word)
+    // 3) Add order column to Video (order is SQL reserved word - must quote it)
     try {
       await db.$executeRawUnsafe(`ALTER TABLE Video ADD COLUMN "order" INTEGER DEFAULT 0`)
       results.push('Video.order added')
     } catch(e) { results.push('Video.order: ' + (e.message || 'skip')) }
 
-    // 4) Question table
+    // ===== NEW: Add price column to Video =====
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Video ADD COLUMN price REAL DEFAULT 0`)
+      results.push('Video.price added')
+    } catch(e) { results.push('Video.price: ' + (e.message || 'skip')) }
+
+    // ===== NEW: Add isPaidAccess column to Student =====
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Student ADD COLUMN isPaidAccess BOOLEAN DEFAULT 0`)
+      results.push('Student.isPaidAccess added')
+    } catch(e) { results.push('Student.isPaidAccess: ' + (e.message || 'skip')) }
+
+    // ===== NEW: Add likes column to Discussion =====
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE Discussion ADD COLUMN likes INTEGER DEFAULT 0`)
+      results.push('Discussion.likes added')
+    } catch(e) { results.push('Discussion.likes: ' + (e.message || 'skip')) }
+
+    // 4) Create Question table if not exists
     try {
       await db.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS Question (
@@ -85,7 +103,7 @@ export async function GET() {
       results.push('Question table ready')
     } catch(e) { results.push('Question table: ' + (e.message || 'skip')) }
 
-    // 5) HomeworkResult table
+    // 5) Create HomeworkResult table if not exists
     try {
       await db.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS HomeworkResult (
@@ -102,7 +120,7 @@ export async function GET() {
       results.push('HomeworkResult table ready')
     } catch(e) { results.push('HomeworkResult table: ' + (e.message || 'skip')) }
 
-    // 6) Payment table
+    // 6) Create Payment table if not exists
     try {
       await db.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS Payment (
@@ -121,7 +139,7 @@ export async function GET() {
       results.push('Payment table ready')
     } catch(e) { results.push('Payment table: ' + (e.message || 'skip')) }
 
-    // 7) VideoAccess table
+    // 7) Create VideoAccess table if not exists
     try {
       await db.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS VideoAccess (
