@@ -39,7 +39,7 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { name, phone, grade, status } = body
+    const { name, phone, grade, status, isFreeAccess } = body
 
     const existing = await db.student.findUnique({ where: { id } })
     if (!existing) {
@@ -53,6 +53,7 @@ export async function PUT(
         ...(phone && { phone }),
         ...(grade && { grade }),
         ...(status && { status }),
+        ...(typeof isFreeAccess === 'boolean' && { isFreeAccess }),
       },
     })
 
