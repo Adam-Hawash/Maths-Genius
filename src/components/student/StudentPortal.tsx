@@ -10,7 +10,7 @@ import {
   Video, ClipboardList, FileText, Megaphone, MessageSquare, Send,
   LogOut, Loader2, FileDown, Bell, PlayCircle, CheckCircle2,
   BookOpen, Target, TrendingUp, GraduationCap, ChevronLeft, ExternalLink,
-  User, Phone, Award, Maximize, Minimize, Lock, DollarSign,
+  User, Phone, Award, Maximize, Minimize, Lock, X,
 } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Image from 'next/image'
@@ -330,10 +330,6 @@ function VideosTab({ videos, watchedIds, studentId, grade }: { videos: VideoType
     return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null
   }
 
-  const needsPay = (video: VideoType) => {
-    return ((video as any).price || 0) > 0
-  }
-
   if (videos.length === 0) return <EmptyState message="لا توجد دروس حالياً" />
 
   return (
@@ -343,36 +339,39 @@ function VideosTab({ videos, watchedIds, studentId, grade }: { videos: VideoType
         const isVideoFile = video.filePath && (video.fileType?.startsWith('video/') || video.filePath.match(/\.(mp4|webm|mov|avi)$/i))
         const isWatched = localWatched.has(video.id)
         const thumbSrc = video.thumbnail || getYouTubeThumbnail(video.url) || null
-        const videoPrice = (video as any).price || 0
-        const isLocked = needsPay(video)
+        const needsPay = (video.price || 0) > 0
 
         return (
           <Card key={video.id} className={`overflow-hidden transition-all ${isWatched ? 'border-emerald-500/30' : ''}`}>
             <div className="relative aspect-video bg-black">
-              {isLocked ? (
-                /* فيديو مقفول - يدفع أولاً */
+              {needsPay ? (
                 <div className="w-full h-full relative">
                   {thumbSrc ? (
-                    <Image src={thumbSrc} alt={video.title} fill className="object-cover blur-sm opacity-40" sizes="(max-width: 640px) 100vw, 50vw" unoptimized loading="eager" />
-                  ) : null}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
-                    <div className="h-14 w-14 rounded-full bg-black/70 flex items-center justify-center">
+                    <Image src={thumbSrc} alt={video.title} fill className="object-cover blur-sm" sizes="(max-width: 640px) 100vw, 50vw" unoptimized loading="eager" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-black/80 to-black" />
+                  )}
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-3 z-20">
+                    <div className="h-14 w-14 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
                       <Lock className="h-7 w-7 text-white" />
                     </div>
-                    <div className="bg-black/60 backdrop-blur-sm rounded-xl px-5 py-3 text-center">
-                      <p className="text-white font-bold text-lg">{videoPrice} ج.م</p>
-                      <Button
-                        className="mt-2 bg-amber-500 hover:bg-amber-600 text-white"
-                        size="sm"
-                        onClick={() => {
-                          setPendingPaymentVideo({ id: video.id, title: video.title, price: videoPrice, grade })
-                          setView('student-payment')
-                        }}
-                      >
-                        <DollarSign className="h-4 w-4 ml-1" />
-                        ادفع الآن
-                      </Button>
-                    </div>
+                    <Badge className="text-lg px-4 py-1.5 bg-amber-500 text-white">
+                      {video.price} ج.م
+                    </Badge>
+                    <Button
+                      className="mt-1"
+                      onClick={() => {
+                        setPendingPaymentVideo({
+                          id: video.id,
+                          title: video.title,
+                          price: video.price || 0,
+                          grade: grade,
+                        })
+                        setView('student-payment')
+                      }}
+                    >
+                      ادفع الآن
+                    </Button>
                   </div>
                 </div>
               ) : ytId ? (
@@ -423,14 +422,7 @@ function VideosTab({ videos, watchedIds, studentId, grade }: { videos: VideoType
             </div>
             <CardContent className="p-3">
               <h3 className="font-semibold text-sm truncate">{video.title}</h3>
-              <div className="flex items-center justify-between mt-1">
-                <p className="text-xs text-muted-foreground">{new Date(video.createdAt).toLocaleDateString('ar-EG')}</p>
-                {videoPrice > 0 && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    {videoPrice + ' ج.م'}
-                  </Badge>
-                )}
-              </div>
+              <p className="text-xs text-muted-foreground mt-1">{new Date(video.createdAt).toLocaleDateString('ar-EG')}</p>
             </CardContent>
           </Card>
         )
@@ -688,9 +680,15 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
               {isExpanded && hasMCQ && (
                 <div className="mt-4 pt-4 border-t space-y-4">
                   {mcq.map(function(q: any, qi: number) {
+                    var ansWrong = isSubmitted && myAnswers[qi] !== undefined && myAnswers[qi] !== q.correct
+                    var ansCorrect = isSubmitted && myAnswers[qi] === q.correct
                     return (
-                      <div key={qi} className="space-y-2">
-                        <p className="font-medium text-sm">{qi + 1}. {q.question}</p>
+                      <div key={qi} className={"space-y-2 rounded-lg p-2 " + (ansWrong ? 'bg-destructive/5 border border-destructive/20' : ansCorrect ? 'bg-emerald-500/5 border border-emerald-500/20' : '')}>
+                        <div className="flex items-start gap-2">
+                          <p className="font-medium text-sm flex-1">{qi + 1}. {q.question}</p>
+                          {isSubmitted && ansCorrect && <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />}
+                          {isSubmitted && ansWrong && <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />}
+                        </div>
                         <div className="space-y-1.5">
                           {q.options.map(function(opt: string, oi: number) {
                             var isSelected = myAnswers[qi] === oi
@@ -713,14 +711,23 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
                             )
                           })}
                         </div>
+                        {isSubmitted && ansWrong && (
+                          <p className="text-xs text-destructive">الإجابة الصحيحة: {String.fromCharCode(65 + q.correct)}) {q.options[q.correct]}</p>
+                        )}
                       </div>
                     )
                   })}
                   {!isSubmitted ? (
-                    <Button size="sm" onClick={function() { setHwSubmitted(function(prev) { var n = { ...prev }; n[hw.id] = true; return n }) }} disabled={Object.keys(myAnswers).length === 0}>تسليم الإجابات</Button>
+                    <Button size="sm" onClick={function() { setHwSubmitted(function(prev) { var n = { ...prev }; n[hw.id] = true; return n }) }} disabled={Object.keys(myAnswers).length === 0}>تسليم الإجابات ({Object.keys(myAnswers).length}/{mcq.length})</Button>
                   ) : (
-                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-                      <p className="text-sm font-medium text-emerald-700">نتيجتك: {score} من {mcq.length} {score === mcq.length ? '— ممتاز! 🎉' : ''}</p>
+                    <div className={"p-4 rounded-lg border " + (score === mcq.length ? 'bg-emerald-500/10 border-emerald-500/30' : score >= mcq.length * 0.5 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-destructive/10 border-destructive/30')}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className={"text-base font-bold " + (score === mcq.length ? 'text-emerald-700' : score >= mcq.length * 0.5 ? 'text-amber-700' : 'text-destructive')}>نتيجتك: {score} من {mcq.length}</p>
+                        <Badge className={score === mcq.length ? 'bg-emerald-500 text-white' : score >= mcq.length * 0.5 ? 'bg-amber-500 text-white' : 'bg-destructive text-white'}>{Math.round(score / mcq.length * 100)}%</Badge>
+                      </div>
+                      {score < mcq.length && (
+                        <p className="text-xs text-muted-foreground">الأسئلة الغلط: {mcq.filter(function(q: any, i: number) { return myAnswers[i] !== undefined && myAnswers[i] !== q.correct }).map(function(q: any, i: number) { return 'سؤال ' + (i + 1) }).join(', ')}</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -758,7 +765,7 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
         {examQuestions.map((q, qi) => (
           <Card key={qi}>
             <CardContent className="p-4 space-y-3">
-              <p className="font-medium text-sm">{qi + 1}. {q.q}</p>
+              <p className="font-medium text-sm">{qi + 1}. {q.question || q.q}</p>
               <div className="space-y-2">
                 {q.options.map((opt: string, oi: number) => (
                   <button
