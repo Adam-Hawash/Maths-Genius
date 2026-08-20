@@ -10,7 +10,7 @@ import {
   Video, ClipboardList, FileText, Megaphone, MessageSquare, Send,
   LogOut, Loader2, FileDown, Bell, PlayCircle, CheckCircle2,
   BookOpen, Target, TrendingUp, GraduationCap, ChevronLeft, ExternalLink,
-  User, Phone, Award, Maximize, Minimize, Lock, X,
+  Maximize, Minimize, Lock,
 } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Image from 'next/image'
@@ -641,6 +641,7 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
   const [hwSubmitted, setHwSubmitted] = useState<Record<string, boolean>>({})
 
   if (homework.length === 0) return <EmptyState message="لا توجد واجبات حالياً" />
+
   return (
     <div className="space-y-3">
       {homework.map((hw) => {
@@ -650,10 +651,27 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
         var isSubmitted = !!hwSubmitted[hw.id]
         var myAnswers = hwAnswers[hw.id] || {}
 
+        // Calculate score only after submission
         var score = 0
+        var wrongQuestions: Array<{ index: number; question: string; myAnswer: number; correctAnswer: number; myOption: string; correctOption: string }> = []
         if (isSubmitted && hasMCQ) {
-          mcq.forEach(function(q: any, i: number) { if (myAnswers[i] === q.correct) score++ })
+          mcq.forEach(function(q: any, i: number) {
+            if (myAnswers[i] === q.correct) {
+              score++
+            } else if (myAnswers[i] !== undefined) {
+              wrongQuestions.push({
+                index: i + 1,
+                question: q.question,
+                myAnswer: myAnswers[i],
+                correctAnswer: q.correct,
+                myOption: q.options[myAnswers[i]] || '',
+                correctOption: q.options[q.correct] || '',
+              })
+            }
+          })
         }
+
+        var allAnswered = hasMCQ && mcq.every(function(_: any, i: number) { return myAnswers[i] !== undefined })
 
         return (
           <Card key={hw.id} className={hasMCQ ? 'cursor-pointer' : ''}>
@@ -680,29 +698,28 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
               {isExpanded && hasMCQ && (
                 <div className="mt-4 pt-4 border-t space-y-4">
                   {mcq.map(function(q: any, qi: number) {
-                    var ansWrong = isSubmitted && myAnswers[qi] !== undefined && myAnswers[qi] !== q.correct
-                    var ansCorrect = isSubmitted && myAnswers[qi] === q.correct
                     return (
-                      <div key={qi} className={"space-y-2 rounded-lg p-2 " + (ansWrong ? 'bg-destructive/5 border border-destructive/20' : ansCorrect ? 'bg-emerald-500/5 border border-emerald-500/20' : '')}>
+                      <div key={qi} className="space-y-2 p-2 rounded-lg">
                         <div className="flex items-start gap-2">
                           <p className="font-medium text-sm flex-1">{qi + 1}. {q.question}</p>
-                          {isSubmitted && ansCorrect && <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />}
-                          {isSubmitted && ansWrong && <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />}
                         </div>
                         <div className="space-y-1.5">
                           {q.options.map(function(opt: string, oi: number) {
-                            var isSelected = myAnswers[qi] === oi
-                            var isCorrect = isSubmitted && oi === q.correct
-                            var isWrong = isSubmitted && isSelected && oi !== q.correct
+                            var isMyChoice = myAnswers[qi] === oi
                             return (
                               <button
                                 key={oi}
                                 disabled={isSubmitted}
-                                onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [qi]: oi }; return a }) }}
+                                onClick={function() {
+                                  setHwAnswers(function(prev) {
+                                    var a = { ...prev }
+                                    a[hw.id] = { ...(a[hw.id] || {}), [qi]: oi }
+                                    return a
+                                  })
+                                }}
                                 className={"w-full text-right p-3 rounded-lg border text-sm transition-colors " + (
-                                  isCorrect ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 font-medium' :
-                                  isWrong ? 'border-destructive bg-destructive/10 text-destructive' :
-                                  isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
+                                  isSubmitted ? 'border-border bg-muted/30 opacity-70 cursor-default' :
+                                  isMyChoice ? 'border-primary bg-primary/10 text-primary font-medium' :
                                   'border-border hover:bg-muted/50'
                                 )}
                               >
@@ -711,23 +728,45 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
                             )
                           })}
                         </div>
-                        {isSubmitted && ansWrong && (
-                          <p className="text-xs text-destructive">الإجابة الصحيحة: {String.fromCharCode(65 + q.correct)}) {q.options[q.correct]}</p>
-                        )}
                       </div>
                     )
                   })}
+
                   {!isSubmitted ? (
-                    <Button size="sm" onClick={function() { setHwSubmitted(function(prev) { var n = { ...prev }; n[hw.id] = true; return n }) }} disabled={Object.keys(myAnswers).length === 0}>تسليم الإجابات ({Object.keys(myAnswers).length}/{mcq.length})</Button>
+                    <Button
+                      size="sm"
+                      onClick={function() {
+                        setHwSubmitted(function(prev) {
+                          var n = { ...prev }
+                          n[hw.id] = true
+                          return n
+                        })
+                      }}
+                      disabled={!allAnswered}
+                    >
+                      تسليم الإجابات ({Object.keys(myAnswers).length}/{mcq.length})
+                    </Button>
                   ) : (
                     <div className={"p-4 rounded-lg border " + (score === mcq.length ? 'bg-emerald-500/10 border-emerald-500/30' : score >= mcq.length * 0.5 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-destructive/10 border-destructive/30')}>
-                      <div className="flex items-center justify-between mb-2">
-                        <p className={"text-base font-bold " + (score === mcq.length ? 'text-emerald-700' : score >= mcq.length * 0.5 ? 'text-amber-700' : 'text-destructive')}>نتيجتك: {score} من {mcq.length}</p>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className={"text-lg font-bold " + (score === mcq.length ? 'text-emerald-700' : score >= mcq.length * 0.5 ? 'text-amber-700' : 'text-destructive')}>نتيجتك: {score} من {mcq.length}</p>
                         <Badge className={score === mcq.length ? 'bg-emerald-500 text-white' : score >= mcq.length * 0.5 ? 'bg-amber-500 text-white' : 'bg-destructive text-white'}>{Math.round(score / mcq.length * 100)}%</Badge>
                       </div>
-                      {score < mcq.length && (
-                        <p className="text-xs text-muted-foreground">الأسئلة الغلط: {mcq.filter(function(q: any, i: number) { return myAnswers[i] !== undefined && myAnswers[i] !== q.correct }).map(function(q: any, i: number) { return 'سؤال ' + (i + 1) }).join(', ')}</p>
+                      {score < mcq.length && wrongQuestions.length > 0 && (
+                        <div className="space-y-2 mt-3">
+                          <p className="text-sm font-semibold text-destructive">الأسئلة التي أخطأت فيها:</p>
+                          {wrongQuestions.map(function(wq) {
+                            return (
+                              <div key={wq.index} className="p-2 rounded-lg bg-destructive/5 border border-destructive/20 text-sm">
+                                <p className="font-medium">سؤال {wq.index}: {wq.question}</p>
+                                <p className="text-xs text-destructive mt-1">إجابتك: {String.fromCharCode(65 + wq.myAnswer)}) {wq.myOption}</p>
+                                <p className="text-xs text-emerald-600 mt-0.5">الإجابة الصحيحة: {String.fromCharCode(65 + wq.correctAnswer)}) {wq.correctOption}</p>
+                              </div>
+                            )
+                          })}
+                        </div>
                       )}
+                      {score === mcq.length && <p className="text-sm text-emerald-600 font-medium">ممتاز! أجبت على جميع الأسئلة بشكل صحيح</p>}
                     </div>
                   )}
                 </div>
@@ -746,67 +785,109 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [submitting, setSubmitting] = useState(false)
   const [examQuestions, setExamQuestions] = useState<any[]>([])
+  const [examResult, setExamResult] = useState<{ score: number; maxScore: number; passed: boolean } | null>(null)
+  const [submittedExamIds, setSubmittedExamIds] = useState<Set<string>>(new Set(results.map(function(r) { return r.examId })))
 
   if (exams.length === 0) return <EmptyState message="لا توجد امتحانات حالياً" />
 
+  // Exam Result Display (after submission)
+  if (examResult && takingExam) {
+    const exam = exams.find(function(e) { return e.id === takingExam })
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-lg">نتيجة الامتحان</h3>
+          <Button variant="outline" size="sm" onClick={function() {
+            setTakingExam(null)
+            setAnswers({})
+            setExamQuestions([])
+            setExamResult(null)
+          }}>العودة للامتحانات</Button>
+        </div>
+        <Card className={examResult.passed ? 'border-emerald-500/50' : 'border-destructive/50'}>
+          <CardContent className="p-6 text-center space-y-4">
+            <div className={"text-5xl font-bold " + (examResult.passed ? 'text-emerald-600' : 'text-destructive')}>{examResult.score}/{examResult.maxScore}</div>
+            <Badge className={"text-lg px-4 py-1 " + (examResult.passed ? 'bg-emerald-500 text-white' : 'bg-destructive text-white')}>
+              {examResult.passed ? 'ناجح' : 'راسب'}
+            </Badge>
+            {exam && <p className="text-sm text-muted-foreground">{exam.title}</p>}
+            <Button variant="outline" onClick={function() {
+              setTakingExam(null)
+              setAnswers({})
+              setExamQuestions([])
+              setExamResult(null)
+            }}>العودة لقائمة الامتحانات</Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   // Exam Taking Mode
   if (takingExam) {
-    const exam = exams.find(e => e.id === takingExam)
+    const exam = exams.find(function(e) { return e.id === takingExam })
     if (!exam || examQuestions.length === 0) {
       setTakingExam(null)
       return null
     }
+    var allAnswered = examQuestions.every(function(_: any, i: number) { return answers[i] !== undefined })
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-bold">{exam.title}</h3>
-          <Button variant="outline" size="sm" onClick={() => { setTakingExam(null); setAnswers({}); setExamQuestions([]) }}>رجوع</Button>
+          <Button variant="outline" size="sm" onClick={function() { setTakingExam(null); setAnswers({}); setExamQuestions([]) }}>رجوع</Button>
         </div>
-        {examQuestions.map((q, qi) => (
-          <Card key={qi}>
-            <CardContent className="p-4 space-y-3">
-              <p className="font-medium text-sm">{qi + 1}. {q.question || q.q}</p>
-              <div className="space-y-2">
-                {q.options.map((opt: string, oi: number) => (
-                  <button
-                    key={oi}
-                    onClick={() => setAnswers(prev => ({ ...prev, [qi]: oi }))}
-                    className={`w-full text-right p-3 rounded-lg border text-sm transition-colors ${
-                      answers[qi] === oi ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
-                    }`}
-                  >
-                    <span className="ml-2 font-bold">{String.fromCharCode(65 + oi)}.</span> {opt}
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {examQuestions.map(function(q: any, qi: number) {
+          return (
+            <Card key={qi}>
+              <CardContent className="p-4 space-y-3">
+                <p className="font-medium text-sm">{qi + 1}. {q.question || q.q}</p>
+                <div className="space-y-2">
+                  {q.options.map(function(opt: string, oi: number) {
+                    var isMyChoice = answers[qi] === oi
+                    return (
+                      <button
+                        key={oi}
+                        onClick={function() { setAnswers(function(prev) { return { ...prev, [qi]: oi } }) }}
+                        className={"w-full text-right p-3 rounded-lg border text-sm transition-colors " + (
+                          isMyChoice ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
+                        )}
+                      >
+                        <span className="ml-2 font-bold">{String.fromCharCode(65 + oi)}.</span> {opt}
+                      </button>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
         <Button
           className="w-full"
-          disabled={Object.keys(answers).length < examQuestions.length || submitting}
-          onClick={async () => {
+          disabled={!allAnswered || submitting}
+          onClick={async function() {
             setSubmitting(true)
             try {
-              const res = await fetch('/api/exams/submit', {
+              var res = await fetch('/api/exams/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentId, examId: takingExam, answers }),
+                body: JSON.stringify({ studentId: studentId, examId: takingExam, answers: answers }),
               })
-              const data = await res.json()
+              var data = await res.json()
               if (res.ok) {
-                toast.success(`الدرجة: ${data.result.score}/${data.result.maxScore} ${data.passed ? '✅ ناجح' : '❌ راسب'}`)
-                setTakingExam(null); setAnswers({}); setExamQuestions([])
-                // Refresh the page data
-                window.location.reload()
+                setExamResult({ score: data.result.score, maxScore: data.result.maxScore, passed: data.passed })
+                setSubmittedExamIds(function(prev) { return new Set([...prev, takingExam]) })
+                toast.success('تم تقديم الامتحان بنجاح! الدرجة: ' + data.result.score + '/' + data.result.maxScore)
               } else {
                 toast.error(data.error || 'خطأ في التقديم')
               }
-            } catch { toast.error('خطأ في الاتصال') }
+            } catch {
+              toast.error('خطأ في الاتصال')
+            }
             setSubmitting(false)
           }}
         >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : `تقديم الامتحان (${Object.keys(answers).length}/${examQuestions.length})`}
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تقديم الامتحان (' + Object.keys(answers).length + '/' + examQuestions.length + ')'}
         </Button>
       </div>
     )
@@ -815,10 +896,11 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
   // Exam List Mode
   return (
     <div className="space-y-3">
-      {exams.map((exam) => {
-        const examResult = results.find(r => r.examId === exam.id)
-        let hasMCQ = false
-        try { if ((exam as any).questions) { const parsed = JSON.parse((exam as any).questions); hasMCQ = parsed.length > 0 } } catch {}
+      {exams.map(function(exam) {
+        var examResult = results.find(function(r) { return r.examId === exam.id })
+        var isLocked = submittedExamIds.has(exam.id) || !!examResult
+        var hasMCQ = false
+        try { if ((exam as any).questions) { var parsed = JSON.parse((exam as any).questions); hasMCQ = parsed.length > 0 } } catch {}
         return (
           <Card key={exam.id} className={examResult ? 'border-emerald-500/30' : ''}>
             <CardContent className="p-4">
@@ -830,16 +912,19 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
                   <div className="min-w-0 space-y-1.5">
                     <h3 className="font-semibold text-sm">{exam.title}</h3>
                     {examResult ? (
-                      <Badge className={`text-xs ${examResult.score >= examResult.maxScore * 0.5 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                      <Badge className={"text-xs " + (examResult.score >= examResult.maxScore * 0.5 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400')}>
                         الدرجة: {examResult.score}/{examResult.maxScore}
                       </Badge>
+                    ) : isLocked ? (
+                      <Badge variant="secondary" className="text-xs">تم التقديم</Badge>
                     ) : hasMCQ ? (
-                      <Button size="sm" onClick={() => {
+                      <Button size="sm" onClick={function() {
                         try {
-                          const parsed = JSON.parse((exam as any).questions)
+                          var parsed = JSON.parse((exam as any).questions)
                           setExamQuestions(parsed)
                           setTakingExam(exam.id)
                           setAnswers({})
+                          setExamResult(null)
                         } catch { toast.error('خطأ في تحميل الأسئلة') }
                       }}>ابدأ الامتحان</Button>
                     ) : (
