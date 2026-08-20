@@ -51,14 +51,12 @@ export async function POST(request: NextRequest) {
     if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 })
 
     let receiptPath = ''
-    let receiptType = ''
 
     // Upload receipt image
     if (receipt && receipt.size > 0) {
       try {
         const upData = await chunkedUpload(receipt, 'payments', undefined, undefined)
         receiptPath = upData.filePath
-        receiptType = upData.fileType
       } catch (err: any) {
         return NextResponse.json({ error: 'فشل رفع صورة الوصل: ' + (err.message || '') }, { status: 500 })
       }
@@ -68,11 +66,8 @@ export async function POST(request: NextRequest) {
       data: {
         studentId,
         studentName: student.name,
-        studentPhone: student.phone,
-        studentGrade: student.grade,
         method,
         receiptPath,
-        receiptType,
         status: 'pending',
         amount,
         videoId,
@@ -82,13 +77,15 @@ export async function POST(request: NextRequest) {
     })
 
     // Log activity
-    await db.studentActivity.create({
-      data: {
-        studentId,
-        action: 'payment_submitted',
-        details: `قدم دفع ${amount} جنيه عن طريق ${method} - في انتظار الموافقة`,
-      },
-    })
+    try {
+      await db.studentActivity.create({
+        data: {
+          studentId,
+          action: 'payment_submitted',
+          details: 'قدم دفع ' + amount + ' جنيه عن طريق ' + method + ' - في انتظار الموافقة',
+        },
+      })
+    } catch(e) { /* silent */ }
 
     return NextResponse.json({
       payment: {
