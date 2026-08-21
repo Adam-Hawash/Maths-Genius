@@ -111,3 +111,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Extraction failed: ' + (error.message || 'Unknown error') }, { status: 500 })
   }
 }
+
