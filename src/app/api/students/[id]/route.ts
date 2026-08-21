@@ -39,28 +39,29 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { name, phone, grade, status, isFreeAccess } = body
+    const { name, phone, grade, status, isPaidAccess } = body
 
     const existing = await db.student.findUnique({ where: { id } })
     if (!existing) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 })
     }
 
+    const updateData: Record<string, any> = {}
+    if (name) updateData.name = name
+    if (phone) updateData.phone = phone
+    if (grade) updateData.grade = grade
+    if (status) updateData.status = status
+    if (typeof isPaidAccess === 'boolean') updateData.isPaidAccess = isPaidAccess
+
     const student = await db.student.update({
       where: { id },
-      data: {
-        ...(name && { name }),
-        ...(phone && { phone }),
-        ...(grade && { grade }),
-        ...(status && { status }),
-        ...(typeof isFreeAccess === 'boolean' && { isFreeAccess }),
-      },
+      data: updateData,
     })
 
     // Record status change activity
     if (status && status !== existing.status) {
       await db.studentActivity.create({
-        data: { studentId: id, action: `status_changed_to_${status}`, details: `Status changed from ${existing.status} to ${status}` },
+        data: { studentId: id, action: 'status_changed_to_' + status, details: 'Status changed from ' + existing.status + ' to ' + status },
       })
     }
 
