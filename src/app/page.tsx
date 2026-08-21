@@ -4,8 +4,8 @@ import { useAppStore } from '@/stores/app-store'
 import { Navbar } from '@/components/landing/Navbar'
 import { Footer } from '@/components/landing/Footer'
 import { StudentPendingView } from '@/components/landing/StudentPendingView'
-import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
+import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { GraduationCap, Loader2 } from 'lucide-react'
@@ -34,8 +34,8 @@ const WhatsAppButton = dynamic(() => import('@/components/landing/WhatsAppButton
 const VideoProtection = dynamic(() => import('@/components/landing/VideoProtection').then(m => ({ default: m.VideoProtection })), {
   ssr: false,
 })
-const StudentPortal = dynamic(() => import('@/components/student/StudentPortal').then(m => ({ default: m.StudentPortal })), {
-  loading: () => <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>,
+const StudentPortal = dynamic(() => import('@/components/student/StudentPortal').then(m => ({ default: m.default || m.StudentPortal })), {
+  loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
 })
 const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard').then(m => ({ default: m.default || m.AdminDashboard })), {
   loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
@@ -55,8 +55,6 @@ export default function HomePage() {
 
   // Load config + gallery + stats on mount
   useEffect(function() {
-    // Create DB tables if not exist (fixes login 500 errors)
-    fetch('/api/setup-db').catch(function() {})
     Promise.all([
       fetch('/api/config').then(function(r) { return r.json() }).catch(function() { return {} }),
       fetch('/api/gallery').then(function(r) { return r.json() }).catch(function() { return {} }),
@@ -66,6 +64,10 @@ export default function HomePage() {
       var gal = results[1]
       var sta = results[2]
       if (cfg && !configLoaded) {
+        // Defensive: if API returned { error, defaults }, unwrap to flat defaults
+        if (cfg.error && cfg.defaults) {
+          cfg = cfg.defaults
+        }
         setSiteConfig(cfg)
         setConfigLoaded(true)
       }
