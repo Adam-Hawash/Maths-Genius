@@ -1,17 +1,10 @@
-// ============================================================
-// 📄 الملف 3: src/app/api/config/route.ts
-// ============================================================
-
 // @ts-nocheck
 import { NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 
 var DEFAULTS = {
-  // === Navbar ===
   navbar_brand: 'Maths Genius',
   navbar_subtitle: 'Mr Wael Khodier',
-
-  // === Hero Section ===
   hero_badge: 'منصة تعليمية متكاملة | Comprehensive Learning Platform',
   hero_title_line1: 'Maths Genius',
   hero_title_line2: 'Mr Wael Khodier',
@@ -23,13 +16,9 @@ var DEFAULTS = {
   hero_stat3_value: '24/7',
   hero_stat3_label: 'Progress Tracking',
   hero_developer_url: 'https://hero-developer-portfolio-11.vercel.app',
-
-  // === Instructor ===
   instructor_name: 'Mr Wael Khodier',
   instructor_title: 'Mathematics Specialist | معلم الرياضيات المتخصص',
   instructor_photo: '',
-
-  // === Features Section ===
   features_title: 'لماذا تختارنا؟ | Why Choose Us?',
   features_subtitle: 'نقدّم لك تجربة تعليمية فريدة تجمع بين الشرح المبسط والتطبيق العملي في Algebra, Geometry, and More',
   feature1_title: 'شرح مبسط | Simplified Explanations',
@@ -40,12 +29,8 @@ var DEFAULTS = {
   feature3_desc: 'حل خطوة بخطوة للمسائل المعقدة مع Cheat Sheets وملخصات بصرية تسهّل الفهم والتذكّر.',
   feature4_title: 'تحضير وامتحانات | Reviews & Exams',
   feature4_desc: 'تحضير شامل ومراجعات دورية واختبارات أسبوعية لضمان التفوّق والاستعداد الكامل للامتحانات النهائية.',
-
-  // === Grades Section ===
   grades_title: 'السنوات الدراسية',
   grades_subtitle: 'اختر صفك الدراسي للوصول إلى المحتوى التعليمي المخصص لك',
-
-  // === Tips Section ===
   tips_badge: 'نصائح للتفوّق | Tips for Excellence',
   tips_title: 'نصائح الأستاذ وائل | Mr. Wael\'s Tips',
   tips_subtitle: 'نصائح ذهبية من الأستاذ وائل خضير للتفوّق في الرياضيات — Golden advice from Mr. Wael Khodier',
@@ -61,8 +46,6 @@ var DEFAULTS = {
   tips_card4_title: 'لا تتردد في السؤال',
   tips_card4_title_en: 'Never Hesitate to Ask',
   tips_card4_desc: 'إذا لم تفهم شيئاً اسأل فوراً. السؤال الجيد هو بداية الفهم العميق. Ask immediately when something is unclear.',
-
-  // === Guide Section ===
   guide_badge: 'دليلك التعليمي | Learning Guide',
   guide_title: 'كيف تستخدم المنصة؟ | How to Use the Platform',
   guide_subtitle: 'ست خطوات بسيطة لتبدأ رحلتك التعليمية في Maths Genius — Six simple steps to begin your learning journey',
@@ -84,31 +67,18 @@ var DEFAULTS = {
   guide_card6_title: 'تحديات ومسابقات',
   guide_card6_title_en: 'Challenges',
   guide_card6_desc: 'تنافس مع زملائك في تحديات رياضية ممتعة واربح مراكز متقدمة. Compete in fun math challenges with your classmates.',
-
-  // === Gallery ===
   gallery_title: 'صور طلابي الأعزاء | My Beloved Students',
   gallery_subtitle: 'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey',
-
-  // === Social Links ===
   social_facebook: '',
   social_whatsapp_channel: '',
   social_instagram: '',
   social_youtube: '',
-
-  // === WhatsApp Button ===
   whatsapp_number: '201017201680',
-
-  // === Footer ===
   footer_brand: 'Maths Genius',
   footer_copyright: 'جميع الحقوق محفوظة لـ أدهم حواش',
-
-  // === Favicon ===
   favicon_url: '',
-
-  // === Tips Section Background ===
   tips_bg_image: '',
-
-  // === API Keys ===
+  tips_section_image: '',
   resend_api_key: '',
 }
 
@@ -118,12 +88,16 @@ export async function GET() {
     var map = Object.assign({}, DEFAULTS)
     for (var i = 0; i < configs.length; i++) {
       var c = configs[i]
-      map[c.key] = c.value
+      if (c && c.key) {
+        map[c.key] = c.value
+      }
     }
     return NextResponse.json(map)
   } catch (error) {
     console.error('Config fetch error:', error)
-    return NextResponse.json({ error: error.message, defaults: DEFAULTS })
+    // IMPORTANT: Return flat DEFAULTS directly (NOT wrapped in {error, defaults})
+    // so the frontend always receives the correct shape it expects
+    return NextResponse.json(DEFAULTS)
   }
 }
 
