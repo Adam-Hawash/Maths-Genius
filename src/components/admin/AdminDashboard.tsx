@@ -17,10 +17,6 @@ import {
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
   PlayCircle, Film, FileDown, PictureInPicture2, Save, Sparkles
 } from 'lucide-react'
-import { CMSPanel } from './CMSPanel'
-import { SocialLinksPanel } from './SocialLinksPanel'
-import { CommunityPanel } from './CommunityPanel'
-import { ActivityPanel } from './ActivityPanel'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
