@@ -1642,15 +1642,14 @@ function ScheduledBroadcastsUtility() {
 
 // أداة إدارة المراحل والصفوف الدراسية الديناميكية
 function CurriculumGradesManager() {
-  const [gradesList, setGradesList] = useState<string[]>(
+  const [gradesList, setGradesList] = useState<string[]>([
     'الصف السادس',
     'الصف الأول الإعدادي',
     'الصف الثاني الإعدادي',
-    'الصف الثالث الإعدادي'
+    'الصف الثالث الإعدادي',
     'اولي باكالوريا',
   ]);
   const [newGradeName, setNewGradeName] = useState('');
-
   const handleAddGrade = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGradeName.trim()) {
