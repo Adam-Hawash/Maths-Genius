@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { safeWrite } from '@/lib/db'
+import { db, safeWrite } from '@/lib/db'
 
 // POST /api/exams/submit - Submit exam answers and auto-grade
 export async function POST(request: NextRequest) {
@@ -17,56 +16,57 @@ export async function POST(request: NextRequest) {
       where: { studentId_examId: { studentId, examId } },
     })
     if (existing) {
-      return NextResponse.json({ error: 'تم تقديم هذا الامتحان بالفعل' }, { status: 400 })
+      return NextResponse.json({ error: 'تم تقديم هذا الامتحان بالفعل ولا يمكنك إعادته' }, { status: 400 })
     }
 
-    // Fetch exam with questions (stored as JSON string in Exam.questions field)
+    // Fetch exam with questions
     const exam = await db.exam.findUnique({ where: { id: examId } })
     if (!exam) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
     }
 
-    // Parse MCQ questions from the exam's JSON questions field
-    var questions: any[] = []
+    // Parse MCQ questions
+    let questions: any[] = []
     if (exam.questions) {
       try {
-        questions = JSON.parse(exam.questions)
+        questions = typeof exam.questions === 'string' ? JSON.parse(exam.questions) : exam.questions
       } catch {
-        // questions field is not valid JSON
+        questions = []
       }
     }
 
     if (questions.length === 0) {
-      return NextResponse.json({ error: 'لا توجد أسئلة MCQ في هذا الامتحان' }, { status: 400 })
+      return NextResponse.json({ error: 'لا توجد أسئلة في هذا الامتحان' }, { status: 400 })
     }
 
-    // Auto-grade: compare each answer to the correct option index
-    var score = 0
-    var wrongQuestions: { question: string; studentAnswer: string; correctAnswer: string }[] = []
+    // Auto-grade with safe answer checking (supports both object and array formats)
+    let score = 0
+    const wrongQuestions: { question: string; studentAnswer: string; correctAnswer: string }[] = []
 
     questions.forEach(function(q: any, i: number) {
-      var studentAnswer = answers[i]
-      var correctIdx = typeof q.correct === 'number' ? q.correct : 0
-      if (studentAnswer === correctIdx) {
+      // التعامل مع answers سواء كانت Array أو Object بـ Keys رقمية
+      const studentAnswer = Array.isArray(answers) ? answers[i] : (answers[i] !== undefined ? answers[i] : answers[String(i)])
+      const correctIdx = typeof q.correct === 'number' ? q.correct : 0
+
+      if (studentAnswer !== undefined && studentAnswer === correctIdx) {
         score++
       } else {
-        var opts = Array.isArray(q.options) ? q.options : []
+        const opts = Array.isArray(q.options) ? q.options : []
         wrongQuestions.push({
           question: q.question || q.q || '',
-          studentAnswer: typeof studentAnswer === 'number' && opts[studentAnswer] ? String.fromCharCode(65 + studentAnswer) + ') ' + opts[studentAnswer] : 'لم يتم الإجابة',
+          studentAnswer: (typeof studentAnswer === 'number' && opts[studentAnswer]) ? String.fromCharCode(65 + studentAnswer) + ') ' + opts[studentAnswer] : 'لم يتم الإجابة',
           correctAnswer: opts[correctIdx] ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx] : '',
         })
       }
     })
 
-    var maxScore = questions.length
-    var passScore = exam.passScore || 50
-    // passScore is stored as percentage (0-100), calculate actual passing score count
-    var passCount = Math.ceil(maxScore * passScore / 100)
-    var passed = score >= passCount
+    const maxScore = questions.length
+    const passScore = exam.passScore || 50
+    const passCount = Math.ceil(maxScore * passScore / 100)
+    const passed = score >= passCount
 
-    // Save result
-    var result = await safeWrite(function() {
+    // Save result safely
+    const result = await safeWrite(function() {
       return db.examResult.create({
         data: {
           studentId: studentId,
