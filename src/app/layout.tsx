@@ -34,21 +34,21 @@ export default async function RootLayout({
       initialConfig[configs[i].key] = configs[i].value;
     }
   } catch (e) {
-    /* DB not available yet */
+    /* DB not available yet — initialConfig stays as empty object, frontend will fetch via /api/config */
   }
 
   // Favicon: use user's custom image or empty (no Z logo)
   var faviconUrl = initialConfig.favicon_url || "https://imgh.in/host/4pdrhw";
 
-  // Collect all image URLs for preloading
-  var heroBg = initialConfig.hero_bg_image || "";
-  var instructorPhoto = initialConfig.instructor_photo || "";
-  var tipsBg = initialConfig.tips_bg_image || "";
-  var siteLogo = initialConfig.site_logo || "";
-  var tip1 = initialConfig.tip1_image || "";
-  var tip2 = initialConfig.tip2_image || "";
-  var tip3 = initialConfig.tip3_image || "";
-  var tipsSectionImg = initialConfig.tips_section_image || "";
+  // Collect all image URLs for preloading — safely access each key
+  var heroBg = (initialConfig.hero_bg_image || "");
+  var instructorPhoto = (initialConfig.instructor_photo || "");
+  var tipsBg = (initialConfig.tips_bg_image || "");
+  var siteLogo = (initialConfig.site_logo || "");
+  var tip1 = (initialConfig.tip1_image || "");
+  var tip2 = (initialConfig.tip2_image || "");
+  var tip3 = (initialConfig.tip3_image || "");
+  var tipsSectionImg = (initialConfig.tips_section_image || "");
 
   var allImages = [heroBg, instructorPhoto, tipsBg, siteLogo, tip1, tip2, tip3, tipsSectionImg].filter(function (url) {
     return url && url.length > 0;
