@@ -4,7 +4,6 @@ import { useAppStore } from '@/stores/app-store'
 import { Navbar } from '@/components/landing/Navbar'
 import { Footer } from '@/components/landing/Footer'
 import { StudentPendingView } from '@/components/landing/StudentPendingView'
-import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
@@ -63,11 +62,12 @@ export default function HomePage() {
       var cfg = results[0]
       var gal = results[1]
       var sta = results[2]
+      // FIXED: defensive unwrap — if config API returned error shape, strip it
+      if (cfg && cfg.error && cfg.defaults) {
+        console.warn('page.tsx: config API returned error shape, using defaults')
+        cfg = cfg.defaults
+      }
       if (cfg && !configLoaded) {
-        // Defensive: if API returned { error, defaults }, unwrap to flat defaults
-        if (cfg.error && cfg.defaults) {
-          cfg = cfg.defaults
-        }
         setSiteConfig(cfg)
         setConfigLoaded(true)
       }
@@ -137,7 +137,6 @@ export default function HomePage() {
 
       {currentView === 'student-pending' && <StudentPendingView />}
       {currentView === 'student-portal' && <StudentPortal />}
-      {currentView === 'student-payment' && <StudentPaymentView />}
       {currentView === 'admin-dashboard' && <AdminDashboard />}
 
       {showFooter && <Footer />}
