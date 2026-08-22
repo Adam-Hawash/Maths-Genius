@@ -4,10 +4,10 @@ import { useAppStore } from '@/stores/app-store'
 import { Navbar } from '@/components/landing/Navbar'
 import { Footer } from '@/components/landing/Footer'
 import { StudentPendingView } from '@/components/landing/StudentPendingView'
+import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
-import { useEffect, useState } from 'react'
-import { GraduationCap, Loader2 } from 'lucide-react'
+import { useEffect } from 'react'
 
 const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
   loading: () => <div className="min-h-[70vh] bg-[#0F0D0A]" />,
@@ -26,6 +26,10 @@ const TipsSection = dynamic(() => import('@/components/landing/TipsSection'), {
 })
 const GallerySection = dynamic(() => import('@/components/landing/GallerySection'), {
   loading: () => <div className="h-20" />,
+})
+const LessonsSection = dynamic(() => import('@/components/landing/LessonsSection'), {
+  loading: () => <div className="h-20" />,
+  ssr: false,
 })
 const WhatsAppButton = dynamic(() => import('@/components/landing/WhatsAppButton').then(m => ({ default: m.WhatsAppButton })), {
   ssr: false,
@@ -50,10 +54,18 @@ export default function HomePage() {
   var setConfigLoaded = store.setConfigLoaded
   var setStats = store.setStats
 
-  const [appReady, setAppReady] = useState(false)
-
-  // Load config + gallery + stats on mount
+  // Load config + gallery + stats on mount — NON-BLOCKING, page renders immediately
   useEffect(function() {
+    // Use server-injected config as instant fallback
+    if (typeof window !== 'undefined' && (window as any).__INITIAL_CONFIG__) {
+      var injected = (window as any).__INITIAL_CONFIG__
+      if (injected && Object.keys(injected).length > 0 && !configLoaded) {
+        setSiteConfig(injected)
+        setConfigLoaded(true)
+      }
+    }
+
+    // Fetch fresh data in background (non-blocking)
     Promise.all([
       fetch('/api/config').then(function(r) { return r.json() }).catch(function() { return {} }),
       fetch('/api/gallery').then(function(r) { return r.json() }).catch(function() { return {} }),
@@ -62,12 +74,12 @@ export default function HomePage() {
       var cfg = results[0]
       var gal = results[1]
       var sta = results[2]
-      // FIXED: defensive unwrap — if config API returned error shape, strip it
+      // Defensive: if config API returned error shape, unwrap defaults
       if (cfg && cfg.error && cfg.defaults) {
         console.warn('page.tsx: config API returned error shape, using defaults')
         cfg = cfg.defaults
       }
-      if (cfg && !configLoaded) {
+      if (cfg && Object.keys(cfg).length > 0) {
         setSiteConfig(cfg)
         setConfigLoaded(true)
       }
@@ -77,35 +89,11 @@ export default function HomePage() {
       if (sta && sta.stats) {
         setStats(sta.stats)
       }
-      setAppReady(true)
     })
   }, [])
 
-  const showFooter = currentView === 'landing'
-  const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
-
-  // Full-page loading screen
-  if (!appReady) {
-    return (
-      <div className="fixed inset-0 z-[9999] bg-[#0F0D0A] flex flex-col items-center justify-center gap-6">
-        <div className="relative">
-          <div className="absolute -inset-6 rounded-full bg-[#C49A38]/10 blur-xl" />
-          <div className="relative w-20 h-20 rounded-2xl bg-[#1A1714] border border-[#C49A38]/30 flex items-center justify-center">
-            <GraduationCap className="h-10 w-10 text-[#E5BE5A]" />
-          </div>
-        </div>
-        <div className="text-center space-y-3">
-          <h1 className="text-2xl font-bold text-white tracking-wide">
-            <span className="text-[#E5BE5A]">Maths</span> Genius
-          </h1>
-          <div className="flex items-center gap-3 justify-center">
-            <Loader2 className="h-4 w-4 animate-spin text-[#C49A38]" />
-            <p className="text-white/40 text-sm">جاري التحميل...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  var showFooter = currentView === 'landing'
+  var showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -118,6 +106,7 @@ export default function HomePage() {
           <FeaturesGuideSection />
           <FeaturesSection />
           <GradesSection />
+          <LessonsSection />
           <TipsSection />
           <GallerySection />
         </main>
@@ -137,6 +126,7 @@ export default function HomePage() {
 
       {currentView === 'student-pending' && <StudentPendingView />}
       {currentView === 'student-portal' && <StudentPortal />}
+      {currentView === 'student-payment' && <StudentPaymentView />}
       {currentView === 'admin-dashboard' && <AdminDashboard />}
 
       {showFooter && <Footer />}
