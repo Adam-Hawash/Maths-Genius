@@ -1,41 +1,54 @@
-
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-export async function GET() {
+// PUT - Approve or reject a payment
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const [totalStudents, pendingStudents, approvedStudents, totalVideos, totalHomework, totalExams, totalAnnouncements, totalDiscussions] =
-      await Promise.all([
-        db.student.count(),
-        db.student.count({ where: { status: 'pending' } }),
-        db.student.count({ where: { status: 'approved' } }),
-        db.video.count(),
-        db.homework.count(),
-        db.exam.count(),
-        db.announcement.count(),
-        db.discussion.count(),
-      ])
+    var { id } = await params
+    var body = await request.json()
+    var { status, adminNotes } = body
 
-    const studentGrades = await db.student.findMany({
-      select: { grade: true },
-      distinct: ['grade'],
+    if (!status || (status !== 'approved' && status !== 'rejected')) {
+      return NextResponse.json({ error: 'status must be approved or rejected' }, { status: 400 })
+    }
+
+    var payment = await db.payment.findUnique({ where: { id } })
+    if (!payment) {
+      return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
+    }
+
+    var updated = await db.payment.update({
+      where: { id },
+      data: {
+        status,
+        notes: adminNotes !== undefined ? adminNotes : (payment.notes || ''),
+      },
     })
 
-    const grades = studentGrades.map((s) => s.grade)
+    // If approved, student should have access to the video
+    // The video access check in StudentPortal will look for approved payments
 
-    return NextResponse.json({
-      totalStudents,
-      pendingStudents,
-      approvedStudents,
-      totalVideos,
-      totalHomework,
-      totalExams,
-      totalAnnouncements,
-      totalDiscussions,
-      grades,
-    })
-  } catch (error) {
-    console.error('Stats error:', error)
+    return NextResponse.json({ message: 'Payment updated', payment: updated })
+  } catch (error: any) {
+    console.error('Payment update error:', error)
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
+  }
+}
+
+// DELETE - Delete a payment
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    var { id } = await params
+    await db.payment.delete({ where: { id } })
+    return NextResponse.json({ message: 'Payment deleted' })
+  } catch (error: any) {
+    console.error('Payment delete error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
