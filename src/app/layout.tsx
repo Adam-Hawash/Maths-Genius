@@ -27,32 +27,23 @@ export default async function RootLayout({
 }>) {
   var initialConfig: Record<string, string> = {};
   try {
-    var dbModule = await import("@/lib/db");
-    var db = dbModule.db;
-    var configs = await db.siteConfig.findMany();
-    for (var i = 0; i < configs.length; i++) {
-      initialConfig[configs[i].key] = configs[i].value;
+    // Use dynamic import with timeout to avoid blocking the page if DB is slow
+    var dbPromise = import("@/lib/db").then(function(dbModule) {
+      return dbModule.db.siteConfig.findMany();
+    });
+    var configs = await Promise.race([
+      dbPromise,
+      new Promise(function(resolve) { setTimeout(function() { resolve([]) }, 3000) })
+    ]);
+    for (var i = 0; i < (configs as any[]).length; i++) {
+      initialConfig[(configs as any[])[i].key] = (configs as any[])[i].value;
     }
   } catch (e) {
-    /* DB not available yet — initialConfig stays as empty object, frontend will fetch via /api/config */
+    /* DB not available yet — client will fetch via /api/config */
   }
 
   // Favicon: use user's custom image or empty (no Z logo)
   var faviconUrl = initialConfig.favicon_url || "https://imgh.in/host/4pdrhw";
-
-  // Collect all image URLs for preloading — safely access each key
-  var heroBg = (initialConfig.hero_bg_image || "");
-  var instructorPhoto = (initialConfig.instructor_photo || "");
-  var tipsBg = (initialConfig.tips_bg_image || "");
-  var siteLogo = (initialConfig.site_logo || "");
-  var tip1 = (initialConfig.tip1_image || "");
-  var tip2 = (initialConfig.tip2_image || "");
-  var tip3 = (initialConfig.tip3_image || "");
-  var tipsSectionImg = (initialConfig.tips_section_image || "");
-
-  var allImages = [heroBg, instructorPhoto, tipsBg, siteLogo, tip1, tip2, tip3, tipsSectionImg].filter(function (url) {
-    return url && url.length > 0;
-  });
 
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
@@ -71,18 +62,6 @@ export default async function RootLayout({
 
         {/* Favicon — user's custom image, NO Z logo */}
         <link rel="icon" href={faviconUrl} />
-
-        {/* Preload all config images for instant display */}
-        {allImages.map(function (url, idx) {
-          return (
-            <link
-              key={"preload-" + idx}
-              rel="preload"
-              href={url}
-              as="image"
-            />
-          );
-        })}
 
         {/* Inject config server-side for instant client access */}
         <script
