@@ -1,103 +1,92 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { chunkedUpload } from '@/lib/chunked-upload'
+import { db, safeWrite } from '@/lib/db'
 
-// GET /api/payments - List all payments (admin)
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const status = searchParams.get('status') || ''
-  const studentId = searchParams.get('studentId') || ''
-
   try {
-    const where: any = {}
-    if (status) where.status = status
-    if (studentId) where.studentId = studentId
-
-    const payments = await db.payment.findMany({
-      where,
+    var status = request.nextUrl.searchParams.get('status') || ''
+    var whereClause: any = {}
+    if (status) {
+      whereClause.status = status
+    }
+    var payments = await db.payment.findMany({
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
+      take: 100,
     })
-
-    return NextResponse.json({ payments })
-  } catch (error) {
-    console.error('Payments list error:', error)
-    return NextResponse.json({ error: 'Failed to fetch payments' }, { status: 500 })
+    return NextResponse.json({ payments: payments })
+  } catch (error: any) {
+    console.error('Payments fetch error:', error)
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
   }
 }
 
-// POST /api/payments - Submit a new payment (student uploads receipt)
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData()
-    const studentId = formData.get('studentId') as string
-    const method = formData.get('method') as string
-    const amount = parseFloat(formData.get('amount') as string) || 0
-    const videoId = formData.get('videoId') as string || ''
-    const videoTitle = formData.get('videoTitle') as string || ''
-    const note = formData.get('note') as string || ''
-    const receipt = formData.get('receipt') as File | null
+    var formData = await request.formData()
+    var videoId = formData.get('videoId') as string || ''
+    var videoTitle = formData.get('videoTitle') as string || ''
+    var amount = parseFloat(formData.get('amount') as string || '0')
+    var paymentMethod = formData.get('paymentMethod') as string || ''
+    var receipt = formData.get('receipt') as File | null
+    var studentId = formData.get('studentId') as string || ''
+    var studentName = formData.get('studentName') as string || ''
+    var notes = formData.get('notes') as string || ''
 
-    if (!studentId || !method) {
-      return NextResponse.json({ error: 'studentId and method required' }, { status: 400 })
+    if (!videoId || !paymentMethod || !receipt) {
+      return NextResponse.json({ error: 'videoId, paymentMethod, and receipt are required' }, { status: 400 })
     }
 
-    const allowedMethods = ['fawry', 'instapay', 'vodafone_cash']
-    if (!allowedMethods.includes(method)) {
-      return NextResponse.json({ error: 'طريقة الدفع غير صالحة' }, { status: 400 })
-    }
-
-    // Get student info
-    const student = await db.student.findUnique({ where: { id: studentId } })
-    if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 })
-
-    let receiptPath = ''
-
-    // Upload receipt image
-    if (receipt && receipt.size > 0) {
-      try {
-        const upData = await chunkedUpload(receipt, 'payments', undefined, undefined)
-        receiptPath = upData.filePath
-      } catch (err: any) {
-        return NextResponse.json({ error: 'فشل رفع صورة الوصل: ' + (err.message || '') }, { status: 500 })
+    // Save receipt file
+    var receiptPath = ''
+    if (receipt) {
+      var chunks: Uint8Array[] = []
+      var reader = receipt.stream().getReader()
+      while (true) {
+        var chunk = await reader.read()
+        if (chunk.done) break
+        chunks.push(chunk.value)
       }
-    }
+      var buffer = new Uint8Array(chunks.reduce((a, c) => a + c.length, 0))
+      var offset = 0
+      for (var c of chunks) {
+        buffer.set(c, offset)
+        offset += c.length
+      }
+      var base64 = Buffer.from(buffer).toString('base64')
 
-    const payment = await db.payment.create({
-      data: {
-        studentId,
-        studentName: student.name,
-        method,
-        receiptPath,
-        status: 'pending',
-        amount,
-        videoId,
-        videoTitle,
-        note,
-      },
-    })
-
-    // Log activity
-    try {
-      await db.studentActivity.create({
+      // Store in Media table
+      var media = await db.media.create({
         data: {
-          studentId,
-          action: 'payment_submitted',
-          details: 'قدم دفع ' + amount + ' جنيه عن طريق ' + method + ' - في انتظار الموافقة',
+          filename: receipt.name,
+          filePath: 'receipts/' + Date.now() + '_' + receipt.name,
+          fileType: receipt.type,
+          fileSize: String(receipt.size),
+          data: base64,
+          category: 'receipts',
         },
       })
-    } catch(e) { /* silent */ }
+      receiptPath = media.filePath
+    }
 
-    return NextResponse.json({
-      payment: {
-        id: payment.id,
-        status: payment.status,
-        method: payment.method,
-        amount: payment.amount,
-        videoTitle: payment.videoTitle,
-      },
+    var payment = await safeWrite(function() {
+      return db.payment.create({
+        data: {
+          studentId,
+          studentName,
+          videoId,
+          videoTitle,
+          amount,
+          paymentMethod,
+          receiptPath,
+          notes,
+          status: 'pending',
+        },
+      })
     })
-  } catch (error) {
+
+    return NextResponse.json({ message: 'تم إرسال إيصال الدفع بنجاح! سيتم مراجعته قريباً', payment }, { status: 201 })
+  } catch (error: any) {
     console.error('Payment submit error:', error)
-    return NextResponse.json({ error: 'Failed to submit payment' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
   }
 }
