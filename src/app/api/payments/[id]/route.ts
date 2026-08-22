@@ -1,54 +1,105 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// PUT - Approve or reject a payment
+// PUT /api/payments/[id] - Approve or reject a payment (admin)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    var { id } = await params
-    var body = await request.json()
-    var { status, adminNotes } = body
+  var id = (await params).id
 
-    if (!status || (status !== 'approved' && status !== 'rejected')) {
-      return NextResponse.json({ error: 'status must be approved or rejected' }, { status: 400 })
+  try {
+    var body = await request.json()
+    var status = body.status || ''
+    var adminNotes = body.adminNotes || ''
+    var adminId = body.adminId || 'admin'
+
+    if (!status || !['approved', 'rejected'].includes(status)) {
+      return NextResponse.json({ error: 'Invalid status. Use approved or rejected' }, { status: 400 })
     }
 
     var payment = await db.payment.findUnique({ where: { id } })
-    if (!payment) {
-      return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
+    if (!payment) return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
+
+    if (payment.status !== 'pending') {
+      return NextResponse.json({ error: 'تم مراجعة هذا الدفع بالفعل' }, { status: 400 })
     }
 
     var updated = await db.payment.update({
       where: { id },
       data: {
-        status,
-        notes: adminNotes !== undefined ? adminNotes : (payment.notes || ''),
+        status: status,
+        reviewedAt: new Date(),
+        reviewedBy: adminId,
+        note: adminNotes ? (payment.note ? payment.note + ' | رفض: ' + adminNotes : adminNotes) : payment.note,
       },
     })
 
-    // If approved, student should have access to the video
-    // The video access check in StudentPortal will look for approved payments
+    // If approved and there is a videoId, grant access
+    if (status === 'approved' && payment.videoId) {
+      try {
+        await db.videoAccess.upsert({
+          where: {
+            videoId_studentId: {
+              videoId: payment.videoId,
+              studentId: payment.studentId,
+            },
+          },
+          create: {
+            videoId: payment.videoId,
+            studentId: payment.studentId,
+            grantedBy: adminId,
+          },
+          update: {},
+        })
+      } catch (err) {
+        console.error('Error granting video access:', err)
+      }
 
-    return NextResponse.json({ message: 'Payment updated', payment: updated })
-  } catch (error: any) {
+      // Log activity
+      try {
+        await db.studentActivity.create({
+          data: {
+            studentId: payment.studentId,
+            action: 'payment_approved',
+            details: 'تم قبول الدفع (' + payment.amount + ' جنيه) - تم فتح الفيديو: ' + payment.videoTitle,
+          },
+        })
+      } catch (e) { /* silent */ }
+    }
+
+    // If rejected, log activity
+    if (status === 'rejected') {
+      try {
+        await db.studentActivity.create({
+          data: {
+            studentId: payment.studentId,
+            action: 'payment_rejected',
+            details: 'تم رفض الدفع (' + payment.amount + ' جنيه) عن طريق ' + payment.method,
+          },
+        })
+      } catch (e) { /* silent */ }
+    }
+
+    return NextResponse.json({ payment: updated })
+  } catch (error) {
     console.error('Payment update error:', error)
-    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to update payment' }, { status: 500 })
   }
 }
 
-// DELETE - Delete a payment
+// DELETE /api/payments/[id] - Delete a payment
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  var id = (await params).id
+
   try {
-    var { id } = await params
     await db.payment.delete({ where: { id } })
-    return NextResponse.json({ message: 'Payment deleted' })
-  } catch (error: any) {
+    return NextResponse.json({ success: true })
+  } catch (error) {
     console.error('Payment delete error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to delete payment' }, { status: 500 })
   }
 }
