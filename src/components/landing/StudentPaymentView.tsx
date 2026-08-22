@@ -1,196 +1,134 @@
-'use client'
+import { NextRequest, NextResponse } from 'next/server'
 
-import { useAppStore } from '@/stores/app-store'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { useState } from 'react'
-import { ArrowRight, Upload, CheckCircle2, Loader2, CreditCard, Smartphone, Building2 } from 'lucide-react'
-import { toast } from 'sonner'
+export async function POST(request: NextRequest) {
+  try {
+    var formData = await request.formData()
+    var file = formData.get('file') as File | null
+    var fileUrl = formData.get('fileUrl') as string | null
 
-export function StudentPaymentView() {
-  const { currentStudent, pendingPaymentVideo, setView, siteConfig } = useAppStore()
-  const [method, setMethod] = useState('')
-  const [receipt, setReceipt] = useState<File | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
+    if (!file && !fileUrl) {
+      return NextResponse.json({ error: 'الرجاء رفع ملف أو إدخال رابط' }, { status: 400 })
+    }
 
-  const video = pendingPaymentVideo
-  if (!video || !currentStudent) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <p className="text-muted-foreground">لا يوجد فيديو محدد للدفع</p>
-      </div>
-    )
-  }
+    var imageBase64 = ''
+    var mimeType = ''
 
-  const price = video.price || 0
-  const vodafoneCash = siteConfig.payment_vodafone_cash || ''
-  const instapay = siteConfig.payment_instapay || ''
-  const fawry = siteConfig.payment_fawry || ''
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('حجم الصورة كبير جداً (الحد 5 ميجا)')
-        return
+      var bytes = await file.arrayBuffer()
+      var buffer = Buffer.from(bytes)
+      imageBase64 = buffer.toString('base64')
+      mimeType = file.type || 'image/png'
+    } else if (fileUrl) {
+      try {
+        var res = await fetch(fileUrl)
+        if (!res.ok) {
+          return NextResponse.json({ error: 'فشل جلب الملف من الرابط' }, { status: 400 })
+        }
+        var arrayBuf = await res.arrayBuffer()
+        var buf = Buffer.from(arrayBuf)
+        imageBase64 = buf.toString('base64')
+        var contentType = res.headers.get('content-type') || ''
+        mimeType = contentType || 'image/png'
+      } catch (fetchErr: any) {
+        return NextResponse.json({ error: 'فشل جلب الملف: ' + (fetchErr.message || '') }, { status: 400 })
       }
-      setReceipt(file)
-      const reader = new FileReader()
-      reader.onload = () => setPreview(reader.result as string)
-      reader.readAsDataURL(file)
     }
-  }
 
-  const handleSubmit = async () => {
-    if (!method) { toast.error('اختر طريقة الدفع أولاً'); return }
-    if (!receipt) { toast.error('ارفع صورة الوصل'); return }
+    var apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      return NextResponse.json({ 
+        error: 'مفتاح GEMINI_API_KEY غير موجود في الإعدادات. اذهب إلى إعدادات Vercel → Environment Variables وأضف المفتاح.',
+        errorKey: 'GEMINI_API_KEY',
+        errorHint: 'احصل على المفتاح من https://aistudio.google.com/apikey وأضفه في Vercel Dashboard → Settings → Environment Variables'
+      }, { status: 500 })
+    }
 
-    setSubmitting(true)
+    var prompt = 'أنت معلم رياضيات خبير. استخرج كل الأسئلة من هذه الصفحة/الصورة. لكل سؤال اكتب: رقم السؤال، نص السؤال كاملاً، الإجابة الصحيحة، و4 اختيارات (إذا كان سؤال اختيار من متعدد) أو "لا يوجد" إذا كان سؤال حر. رد بـ JSON فقط بدون أي نص إضافي بهذا الشكل بالضبط: {"questions": [{"question": "نص السؤال", "options": ["اختيار1", "اختيار2", "اختيار3", "اختيار4"], "correct": 0}]} ملاحظات: correct = index الاختيار الصحيح (0-3)، إذا السؤال حر حط options كلها "لا يوجد" و correct = 0، لو فيها معادلات اكتبها بالعادي، استخرج كل الأسئلة الموجودة.'
+
+    var geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey
+
+    var body = {
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inlineData: { mimeType: mimeType, data: imageBase64 } }
+        ]
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+    }
+
+    var response
     try {
-      const formData = new FormData()
-      formData.append('studentId', currentStudent.id)
-      formData.append('method', method)
-      formData.append('amount', String(price))
-      formData.append('videoId', video.id)
-      formData.append('videoTitle', video.title)
-      formData.append('receipt', receipt)
-
-      const res = await fetch('/api/payments', { method: 'POST', body: formData })
-      if (res.ok) {
-        setSubmitted(true)
-        toast.success('تم إرسال طلب الدفع بنجاح! سيتم مراجعته قريباً')
-      } else {
-        const data = await res.json().catch(() => ({}))
-        toast.error(data.error || 'فشل إرسال طلب الدفع')
-      }
-    } catch {
-      toast.error('خطأ في الاتصال')
+      response = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    } catch (fetchErr: any) {
+      return NextResponse.json({ error: 'فشل الاتصال بخدمة Gemini: ' + (fetchErr.message || '') }, { status: 500 })
     }
-    setSubmitting(false)
+
+    if (!response.ok) {
+      var errText = ''
+      try { errText = await response.text() } catch(e) { errText = '' }
+      console.error('Gemini error:', response.status, errText)
+      if (response.status === 400) {
+        return NextResponse.json({ error: 'خطأ في طلب Gemini — تأكد أن المفتاح صحيح وملف الصورة سليم' }, { status: 500 })
+      }
+      if (response.status === 403 || response.status === 401) {
+        return NextResponse.json({ error: 'مفتاح GEMINI_API_KEY غير صالح أو منتهي. جرب مفتاح جديد من https://aistudio.google.com/apikey' }, { status: 500 })
+      }
+      if (response.status === 429) {
+        return NextResponse.json({ error: 'تم تجاوز حد الاستخدام — انتظر قليلاً وحاول مرة أخرى' }, { status: 500 })
+      }
+      return NextResponse.json({ error: 'خطأ في خدمة الذكاء الاصطناعي: ' + response.status }, { status: 500 })
+    }
+
+    var data
+    try {
+      data = await response.json()
+    } catch(e) {
+      return NextResponse.json({ error: 'فشل تحليل رد الذكاء الاصطناعي' }, { status: 500 })
+    }
+
+    var text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text
+
+    if (!text) {
+      var blockReason = (data.candidates && data.candidates[0] && data.candidates[0].finishReason) || ''
+      if (blockReason === 'SAFETY') {
+        return NextResponse.json({ error: 'تم حظر الرد بسبب سياسة الأمان — جرب صورة أخرى أو أعد صياغة المحتوى' }, { status: 500 })
+      }
+      return NextResponse.json({ error: 'لم يرد الذكاء الاصطناعي بأي نتيجة. تأكد أن الصورة تحتوي على أسئلة واضحة.' }, { status: 500 })
+    }
+
+    var jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      return NextResponse.json({ error: 'لم يتم تحليل رد الذكاء الاصطناعي كـ JSON. جرب صورة أوضح.', aiRawText: text.substring(0, 200) }, { status: 500 })
+    }
+
+    var parsed
+    try {
+      parsed = JSON.parse(jsonMatch[0])
+    } catch (parseErr) {
+      return NextResponse.json({ error: 'صيغة JSON غير صحيحة من الذكاء الاصطناعي. جرب صورة أخرى.' }, { status: 500 })
+    }
+
+    var questions = parsed.questions || []
+    var validQuestions = questions.map(function(q: any) {
+      var opts = Array.isArray(q.options) ? q.options : ['لا يوجد', 'لا يوجد', 'لا يوجد', 'لا يوجد']
+      while (opts.length < 4) opts.push('لا يوجد')
+      var correct = typeof q.correct === 'number' ? q.correct : 0
+      if (correct < 0 || correct > 3) correct = 0
+      return { question: q.question || '', options: opts.slice(0, 4), correct: correct }
+    }).filter(function(q: any) { return q.question.trim().length > 0 })
+
+    if (validQuestions.length === 0) {
+      return NextResponse.json({ error: 'لم يتم استخراج أي أسئلة من الصورة. تأكد أن الصورة تحتوي على أسئلة واضحة ومقروءة.' }, { status: 400 })
+    }
+
+    return NextResponse.json({ success: true, questions: validQuestions, totalExtracted: validQuestions.length })
+  } catch (error: any) {
+    console.error('Extract questions error:', error)
+    return NextResponse.json({ error: 'فشل الاستخراج: ' + (error.message || 'خطأ غير معروف') }, { status: 500 })
   }
-
-  if (submitted) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center p-4">
-        <Card className="max-w-md w-full text-center">
-          <CardContent className="pt-8 pb-8 space-y-4">
-            <CheckCircle2 className="h-16 w-16 text-emerald-500 mx-auto" />
-            <h2 className="text-xl font-bold">تم إرسال طلب الدفع!</h2>
-            <p className="text-muted-foreground">سيتم مراجعة الدفع من قبل الأستاذ وائل وتشغيل الفيديو فوراً بعد التأكيد.</p>
-            <Button onClick={() => setView('student-portal')} className="mt-4">
-              <ArrowRight className="h-4 w-4 ml-1" />
-              العودة للدروس
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  const paymentMethods = [
-    { id: 'vodafone_cash', label: 'Vodafone Cash', icon: Smartphone, number: vodafoneCash, color: 'text-red-500' },
-    { id: 'instapay', label: 'InstaPay', icon: CreditCard, number: instapay, color: 'text-purple-500' },
-    { id: 'fawry', label: 'Fawry', icon: Building2, number: fawry, color: 'text-blue-500' },
-  ]
-
-  const availableMethods = paymentMethods.filter(m => m.number)
-
-  return (
-    <div className="min-h-[60vh] p-4 max-w-2xl mx-auto space-y-6">
-      {/* Back + Video Info */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => setView('student-portal')}>
-          <ArrowRight className="h-4 w-4" />
-        </Button>
-        <h1 className="text-xl font-bold">الدفع</h1>
-      </div>
-
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">الدرس</p>
-            <p className="font-bold text-lg">{video.title}</p>
-            <p className="text-2xl font-bold text-amber-500">{price} ج.م</p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Payment Methods */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">اختر طريقة الدفع</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {availableMethods.length === 0 ? (
-            <p className="text-muted-foreground text-sm">لم يتم إعداد طرق الدفع بعد. تواصل مع الأستاذ وائل.</p>
-          ) : (
-            availableMethods.map((m) => (
-              <div
-                key={m.id}
-                onClick={() => setMethod(m.id)}
-                className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                  method === m.id ? 'border-amber-500 bg-amber-500/5' : 'border-muted hover:border-muted-foreground/30'
-                }`}
-              >
-                <m.icon className={`h-6 w-6 ${m.color}`} />
-                <div className="flex-1">
-                  <p className="font-semibold text-sm">{m.label}</p>
-                  <p className="text-xs text-muted-foreground font-mono" dir="ltr">{m.number}</p>
-                </div>
-                {method === m.id && <CheckCircle2 className="h-5 w-5 text-amber-500" />}
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Receipt Upload */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">رفع صورة الوصل</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div
-            onClick={() => document.getElementById('receipt-input')?.click()}
-            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
-              preview ? 'border-emerald-500 bg-emerald-500/5' : 'border-muted hover:border-muted-foreground/30'
-            }`}
-          >
-            {preview ? (
-              <img src={preview} alt="وصل" className="max-h-48 mx-auto rounded-lg" />
-            ) : (
-              <div className="space-y-2">
-                <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">اضغط لرفع صورة الوصل</p>
-                <p className="text-xs text-muted-foreground">PNG, JPG - حد أقصى 5 ميجا</p>
-              </div>
-            )}
-          </div>
-          <input
-            id="receipt-input"
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Submit */}
-      <Button
-        className="w-full py-6 text-lg bg-amber-500 hover:bg-amber-600"
-        onClick={handleSubmit}
-        disabled={!method || !receipt || submitting}
-      >
-        {submitting ? (
-          <Loader2 className="h-5 w-5 animate-spin" />
-        ) : (
-          'إرسال طلب الدفع'
-        )}
-      </Button>
-    </div>
-  )
 }
