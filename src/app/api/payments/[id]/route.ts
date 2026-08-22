@@ -35,7 +35,6 @@ export async function PUT(
       },
     })
 
-    // If approved and there is a videoId, grant access
     if (status === 'approved' && payment.videoId) {
       try {
         await db.videoAccess.upsert({
@@ -56,7 +55,6 @@ export async function PUT(
         console.error('Error granting video access:', err)
       }
 
-      // Log activity
       try {
         await db.studentActivity.create({
           data: {
@@ -68,7 +66,6 @@ export async function PUT(
       } catch (e) { /* silent */ }
     }
 
-    // If rejected, log activity
     if (status === 'rejected') {
       try {
         await db.studentActivity.create({
