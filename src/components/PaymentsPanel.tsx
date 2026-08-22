@@ -401,3 +401,4 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
     </>
   )
 }
+
