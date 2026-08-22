@@ -5,7 +5,6 @@ var CONTENT_TYPES: Record<string, string> = {
   'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime', 'avi': 'video/x-msvideo',
   'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp',
   'pdf': 'application/pdf', 'doc': 'application/msword', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'xls': 'application/vnd.ms-excel', 'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 }
 
 function getContentType(filename: string, fallback: string): string {
@@ -47,7 +46,6 @@ export async function POST(request: NextRequest) {
     if (totalChunks <= 1) {
       var buffer = Buffer.from(await file.arrayBuffer())
       var base64 = buffer.toString('base64')
-      var ext = fileName.split('.').pop() || ''
       var contentType = getContentType(fileName, file.type || 'application/octet-stream')
 
       var media = await db.media.create({
@@ -82,7 +80,6 @@ export async function POST(request: NextRequest) {
       for (var i = 0; i < entry.parts.length; i++) { assembled.set(new Uint8Array(entry.parts[i]), off); off += entry.parts[i].byteLength }
 
       var base64Data = Buffer.from(assembled).toString('base64')
-      var ext2 = fileName.split('.').pop() || ''
       var ct = getContentType(fileName, entry.fileType || 'application/octet-stream')
 
       var mediaRecord = await db.media.create({
