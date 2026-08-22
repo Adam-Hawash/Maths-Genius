@@ -1,4 +1,4 @@
-  'use client'
+'use client'
 
 import { useAppStore, GRADES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
@@ -15,7 +15,8 @@ import {
   Megaphone, Plus, Check, X, Trash2, LogOut, Loader2,
   BarChart3, RefreshCw, Settings, Upload, MessageSquare,
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
-  PlayCircle, Film, FileDown, PictureInPicture2, Save, Sparkles
+  PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save,
+  Sparkles, Bot
 } from 'lucide-react'
 import { CMSPanel } from './CMSPanel'
 import { SocialLinksPanel } from './SocialLinksPanel'
@@ -38,10 +39,6 @@ export function AdminDashboard() {
   const [resendSaving, setResendSaving] = useState(false)
   const [heroDevUrl, setHeroDevUrl] = useState('')
   const [heroDevSaving, setHeroDevSaving] = useState(false)
-  const [vodafoneCash, setVodafoneCash] = useState('')
-  const [instapay, setInstapay] = useState('')
-  const [fawry, setFawry] = useState('')
-  const [paymentSaving, setPaymentSaving] = useState(false)
 
   const fetchStats = async () => {
     try {
@@ -69,9 +66,6 @@ export function AdminDashboard() {
         const cfgData = await cfgRes.json()
         setResendApiKey(cfgData.resend_api_key || '')
         setHeroDevUrl(cfgData.hero_developer_url || '')
-        setVodafoneCash(cfgData.payment_vodafone_cash || '')
-        setInstapay(cfgData.payment_instapay || '')
-        setFawry(cfgData.payment_fawry || '')
       } catch { /* silent */ }
     } catch { /* silent */ }
     setSettingsLoading(false)
@@ -158,13 +152,13 @@ export function AdminDashboard() {
           <TabsContent value="gallery"><GalleryManager /></TabsContent>
           <TabsContent value="cms"><CMSPanel /></TabsContent>
           <TabsContent value="social"><SocialLinksPanel /></TabsContent>
-          <TabsContent value="ai-extract"><AIExtractionPanel /></TabsContent>
+          <TabsContent value="ai-extract"><AiExtractionPanel onStatsRefresh={fetchStats} /></TabsContent>
         </Tabs>
 
         {/* Admin Settings Dialog */}
         {showSettings && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
-            <div className="bg-card border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-card border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold flex items-center gap-2"><Settings className="h-5 w-5 text-primary" />إعدادات الحساب</h3>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowSettings(false)}><X className="h-4 w-4" /></Button>
@@ -216,8 +210,9 @@ export function AdminDashboard() {
                           const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hero_developer_url: heroDevUrl }) })
                           if (res.ok) {
                             // Update siteConfig in store so footer/hero reflect instantly
-                            const cfg = useAppStore.getState().siteConfig
-                            useAppStore.getState().setSiteConfig({ ...cfg, hero_developer_url: heroDevUrl })
+                            const store = await import('@/stores/app-store')
+                            const cfg = store.useAppStore.getState().siteConfig
+                            store.useAppStore.getState().setSiteConfig({ ...cfg, hero_developer_url: heroDevUrl })
                             toast.success('تم حفظ رابط Hero Developer')
                           } else { toast.error('خطأ في الحفظ') }
                         } catch { toast.error('خطأ في الحفظ') }
@@ -228,36 +223,6 @@ export function AdminDashboard() {
                     </div>
                     <Input value={heroDevUrl} onChange={(e) => setHeroDevUrl(e.target.value)} placeholder="https://hero-developer-portfolio-11.vercel.app" dir="ltr" type="url" className="font-mono text-xs" />
                     <p className="text-[10px] text-muted-foreground">الرابط يظهر في الهيدر (Hero Developer) والفوتر (Made by Adam Hawash). غيّره في أي وقت وبيتنعكس فوراً.</p>
-                  </div>
-                  {/* Payment Numbers */}
-                  <div className="border-t pt-4 space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground">أرقام الدفع (تظهر للطالب عند الدفع)</p>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">فودافون كاش</Label>
-                      <Input value={vodafoneCash} onChange={(e) => setVodafoneCash(e.target.value)} placeholder="01012345678" dir="ltr" className="font-mono text-xs" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">إنستا باي</Label>
-                      <Input value={instapay} onChange={(e) => setInstapay(e.target.value)} placeholder="@username" dir="ltr" className="font-mono text-xs" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">فوري</Label>
-                      <Input value={fawry} onChange={(e) => setFawry(e.target.value)} placeholder="01098765432" dir="ltr" className="font-mono text-xs" />
-                    </div>
-                    <Button size="sm" variant="outline" onClick={async () => {
-                      setPaymentSaving(true)
-                      try {
-                        const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry }) })
-                        if (res.ok) {
-                          const cfg = useAppStore.getState().siteConfig
-                          useAppStore.getState().setSiteConfig({ ...cfg, payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry })
-                          toast.success('تم حفظ أرقام الدفع')
-                        } else { toast.error('خطأ في الحفظ') }
-                      } catch { toast.error('خطأ في الحفظ') }
-                      setPaymentSaving(false)
-                    }} disabled={paymentSaving}>
-                      {paymentSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                    </Button>
                   </div>
                   <div className="flex gap-2 pt-2">
                     <Button onClick={saveSettings} disabled={settingsSaving || !settingsOldPass} className="flex-1">
@@ -292,7 +257,7 @@ function StatCard({ icon: Icon, label, value, color }: { icon: any; label: strin
 function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'paid' | 'rejected'>('pending')     
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending')
   const [filterGrade, setFilterGrade] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [studentProgress, setStudentProgress] = useState<any>(null)
@@ -329,31 +294,30 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
     setStudentProgress(null)
   }
 
- const handleAction = async (id: string, status: 'approved' | 'paid' | 'rejected') => {
-  try {
-    await fetch(`/api/students/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
-    var msg = status === 'approved' ? 'تم قبول الطالب - فيديوهات مجانية' : status === 'paid' ? 'تم تحويل الطالب لمدفوع' : 'تم رفض الطالب'
-    toast.success(msg)
-    loadStudents(false); onStatsRefresh()
-  } catch { toast.error('خطأ في تحديث حالة الطالب') }
-}
+  const handleAction = async (id: string, status: 'approved' | 'rejected') => {
+    try {
+      await fetch(`/api/students/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
+      toast.success(status === 'approved' ? 'تم قبول الطالب' : 'تم رفض الطالب')
+      loadStudents(false); onStatsRefresh()
+    } catch { toast.error('خطأ في تحديث حالة الطالب') }
+  }
 
   const handleDelete = async (id: string) => {
     try { await fetch(`/api/students/${id}`, { method: 'DELETE' }); toast.success('تم حذف الطالب'); loadStudents(false); onStatsRefresh() }
     catch { toast.error('خطأ في حذف الطالب') }
   }
- const statusColors: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  paid: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-}
-const statusLabels: Record<string, string> = {
-  pending: 'قيد المراجعة',
-  approved: 'مقبول (مجاني)',
-  paid: 'مدفوع',
-  rejected: 'مرفوض'
-}
+
+  const toggleFreeAccess = async (id: string, current: boolean) => {
+    try {
+      await fetch(`/api/students/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFreeAccess: !current }) })
+      toast.success(!current ? 'تم تفعيل الوصول المجاني' : 'تم إلغاء الوصول المجاني')
+      loadStudents(false)
+    } catch { toast.error('خطأ في تحديث حالة الوصول') }
+  }
+
+  const statusColors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
+  const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض' }
+
   // Student Details Panel
   if (selectedStudentId && studentProgress) {
     const { summary, videoProgress: vp, examResults: er } = studentProgress
@@ -445,7 +409,7 @@ const statusLabels: Record<string, string> = {
               {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
             <div className="flex gap-1 bg-muted rounded-lg p-1">
-           {(['pending', 'all', 'approved', 'paid', 'rejected'] as const).map((f) => (
+              {(['pending', 'all', 'approved', 'rejected'] as const).map((f) => (
                 <Button key={f} variant={filter === f ? 'default' : 'ghost'} size="sm" className="text-xs h-7 px-2" onClick={() => setFilter(f)}>
                   {f === 'pending' ? 'بانتظار' : f === 'approved' ? 'مقبول' : f === 'rejected' ? 'مرفوض' : 'الكل'}
                 </Button>
@@ -472,14 +436,19 @@ const statusLabels: Record<string, string> = {
                   <p className="text-xs text-muted-foreground">ولي الأمر: {s.parentName} <span dir="ltr">({s.parentPhone})</span></p>
                   <div className="flex items-center gap-3 flex-wrap">
                     <Badge variant="outline" className="text-[10px]">{s.grade}</Badge>
+                    <Badge variant={(s as any).isFreeAccess !== false ? 'secondary' : 'destructive'} className="text-[10px]">{(s as any).isFreeAccess !== false ? 'مجاني' : 'مدفوع'}</Badge>
                     {s.lastLogin && <p className="text-[10px] text-muted-foreground">آخر دخول: {new Date(s.lastLogin).toLocaleDateString('ar-EG')}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  <Button size="icon" variant="ghost" className={`h-8 w-8 ${(s as any).isFreeAccess !== false ? 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20' : 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`} onClick={() => toggleFreeAccess(s.id, (s as any).isFreeAccess !== false)} title={(s as any).isFreeAccess !== false ? 'وصول مجاني' : 'مدفوع'}>
+                    <Eye className="h-4 w-4" />
+                  </Button>
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => loadStudentProgress(s.id)} title="تفاصيل"><BarChart3 className="h-4 w-4" /></Button>
-               {s.status === 'pending' && (<><Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')}><Check className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => handleAction(s.id, 'paid')} title="تحويل لمدفوع"><Save className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')}><X className="h-4 w-4" /></Button></>)}
-               {s.status === 'approved' && (<><Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => handleAction(s.id, 'paid')} title="تحويل لمدفوع"><Save className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')}><X className="h-4 w-4" /></Button></>)}
-               {s.status === 'paid' && (<><Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="تحويل لمجاني"><Check className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')}><X className="h-4 w-4" /></Button></>)}
+                  {s.status === 'pending' && (<>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')}><Check className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')}><X className="h-4 w-4" /></Button>
+                  </>)}
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(s.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
@@ -562,9 +531,9 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
         title: formTitle.trim(),
         grade: formGrade,
         url: formUrl.trim(),
-        price: formPrice.trim() || '0',
       }
       if (videoPath) { body.filePath = videoPath; body.fileType = videoType }
+      if (formPrice.trim()) { body.price = formPrice.trim() }
       if (thumbnailPath) { body.thumbnail = thumbnailPath }
       else if (formThumbnailUrl.trim()) { body.thumbnail = formThumbnailUrl.trim() }
 
@@ -638,8 +607,8 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                 <Input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} placeholder="مثال: الباب الأول - الكسور" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">السعر (ج.م) — اتركه فاضي للمجاني</Label>
-                <Input value={formPrice} onChange={(e) => setFormPrice(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0" dir="ltr" type="number" min="0" step="0.01" />
+                <Label className="text-xs">السعر (ج.م) - اتركه فاضي لو مجاني</Label>
+                <Input type="number" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} placeholder="0 = مجاني" min="0" dir="ltr" />
               </div>
             </div>
 
@@ -742,6 +711,8 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                       <div className="flex items-center gap-1">
                         {v.filePath && <Badge variant="secondary" className="text-[10px]">📎 ملف</Badge>}
                         {v.url && !v.filePath && <Badge variant="secondary" className="text-[10px]">▶ YouTube</Badge>}
+                        {(v as any).price > 0 && <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">{(v as any).price} ج.م</Badge>}
+                        {(v as any).price <= 0 && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">مجاني</Badge>}
                       </div>
                     </div>
                     <p className="text-[10px] text-muted-foreground">{new Date(v.createdAt).toLocaleDateString('ar-EG')}</p>
@@ -1374,183 +1345,6 @@ function GalleryManager() {
   )
 }
 
-/* ========== AI EXTRACTION PANEL ========== */
-function AIExtractionPanel() {
-  const [file, setFile] = useState<File | null>(null)
-  const [extracting, setExtracting] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [extractedQuestions, setExtractedQuestions] = useState<Array<{ question: string; options: string[]; correct: number }>>([])
-  const [targetType, setTargetType] = useState<'homework' | 'exam'>('exam')
-  const [targetGrade, setTargetGrade] = useState('')
-  const [targetTitle, setTargetTitle] = useState('')
-  const [passScore, setPassScore] = useState(50)
-  const [statusMsg, setStatusMsg] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  const handleExtract = async () => {
-    if (!file) { toast.error('اختر ملف أولا'); return }
-    setExtracting(true)
-    setStatusMsg('جاري تحليل الملف واستخراج الأسئلة...')
-    try {
-      var fd = new FormData()
-      fd.append('file', file)
-      var ctrl = new AbortController()
-      var tmr = setTimeout(function() { ctrl.abort() }, 120000)
-      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd, signal: ctrl.signal })
-      clearTimeout(tmr)
-      var data = await res.json()
-      if (res.ok && data.questions && data.questions.length > 0) {
-        var mapped = data.questions.map(function(q: any) {
-          return { question: q.question || '', options: (q.options || ['لا يوجد','لا يوجد','لا يوجد','لا يوجد']).slice(0, 4), correct: q.correct || 0 }
-        })
-        setExtractedQuestions(mapped)
-        toast.success('تم استخراج ' + mapped.length + ' سؤال بنجاح')
-        setStatusMsg('')
-      } else {
-        toast.error(data.error || 'لم يتم استخراج أسئلة')
-        setStatusMsg('')
-      }
-    } catch (err: any) {
-      if (err && err.name === 'AbortError') { toast.error('انتهت مهلة الاستخراج (120 ثانية)') }
-      else { toast.error('خطأ: ' + (err.message || 'فشل الاتصال')) }
-      setStatusMsg('')
-    }
-    setExtracting(false)
-  }
-
-  const handleSave = async () => {
-    if (!targetTitle.trim()) { toast.error('أدخل عنوان للامتحان/الواجب'); return }
-    if (!targetGrade) { toast.error('اختر الصف الدراسي'); return }
-    if (extractedQuestions.length === 0) { toast.error('لا توجد أسئلة محفوظة'); return }
-    setSaving(true)
-    setStatusMsg('جاري الحفظ في المنصة...')
-    try {
-      var body: Record<string, string> = {
-        title: targetTitle.trim(),
-        grade: targetGrade,
-        content: 'تم إنشاؤه بواسطة استخراج الذكاء الاصطناعي - ' + extractedQuestions.length + ' سؤال',
-        questions: JSON.stringify(extractedQuestions.map(function(q) {
-          return { q: q.question, options: q.options, correct: q.correct, points: Math.round(100 / extractedQuestions.length) }
-        }))
-      }
-      if (targetType === 'exam') { body.passScore = String(passScore) }
-      var apiPath = targetType === 'exam' ? '/api/exams' : '/api/homework'
-      var res = await fetch(apiPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      if (res.ok) {
-        toast.success('تم حفظ ' + (targetType === 'exam' ? 'الامتحان' : 'الواجب') + ' بنجاح في الصف ' + targetGrade + '!')
-        setExtractedQuestions([]); setTargetTitle(''); setFile(null); setTargetGrade('')
-        setStatusMsg('')
-      } else {
-        try { var d = await res.json(); toast.error(d.error || 'خطأ في الحفظ', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر') }
-        setStatusMsg('')
-      }
-    } catch (err: any) { toast.error('خطأ في الاتصال: ' + (err.message || '')); setStatusMsg('') }
-    setSaving(false)
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-amber-500" />
-          استخراج الذكاء الاصطناعي | AI Extraction
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Step 1: Upload */}
-        <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
-          <h4 className="font-semibold text-sm">الخطوة 1: ارفع ملف الأسئلة</h4>
-          <p className="text-xs text-muted-foreground">ارفع صورة أو PDF تحتوي على أسئلة رياضيات وسيتم استخراجها تلقائيا</p>
-          <div className="flex items-center gap-3">
-            <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,image/*" className="hidden" onChange={function(e) { setFile(e.target.files && e.target.files[0] || null) }} />
-            <Button type="button" variant="outline" onClick={function() { fileRef.current && fileRef.current.click() }}>
-              <Upload className="h-4 w-4 ml-1" />{file ? file.name : 'اختر ملف (PDF / صورة)'}
-            </Button>
-            {file && <span className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>}
-          </div>
-          <Button onClick={handleExtract} disabled={extracting || !file}>
-            {extracting ? <><Loader2 className="h-4 w-4 ml-1 animate-spin" />جاري الاستخراج...</> : <><Sparkles className="h-4 w-4 ml-1" />استخراج الأسئلة</>}
-          </Button>
-          {statusMsg && <p className="text-xs text-primary animate-pulse flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />{statusMsg}</p>}
-        </div>
-
-        {/* Step 2: Review */}
-        {extractedQuestions.length > 0 && (
-          <div className="p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-sm text-emerald-700 dark:text-emerald-400">الخطوة 2: مراجعة الأسئلة المستخرجة ({extractedQuestions.length} سؤال)</h4>
-              <Badge className="bg-emerald-100 text-emerald-700">{extractedQuestions.length} سؤال</Badge>
-            </div>
-            <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
-              {extractedQuestions.map(function(q, qi) {
-                return (
-                  <div key={qi} className="p-3 rounded-lg border bg-background space-y-2">
-                    <div className="flex items-start gap-2">
-                      <span className="text-xs font-bold text-primary mt-1 shrink-0">{qi + 1}</span>
-                      <div className="flex-1">
-                        <Input value={q.question} onChange={function(e) { var n = [...extractedQuestions]; n[qi] = { ...n[qi], question: e.target.value }; setExtractedQuestions(n) }} placeholder="نص السؤال" className="text-sm" />
-                        <div className="grid grid-cols-2 gap-2 mt-2">
-                          {q.options.map(function(opt, oi) {
-                            var isCorrect = q.correct === oi
-                            return (
-                              <div key={oi} className="flex items-center gap-1.5">
-                                <button type="button" className={"w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors " + (isCorrect ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30 hover:border-primary/50")} onClick={function() { var n = [...extractedQuestions]; n[qi] = { ...n[qi], correct: oi }; setExtractedQuestions(n) }}>{String.fromCharCode(65 + oi)}</button>
-                                <Input value={opt} onChange={function(e) { var n = [...extractedQuestions]; var newOpts = [...n[qi].options]; newOpts[oi] = e.target.value; n[qi] = { ...n[qi], options: newOpts }; setExtractedQuestions(n) }} placeholder={"اختيار " + (oi + 1)} className="h-8 text-xs" />
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={function() { setExtractedQuestions(extractedQuestions.filter(function(_, idx) { return idx !== qi })) }}><X className="h-3.5 w-3.5" /></Button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Save */}
-        {extractedQuestions.length > 0 && (
-          <div className="p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3">
-            <h4 className="font-semibold text-sm">الخطوة 3: حفظ في المنصة</h4>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1">
-                <Label className="text-xs">النوع</Label>
-                <select value={targetType} onChange={function(e) { setTargetType(e.target.value as any) }} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                  <option value="exam">امتحان</option>
-                  <option value="homework">واجب</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">الصف الدراسي</Label>
-                <select value={targetGrade} onChange={function(e) { setTargetGrade(e.target.value) }} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                  <option value="">اختر الصف</option>
-                  {GRADES.map(function(g) { return <option key={g} value={g}>{g}</option> })}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">العنوان</Label>
-                <Input value={targetTitle} onChange={function(e) { setTargetTitle(e.target.value) }} placeholder="مثال: امتحان الباب الأول" className="h-9 text-sm" />
-              </div>
-            </div>
-            {targetType === 'exam' && (
-              <div className="flex items-center gap-2">
-                <Label className="text-xs shrink-0">درجة النجاح:</Label>
-                <Input type="number" value={passScore} onChange={function(e) { setPassScore(Number(e.target.value)) }} className="w-20 h-8 text-sm" min={0} max={100} />
-                <span className="text-xs text-muted-foreground">/ 100</span>
-              </div>
-            )}
-            <Button onClick={handleSave} disabled={saving || !targetGrade || !targetTitle.trim()}>
-              {saving ? <><Loader2 className="h-4 w-4 ml-1 animate-spin" />جاري الحفظ...</> : <><Save className="h-4 w-4 ml-1" />حفظ في المنصة ({targetType === 'exam' ? 'امتحان' : 'واجب'})</>}
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
 /* ========== MY STUDENTS PANEL (طلابي) ========== */
 interface StudentAnalytics {
   id: string; name: string; phone: string; grade: string
@@ -1789,7 +1583,6 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState('')
-  const [aiExtracting, setAiExtracting] = useState(false)
   const [filterGrade, setFilterGrade] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const answerKeyRef = useRef<HTMLInputElement>(null)
@@ -1887,33 +1680,6 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       setUploading(false)
       setUploadMsg('')
     }
-  }
-
-  const handleAIExtract = async () => {
-    if (aiExtracting) return
-    setAiExtracting(true)
-    setUploadMsg('جاري استخراج الأسئلة بالذكاء الاصطناعي...')
-    try {
-      var fd = new FormData()
-      if (formFile) { fd.append('file', formFile) }
-      else if (formFileUrl.trim()) { fd.append('fileUrl', formFileUrl.trim()) }
-      else { toast.error('ارفع ملف الأسئلة أولاً أو حط رابط'); setAiExtracting(false); setUploadMsg(''); return }
-      var ctrl = new AbortController()
-      var tmr = setTimeout(function() { ctrl.abort() }, 60000)
-      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd, signal: ctrl.signal })
-      clearTimeout(tmr)
-      var data = await res.json()
-      if (res.ok && data.questions && data.questions.length > 0) {
-        var extracted = data.questions.map(function(q: any) { return { question: q.question || '', options: (q.options || ['','','','']).slice(0, 4), correct: q.correct || 0 } })
-        setMcqQuestions(extracted)
-        toast.success('تم استخراج ' + extracted.length + ' سؤال بنجاح!')
-      } else { toast.error(data.error || 'لم يتم استخراج أسئلة') }
-    } catch (err: any) {
-      if (err && err.name === 'AbortError') { toast.error('انتهت مهلة الاستخراج') }
-      else { toast.error('خطأ: ' + (err.message || '')) }
-    }
-    setAiExtracting(false)
-    setUploadMsg('')
   }
 
   const handleSubmit = async () => {
@@ -2043,15 +1809,9 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
               <div className="space-y-3 p-3 rounded-lg border border-primary/30 bg-primary/5">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold text-primary">أسئلة اختيار من متعدد (اختياري)</Label>
-                  <div className="flex gap-1">
-                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={function() {
-                      setMcqQuestions([...mcqQuestions, { question: '', options: ['', '', '', ''], correct: 0 }])
-                    }}><Plus className="h-3 w-3 ml-1" />إضافة سؤال</Button>
-                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs border-purple-500/50 text-purple-600 hover:bg-purple-500/10" onClick={handleAIExtract} disabled={aiExtracting || (!formFile && !formFileUrl.trim())}>
-                      {aiExtracting ? <Loader2 className="h-3 w-3 ml-1 animate-spin" /> : <Sparkles className="h-3 w-3 ml-1" />}
-                      استخراج بالذكاء الاصطناعي
-                    </Button>
-                  </div>
+                  <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={function() {
+                    setMcqQuestions([...mcqQuestions, { question: '', options: ['', '', '', ''], correct: 0 }])
+                  }}><Plus className="h-3 w-3 ml-1" />إضافة سؤال</Button>
                 </div>
                 {mcqQuestions.length === 0 && <p className="text-[11px] text-muted-foreground text-center py-2">اضغط "إضافة سؤال" لإضافة أسئلة متعددة</p>}
                 {mcqQuestions.map(function(q, qi) {
@@ -2106,6 +1866,293 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
                 <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0" onClick={() => handleDelete(item.id)}><Trash2 className="h-4 w-4" /></Button>
               </div>
             ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ========== AI EXTRACTION PANEL ========== */
+interface ExtractedQuestion {
+  question: string
+  options: string[]
+  correct: number
+  points: number
+}
+
+interface ExtractedData {
+  title: string
+  content: string
+  questions: ExtractedQuestion[]
+  answerKey: string
+}
+
+function AiExtractionPanel({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+  const [extractType, setExtractType] = useState<'homework' | 'exam'>('homework')
+  const [grade, setGrade] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [fileUrl, setFileUrl] = useState('')
+  const [extracting, setExtracting] = useState(false)
+  const [extracted, setExtracted] = useState<ExtractedData | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [statusMsg, setStatusMsg] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleExtract = async () => {
+    if (!file && !fileUrl.trim()) { toast.error('ارفع ملف أو أدخل رابط'); return }
+    if (!grade) { toast.error('اختر الصف'); return }
+    setExtracting(true)
+    setStatusMsg('جاري تحليل الملف بالذكاء الاصطناعي...')
+    setExtracted(null)
+    try {
+      const formData = new FormData()
+      formData.append('type', extractType)
+      formData.append('grade', grade)
+      if (file) formData.append('file', file)
+      if (fileUrl.trim()) formData.append('fileUrl', fileUrl.trim())
+
+      // FIXED: correct API path is /api/ai/extract-questions (not /api/ai-extract)
+      const res = await fetch('/api/ai/extract-questions', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        // FIXED: API returns {success, questions, totalExtracted} — wrap into ExtractedData
+        const extractedQuestions: ExtractedQuestion[] = (data.questions || []).map(function(q: any) {
+          return {
+            question: q.question || '',
+            options: Array.isArray(q.options) ? q.options : [],
+            correct: typeof q.correct === 'number' ? q.correct : 0,
+            points: q.points || 1,
+          }
+        })
+        const typeLabel = extractType === 'homework' ? 'واجب' : 'امتحان'
+        setExtracted({
+          title: typeLabel + ' مستخرج بالذكاء الاصطناعي',
+          content: '',
+          questions: extractedQuestions,
+          answerKey: '',
+        })
+        toast.success('تم الاستخراج بنجاح! ' + extractedQuestions.length + ' سؤال. راجع النتائج واحفظها')
+      } else {
+        toast.error(data.error || 'خطأ في الاستخراج', { duration: 8000 })
+      }
+    } catch (err: any) {
+      toast.error('خطأ في الاتصال: ' + (err.message || ''), { duration: 8000 })
+    }
+    setExtracting(false)
+    setStatusMsg('')
+  }
+
+  const handleSave = async () => {
+    if (!extracted || !grade) return
+    setSaving(true)
+    try {
+      const body: Record<string, string> = {
+        title: extracted.title,
+        content: extracted.content,
+        grade: grade,
+      }
+      if (extracted.questions.length > 0) {
+        // FIXED: for exams, use 'q' field (not 'question') — StudentPortal expects q.q
+        // for homework, use 'question' field — StudentPortal expects q.question
+        const mcqQuestions = extracted.questions.map(q => {
+          if (extractType === 'exam') {
+            return { q: q.question, options: q.options, correct: q.correct, points: q.points || 1 }
+          } else {
+            return { question: q.question, options: q.options, correct: q.correct, points: q.points || 1 }
+          }
+        })
+        body.questions = JSON.stringify(mcqQuestions)
+      }
+      if (extracted.answerKey && extracted.answerKey.trim()) {
+        body.answerKeyContent = extracted.answerKey
+      }
+
+      const apiPath = extractType === 'homework' ? '/api/homework' : '/api/exams'
+      if (extractType === 'exam') {
+        body.passScore = '50'
+      }
+
+      const res = await fetch(apiPath, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        const typeLabel = extractType === 'homework' ? 'الواجب' : 'الامتحان'
+        toast.success('تم حفظ ' + typeLabel + ' بنجاح!')
+        setExtracted(null); setFile(null); setFileUrl('')
+        fileRef.current && (fileRef.current.value = '')
+        onStatsRefresh()
+      } else {
+        try { const d = await res.json(); toast.error(d.error || 'خطأ في الحفظ', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر', { duration: 8000 }) }
+      }
+    } catch (err: any) {
+      toast.error('خطأ: ' + (err.message || ''), { duration: 8000 })
+    }
+    setSaving(false)
+  }
+
+  const resetAll = () => {
+    setExtracted(null); setFile(null); setFileUrl(''); setStatusMsg('')
+    fileRef.current && (fileRef.current.value = '')
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            استخراج بالذكاء الاصطناعي | AI Extraction
+          </CardTitle>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          ارفع ملف (صورة أو PDF) وأختر هل هو واجب أو امتحان، والذكاء الاصطناعي هيستخرج الأسئلة والمحتوى تلقائياً
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Type Selection */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">نوع المحتوى *</Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setExtractType('homework'); resetAll() }}
+                className={'flex-1 p-3 rounded-lg border text-center transition-all ' + (extractType === 'homework' ? 'border-primary bg-primary/10 text-primary' : 'border-muted hover:border-muted-foreground/30')}
+              >
+                <ClipboardList className="h-5 w-5 mx-auto mb-1" />
+                <span className="text-sm font-semibold">واجب</span>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Homework</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setExtractType('exam'); resetAll() }}
+                className={'flex-1 p-3 rounded-lg border text-center transition-all ' + (extractType === 'exam' ? 'border-primary bg-primary/10 text-primary' : 'border-muted hover:border-muted-foreground/30')}
+              >
+                <FileText className="h-5 w-5 mx-auto mb-1" />
+                <span className="text-sm font-semibold">امتحان</span>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Exam</p>
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">الصف الدراسي *</Label>
+            <select value={grade} onChange={(e) => setGrade(e.target.value)} className="w-full h-11 rounded-lg border border-input bg-transparent px-3 text-sm">
+              <option value="">اختر الصف</option>
+              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* File Upload */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">رفع ملف (صورة أو PDF)</Label>
+          <div className="flex items-center gap-2">
+            <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] || null); setFileUrl(''); setExtracted(null) }} />
+            <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+              <Upload className="h-4 w-4 ml-1" />
+              {file ? file.name : 'اختر ملف'}
+            </Button>
+            {file && <span className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(1)} MB</span>}
+          </div>
+        </div>
+
+        {/* URL fallback */}
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">أو رابط الملف</Label>
+          <Input placeholder="https://example.com/file.pdf" value={fileUrl} onChange={(e) => { setFileUrl(e.target.value); if (e.target.value.trim()) { setFile(null); setExtracted(null) } }} dir="ltr" />
+        </div>
+
+        {/* Extract Button */}
+        <div className="flex gap-2">
+          <Button onClick={handleExtract} disabled={extracting || (!file && !fileUrl.trim()) || !grade}>
+            {extracting ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Sparkles className="h-4 w-4 ml-1" />}
+            {extracting ? 'جاري الاستخراج...' : 'استخراج المحتوى'}
+          </Button>
+          {(file || fileUrl) && (
+            <Button variant="outline" onClick={resetAll}>إلغاء</Button>
+          )}
+        </div>
+
+        {statusMsg && !extracted && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+            <Bot className="h-4 w-4 text-primary animate-pulse" />
+            <p className="text-xs text-primary">{statusMsg}</p>
+          </div>
+        )}
+
+        {/* Extracted Results */}
+        {extracted && (
+          <div className="space-y-4 p-4 rounded-xl border border-primary/30 bg-primary/5">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-sm flex items-center gap-2">
+                <Check className="h-4 w-4 text-emerald-500" />
+                تم الاستخراج بنجاح
+              </h4>
+              <Badge variant="outline" className="text-xs border-primary/40 text-primary">
+                {extractType === 'homework' ? 'واجب' : 'امتحان'} — {extracted.questions.length} سؤال
+              </Badge>
+            </div>
+
+            {/* Title */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">العنوان</Label>
+              <Input value={extracted.title} onChange={(e) => setExtracted({ ...extracted, title: e.target.value })} />
+            </div>
+
+            {/* Content */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">المحتوى (اختياري)</Label>
+              <Textarea value={extracted.content} onChange={(e) => setExtracted({ ...extracted, content: e.target.value })} rows={3} />
+            </div>
+
+            {/* Extracted Questions */}
+            {extracted.questions && extracted.questions.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs font-semibold">الأسئلة المستخرجة ({extracted.questions.length} سؤال)</Label>
+                  <Badge variant="secondary" className="text-[9px]">MCQ</Badge>
+                </div>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                  {extracted.questions.map((q, qi) => (
+                    <div key={qi} className="p-3 rounded-lg border bg-card space-y-2">
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs font-bold text-primary mt-0.5">{qi + 1}</span>
+                        <p className="text-sm flex-1">{q.question}</p>
+                      </div>
+                      {q.options && q.options.length > 0 && (
+                        <div className="grid grid-cols-2 gap-1.5 mr-6">
+                          {q.options.map((opt, oi) => (
+                            <div key={oi} className={'text-xs p-1.5 rounded border ' + (q.correct === oi ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-muted')}>
+                              {String.fromCharCode(65 + oi)}) {opt}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Answer Key */}
+            {extracted.answerKey && extracted.answerKey.trim() && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">نموذج الإجابة</Label>
+                <Textarea value={extracted.answerKey} onChange={(e) => setExtracted({ ...extracted, answerKey: e.target.value })} rows={3} />
+              </div>
+            )}
+
+            {/* Save Button */}
+            <div className="flex gap-2 pt-2">
+              <Button onClick={handleSave} disabled={saving || !extracted.title.trim()}>
+                {saving ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Save className="h-4 w-4 ml-1" />}
+                {saving ? 'جاري الحفظ...' : 'حفظ كـ' + (extractType === 'homework' ? 'واجب' : 'امتحان')}
+              </Button>
+              <Button variant="outline" onClick={resetAll}>تجاهل</Button>
+            </div>
           </div>
         )}
       </CardContent>
