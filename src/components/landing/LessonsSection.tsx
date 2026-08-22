@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { BookOpen, Lock, PlayCircle } from 'lucide-react'
 import Image from 'next/image'
 
-export function LessonsSection() {
+export default function LessonsSection() {
   var store = useAppStore()
   var setView = store.setView
   var [videos, setVideos] = useState<any[]>([])
