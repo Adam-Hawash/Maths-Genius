@@ -5,6 +5,7 @@ export async function POST(request: NextRequest) {
     var formData = await request.formData()
     var file = formData.get('file') as File | null
     var fileUrl = formData.get('fileUrl') as string | null
+    var type = formData.get('type') as string || 'homework'
 
     if (!file && !fileUrl) {
       return NextResponse.json({ error: 'الرجاء رفع ملف أو إدخال رابط' }, { status: 400 })
@@ -36,14 +37,20 @@ export async function POST(request: NextRequest) {
 
     var apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'مفتاح GEMINI_API_KEY غير موجود في الإعدادات. اذهب إلى إعدادات Vercel → Environment Variables وأضف المفتاح.',
         errorKey: 'GEMINI_API_KEY',
         errorHint: 'احصل على المفتاح من https://aistudio.google.com/apikey وأضفه في Vercel Dashboard → Settings → Environment Variables'
       }, { status: 500 })
     }
 
-    var prompt = 'أنت معلم رياضيات خبير. استخرج كل الأسئلة من هذه الصفحة/الصورة. لكل سؤال اكتب: رقم السؤال، نص السؤال كاملاً، الإجابة الصحيحة، و4 اختيارات (إذا كان سؤال اختيار من متعدد) أو "لا يوجد" إذا كان سؤال حر. رد بـ JSON فقط بدون أي نص إضافي بهذا الشكل بالضبط: {"questions": [{"question": "نص السؤال", "options": ["اختيار1", "اختيار2", "اختيار3", "اختيار4"], "correct": 0}]} ملاحظات: correct = index الاختيار الصحيح (0-3)، إذا السؤال حر حط options كلها "لا يوجد" و correct = 0، لو فيها معادلات اكتبها بالعادي، استخرج كل الأسئلة الموجودة.'
+    var isExam = type === 'exam'
+    var prompt = ''
+    if (isExam) {
+      prompt = 'أنت معلم رياضيات خبير. هذا امتحان. استخرج كل الأسئلة من هذه الصفحة/الصورة. لكل سؤال اكتب: رقم السؤال، نص السؤال كاملاً، 4 اختيارات، الإجابة الصحيحة، ودرجة السؤال. رد بـ JSON فقط بدون أي نص إضافي بهذا الشكل بالضبط: {"questions": [{"question": "نص السؤال", "options": ["اختيار1", "اختيار2", "اختيار3", "اختيار4"], "correct": 0, "points": 5}]} ملاحظات: correct = index الاختيار الصحيح (0-3)، points = درجة السؤال (الافتراضي 5 إذا لم تحدد)، لو فيها معادلات اكتبها بالعادي، استخرج كل الأسئلة الموجودة.'
+    } else {
+      prompt = 'أنت معلم رياضيات خبير. هذا واجب. استخرج كل الأسئلة من هذه الصفحة/الصورة. لكل سؤال اكتب: رقم السؤال، نص السؤال كاملاً، 4 اختيارات، والإجابة الصحيحة. رد بـ JSON فقط بدون أي نص إضافي بهذا الشكل بالضبط: {"questions": [{"question": "نص السؤال", "options": ["اختيار1", "اختيار2", "اختيار3", "اختيار4"], "correct": 0}]} ملاحظات: correct = index الاختيار الصحيح (0-3)، لو فيها معادلات اكتبها بالعادي، استخرج كل الأسئلة الموجودة.'
+    }
 
     var geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey
 
@@ -119,14 +126,18 @@ export async function POST(request: NextRequest) {
       while (opts.length < 4) opts.push('لا يوجد')
       var correct = typeof q.correct === 'number' ? q.correct : 0
       if (correct < 0 || correct > 3) correct = 0
-      return { question: q.question || '', options: opts.slice(0, 4), correct: correct }
+      if (isExam) {
+        return { question: q.question || '', options: opts.slice(0, 4), correct: correct, points: typeof q.points === 'number' ? q.points : 5 }
+      } else {
+        return { question: q.question || '', options: opts.slice(0, 4), correct: correct }
+      }
     }).filter(function(q: any) { return q.question.trim().length > 0 })
 
     if (validQuestions.length === 0) {
       return NextResponse.json({ error: 'لم يتم استخراج أي أسئلة من الصورة. تأكد أن الصورة تحتوي على أسئلة واضحة ومقروءة.' }, { status: 400 })
     }
 
-    return NextResponse.json({ success: true, questions: validQuestions, totalExtracted: validQuestions.length })
+    return NextResponse.json({ success: true, questions: validQuestions, totalExtracted: validQuestions.length, type: type })
   } catch (error: any) {
     console.error('Extract questions error:', error)
     return NextResponse.json({ error: 'فشل الاستخراج: ' + (error.message || 'خطأ غير معروف') }, { status: 500 })
