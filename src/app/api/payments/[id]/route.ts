@@ -1,71 +1,54 @@
-// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// PUT /api/payments/[id] - Approve or reject a payment (admin)
+// PUT - Approve or reject a payment
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
-
   try {
-    const { status } = await request.json()
+    var { id } = await params
+    var body = await request.json()
+    var { status, adminNotes } = body
 
-    if (!status || !['approved', 'rejected'].includes(status)) {
-      return NextResponse.json({ error: 'Invalid status. Use approved or rejected' }, { status: 400 })
+    if (!status || (status !== 'approved' && status !== 'rejected')) {
+      return NextResponse.json({ error: 'status must be approved or rejected' }, { status: 400 })
     }
 
-    const payment = await db.payment.findUnique({ where: { id } })
-    if (!payment) return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
-
-    if (payment.status !== 'pending') {
-      return NextResponse.json({ error: 'تم مراجعة هذا الدفع بالفعل' }, { status: 400 })
+    var payment = await db.payment.findUnique({ where: { id } })
+    if (!payment) {
+      return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
     }
 
-    const updated = await db.payment.update({
+    var updated = await db.payment.update({
       where: { id },
-      data: { status },
+      data: {
+        status,
+        notes: adminNotes !== undefined ? adminNotes : (payment.notes || ''),
+      },
     })
 
-    // If approved and there's a videoId, grant access via raw SQL
-    if (status === 'approved' && payment.videoId) {
-      try {
-        await db.$executeRawUnsafe(
-          `INSERT OR IGNORE INTO VideoAccess (id, studentId, videoId, grantedAt) VALUES (?, ?, ?, datetime('now'))`,
-          id + '_access', payment.studentId, payment.videoId
-        )
+    // If approved, student should have access to the video
+    // The video access check in StudentPortal will look for approved payments
 
-        try {
-          await db.studentActivity.create({
-            data: {
-              studentId: payment.studentId,
-              action: 'payment_approved',
-              details: 'تم قبول الدفع (' + payment.amount + ' جنيه) - تم فتح الفيديو: ' + payment.videoTitle,
-            },
-          })
-        } catch(e) { /* silent */ }
-      } catch (err) {
-        console.error('Error granting video access:', err)
-      }
-    }
-
-    // If rejected, log activity
-    if (status === 'rejected') {
-      try {
-        await db.studentActivity.create({
-          data: {
-            studentId: payment.studentId,
-            action: 'payment_rejected',
-            details: 'تم رفض الدفع (' + payment.amount + ' جنيه) عن طريق ' + payment.method,
-          },
-        })
-      } catch(e) { /* silent */ }
-    }
-
-    return NextResponse.json({ payment: updated })
-  } catch (error) {
+    return NextResponse.json({ message: 'Payment updated', payment: updated })
+  } catch (error: any) {
     console.error('Payment update error:', error)
-    return NextResponse.json({ error: 'Failed to update payment' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
+  }
+}
+
+// DELETE - Delete a payment
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    var { id } = await params
+    await db.payment.delete({ where: { id } })
+    return NextResponse.json({ message: 'Payment deleted' })
+  } catch (error: any) {
+    console.error('Payment delete error:', error)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
