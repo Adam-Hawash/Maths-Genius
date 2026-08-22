@@ -1,7 +1,3 @@
-// ============================================================
-// src/app/api/config/route.ts — FIXED
-// ============================================================
-
 // @ts-nocheck
 import { NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
@@ -77,7 +73,7 @@ var DEFAULTS = {
   guide_card3_desc: 'أكمل واجباتك الأسبوعية وحلّ التمارين لتثبيت المعلومات واختبار فهمك. Complete weekly homework to reinforce your learning.',
   guide_card4_title: 'أداء الامتحانات',
   guide_card4_title_en: 'Take Exams',
-  guide_card4_desc: 'شارك في الامتحانات الدورية لمتابعة مستواك والاستعداد للامتحانات النهائية. Take periodic exams to track your progress.',
+  guide_card4_desc: 'شارك في الامتحانات الدورية لمتابعة مستوايك والاستعداد للامتحانات النهائية. Take periodic exams to track your progress.',
   guide_card5_title: 'بطاقات تعليمية',
   guide_card5_title_en: 'Flashcards',
   guide_card5_desc: 'استخدم البطاقات التعليمية لمراجعة المصطلحات والقوانين الرياضية بشكل سريع. Review formulas and terms with flashcards.',
@@ -108,8 +104,16 @@ var DEFAULTS = {
   // === Tips Section Background ===
   tips_bg_image: '',
 
+  // === Tips Section Center Image ===
+  tips_section_image: '',
+
   // === API Keys ===
   resend_api_key: '',
+
+  // === Payment Numbers (shown to students) ===
+  payment_vodafone_cash: '',
+  payment_instapay: '',
+  payment_fawry: '',
 }
 
 export async function GET() {
@@ -123,8 +127,7 @@ export async function GET() {
     return NextResponse.json(map)
   } catch (error) {
     console.error('Config fetch error:', error)
-    // FIXED: return flat DEFAULTS on error (not {error, defaults} wrapper)
-    // This prevents CMSPanel from loading junk keys like "error" and "defaults"
+    // CRITICAL FIX: Return flat DEFAULTS so frontend never crashes
     return NextResponse.json(Object.assign({}, DEFAULTS))
   }
 }
@@ -136,9 +139,9 @@ export async function PUT(request) {
 
     for (var i = 0; i < keys.length; i++) {
       var key = keys[i]
-      // FIXED: skip junk keys that could corrupt the config
-      if (key === 'error' || key === 'defaults') continue
       var value = body[key]
+      // Skip non-config keys that might come from error responses
+      if (key === 'error' || key === 'defaults') continue
       await safeWrite(function(k, v) {
         return function() {
           return db.siteConfig.upsert({
