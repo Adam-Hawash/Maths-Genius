@@ -1,54 +1,53 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// PUT - Approve or reject a payment
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET() {
   try {
-    var { id } = await params
-    var body = await request.json()
-    var { status, adminNotes } = body
+    // Fetch core stats that always exist
+    var coreStats = await Promise.all([
+      db.student.count(),
+      db.student.count({ where: { status: 'pending' } }),
+      db.student.count({ where: { status: 'approved' } }),
+      db.video.count(),
+      db.homework.count(),
+      db.exam.count(),
+      db.announcement.count(),
+      db.discussion.count(),
+    ])
 
-    if (!status || (status !== 'approved' && status !== 'rejected')) {
-      return NextResponse.json({ error: 'status must be approved or rejected' }, { status: 400 })
+    var result: Record<string, any> = {
+      totalStudents: coreStats[0],
+      pendingStudents: coreStats[1],
+      approvedStudents: coreStats[2],
+      totalVideos: coreStats[3],
+      totalHomework: coreStats[4],
+      totalExams: coreStats[5],
+      totalAnnouncements: coreStats[6],
+      totalDiscussions: coreStats[7],
+      pendingPayments: 0,
     }
 
-    var payment = await db.payment.findUnique({ where: { id } })
-    if (!payment) {
-      return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
+    // Fetch Payment count safely (table might not exist yet)
+    try {
+      result.pendingPayments = await db.payment.count({ where: { status: 'pending' } })
+    } catch (e) {
+      result.pendingPayments = 0
     }
 
-    var updated = await db.payment.update({
-      where: { id },
-      data: {
-        status,
-        notes: adminNotes !== undefined ? adminNotes : (payment.notes || ''),
-      },
-    })
+    // Fetch grades
+    try {
+      var studentGrades = await db.student.findMany({
+        select: { grade: true },
+        distinct: ['grade'],
+      })
+      result.grades = studentGrades.map(function(s) { return s.grade })
+    } catch (e) {
+      result.grades = []
+    }
 
-    // If approved, student should have access to the video
-    // The video access check in StudentPortal will look for approved payments
-
-    return NextResponse.json({ message: 'Payment updated', payment: updated })
-  } catch (error: any) {
-    console.error('Payment update error:', error)
-    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
-  }
-}
-
-// DELETE - Delete a payment
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    var { id } = await params
-    await db.payment.delete({ where: { id } })
-    return NextResponse.json({ message: 'Payment deleted' })
-  } catch (error: any) {
-    console.error('Payment delete error:', error)
+    return NextResponse.json(result)
+  } catch (error) {
+    console.error('Stats error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
