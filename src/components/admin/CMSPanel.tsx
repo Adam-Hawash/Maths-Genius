@@ -205,6 +205,11 @@ export function CMSPanel() {
         return
       }
       var data = await res.json()
+      // FIXED: defensive unwrap — if config API returns error shape, strip it
+      if (data && data.error && data.defaults) {
+        console.warn('CMSPanel: config API returned error shape, using defaults')
+        data = data.defaults || {}
+      }
       setConfig(data)
       var pvs: Record<string, string> = {}
       IMAGE_SLOTS.forEach(function(slot) { pvs[slot.configKey] = data[slot.configKey] || '' })
@@ -218,15 +223,23 @@ export function CMSPanel() {
   var handleSave = async function() {
     setSaving(true)
     try {
+      // FIXED: filter out junk keys before saving
+      var cleanConfig: Record<string, string> = {}
+      var keys = Object.keys(config)
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i]
+        if (key === 'error' || key === 'defaults') continue
+        cleanConfig[key] = config[key]
+      }
       var res = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify(cleanConfig),
       })
       if (res.ok) {
         toast.success('تم حفظ الإعدادات بنجاح | Settings saved')
         var storeState = await (await import('@/stores/app-store')).useAppStore.getState()
-        storeState.setSiteConfig(config)
+        storeState.setSiteConfig(cleanConfig)
       } else {
         var errText = ''
         try { errText = await res.text() } catch(x) {}
