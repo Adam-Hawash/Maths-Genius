@@ -20,17 +20,18 @@ model Student {
   id          String            @id @default(cuid())
   name        String
   phone       String            @unique
-  password    String            @default("")
   grade       String
   status      String            @default("pending")
   parentName  String
   parentPhone String
   loginCount  Int               @default(0)
   lastLogin   DateTime?
+  isPaidAccess Boolean          @default(false)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   examResults ExamResult[]
   activities  StudentActivity[]
+  payments    Payment[]
 }
 
 model StudentActivity {
@@ -53,16 +54,6 @@ model Video {
   price     Float    @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
-
-model VideoAccess {
-  id         String   @id @default(cuid())
-  studentId  String
-  videoId    String
-  grantedBy  String   @default("admin")
-  createdAt  DateTime @default(now())
-
-  @@unique([studentId, videoId])
 }
 
 model Homework {
@@ -124,6 +115,7 @@ model Discussion {
   grade        String
   content      String
   isAdminReply Boolean  @default(false)
+  likes        Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -141,8 +133,8 @@ model Media {
   filePath  String
   fileType  String
   fileSize  String   @default("")
-  data      String   @default("")
   category  String   @default("general")
+  data      String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -172,18 +164,33 @@ model GalleryImage {
 }
 
 model Payment {
-  id            String    @id @default(cuid())
-  studentId     String
-  studentName   String    @default("")
-  videoId       String    @default("")
-  videoTitle    String    @default("")
-  amount        Float     @default(0)
-  paymentMethod String    @default("")
-  receiptPath   String    @default("")
-  notes         String    @default("")
-  status        String    @default("pending")
-  reviewedAt    DateTime?
-  reviewedBy    String    @default("")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  studentId    String
+  studentName  String
+  studentPhone String    @default("")
+  studentGrade String    @default("")
+  method       String
+  amount       Float     @default(0)
+  videoId      String    @default("")
+  videoTitle   String    @default("")
+  receiptPath  String    @default("")
+  receiptType  String    @default("")
+  status       String    @default("pending")
+  note         String    @default("")
+  reviewedAt   DateTime?
+  reviewedBy   String    @default("")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model VideoAccess {
+  id        String   @id @default(cuid())
+  videoId   String
+  studentId String
+  grantedBy String   @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([videoId, studentId])
 }
