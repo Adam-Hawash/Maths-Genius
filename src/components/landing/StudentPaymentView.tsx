@@ -1,134 +1,221 @@
-import { NextRequest, NextResponse } from 'next/server'
+'use client'
 
-export async function POST(request: NextRequest) {
-  try {
-    var formData = await request.formData()
-    var file = formData.get('file') as File | null
-    var fileUrl = formData.get('fileUrl') as string | null
+import { useAppStore } from '@/stores/app-store'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import {
+  ArrowRight, Upload, Loader2, Smartphone, CreditCard, Wallet, CheckCircle2,
+} from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 
-    if (!file && !fileUrl) {
-      return NextResponse.json({ error: 'الرجاء رفع ملف أو إدخال رابط' }, { status: 400 })
+export function StudentPaymentView() {
+  const { pendingPaymentVideo, setView, setPendingPaymentVideo, siteConfig, currentStudent } = useAppStore()
+  const [paymentMethod, setPaymentMethod] = useState('')
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [notes, setNotes] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+
+  const video = pendingPaymentVideo
+
+  const vodafoneCash = siteConfig?.payment_vodafone_cash || ''
+  const instapay = siteConfig?.payment_instapay || ''
+  const fawry = siteConfig?.payment_fawry || ''
+
+  useEffect(() => {
+    if (!video) {
+      setView('student-portal')
     }
+  }, [video, setView])
 
-    var imageBase64 = ''
-    var mimeType = ''
+  if (!video) return null
 
-    if (file) {
-      var bytes = await file.arrayBuffer()
-      var buffer = Buffer.from(bytes)
-      imageBase64 = buffer.toString('base64')
-      mimeType = file.type || 'image/png'
-    } else if (fileUrl) {
-      try {
-        var res = await fetch(fileUrl)
-        if (!res.ok) {
-          return NextResponse.json({ error: 'فشل جلب الملف من الرابط' }, { status: 400 })
-        }
-        var arrayBuf = await res.arrayBuffer()
-        var buf = Buffer.from(arrayBuf)
-        imageBase64 = buf.toString('base64')
-        var contentType = res.headers.get('content-type') || ''
-        mimeType = contentType || 'image/png'
-      } catch (fetchErr: any) {
-        return NextResponse.json({ error: 'فشل جلب الملف: ' + (fetchErr.message || '') }, { status: 400 })
-      }
+  const handleSubmit = async () => {
+    if (!paymentMethod || !receiptFile) {
+      toast.error('اختر طريقة الدفع وارفع إثبات الدفع')
+      return
     }
-
-    var apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ 
-        error: 'مفتاح GEMINI_API_KEY غير موجود في الإعدادات. اذهب إلى إعدادات Vercel → Environment Variables وأضف المفتاح.',
-        errorKey: 'GEMINI_API_KEY',
-        errorHint: 'احصل على المفتاح من https://aistudio.google.com/apikey وأضفه في Vercel Dashboard → Settings → Environment Variables'
-      }, { status: 500 })
-    }
-
-    var prompt = 'أنت معلم رياضيات خبير. استخرج كل الأسئلة من هذه الصفحة/الصورة. لكل سؤال اكتب: رقم السؤال، نص السؤال كاملاً، الإجابة الصحيحة، و4 اختيارات (إذا كان سؤال اختيار من متعدد) أو "لا يوجد" إذا كان سؤال حر. رد بـ JSON فقط بدون أي نص إضافي بهذا الشكل بالضبط: {"questions": [{"question": "نص السؤال", "options": ["اختيار1", "اختيار2", "اختيار3", "اختيار4"], "correct": 0}]} ملاحظات: correct = index الاختيار الصحيح (0-3)، إذا السؤال حر حط options كلها "لا يوجد" و correct = 0، لو فيها معادلات اكتبها بالعادي، استخرج كل الأسئلة الموجودة.'
-
-    var geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey
-
-    var body = {
-      contents: [{
-        parts: [
-          { text: prompt },
-          { inlineData: { mimeType: mimeType, data: imageBase64 } }
-        ]
-      }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
-    }
-
-    var response
+    setUploading(true)
     try {
-      response = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-    } catch (fetchErr: any) {
-      return NextResponse.json({ error: 'فشل الاتصال بخدمة Gemini: ' + (fetchErr.message || '') }, { status: 500 })
-    }
-
-    if (!response.ok) {
-      var errText = ''
-      try { errText = await response.text() } catch(e) { errText = '' }
-      console.error('Gemini error:', response.status, errText)
-      if (response.status === 400) {
-        return NextResponse.json({ error: 'خطأ في طلب Gemini — تأكد أن المفتاح صحيح وملف الصورة سليم' }, { status: 500 })
+      const formData = new FormData()
+      formData.append('videoId', video.id)
+      formData.append('videoTitle', video.title)
+      formData.append('amount', String(video.price))
+      formData.append('paymentMethod', paymentMethod)
+      formData.append('receipt', receiptFile)
+      formData.append('notes', notes)
+      if (currentStudent) {
+        formData.append('studentId', currentStudent.id)
+        formData.append('studentName', currentStudent.name)
       }
-      if (response.status === 403 || response.status === 401) {
-        return NextResponse.json({ error: 'مفتاح GEMINI_API_KEY غير صالح أو منتهي. جرب مفتاح جديد من https://aistudio.google.com/apikey' }, { status: 500 })
+      const res = await fetch('/api/payments', { method: 'POST', body: formData })
+      if (res.ok) {
+        setSubmitted(true)
+        toast.success('تم إرسال إثبات الدفع بنجاح!')
+      } else {
+        const data = await res.json().catch(function() { return { error: 'خطأ' } })
+        toast.error(data.error || 'حدث خطأ أثناء إرسال الدفع')
       }
-      if (response.status === 429) {
-        return NextResponse.json({ error: 'تم تجاوز حد الاستخدام — انتظر قليلاً وحاول مرة أخرى' }, { status: 500 })
-      }
-      return NextResponse.json({ error: 'خطأ في خدمة الذكاء الاصطناعي: ' + response.status }, { status: 500 })
+    } catch {
+      toast.error('حدث خطأ في الاتصال')
+    } finally {
+      setUploading(false)
     }
-
-    var data
-    try {
-      data = await response.json()
-    } catch(e) {
-      return NextResponse.json({ error: 'فشل تحليل رد الذكاء الاصطناعي' }, { status: 500 })
-    }
-
-    var text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text
-
-    if (!text) {
-      var blockReason = (data.candidates && data.candidates[0] && data.candidates[0].finishReason) || ''
-      if (blockReason === 'SAFETY') {
-        return NextResponse.json({ error: 'تم حظر الرد بسبب سياسة الأمان — جرب صورة أخرى أو أعد صياغة المحتوى' }, { status: 500 })
-      }
-      return NextResponse.json({ error: 'لم يرد الذكاء الاصطناعي بأي نتيجة. تأكد أن الصورة تحتوي على أسئلة واضحة.' }, { status: 500 })
-    }
-
-    var jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      return NextResponse.json({ error: 'لم يتم تحليل رد الذكاء الاصطناعي كـ JSON. جرب صورة أوضح.', aiRawText: text.substring(0, 200) }, { status: 500 })
-    }
-
-    var parsed
-    try {
-      parsed = JSON.parse(jsonMatch[0])
-    } catch (parseErr) {
-      return NextResponse.json({ error: 'صيغة JSON غير صحيحة من الذكاء الاصطناعي. جرب صورة أخرى.' }, { status: 500 })
-    }
-
-    var questions = parsed.questions || []
-    var validQuestions = questions.map(function(q: any) {
-      var opts = Array.isArray(q.options) ? q.options : ['لا يوجد', 'لا يوجد', 'لا يوجد', 'لا يوجد']
-      while (opts.length < 4) opts.push('لا يوجد')
-      var correct = typeof q.correct === 'number' ? q.correct : 0
-      if (correct < 0 || correct > 3) correct = 0
-      return { question: q.question || '', options: opts.slice(0, 4), correct: correct }
-    }).filter(function(q: any) { return q.question.trim().length > 0 })
-
-    if (validQuestions.length === 0) {
-      return NextResponse.json({ error: 'لم يتم استخراج أي أسئلة من الصورة. تأكد أن الصورة تحتوي على أسئلة واضحة ومقروءة.' }, { status: 400 })
-    }
-
-    return NextResponse.json({ success: true, questions: validQuestions, totalExtracted: validQuestions.length })
-  } catch (error: any) {
-    console.error('Extract questions error:', error)
-    return NextResponse.json({ error: 'فشل الاستخراج: ' + (error.message || 'خطأ غير معروف') }, { status: 500 })
   }
+
+  const handleBack = () => {
+    setPendingPaymentVideo(null)
+    setView('student-portal')
+  }
+
+  if (submitted) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardContent className="p-8 space-y-4">
+            <div className="mx-auto h-16 w-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <CheckCircle2 className="h-8 w-8 text-amber-600" />
+            </div>
+            <h2 className="text-xl font-bold">تم إرسال إثبات الدفع بنجاح!</h2>
+            <p className="text-muted-foreground">استنى موافقة الأدمن — هتلاحظ إن الفيديو اشتغل لما يتم قبول الدفع.</p>
+            <Button onClick={handleBack} className="mt-4">
+              <ArrowRight className="h-4 w-4 ml-2" />
+              العودة للدروس
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 py-6 px-4 sm:px-6">
+      <div className="mx-auto max-w-lg">
+        <div className="flex items-center gap-3 mb-6">
+          <Button variant="ghost" size="sm" onClick={handleBack}>
+            <ArrowRight className="h-4 w-4 ml-1" />
+            رجوع
+          </Button>
+          <h1 className="text-xl font-bold">الدفع</h1>
+        </div>
+
+        <Card className="mb-6">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="text-sm text-muted-foreground">فيديو</p>
+              <p className="font-bold truncate">{video.title}</p>
+            </div>
+            <Badge className="text-lg px-3 py-1 bg-amber-500 text-white shrink-0">
+              {video.price} ج.م
+            </Badge>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardContent className="p-4 space-y-4">
+            <h2 className="font-bold flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-primary" />
+              رقم الدفع
+            </h2>
+            <p className="text-sm text-muted-foreground">حول المبلغ على أي رقم من الأرقام دي، ثم ارفع صورة الإيصال</p>
+            <div className="space-y-3">
+              {vodafoneCash && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+                  <div className="h-10 w-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                    <Smartphone className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">فودافون كاش</p>
+                    <p className="font-bold text-sm" dir="ltr">{vodafoneCash}</p>
+                  </div>
+                </div>
+              )}
+              {instapay && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+                  <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+                    <CreditCard className="h-5 w-5 text-violet-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">إنستا باي</p>
+                    <p className="font-bold text-sm" dir="ltr">{instapay}</p>
+                  </div>
+                </div>
+              )}
+              {fawry && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+                  <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                    <Wallet className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">فوري</p>
+                    <p className="font-bold text-sm" dir="ltr">{fawry}</p>
+                  </div>
+                </div>
+              )}
+              {!vodafoneCash && !instapay && !fawry && (
+                <p className="text-center text-sm text-muted-foreground py-4">لم يتم إعداد أرقام الدفع بعد</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardContent className="p-4 space-y-4">
+            <h2 className="font-bold">اختر طريقة الدفع</h2>
+            <div className="grid grid-cols-3 gap-2">
+              {vodafoneCash && (
+                <button onClick={() => setPaymentMethod('vodafone_cash')} className={"flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all " + (paymentMethod === 'vodafone_cash' ? 'border-primary bg-primary/10 text-primary' : 'border-muted hover:border-primary/50')}>
+                  <Smartphone className="h-5 w-5" />
+                  <span className="text-xs font-medium">فودافون كاش</span>
+                </button>
+              )}
+              {instapay && (
+                <button onClick={() => setPaymentMethod('instapay')} className={"flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all " + (paymentMethod === 'instapay' ? 'border-primary bg-primary/10 text-primary' : 'border-muted hover:border-primary/50')}>
+                  <CreditCard className="h-5 w-5" />
+                  <span className="text-xs font-medium">إنستا باي</span>
+                </button>
+              )}
+              {fawry && (
+                <button onClick={() => setPaymentMethod('fawry')} className={"flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all " + (paymentMethod === 'fawry' ? 'border-primary bg-primary/10 text-primary' : 'border-muted hover:border-primary/50')}>
+                  <Wallet className="h-5 w-5" />
+                  <span className="text-xs font-medium">فوري</span>
+                </button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardContent className="p-4 space-y-4">
+            <h2 className="font-bold">ارفع مستند أو إثبات الدفع</h2>
+            <label className={"flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-colors " + (receiptFile ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50')}>
+              {receiptFile ? (
+                <><CheckCircle2 className="h-8 w-8 text-primary" /><p className="text-sm font-medium text-primary">{receiptFile.name}</p><p className="text-xs text-muted-foreground">اضغط لتغيير الصورة</p></>
+              ) : (
+                <><Upload className="h-8 w-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">اضغط لاختيار صورة الإيصال</p></>
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => setReceiptFile(e.target.files?.[0] || null)} />
+            </label>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardContent className="p-4 space-y-3">
+            <h2 className="font-bold">ملاحظات <span className="text-muted-foreground font-normal text-xs">(اختياري)</span></h2>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="اكتب أي ملاحظات... مثلاً: الاسم على الحساب، أو رقم التحويل" rows={3} className="text-sm" />
+          </CardContent>
+        </Card>
+
+        <Button className="w-full py-6 text-base" size="lg" onClick={handleSubmit} disabled={!paymentMethod || !receiptFile || uploading}>
+          {uploading ? <Loader2 className="h-5 w-5 animate-spin ml-2" /> : <CheckCircle2 className="h-5 w-5 ml-2" />}
+          {uploading ? 'جاري الإرسال...' : 'إرسال الإثبات'}
+        </Button>
+
+        <p className="text-center text-xs text-muted-foreground mt-3">بعد الإرسال، استنى موافقة الأدمن وهيظهرلك الرسالة لما يتم القبول</p>
+      </div>
+    </div>
+  )
 }
