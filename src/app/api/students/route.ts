@@ -5,30 +5,19 @@ import { db } from '@/lib/db'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const phone = searchParams.get('phone')
     const grade = searchParams.get('grade')
     const status = searchParams.get('status')
     const keyword = searchParams.get('keyword')
+    const phone = searchParams.get('phone')
+    const password = searchParams.get('password')
     const page = parseInt(searchParams.get('page') || '1')
     const pageSize = parseInt(searchParams.get('pageSize') || '20')
-
-    // Direct phone lookup for student login
-    if (phone) {
-      try {
-        const student = await db.student.findFirst({ where: { phone }, include: { _count: { select: { activities: true } } } })
-        if (student) {
-          return NextResponse.json({ students: [{ ...student, watchedVideoCount: 0 }], total: 1, page: 1, pageSize: 1, totalPages: 1 })
-        }
-        return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0 })
-      } catch (loginErr: any) {
-        console.error('Student login error:', loginErr)
-        return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0 })
-      }
-    }
 
     const where: Record<string, unknown> = {}
     if (grade) where.grade = grade
     if (status) where.status = status
+    if (phone) where.phone = phone
+    if (password) where.password = password
     if (keyword) {
       where.OR = [
         { name: { contains: keyword } },
@@ -49,7 +38,6 @@ export async function GET(request: NextRequest) {
       db.student.count({ where }),
     ])
 
-    // Get watched video IDs per student (for tracking)
     const allStudentIds = students.map(s => s.id)
     const watchedVideos = allStudentIds.length > 0
       ? await db.studentActivity.groupBy({
@@ -59,9 +47,7 @@ export async function GET(request: NextRequest) {
         })
       : []
     const watchMap: Record<string, number> = {}
-    for (const w of watchedVideos) {
-      watchMap[w.studentId] = w._count.id
-    }
+    for (const w of watchedVideos) { watchMap[w.studentId] = w._count.id }
 
     const studentsWithStats = students.map(s => ({
       ...s,
@@ -70,9 +56,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       students: studentsWithStats,
-      total,
-      page,
-      pageSize,
+      total, page, pageSize,
       totalPages: Math.ceil(total / pageSize),
     })
   } catch (error) {
@@ -84,23 +68,21 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, phone, grade, status, parentName, parentPhone } = body
+    const { name, phone, grade, status, parentName, parentPhone, password } = body
 
     if (!name || !phone || !grade || !parentName || !parentPhone) {
       return NextResponse.json({ error: 'All fields are required including parent information' }, { status: 400 })
     }
 
     const student = await db.student.create({
-      data: { name, phone, grade, status: status || 'pending', parentName, parentPhone },
+      data: { name, phone, grade, status: status || 'pending', parentName, parentPhone, password: password || '' },
     })
 
-    // Record registration activity
     await db.studentActivity.create({
-      data: { studentId: student.id, action: 'registered', details: `Registered as ${grade}` },
+      data: { studentId: student.id, action: 'registered', details: 'Registered as ' + grade },
     })
 
-    // Fire-and-forget admin notification via Resend
-    fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/notify-admin`, {
+    fetch((process.env.NEXT_PUBLIC_BASE_URL || '') + '/api/notify-admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ studentName: name, studentPhone: phone, studentGrade: grade, parentName: parentName || '', parentPhone: parentPhone || '' }),
