@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
-import { Loader2, Play } from 'lucide-react'
+import { Loader2, Lock, Play } from 'lucide-react'
+import { useAppStore, GRADES } from '@/stores/app-store'
 
 interface VideoItem {
   id: string
@@ -15,16 +16,6 @@ interface VideoItem {
   price: number
 }
 
-function isYouTubeUrl(url: string) {
-  return /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)/.test(url)
-}
-
-function getYouTubeEmbedUrl(url: string) {
-  var match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
-  if (match) return `https://www.youtube.com/embed/${match[1]}?controls=0&rel=0&modestbranding=1`
-  return url
-}
-
 function getYouTubeThumbnail(url: string) {
   var match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
   if (match) return `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`
@@ -32,9 +23,9 @@ function getYouTubeThumbnail(url: string) {
 }
 
 export function PublicVideosSection() {
+  var setView = useAppStore(function (s) { return s.setView })
   var [videos, setVideos] = useState<VideoItem[]>([])
   var [loading, setLoading] = useState(true)
-  var [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null)
   var [gradeFilter, setGradeFilter] = useState('all')
 
   useEffect(function () {
@@ -78,15 +69,15 @@ export function PublicVideosSection() {
           <p className="text-muted-foreground text-lg">تابع الدروس التعليمية في الرياضيات</p>
         </div>
 
-        {/* Grade filter tabs */}
+        {/* Grade filter tabs - Arabic only */}
         <div className="flex flex-wrap justify-center gap-2 mb-8">
           {[
             { value: 'all', label: 'الكل' },
             { value: 'الصف السادس الابتدائي', label: 'الصف السادس' },
-            { value: 'الصف الأول الاعدادي', label: 'الاول الاعدادي' },
-            { value: 'الصف الثاني الاعدادي', label: 'التاني الاعدادي' },
-            { value: 'الصف الثالث الاعدادي', label: 'التالت الاعدادي' },
-            { value: '1 Bac', label: '1 Bac' },
+            { value: 'الصف الأول الاعدادي', label: 'الأول الإعدادي' },
+            { value: 'الصف الثاني الاعدادي', label: 'الثاني الإعدادي' },
+            { value: 'الصف الثالث الاعدادي', label: 'الثالث الإعدادي' },
+            { value: 'أولى بكالوريا', label: 'أولى بكالوريا' },
           ].map(function (g) {
             var isActive = gradeFilter === g.value
             return (
@@ -108,12 +99,12 @@ export function PublicVideosSection() {
         {/* Video grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map(function (video) {
-            var thumb = video.thumbnail || (video.url && isYouTubeUrl(video.url) ? getYouTubeThumbnail(video.url) : '')
+            var thumb = video.thumbnail || (video.url && getYouTubeThumbnail(video.url)) || ''
             return (
               <Card
                 key={video.id}
                 className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group"
-                onClick={function () { setSelectedVideo(video) }}
+                onClick={function () { setView('auth-login') }}
               >
                 <div className="relative aspect-video bg-muted">
                   {thumb ? (
@@ -127,16 +118,19 @@ export function PublicVideosSection() {
                       <Play className="h-12 w-12 text-muted-foreground" />
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center">
-                      <Play className="h-7 w-7 text-primary mr-[-2px]" />
+                  {/* Lock overlay */}
+                  <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-2">
+                    <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                      <Lock className="h-6 w-6 text-white" />
                     </div>
+                    <span className="text-white text-sm font-medium">سجل دخولك</span>
                   </div>
                 </div>
                 <div className="p-3">
                   <h3 className="font-semibold text-sm line-clamp-2 leading-relaxed">
                     {video.title}
                   </h3>
+                  <p className="text-xs text-muted-foreground mt-1">{video.grade}</p>
                 </div>
               </Card>
             )
@@ -149,47 +143,6 @@ export function PublicVideosSection() {
           </div>
         )}
       </div>
-
-      {/* Video modal */}
-      {selectedVideo && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-          onClick={function () { setSelectedVideo(null) }}
-        >
-          <div
-            className="relative w-full max-w-4xl"
-            onClick={function (e) { e.stopPropagation() }}
-          >
-            <button
-              onClick={function () { setSelectedVideo(null) }}
-              className="absolute -top-10 left-0 text-white hover:text-gray-300 text-sm"
-            >
-              ✕ إغلاق
-            </button>
-            <div className="aspect-video bg-black rounded-lg overflow-hidden">
-              {selectedVideo.url && isYouTubeUrl(selectedVideo.url) ? (
-                <iframe
-                  src={getYouTubeEmbedUrl(selectedVideo.url)}
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              ) : selectedVideo.filePath ? (
-                <video
-                  src={selectedVideo.filePath}
-                  controls
-                  className="w-full h-full"
-                  autoPlay
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-white">
-                  <p>لا يمكن تشغيل هذا الفيديو</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   )
 }
