@@ -6,8 +6,8 @@ export type AppView =
   | 'auth-register'
   | 'student-pending'
   | 'student-portal'
-  | 'student-payment'
   | 'admin-dashboard'
+  | 'student-payment'
 
 export interface Student {
   id: string
@@ -17,7 +17,6 @@ export interface Student {
   status: string
   parentName: string
   parentPhone: string
-  isFreeAccess: boolean
   loginCount: number
   lastLogin: string | null
   watchedVideoCount?: number
@@ -122,13 +121,14 @@ export const GRADES = [
   'أولى بكالوريا',
 ] as const
 
-export const GRADES_EN = [
-  { ar: 'الصف السادس الابتدائي', en: 'Grade 6' },
-  { ar: 'الصف الأول الاعدادي', en: 'Prep 1' },
-  { ar: 'الصف الثاني الاعدادي', en: 'Prep 2' },
-  { ar: 'الصف الثالث الاعدادي', en: 'Prep 3' },
-  { ar: 'أولى بكالوريا', en: 'Bac' },
-] as const
+// Mapping from Arabic grade to English short name (for video cards, exam labels, etc.)
+export const GRADE_SHORT_NAMES: Record<string, string> = {
+  'الصف السادس الابتدائي': 'Grade 6',
+  'الصف الأول الاعدادي': 'Prep 1',
+  'الصف الثاني الاعدادي': 'Prep 2',
+  'الصف الثالث الاعدادي': 'Prep 3',
+  'أولى بكالوريا': '1 Bac',
+}
 
 export interface Stats {
   totalStudents: number
@@ -140,6 +140,7 @@ export interface Stats {
   totalAnnouncements: number
   totalDiscussions: number
   grades: string[]
+  pendingPayments?: number
 }
 
 export interface SiteConfig {
@@ -190,8 +191,8 @@ interface AppState {
   galleryImages: GalleryImage[]
   setGalleryImages: (images: GalleryImage[]) => void
 
-  pendingPaymentVideo: Video | null
-  setPendingPaymentVideo: (video: Video | null) => void
+  pendingPaymentVideo: { id: string; title: string; price: number; grade: string } | null
+  setPendingPaymentVideo: (v: { id: string; title: string; price: number; grade: string } | null) => void
 
   logout: () => void
 }
@@ -233,13 +234,13 @@ export const useAppStore = create<AppState>((set) => ({
   setSocialLinks: (links) => set({ socialLinks: links }),
 
   stats: null,
-  setStats: (stats) => set({ stats: stats }),
+  setStats: (stats) => set({ stats }),
 
   galleryImages: [],
   setGalleryImages: (images) => set({ galleryImages: images }),
 
   pendingPaymentVideo: null,
-  setPendingPaymentVideo: (video) => set({ pendingPaymentVideo: video }),
+  setPendingPaymentVideo: (v) => set({ pendingPaymentVideo: v }),
 
   logout: () =>
     set({
