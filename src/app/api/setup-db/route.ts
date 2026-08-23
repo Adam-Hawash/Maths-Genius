@@ -6,23 +6,23 @@ export async function GET() {
     var dbUrl = process.env.DATABASE_URL || ''
     var authToken = process.env.TURSO_AUTH_TOKEN || ''
     if (!dbUrl) return NextResponse.json({ ok: false, error: 'DATABASE_URL not set' }, { status: 500 })
-
     var client = createClient({ url: dbUrl, authToken: authToken || undefined })
     var results: any[] = []
 
     var addColumn = async function(table: string, col: string, type: string, def: string) {
       try {
         await client.execute('ALTER TABLE ' + table + ' ADD COLUMN ' + col + ' ' + type + ' ' + def)
-        results.push({ table: table, column: col, ok: true })
+        results.push({ table, column: col, ok: true })
       } catch (e: any) {
         if (e.message && (e.message.indexOf('duplicate') !== -1 || e.message.indexOf('already exists') !== -1)) {
-          results.push({ table: table, column: col, ok: true, note: 'exists' })
+          results.push({ table, column: col, ok: true, note: 'exists' })
         } else {
-          results.push({ table: table, column: col, ok: false, error: e.message })
+          results.push({ table, column: col, ok: false, error: e.message })
         }
       }
     }
 
+    // Create tables
     var tables = [
       'CREATE TABLE IF NOT EXISTS Admin (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password TEXT NOT NULL, name TEXT NOT NULL DEFAULT "Admin", createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
       'CREATE TABLE IF NOT EXISTS Student (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT NOT NULL UNIQUE, password TEXT NOT NULL DEFAULT "", grade TEXT NOT NULL, status TEXT NOT NULL DEFAULT "pending", parentName TEXT NOT NULL DEFAULT "", parentPhone TEXT NOT NULL DEFAULT "", loginCount INTEGER NOT NULL DEFAULT 0, lastLogin DATETIME, isPaidAccess INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
@@ -40,25 +40,43 @@ export async function GET() {
       'CREATE TABLE IF NOT EXISTS Payment (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, studentName TEXT DEFAULT "", studentPhone TEXT DEFAULT "", studentGrade TEXT DEFAULT "", method TEXT DEFAULT "", amount REAL DEFAULT 0, videoId TEXT DEFAULT "", videoTitle TEXT DEFAULT "", receiptPath TEXT DEFAULT "", receiptType TEXT DEFAULT "", status TEXT NOT NULL DEFAULT "pending", note TEXT DEFAULT "", reviewedAt DATETIME, reviewedBy TEXT DEFAULT "", createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE)',
       'CREATE TABLE IF NOT EXISTS VideoAccess (id TEXT PRIMARY KEY, videoId TEXT NOT NULL, studentId TEXT NOT NULL, grantedBy TEXT NOT NULL DEFAULT "admin", createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(videoId, studentId))',
     ]
-
     for (var i = 0; i < tables.length; i++) {
-      try {
-        await client.execute(tables[i])
-        results.push({ table: tables[i].match(/CREATE TABLE IF NOT EXISTS (\w+)/)?.[1], ok: true })
-      } catch (e: any) {
-        results.push({ table: tables[i].match(/CREATE TABLE IF NOT EXISTS (\w+)/)?.[1], ok: false, error: e.message })
-      }
+      try { await client.execute(tables[i]); results.push({ table: tables[i].match(/CREATE TABLE IF NOT EXISTS (\w+)/)?.[1], ok: true }) }
+      catch (e: any) { results.push({ table: tables[i].match(/CREATE TABLE IF NOT EXISTS (\w+)/)?.[1], ok: false, error: e.message }) }
     }
 
+    // ALL missing columns for ALL tables
     await addColumn('Student', 'password', 'TEXT', "NOT NULL DEFAULT ''")
     await addColumn('Student', 'isPaidAccess', 'INTEGER', 'NOT NULL DEFAULT 0')
     await addColumn('Student', 'parentName', 'TEXT', "NOT NULL DEFAULT ''")
     await addColumn('Student', 'parentPhone', 'TEXT', "NOT NULL DEFAULT ''")
     await addColumn('Video', 'price', 'REAL', 'DEFAULT 0')
+    await addColumn('Video', 'fileType', 'TEXT', "DEFAULT ''")
+    await addColumn('Video', 'thumbnail', 'TEXT', "DEFAULT ''")
+    await addColumn('Homework', 'questions', 'TEXT', "DEFAULT ''")
+    await addColumn('Homework', 'answerKeyPath', 'TEXT', "DEFAULT ''")
+    await addColumn('Homework', 'answerKeyType', 'TEXT', "DEFAULT ''")
+    await addColumn('Homework', 'thumbnail', 'TEXT', "DEFAULT ''")
+    await addColumn('Homework', 'fileType', 'TEXT', "DEFAULT ''")
+    await addColumn('Homework', 'content', 'TEXT', "DEFAULT ''")
+    await addColumn('Exam', 'questions', 'TEXT', "DEFAULT ''")
+    await addColumn('Exam', 'answerKeyPath', 'TEXT', "DEFAULT ''")
+    await addColumn('Exam', 'answerKeyType', 'TEXT', "DEFAULT ''")
+    await addColumn('Exam', 'thumbnail', 'TEXT', "DEFAULT ''")
+    await addColumn('Exam', 'fileType', 'TEXT', "DEFAULT ''")
+    await addColumn('Exam', 'content', 'TEXT', "DEFAULT ''")
     await addColumn('Exam', 'passScore', 'REAL', 'DEFAULT 50')
     await addColumn('ExamResult', 'score', 'REAL', 'DEFAULT 0')
     await addColumn('ExamResult', 'maxScore', 'REAL', 'DEFAULT 100')
+    await addColumn('Announcement', 'content', 'TEXT', "DEFAULT ''")
     await addColumn('Discussion', 'likes', 'INTEGER', 'NOT NULL DEFAULT 0')
+    await addColumn('Discussion', 'isAdminReply', 'INTEGER', 'NOT NULL DEFAULT 0')
+    await addColumn('Media', 'data', 'TEXT', "DEFAULT ''")
+    await addColumn('Media', 'category', 'TEXT', "DEFAULT 'general'")
+    await addColumn('Media', 'fileSize', 'TEXT', "DEFAULT ''")
+    await addColumn('GalleryImage', 'type', 'TEXT', "DEFAULT 'image'")
+    await addColumn('GalleryImage', 'videoUrl', 'TEXT', "DEFAULT ''")
+    await addColumn('GalleryImage', 'sortOrder', 'INTEGER', 'NOT NULL DEFAULT 0')
     await addColumn('Payment', 'studentPhone', 'TEXT', "DEFAULT ''")
     await addColumn('Payment', 'studentGrade', 'TEXT', "DEFAULT ''")
     await addColumn('Payment', 'method', 'TEXT', "DEFAULT ''")
@@ -67,32 +85,23 @@ export async function GET() {
     await addColumn('Payment', 'reviewedAt', 'DATETIME', '')
     await addColumn('Payment', 'reviewedBy', 'TEXT', "DEFAULT ''")
 
+    // Fix NULLs
     var fixes = [
+      'UPDATE Student SET password = \'\' WHERE password IS NULL',
+      'UPDATE Student SET isPaidAccess = 0 WHERE isPaidAccess IS NULL',
       'UPDATE Video SET price = 0 WHERE price IS NULL',
       'UPDATE Exam SET passScore = 50 WHERE passScore IS NULL',
       'UPDATE ExamResult SET score = 0 WHERE score IS NULL',
       'UPDATE ExamResult SET maxScore = 100 WHERE maxScore IS NULL',
       'UPDATE Payment SET amount = 0 WHERE amount IS NULL',
-      'UPDATE Student SET password = \'\' WHERE password IS NULL',
-      'UPDATE Student SET isPaidAccess = 0 WHERE isPaidAccess IS NULL',
-      'UPDATE Student SET parentName = \'\' WHERE parentName IS NULL',
-      'UPDATE Student SET parentPhone = \'\' WHERE parentPhone IS NULL',
     ]
     for (var j = 0; j < fixes.length; j++) {
       try { await client.execute(fixes[j]); results.push({ fix: fixes[j], ok: true }) }
       catch (e: any) { results.push({ fix: fixes[j], ok: false, error: e.message }) }
     }
 
-    try {
-      var admins = await client.execute('SELECT id FROM Admin LIMIT 1')
-      if (!admins.rows || admins.rows.length === 0) {
-        await client.execute({ sql: 'INSERT INTO Admin (id, email, password, name, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)', args: ['admin_001', 'math genius', 'wael2026#', 'Mr Wael Khodier', new Date().toISOString(), new Date().toISOString()] })
-        results.push({ admin: 'created' })
-      }
-    } catch (_) {}
-
     await client.close()
-    return NextResponse.json({ ok: true, results: results })
+    return NextResponse.json({ ok: true, results })
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message || String(error) }, { status: 500 })
   }
