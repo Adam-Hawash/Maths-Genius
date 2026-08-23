@@ -38,17 +38,19 @@ export function StudentPortal() {
     let cancelled = false
     ;(async () => {
       try {
-        const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes] = await Promise.all([
+        const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes, accessRes] = await Promise.all([
           fetch(`/api/videos?grade=${encodeURIComponent(grade)}&pageSize=100`).then(r => r.json()),
           fetch(`/api/homework?grade=${encodeURIComponent(grade)}&pageSize=50`).then(r => r.json()),
           fetch(`/api/exams?grade=${encodeURIComponent(grade)}&pageSize=50`).then(r => r.json()),
           fetch(`/api/announcements?grade=${encodeURIComponent(grade)}&pageSize=10`).then(r => r.json()),
           fetch(`/api/exam-results?grade=${encodeURIComponent(grade)}`).then(r => r.json()),
           fetch(`/api/activities?studentId=${studentId}&action=watched_video&pageSize=200`).then(r => r.json()),
+          fetch(`/api/video-access?studentId=${studentId}`).then(r => r.json()).catch(function() { return { accesses: [] } }),
         ])
         if (cancelled) return
         const videos = videosRes.videos || []
         const watchedIds = new Set<string>((actRes.activities || []).map((a: any) => a.details?.replace('Watched: ', '')))
+        const accessedVideoIds = new Set<string>((accessRes.accesses || []).map((a: any) => a.videoId))
         setDashboardData({
           videos,
           homework: hwRes.homework || [],
@@ -56,6 +58,7 @@ export function StudentPortal() {
           announcements: annRes.announcements || [],
           examResults: resultsRes.results || [],
           watchedIds,
+          accessedVideoIds,
         })
       } catch { /* silent */ }
       if (!cancelled) setLoading(false)
@@ -254,6 +257,7 @@ type PortalData = {
   announcements: Announcement[]
   examResults: ExamResult[]
   watchedIds: Set<string>
+  accessedVideoIds: Set<string>
 }
 
 function FullPortalContent({ initialData, onBack }: { initialData: PortalData; onBack: () => void }) {
@@ -295,7 +299,7 @@ function FullPortalContent({ initialData, onBack }: { initialData: PortalData; o
           ))}
         </div>
 
-        {activeTab === 'videos' && <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} studentId={studentId} grade={grade} />}
+        {activeTab === 'videos' && <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} accessedVideoIds={initialData.accessedVideoIds} studentId={studentId} grade={grade} />}
         {activeTab === 'homework' && <HomeworkTab homework={initialData.homework} />}
         {activeTab === 'exams' && <ExamsTab exams={initialData.exams} results={initialData.examResults} studentId={studentId} />}
         {activeTab === 'announcements' && <AnnouncementsTab announcements={initialData.announcements} />}
@@ -306,9 +310,10 @@ function FullPortalContent({ initialData, onBack }: { initialData: PortalData; o
 }
 
 /* ========== VIDEOS TAB ========== */
-function VideosTab({ videos, watchedIds, studentId, grade }: { videos: VideoType[]; watchedIds: Set<string>; studentId: string; grade: string }) {
+function VideosTab({ videos, watchedIds, accessedVideoIds, studentId, grade }: { videos: VideoType[]; watchedIds: Set<string>; accessedVideoIds: Set<string>; studentId: string; grade: string }) {
   const { currentStudent, setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
+
   const trackVideoWatch = (videoId: string) => {
     if (!studentId || localWatched.has(videoId)) return
     setLocalWatched(prev => new Set([...prev, videoId]))
@@ -338,8 +343,8 @@ function VideosTab({ videos, watchedIds, studentId, grade }: { videos: VideoType
         const isVideoFile = video.filePath && (video.fileType?.startsWith('video/') || video.filePath.match(/\.(mp4|webm|mov|avi)$/i))
         const isWatched = localWatched.has(video.id)
         const thumbSrc = video.thumbnail || getYouTubeThumbnail(video.url) || null
-        const isApprovedFree = currentStudent?.status === 'approved'
-        const needsPay = !isApprovedFree && (video.price || 0) > 0
+        const hasAccess = currentStudent?.status === 'approved' || accessedVideoIds.has(video.id)
+        const needsPay = !hasAccess && (video.price || 0) > 0
 
         return (
           <Card key={video.id} className={`overflow-hidden transition-all ${isWatched ? 'border-emerald-500/30' : ''}`}>
