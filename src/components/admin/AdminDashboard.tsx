@@ -248,20 +248,20 @@ export function AdminDashboard() {
                       <Label className="text-xs">فوري</Label>
                       <Input value={fawry} onChange={(e) => setFawry(e.target.value)} placeholder="01098765432" dir="ltr" className="font-mono text-xs" />
                     </div>
-                    <Button size="sm" variant="outline" onClick={async () => {
-                      setPaymentSaving(true)
-                      try {
-                        const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry }) })
-                        if (res.ok) {
-                          const cfg = useAppStore.getState().siteConfig
-                          useAppStore.getState().setSiteConfig({ ...cfg, payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry })
-                          toast.success('تم حفظ أرقام الدفع')
-                        } else { toast.error('خطأ في الحفظ') }
-                      } catch { toast.error('خطأ في الحفظ') }
-                      setPaymentSaving(false)
-                    }} disabled={paymentSaving}>
-                      {paymentSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                    </Button>
+                   <Button size="sm" variant="outline" onClick={async () => {
+  setPaymentSaving(true)
+  try {
+    const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry }) })
+    if (res.ok) {
+      const cfg = useAppStore.getState().siteConfig
+      useAppStore.getState().setSiteConfig({ ...cfg, payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry })
+      toast.success('تم حفظ أرقام الدفع')
+    } else { toast.error('خطأ في الحفظ') }
+  } catch { toast.error('خطأ في الحفظ') }
+  setPaymentSaving(false)
+}} disabled={paymentSaving}>
+  {paymentSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+</Button>
                   </div>
                   <div className="flex gap-2 pt-2">
                     <Button onClick={saveSettings} disabled={settingsSaving || !settingsOldPass} className="flex-1">
