@@ -498,6 +498,7 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
             </div>
           </div>
         </div>
+      
       )}
     </>
   )
