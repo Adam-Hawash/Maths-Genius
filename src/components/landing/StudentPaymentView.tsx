@@ -311,6 +311,7 @@ export function StudentPaymentView() {
             <li>تأكد من رفع صورة واضحة لإثبات التحويل</li>
           </ul>
         </div>
+        
       </div>
     </div>
   )
