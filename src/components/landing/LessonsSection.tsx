@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useAppStore, GRADES } from '@/stores/app-store'
+import { useAppStore, GRADES, GRADE_SHORT_NAMES } from '@/stores/app-store'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BookOpen, Lock, PlayCircle } from 'lucide-react'
@@ -41,7 +41,7 @@ export default function LessonsSection() {
           <p className="text-white/50 max-w-xl mx-auto">اختر درسك وابدأ التعلم. سجل دخولك للوصول للمحتوى الكامل.</p>
         </div>
 
-        {/* Grade Filter */}
+        {/* Grade Filter - Arabic tabs */}
         <div className="flex justify-center mb-8">
           <select
             value={selectedGrade}
@@ -67,6 +67,7 @@ export default function LessonsSection() {
             {videos.map(function(v) {
               var ytId = getYouTubeId(v.url)
               var thumb = v.thumbnail || (ytId ? 'https://img.youtube.com/vi/' + ytId + '/mqdefault.jpg' : null)
+              var gradeShort = GRADE_SHORT_NAMES[v.grade] || v.grade
               return (
                 <Card
                   key={v.id}
@@ -85,22 +86,11 @@ export default function LessonsSection() {
                         <Lock className="h-6 w-6 text-white" />
                       </div>
                     </div>
-                    {/* Price Badge */}
-                    {v.price > 0 && (
-                      <Badge className="absolute top-2 left-2 bg-[#C49A38] text-white border-0 text-[10px]">
-                        {v.price} ج.م
-                      </Badge>
-                    )}
-                    {v.price === 0 && (
-                      <Badge className="absolute top-2 left-2 bg-emerald-500/90 text-white border-0 text-[10px]">
-                        مجاني
-                      </Badge>
-                    )}
                   </div>
                   <div className="p-3 space-y-1.5">
                     <p className="font-semibold text-sm text-white truncate group-hover:text-[#E5BE5A] transition-colors">{v.title}</p>
                     <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-[10px] border-[#C49A38]/30 text-[#C49A38]">{v.grade}</Badge>
+                      <Badge variant="outline" className="text-[10px] border-[#C49A38]/30 text-[#C49A38]">{gradeShort}</Badge>
                       <div className="flex items-center gap-1 text-[10px] text-white/30">
                         <Lock className="h-3 w-3" />
                         <span>سجل دخولك</span>
