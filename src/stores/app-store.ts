@@ -119,7 +119,7 @@ export const GRADES = [
   'الصف الأول الاعدادي',
   'الصف الثاني الاعدادي',
   'الصف الثالث الاعدادي',
-  'أولى بكالوريا',
+  '1 Bac',
 ] as const
 
 export const GRADES_EN = [
@@ -127,7 +127,7 @@ export const GRADES_EN = [
   { ar: 'الصف الأول الاعدادي', en: 'Prep 1' },
   { ar: 'الصف الثاني الاعدادي', en: 'Prep 2' },
   { ar: 'الصف الثالث الاعدادي', en: 'Prep 3' },
-  { ar: 'أولى بكالوريا', en: 'Bac' },
+  { ar: 'اولي باكالوريا', en: ' 1 Bac' },
 ] as const
 
 export interface Stats {
