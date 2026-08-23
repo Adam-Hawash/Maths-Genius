@@ -307,9 +307,8 @@ function FullPortalContent({ initialData, onBack }: { initialData: PortalData; o
 
 /* ========== VIDEOS TAB ========== */
 function VideosTab({ videos, watchedIds, studentId, grade }: { videos: VideoType[]; watchedIds: Set<string>; studentId: string; grade: string }) {
-  const { setView, setPendingPaymentVideo } = useAppStore()
+  const { currentStudent, setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
-
   const trackVideoWatch = (videoId: string) => {
     if (!studentId || localWatched.has(videoId)) return
     setLocalWatched(prev => new Set([...prev, videoId]))
