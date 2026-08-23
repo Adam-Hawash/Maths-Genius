@@ -23,8 +23,9 @@ model Student {
   password    String            @default("")
   grade       String
   status      String            @default("pending")
-  parentName  String
-  parentPhone String
+  parentName  String            @default("")
+  parentPhone String            @default("")
+  isPaidAccess Boolean          @default(false)
   loginCount  Int               @default(0)
   lastLogin   DateTime?
   createdAt   DateTime          @default(now())
