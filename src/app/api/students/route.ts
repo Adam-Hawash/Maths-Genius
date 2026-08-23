@@ -1,23 +1,35 @@
-
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const grade = searchParams.get('grade')
-    const status = searchParams.get('status')
-    const keyword = searchParams.get('keyword')
-    const phone = searchParams.get('phone')
-    const password = searchParams.get('password')
-    const page = parseInt(searchParams.get('page') || '1')
-    const pageSize = parseInt(searchParams.get('pageSize') || '20')
+    var searchParams = new URL(request.url).searchParams
+    var phone = searchParams.get('phone')
+    var grade = searchParams.get('grade')
+    var status = searchParams.get('status')
+    var keyword = searchParams.get('keyword')
+    var page = parseInt(searchParams.get('page') || '1')
+    var pageSize = parseInt(searchParams.get('pageSize') || '20')
 
-    const where: Record<string, unknown> = {}
+    if (phone) {
+      try {
+        var student = await db.student.findFirst({
+          where: { phone },
+          include: { _count: { select: { activities: true } } },
+        })
+        if (student) {
+          return NextResponse.json({ students: [{ ...student, watchedVideoCount: 0 }], total: 1, page: 1, pageSize: 1, totalPages: 1 })
+        }
+        return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0 })
+      } catch (loginErr: any) {
+        console.error('Student login error:', loginErr)
+        return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0 })
+      }
+    }
+
+    var where: Record<string, unknown> = {}
     if (grade) where.grade = grade
     if (status) where.status = status
-    if (phone) where.phone = phone
-    if (password) where.password = password
     if (keyword) {
       where.OR = [
         { name: { contains: keyword } },
@@ -25,38 +37,39 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    const [students, total] = await Promise.all([
+    var [students, total] = await Promise.all([
       db.student.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: {
-          _count: { select: { activities: true } },
-        },
+        include: { _count: { select: { activities: true } } },
       }),
       db.student.count({ where }),
     ])
 
-    const allStudentIds = students.map(s => s.id)
-    const watchedVideos = allStudentIds.length > 0
+    var allStudentIds = students.map(function(s) { return s.id })
+    var watchedVideos = allStudentIds.length > 0
       ? await db.studentActivity.groupBy({
           by: ['studentId'],
           where: { studentId: { in: allStudentIds }, action: 'watched_video' },
           _count: { id: true },
         })
       : []
-    const watchMap: Record<string, number> = {}
-    for (const w of watchedVideos) { watchMap[w.studentId] = w._count.id }
+    var watchMap: Record<string, number> = {}
+    for (var w = 0; w < watchedVideos.length; w++) {
+      watchMap[watchedVideos[w].studentId] = watchedVideos[w]._count.id
+    }
 
-    const studentsWithStats = students.map(s => ({
-      ...s,
-      watchedVideoCount: watchMap[s.id] || 0,
-    }))
+    var studentsWithStats = students.map(function(s) {
+      return { ...s, watchedVideoCount: watchMap[s.id] || 0 }
+    })
 
     return NextResponse.json({
       students: studentsWithStats,
-      total, page, pageSize,
+      total: total,
+      page: page,
+      pageSize: pageSize,
       totalPages: Math.ceil(total / pageSize),
     })
   } catch (error) {
@@ -67,30 +80,46 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name, phone, grade, status, parentName, parentPhone, password } = body
+    var body = await request.json()
+    var name = body.name || ''
+    var phone = body.phone || ''
+    var grade = body.grade || ''
+    var status = body.status || 'pending'
+    var parentName = body.parentName || body.fatherName || ''
+    var parentPhone = body.parentPhone || body.motherPhone || ''
+    var password = body.password || ''
 
-    if (!name || !phone || !grade || !parentName || !parentPhone) {
-      return NextResponse.json({ error: 'All fields are required including parent information' }, { status: 400 })
+    if (!name || !phone || !grade) {
+      return NextResponse.json({ error: 'الاسم ورقم الهاتف والصف مطلوبين' }, { status: 400 })
     }
 
-    const student = await db.student.create({
-      data: { name, phone, grade, status: status || 'pending', parentName, parentPhone, password: password || '' },
+    var student = await db.student.create({
+      data: {
+        name: name,
+        phone: phone,
+        grade: grade,
+        status: status,
+        parentName: parentName,
+        parentPhone: parentPhone,
+        password: password,
+      },
     })
 
-    await db.studentActivity.create({
-      data: { studentId: student.id, action: 'registered', details: 'Registered as ' + grade },
-    })
+    try {
+      await db.studentActivity.create({
+        data: { studentId: student.id, action: 'registered', details: 'Registered as ' + grade },
+      })
+    } catch (_) {}
 
     fetch((process.env.NEXT_PUBLIC_BASE_URL || '') + '/api/notify-admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentName: name, studentPhone: phone, studentGrade: grade, parentName: parentName || '', parentPhone: parentPhone || '' }),
-    }).catch(() => {})
+      body: JSON.stringify({ studentName: name, studentPhone: phone, studentGrade: grade, parentName: parentName, parentPhone: parentPhone }),
+    }).catch(function() {})
 
-    return NextResponse.json({ message: 'Student created', student }, { status: 201 })
-  } catch (error) {
+    return NextResponse.json({ message: 'Student created', student: student }, { status: 201 })
+  } catch (error: any) {
     console.error('Student create error:', error)
-    return NextResponse.json({ error: 'Failed to create student' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to create student: ' + (error.message || 'Unknown error') }, { status: 500 })
   }
 }
