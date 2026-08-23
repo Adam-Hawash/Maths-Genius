@@ -1,0 +1,195 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Card } from '@/components/ui/card'
+import { Loader2, Play } from 'lucide-react'
+
+interface VideoItem {
+  id: string
+  title: string
+  url: string
+  filePath: string
+  fileType: string
+  thumbnail: string
+  grade: string
+  price: number
+}
+
+function isYouTubeUrl(url: string) {
+  return /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)/.test(url)
+}
+
+function getYouTubeEmbedUrl(url: string) {
+  var match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  if (match) return `https://www.youtube.com/embed/${match[1]}?controls=0&rel=0&modestbranding=1`
+  return url
+}
+
+function getYouTubeThumbnail(url: string) {
+  var match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  if (match) return `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`
+  return ''
+}
+
+export function PublicVideosSection() {
+  var [videos, setVideos] = useState<VideoItem[]>([])
+  var [loading, setLoading] = useState(true)
+  var [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null)
+  var [gradeFilter, setGradeFilter] = useState('all')
+
+  useEffect(function () {
+    var cancelled = false
+    ;(async function () {
+      try {
+        var res = await fetch('/api/videos?pageSize=100')
+        var data = await res.json()
+        if (!cancelled) {
+          setVideos(Array.isArray(data) ? data : (data.videos || []))
+          setLoading(false)
+        }
+      } catch (e) {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return function () { cancelled = true }
+  }, [])
+
+  var filtered = gradeFilter === 'all'
+    ? videos
+    : videos.filter(function (v) { return v.grade === gradeFilter })
+
+  if (loading) {
+    return (
+      <section className="py-16 px-4">
+        <div className="max-w-6xl mx-auto text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+        </div>
+      </section>
+    )
+  }
+
+  if (videos.length === 0) return null
+
+  return (
+    <section className="py-16 px-4 bg-muted/30">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-bold mb-3">الفيديوهات التعليمية</h2>
+          <p className="text-muted-foreground text-lg">تابع الدروس التعليمية في الرياضيات</p>
+        </div>
+
+        {/* Grade filter tabs */}
+        <div className="flex flex-wrap justify-center gap-2 mb-8">
+          {[
+            { value: 'all', label: 'الكل' },
+            { value: 'الصف السادس الابتدائي', label: 'الصف السادس' },
+            { value: 'الصف الأول الاعدادي', label: 'الاول الاعدادي' },
+            { value: 'الصف الثاني الاعدادي', label: 'التاني الاعدادي' },
+            { value: 'الصف الثالث الاعدادي', label: 'التالت الاعدادي' },
+            { value: '1 Bac', label: '1 Bac' },
+          ].map(function (g) {
+            var isActive = gradeFilter === g.value
+            return (
+              <button
+                key={g.value}
+                onClick={function () { setGradeFilter(g.value) }}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-card border border-border hover:bg-accent'
+                }`}
+              >
+                {g.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Video grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map(function (video) {
+            var thumb = video.thumbnail || (video.url && isYouTubeUrl(video.url) ? getYouTubeThumbnail(video.url) : '')
+            return (
+              <Card
+                key={video.id}
+                className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group"
+                onClick={function () { setSelectedVideo(video) }}
+              >
+                <div className="relative aspect-video bg-muted">
+                  {thumb ? (
+                    <img
+                      src={thumb}
+                      alt={video.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-muted">
+                      <Play className="h-12 w-12 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center">
+                      <Play className="h-7 w-7 text-primary mr-[-2px]" />
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3">
+                  <h3 className="font-semibold text-sm line-clamp-2 leading-relaxed">
+                    {video.title}
+                  </h3>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+
+        {filtered.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground">
+            لا توجد فيديوهات في هذا الصف
+          </div>
+        )}
+      </div>
+
+      {/* Video modal */}
+      {selectedVideo && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={function () { setSelectedVideo(null) }}
+        >
+          <div
+            className="relative w-full max-w-4xl"
+            onClick={function (e) { e.stopPropagation() }}
+          >
+            <button
+              onClick={function () { setSelectedVideo(null) }}
+              className="absolute -top-10 left-0 text-white hover:text-gray-300 text-sm"
+            >
+              ✕ إغلاق
+            </button>
+            <div className="aspect-video bg-black rounded-lg overflow-hidden">
+              {selectedVideo.url && isYouTubeUrl(selectedVideo.url) ? (
+                <iframe
+                  src={getYouTubeEmbedUrl(selectedVideo.url)}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : selectedVideo.filePath ? (
+                <video
+                  src={selectedVideo.filePath}
+                  controls
+                  className="w-full h-full"
+                  autoPlay
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white">
+                  <p>لا يمكن تشغيل هذا الفيديو</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
