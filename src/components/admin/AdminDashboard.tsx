@@ -40,6 +40,10 @@ export function AdminDashboard() {
   const [resendSaving, setResendSaving] = useState(false)
   const [heroDevUrl, setHeroDevUrl] = useState('')
   const [heroDevSaving, setHeroDevSaving] = useState(false)
+    const [vodafoneCash, setVodafoneCash] = useState('')
+  const [instapay, setInstapay] = useState('')
+  const [fawry, setFawry] = useState('')
+  const [paymentSaving, setPaymentSaving] = useState(false)
 
   const fetchStats = async () => {
     try {
@@ -67,6 +71,9 @@ export function AdminDashboard() {
         const cfgData = await cfgRes.json()
         setResendApiKey(cfgData.resend_api_key || '')
         setHeroDevUrl(cfgData.hero_developer_url || '')
+                setVodafoneCash(cfgData.payment_vodafone_cash || '')
+        setInstapay(cfgData.payment_instapay || '')
+        setFawry(cfgData.payment_fawry || '')
       } catch { /* silent */ }
     } catch { /* silent */ }
     setSettingsLoading(false)
@@ -162,7 +169,7 @@ export function AdminDashboard() {
         {/* Admin Settings Dialog */}
         {showSettings && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
-            <div className="bg-card border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-card border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold flex items-center gap-2"><Settings className="h-5 w-5 text-primary" />إعدادات الحساب</h3>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowSettings(false)}><X className="h-4 w-4" /></Button>
@@ -227,6 +234,36 @@ export function AdminDashboard() {
                     </div>
                     <Input value={heroDevUrl} onChange={(e) => setHeroDevUrl(e.target.value)} placeholder="https://hero-developer-portfolio-11.vercel.app" dir="ltr" type="url" className="font-mono text-xs" />
                     <p className="text-[10px] text-muted-foreground">الرابط يظهر في الهيدر (Hero Developer) والفوتر (Made by Adam Hawash). غيّره في أي وقت وبيتنعكس فوراً.</p>
+                                      {/* Payment Numbers */}
+                  <div className="border-t pt-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-muted-foreground">أرقام الدفع (تظهر للطالب عند الدفع)</p>
+                      <Button size="sm" variant="outline" onClick={async () => {
+                        setPaymentSaving(true)
+                        try {
+                          await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry }) })
+                          const cfg = useAppStore.getState().siteConfig
+                          useAppStore.getState().setSiteConfig({ ...cfg, payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry })
+                          toast.success('تم حفظ أرقام الدفع')
+                        } catch { toast.error('خطأ في الحفظ') }
+                        setPaymentSaving(false)
+                      }} disabled={paymentSaving}>
+                        {paymentSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">فودافون كاش</Label>
+                      <Input value={vodafoneCash} onChange={(e) => setVodafoneCash(e.target.value)} placeholder="01012345678" dir="ltr" className="font-mono text-xs" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">إنستا باي</Label>
+                      <Input value={instapay} onChange={(e) => setInstapay(e.target.value)} placeholder="@username" dir="ltr" className="font-mono text-xs" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">فوري</Label>
+                      <Input value={fawry} onChange={(e) => setFawry(e.target.value)} placeholder="01098765432" dir="ltr" className="font-mono text-xs" />
+                    </div>
+                  </div>
                   </div>
                   <div className="flex gap-2 pt-2">
                     <Button onClick={saveSettings} disabled={settingsSaving} className="flex-1">
