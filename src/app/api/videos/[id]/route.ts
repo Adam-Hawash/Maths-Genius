@@ -3,59 +3,74 @@ import { db } from '@/lib/db'
 
 // GET /api/videos/[id]
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
   try {
+    const { id } = await params
     const video = await db.video.findUnique({ where: { id } })
-    if (!video) return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+
+    if (!video) {
+      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+    }
+
     return NextResponse.json({ video })
   } catch (error) {
-    console.error('Video get error:', error)
-    return NextResponse.json({ error: 'Failed to fetch video' }, { status: 500 })
+    console.error('Video fetch error:', error)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
 
-// PUT /api/videos/[id] - Update video (including price)
+// PUT /api/videos/[id]
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
   try {
+    const { id } = await params
     const body = await request.json()
-    const video = await db.video.findUnique({ where: { id } })
-    if (!video) return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+    const { title, url, grade, price } = body
 
-    const updateData: any = {}
-    if (body.title !== undefined) updateData.title = body.title
-    if (body.url !== undefined) updateData.url = body.url
-    if (body.filePath !== undefined) updateData.filePath = body.filePath
-    if (body.fileType !== undefined) updateData.fileType = body.fileType
-    if (body.thumbnail !== undefined) updateData.thumbnail = body.thumbnail
-    if (body.grade !== undefined) updateData.grade = body.grade
-    if (body.price !== undefined) updateData.price = parseFloat(body.price) || 0
+    const existing = await db.video.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+    }
 
-    const updated = await db.video.update({ where: { id }, data: updateData })
-    return NextResponse.json({ video: updated })
+    const video = await db.video.update({
+      where: { id },
+      data: {
+        ...(title !== undefined && { title }),
+        ...(url !== undefined && { url }),
+        ...(grade !== undefined && { grade }),
+        ...(price !== undefined && { price: parseFloat(price) || 0 }),
+      },
+    })
+
+    return NextResponse.json({ message: 'Video updated', video })
   } catch (error) {
     console.error('Video update error:', error)
-    return NextResponse.json({ error: 'Failed to update video' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
 
 // DELETE /api/videos/[id]
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
   try {
+    const { id } = await params
+
+    const existing = await db.video.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+    }
+
     await db.video.delete({ where: { id } })
-    return NextResponse.json({ success: true })
+
+    return NextResponse.json({ message: 'Video deleted' })
   } catch (error) {
     console.error('Video delete error:', error)
-    return NextResponse.json({ error: 'Failed to delete video' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
