@@ -2173,3 +2173,5 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
     </Card>
   )
 }
+
+    
