@@ -1075,6 +1075,7 @@ function EmptyState({ message }: { message: string }) {
       <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
         <MessageSquare className="h-6 w-6 text-muted-foreground" />
       </div>
+
       
       <p className="text-muted-foreground text-sm">{message}</p>
     </div>
