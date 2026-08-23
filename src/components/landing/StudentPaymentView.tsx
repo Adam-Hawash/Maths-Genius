@@ -22,6 +22,7 @@ export function StudentPaymentView() {
 
   const video = pendingPaymentVideo
 
+  // Payment numbers from site config (set by admin)
   const vodafoneCash = siteConfig?.payment_vodafone_cash || ''
   const instapay = siteConfig?.payment_instapay || ''
   const fawry = siteConfig?.payment_fawry || ''
@@ -103,6 +104,7 @@ export function StudentPaymentView() {
   return (
     <div className="flex-1 py-6 px-4 sm:px-6">
       <div className="mx-auto max-w-lg">
+        {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Button variant="ghost" size="sm" onClick={handleBack}>
             <ArrowRight className="h-4 w-4 ml-1" />
@@ -111,6 +113,7 @@ export function StudentPaymentView() {
           <h1 className="text-xl font-bold">الدفع</h1>
         </div>
 
+        {/* Video Info */}
         <Card className="mb-6">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="min-w-0">
@@ -123,6 +126,7 @@ export function StudentPaymentView() {
           </CardContent>
         </Card>
 
+        {/* Payment Numbers */}
         <Card className="mb-6">
           <CardContent className="p-4 space-y-4">
             <h2 className="font-bold flex items-center gap-2">
@@ -179,6 +183,7 @@ export function StudentPaymentView() {
           </CardContent>
         </Card>
 
+        {/* Payment Method Selection */}
         <Card className="mb-6">
           <CardContent className="p-4 space-y-4">
             <h2 className="font-bold">اختر طريقة الدفع</h2>
@@ -226,6 +231,7 @@ export function StudentPaymentView() {
           </CardContent>
         </Card>
 
+        {/* Receipt Upload */}
         <Card className="mb-6">
           <CardContent className="p-4 space-y-4">
             <h2 className="font-bold">ارفع مستند أو إثبات الدفع</h2>
@@ -254,9 +260,39 @@ export function StudentPaymentView() {
           </CardContent>
         </Card>
 
+        {/* Notes (optional) */}
         <Card className="mb-6">
           <CardContent className="p-4 space-y-3">
             <h2 className="font-bold">ملاحظات <span className="text-muted-foreground font-normal text-xs">(اختياري)</span></h2>
             <Textarea
               value={notes}
-              o
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="اكتب أي ملاحظات... مثلاً: الاسم على الحساب، أو رقم التحويل"
+              rows={3}
+              className="text-sm"
+            />
+          </CardContent>
+        </Card>
+
+        {/* Submit */}
+        <Button
+          className="w-full py-6 text-base"
+          size="lg"
+          onClick={handleSubmit}
+          disabled={!paymentMethod || !receiptFile || uploading}
+        >
+          {uploading ? (
+            <Loader2 className="h-5 w-5 animate-spin ml-2" />
+          ) : (
+            <CheckCircle2 className="h-5 w-5 ml-2" />
+          )}
+          {uploading ? 'جاري الإرسال...' : 'إرسال الإثبات'}
+        </Button>
+
+        <p className="text-center text-xs text-muted-foreground mt-3">
+          بعد الإرسال، استنى موافقة الأدمن وهيظهرلك الرسالة لما يتم القبول
+        </p>
+      </div>
+    </div>
+  )
+}
