@@ -22,7 +22,7 @@ export function StudentPendingView() {
             تم استلام طلبك بنجاح وجاري مراجعته من قبل الأدمن. ستحصل على إشعار فور الموافقة على طلبك.
           </p>
         </div>
-        <Button variant="outline" onClick={logout}>
+        <Button variant="ghost" onClick={logout}>
           تسجيل خروج
         </Button>
       </div>
