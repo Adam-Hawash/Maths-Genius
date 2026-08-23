@@ -84,4 +84,5 @@ export async function POST(request: NextRequest) {
     console.error('AI extract error:', error)
     return NextResponse.json({ error: 'خطأ: ' + (error.message || 'Unknown') }, { status: 500 })
   }
-}
+} 
+
