@@ -1,6 +1,6 @@
 'use client'
 
-import { useAppStore, GRADES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
+import { useAppStore, GRADES, GRADES_EN, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -248,20 +248,21 @@ export function AdminDashboard() {
                       <Label className="text-xs">فوري</Label>
                       <Input value={fawry} onChange={(e) => setFawry(e.target.value)} placeholder="01098765432" dir="ltr" className="font-mono text-xs" />
                     </div>
-                   <Button size="sm" variant="outline" onClick={async () => {
-  setPaymentSaving(true)
-  try {
-    const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry }) })
-    if (res.ok) {
-      const cfg = useAppStore.getState().siteConfig
-      useAppStore.getState().setSiteConfig({ ...cfg, payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry })
-      toast.success('تم حفظ أرقام الدفع')
-    } else { toast.error('خطأ في الحفظ') }
-  } catch { toast.error('خطأ في الحفظ') }
-  setPaymentSaving(false)
-}} disabled={paymentSaving}>
-  {paymentSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-</Button>
+                    <Button className="w-full" onClick={async () => {
+                      setPaymentSaving(true)
+                      try {
+                        const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry }) })
+                        if (res.ok) {
+                          const cfg = useAppStore.getState().siteConfig
+                          useAppStore.getState().setSiteConfig({ ...cfg, payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry })
+                          toast.success('تم حفظ أرقام الدفع')
+                        } else { toast.error('خطأ في الحفظ') }
+                      } catch { toast.error('خطأ في الحفظ') }
+                      setPaymentSaving(false)
+                    }} disabled={paymentSaving}>
+                      {paymentSaving ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Save className="h-4 w-4 ml-1" />}
+                      {paymentSaving ? 'جاري الحفظ...' : 'حفظ أرقام الدفع'}
+                    </Button>
                   </div>
                   <div className="flex gap-2 pt-2">
                     <Button onClick={saveSettings} disabled={settingsSaving || !settingsOldPass} className="flex-1">
@@ -437,7 +438,7 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
           <div className="flex gap-1 flex-wrap items-center">
             <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-8 rounded-md border border-input bg-transparent px-2 text-xs">
               <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
             </select>
             <div className="flex gap-1 bg-muted rounded-lg p-1">
               {(['pending', 'all', 'approved', 'rejected'] as const).map((f) => (
@@ -611,7 +612,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
           <div className="flex gap-2 items-center flex-wrap">
             <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
               <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
             </select>
             <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4 ml-1" />إضافة فيديو</Button>
           </div>
@@ -626,7 +627,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
               <div className="space-y-1.5">
                 <Label className="text-xs">الصف الدراسي *</Label>
                 <select value={formGrade} onChange={(e) => setFormGrade(e.target.value)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                  <option value="">اختر الصف</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                  <option value="">اختر الصف</option>{GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -937,7 +938,7 @@ function ExamTrackingPanel() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5"><Label className="text-xs">الصف</Label>
                 <select value={formGrade} onChange={(e) => setFormGrade(e.target.value)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                  <option value="">اختر الصف</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                  <option value="">اختر الصف</option>{GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5"><Label className="text-xs">العنوان</Label>
@@ -1434,7 +1435,7 @@ function MyStudentsPanel() {
             <CardTitle className="text-lg flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" />طلابي | My Students</CardTitle>
             <select value={grade} onChange={(e) => setGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm min-w-[200px]">
               <option value="">اختر الصف لعرض التحليلات</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
             </select>
           </div>
         </CardHeader>
@@ -1788,7 +1789,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
           <div className="flex gap-2 items-center flex-wrap">
             <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
               <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
             </select>
             <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4 ml-1" />إضافة</Button>
           </div>
@@ -1801,7 +1802,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
             <div className="space-y-1.5">
               <Label className="text-xs">الصف الدراسي</Label>
               <select value={formGrade} onChange={(e) => setFormGrade(e.target.value)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                <option value="">اختر الصف</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                <option value="">اختر الصف</option>{GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
               </select>
             </div>
             {Object.entries(fields).map(([key, field]) => (
@@ -1978,7 +1979,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
           <Label className="text-xs font-medium">الصف الدراسي *</Label>
           <select value={grade} onChange={function(e) { setGrade(e.target.value) }} className="w-full h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
             <option value="">اختر الصف</option>
-            {GRADES.map(function(g) { return <option key={g} value={g}>{g}</option> })}
+            {GRADES_EN.map(function(g) { return <option key={g.ar} value={g.ar}>{g.en}</option> })}
           </select>
         </div>
         <div className="space-y-1.5">
