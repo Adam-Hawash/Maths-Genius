@@ -21,6 +21,7 @@ model Student {
   name        String
   phone       String            @unique
   grade       String
+  password    String            @default("")
   status      String            @default("pending")
   parentName  String
   parentPhone String
