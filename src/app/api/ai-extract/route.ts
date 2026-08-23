@@ -12,10 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'ارفع ملف أو أدخل رابط' }, { status: 400 })
     }
 
-    var apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'مفتاح Gemini غير مُعد' }, { status: 500 })
-    }
+    var apiKey = 'AQ.Ab8RN6J1lUbn5oxF_0PsuobEDkoAEoRR5BcTZx1HVJEnIkN46Q'
 
     var base64Data = ''
     var mimeType = ''
