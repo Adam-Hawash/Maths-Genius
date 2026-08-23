@@ -19,7 +19,7 @@ export async function GET() {
     try { await db.$executeRawUnsafe(`ALTER TABLE Exam ADD COLUMN questions TEXT DEFAULT ''`); results.push('Exam.questions') } catch(e) { results.push('Exam.questions: skip') }
     try { await db.$executeRawUnsafe(`ALTER TABLE Exam ADD COLUMN passScore REAL DEFAULT 50`); results.push('Exam.passScore') } catch(e) { results.push('Exam.passScore: skip') }
     try { await db.$executeRawUnsafe(`ALTER TABLE Video ADD COLUMN price REAL DEFAULT 0`); results.push('Video.price') } catch(e) { results.push('Video.price: skip') }
-    try { await db.$executeRawUnsafe(`ALTER TABLE Student ADD COLUMN isPaidAccess BOOLEAN DEFAULT 0`); results.push('Student.isPaidAccess') } catch(e) { results.push('Student.isPaidAccess: skip') }
+    try { await db.$executeRawUnsafe(`ALTER TABLE Student ADD COLUMN password TEXT DEFAULT ''`); results.push('Student.password') } catch(e) { results.push('Student.password: skip') }
     try { await db.$executeRawUnsafe(`ALTER TABLE Discussion ADD COLUMN likes INTEGER DEFAULT 0`); results.push('Discussion.likes') } catch(e) { results.push('Discussion.likes: skip') }
 
     // ===== CREATE Payment TABLE =====
