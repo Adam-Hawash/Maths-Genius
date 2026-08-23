@@ -122,6 +122,14 @@ export const GRADES = [
   'أولى بكالوريا',
 ] as const
 
+export const GRADES_EN = [
+  { ar: 'الصف السادس الابتدائي', en: 'Grade 6' },
+  { ar: 'الصف الأول الاعدادي', en: 'Prep 1' },
+  { ar: 'الصف الثاني الاعدادي', en: 'Prep 2' },
+  { ar: 'الصف الثالث الاعدادي', en: 'Prep 3' },
+  { ar: 'أولى بكالوريا', en: 'Bac' },
+] as const
+
 export interface Stats {
   totalStudents: number
   pendingStudents: number
