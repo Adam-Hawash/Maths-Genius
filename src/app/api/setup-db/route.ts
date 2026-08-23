@@ -3,8 +3,8 @@ import { createClient } from '@libsql/client'
 
 export async function GET() {
   try {
-    var dbUrl = process.env.DATABASE_URL || ''
-    var authToken = process.env.TURSO_AUTH_TOKEN || ''
+    var dbUrl = process.env.DATABASE_URL || 'libsql://maths-genius-adam-hawash.aws-eu-west-1.turso.io'
+    var authToken = process.env.TURSO_AUTH_TOKEN || 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODc0ODA0ODUsImlkIjoiMDFhMDAxNzAtMjcwMS03MDJiLTk0MGUtMWVkN2M5MzAwZTFkIiwia2lkIjoiVHZqUndGS2hNWTU0NW9BYjNXd3ZCQ0Y4Mk8zdHJJRm9rVzF0MWtNWWpObyIsInJpZCI6Ijc3MmI3ZGM3LWVkNmYtNDdhOC05NDNjLTk5MWVmNDQ1YmI2YyJ9.'
 
     if (!dbUrl) {
       return NextResponse.json({ ok: false, error: 'DATABASE_URL not set' }, { status: 500 })
@@ -50,6 +50,7 @@ export async function GET() {
         parentPhone TEXT NOT NULL DEFAULT '',
         loginCount INTEGER NOT NULL DEFAULT 0,
         lastLogin DATETIME,
+        isPaidAccess INTEGER NOT NULL DEFAULT 0,
         createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`,
@@ -115,7 +116,7 @@ export async function GET() {
       `CREATE TABLE IF NOT EXISTS Announcement (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
-        content TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
         grade TEXT NOT NULL,
         createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -214,6 +215,8 @@ export async function GET() {
     // Add missing columns to existing tables
     await addColumn('Student', 'password', 'TEXT', "NOT NULL DEFAULT ''")
     await addColumn('Student', 'isPaidAccess', 'INTEGER', 'NOT NULL DEFAULT 0')
+    await addColumn('Student', 'parentName', 'TEXT', "NOT NULL DEFAULT ''")
+    await addColumn('Student', 'parentPhone', 'TEXT', "NOT NULL DEFAULT ''")
     await addColumn('Video', 'price', 'REAL', 'DEFAULT 0')
     await addColumn('Exam', 'passScore', 'REAL', 'DEFAULT 50')
     await addColumn('ExamResult', 'score', 'REAL', 'DEFAULT 0')
@@ -237,6 +240,9 @@ export async function GET() {
       'UPDATE VideoProgress SET watchedSeconds = 0 WHERE watchedSeconds IS NULL',
       'UPDATE VideoProgress SET totalSeconds = 0 WHERE totalSeconds IS NULL',
       'UPDATE Student SET password = \'\' WHERE password IS NULL',
+      'UPDATE Student SET isPaidAccess = 0 WHERE isPaidAccess IS NULL',
+      'UPDATE Student SET parentName = \'\' WHERE parentName IS NULL',
+      'UPDATE Student SET parentPhone = \'\' WHERE parentPhone IS NULL',
     ]
 
     for (var j = 0; j < fixNulls.length; j++) {
@@ -248,7 +254,7 @@ export async function GET() {
       }
     }
 
-    // Create default admin if none exists
+    // Create default admin
     try {
       var admins = await client.execute('SELECT id FROM Admin LIMIT 1')
       if (!admins.rows || admins.rows.length === 0) {
@@ -266,7 +272,7 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
-      message: 'Database setup complete - all columns added and NULLs fixed',
+      message: 'Database setup complete',
       results: results,
     })
   } catch (error: any) {
