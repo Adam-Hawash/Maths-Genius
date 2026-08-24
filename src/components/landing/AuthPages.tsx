@@ -122,7 +122,7 @@ export function LoginView() {
       if (!student) { toast.error('رقم الهاتف أو كلمة المرور غير صحيحة'); setStudentLoading(false); return }
       if (student.status === 'pending') { setCurrentStudent(student); setView('student-pending'); toast.info('حسابك قيد المراجعة، انتظر موافقة المسؤول') }
       else if (student.status === 'rejected') { toast.error('تم رفض طلب التسجيل، تواصل مع المسؤول') }
-      else if (student.status === 'approved') { setCurrentStudent(student); setView('student-portal'); toast.success('مرحباً ' + student.name + '!'); fetch('/api/students/track-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: student.id }) }).catch(function () {}) }
+      else if (student.status === 'approved' || student.status === 'paid') { setCurrentStudent(student); setView('student-portal'); toast.success('مرحباً ' + student.name + '!'); fetch('/api/students/track-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: student.id }) }).catch(function () {}) }
     } catch (e) { toast.error('حدث خطأ في الاتصال') }
     setStudentLoading(false)
   }
@@ -170,7 +170,7 @@ export function LoginView() {
                 </TabsContent>
                 <TabsContent value="admin">
                   <div className="space-y-4">
-                    <Badge variant="outline" className="mb-2 w-full justify-center py-1">دخول المشرفين فقط</Badge>
+                    <Badge variant="outline" className="mb-2 w-full justify-center py-1">دخول المشرفين فق��</Badge>
                     <div className="space-y-2"><Label htmlFor="auth-admin-email" className="text-foreground">البريد الإلكتروني</Label><Input id="auth-admin-email" type="email" placeholder="البريد الإلكتروني" value={adminEmail} onChange={function (e) { setAdminEmail(e.target.value) }} onKeyDown={function (e) { if (e.key === 'Enter' && !adminLoading) handleAdminLogin() }} dir="ltr" className="min-h-[44px]" disabled={adminLoading} autoComplete="email" /></div>
                     <div className="space-y-2"><Label htmlFor="auth-admin-password" className="text-foreground">كلمة المرور</Label><Input id="auth-admin-password" type="password" placeholder="كلمة المرور" value={adminPassword} onChange={function (e) { setAdminPassword(e.target.value) }} onKeyDown={function (e) { if (e.key === 'Enter' && !adminLoading) handleAdminLogin() }} dir="ltr" className="min-h-[44px]" disabled={adminLoading} autoComplete="current-password" /></div>
                     {adminStatusMsg && <p className="text-xs text-center text-muted-foreground animate-pulse">{adminStatusMsg}</p>}

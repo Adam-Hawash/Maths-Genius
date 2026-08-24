@@ -55,8 +55,8 @@ var statusConfig: Record<string, { label: string; color: string; icon: any }> = 
 var studentStatusConfig: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: 'قيد المراجعة', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', icon: Clock },
   approved: { label: 'مقبول (مجاني)', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', icon: CheckCircle2 },
-  rejected: { label: 'مرفوض (بفلوس)', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
-  paid: { label: 'مدفوع (بفلوس)', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: CreditCard },
+  rejected: { label: 'مرفوض', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
+  paid: { label: 'مشاهدة بفلوس', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', icon: Wallet },
 }
 
 export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
@@ -479,12 +479,12 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
                                 مقبول (مجاني)
                               </Button>
                             )}
-                            {st.status !== 'rejected' && (
-                              <Button size="sm" variant="outline" className={"text-xs h-7 " + (st.status === 'rejected' ? 'border-red-500 bg-red-50 text-red-700' : '')} onClick={function(e) { e.stopPropagation(); handleStatusChange(st.id, 'rejected') }} disabled={statusLoading === st.id}>
-                                {statusLoading === st.id ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <X className="h-3 w-3 ml-1" />}
-                                مرفوض (بفلوس)
-                              </Button>
-                            )}
+{st.status !== 'paid' && (
+  <Button size="sm" variant="outline" className="text-xs h-7 border-amber-500 text-amber-700 hover:bg-amber-50" onClick={function(e) { e.stopPropagation(); handleStatusChange(st.id, 'paid') }} disabled={statusLoading === st.id}>
+  {statusLoading === st.id ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <Wallet className="h-3 w-3 ml-1" />}
+  مشاهدة بفلوس
+  </Button>
+  )}
                             <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive hover:bg-destructive/10" onClick={function(e) { e.stopPropagation(); handleDeleteStudent(st.id) }}>
                               <Trash2 className="h-3 w-3 ml-1" />
                               حذف من المنصة
