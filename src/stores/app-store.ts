@@ -15,6 +15,7 @@ export interface Student {
   phone: string
   grade: string
   status: string
+  isPaidAccess: boolean
   parentName: string
   parentPhone: string
   loginCount: number
