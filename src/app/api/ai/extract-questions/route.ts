@@ -52,14 +52,14 @@ export async function POST(request: NextRequest) {
     let response: Response
 
     if (geminiKey) {
-      response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(geminiKey), {
+      response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + encodeURIComponent(geminiKey), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }),
       })
     } else if (process.env.AI_GATEWAY_API_KEY) {
       response = await fetch('https://ai-gateway.vercel.sh/v1/chat/completions', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.AI_GATEWAY_API_KEY}` },
-        body: JSON.stringify({ model: 'google/gemini-2.5-flash', temperature: 0.1, max_tokens: 8192, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'file', file: { filename, file_data: `data:${mimeType};base64,${base64}` } }] }] }),
+        body: JSON.stringify({ model: 'google/gemini-1.5-flash', temperature: 0.1, max_tokens: 8192, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'file', file: { filename, file_data: `data:${mimeType};base64,${base64}` } }] }] }),
       })
     } else return NextResponse.json({ error: 'خدمة الذكاء الاصطناعي غير مهيأة في بيئة Vercel' }, { status: 503 })
 
