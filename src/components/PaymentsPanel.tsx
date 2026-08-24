@@ -173,7 +173,7 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
         body: JSON.stringify({ status: newStatus }),
       })
       if (res.ok) {
-        var label = newStatus === 'approved' ? 'مقبول (مجاني)' : newStatus === 'rejected' ? 'مرفوض (بفلوس)' : newStatus
+        var label = newStatus === 'approved' ? 'مقبول (مجاني)' : newStatus === 'paid' ? 'مشاهدة بفلوس' : newStatus
         toast.success('تم تغيير حالة الطالب إلى: ' + label)
         loadStudents()
         onRefresh()

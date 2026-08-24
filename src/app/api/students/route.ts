@@ -116,7 +116,8 @@ export async function POST(request: NextRequest) {
       })
     } catch (_) {}
 
-    fetch((process.env.NEXT_PUBLIC_BASE_URL || '') + '/api/notify-admin', {
+    var origin = process.env.NEXT_PUBLIC_BASE_URL || new URL(request.url).origin
+    fetch(origin + '/api/notify-admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ studentName: name, studentPhone: phone, studentGrade: grade, parentName: parentName, parentPhone: parentPhone }),

@@ -49,6 +49,8 @@ export function StudentPaymentView() {
       formData.append('receipt', receiptFile)
       formData.append('studentId', currentStudent?.id || '')
       formData.append('studentName', currentStudent?.name || '')
+      formData.append('studentPhone', currentStudent?.phone || '')
+      formData.append('studentGrade', currentStudent?.grade || '')
 
       const res = await fetch('/api/payments', {
         method: 'POST',
@@ -59,7 +61,12 @@ export function StudentPaymentView() {
         setSubmitted(true)
         toast.success('تم إرسال إيصال الدفع بنجاح! سيتم مراجعته قريباً')
       } else {
-        toast.error('حدث خطأ أثناء إرسال الدفع')
+        let message = 'حدث خطأ أثناء إرسال الدفع'
+        try {
+          const data = await res.json()
+          if (data?.error) message = data.error
+        } catch { /* keep the default message */ }
+        toast.error(message)
       }
     } catch {
       toast.error('حدث خطأ في الاتصال')

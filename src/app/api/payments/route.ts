@@ -13,9 +13,36 @@ export async function POST(request: NextRequest) {
     var notes = formData.get('notes') as string || ''
     var studentId = formData.get('studentId') as string || ''
     var studentName = formData.get('studentName') as string || ''
+    var studentPhone = formData.get('studentPhone') as string || ''
+    var studentGrade = formData.get('studentGrade') as string || ''
 
     if (!videoId || !paymentMethod || !receipt) {
       return NextResponse.json({ error: 'videoId, paymentMethod, and receipt are required' }, { status: 400 })
+    }
+    if (!studentId) {
+      return NextResponse.json({ error: 'يجب تسجيل الدخول قبل الدفع' }, { status: 400 })
+    }
+
+    // Never trust the amount coming from the browser - read the real price.
+    var video = await db.video.findUnique({ where: { id: videoId } })
+    if (!video) return NextResponse.json({ error: 'الفيديو غير موجود' }, { status: 404 })
+    var realAmount = Number(video.price) || 0
+    if (realAmount <= 0) {
+      return NextResponse.json({ error: 'هذا الفيديو مجاني ولا يحتاج دفع' }, { status: 400 })
+    }
+
+    var student = await db.student.findUnique({ where: { id: studentId } })
+    if (!student) return NextResponse.json({ error: 'الطالب غير موجود' }, { status: 404 })
+
+    // Block duplicate pending/approved receipts for the same video.
+    var existing = await db.payment.findFirst({
+      where: { studentId: studentId, videoId: videoId, status: { in: ['pending', 'approved'] } },
+    })
+    if (existing) {
+      return NextResponse.json(
+        { error: existing.status === 'approved' ? 'الفيديو مفتوح لك بالفعل' : 'تم إرسال إيصال لهذا الفيديو وجاري مراجعته' },
+        { status: 409 },
+      )
     }
 
     // Save receipt file
@@ -52,17 +79,30 @@ export async function POST(request: NextRequest) {
 
     var payment = await db.payment.create({
       data: {
-        studentId,
-        studentName,
-        videoId,
-        videoTitle,
-        amount,
-        paymentMethod,
-        receiptPath,
-        notes,
+        studentId: studentId,
+        studentName: studentName || student.name,
+        studentPhone: studentPhone || student.phone,
+        studentGrade: studentGrade || student.grade,
+        videoId: videoId,
+        videoTitle: videoTitle || video.title,
+        amount: realAmount,
+        method: paymentMethod,
+        receiptPath: receiptPath,
+        receiptType: receipt.type || '',
+        note: notes,
         status: 'pending',
       },
     })
+
+    try {
+      await db.studentActivity.create({
+        data: {
+          studentId: studentId,
+          action: 'payment_submitted',
+          details: 'أرسل إيصال دفع (' + realAmount + ' جنيه) للفيديو: ' + (videoTitle || video.title),
+        },
+      })
+    } catch (_) { /* activity logging is best effort */ }
 
     return NextResponse.json({ message: 'Payment submitted', payment }, { status: 201 })
   } catch (error: any) {
@@ -106,7 +146,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       payments,
       counts: {
-        total: countMap['pending'] + (countMap['approved'] || 0) + (countMap['rejected'] || 0),
+        total: (countMap['pending'] || 0) + (countMap['approved'] || 0) + (countMap['rejected'] || 0),
         pending: countMap['pending'] || 0,
         approved: countMap['approved'] || 0,
         rejected: countMap['rejected'] || 0,

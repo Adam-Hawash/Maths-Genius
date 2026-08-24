@@ -15,8 +15,9 @@ import {
   Megaphone, Plus, Check, X, Trash2, LogOut, Loader2,
   BarChart3, RefreshCw, Settings, Upload, MessageSquare,
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
-  PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet
+  PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet, Database
 } from 'lucide-react'
+import { DatabasePanel } from './DatabasePanel'
 import { CMSPanel } from './CMSPanel'
 import { SocialLinksPanel } from './SocialLinksPanel'
 import { CommunityPanel } from './CommunityPanel'
@@ -139,6 +140,7 @@ export function AdminDashboard() {
             <TabsTrigger value="social" className="text-xs sm:text-sm gap-1"><Link2 className="h-4 w-4" /><span className="hidden sm:inline">الروابط</span></TabsTrigger>
             <TabsTrigger value="payments" className="text-xs sm:text-sm gap-1 text-amber-600 dark:text-amber-400"><Wallet className="h-4 w-4" /><span className="hidden sm:inline">المدفوعات</span></TabsTrigger>
             <TabsTrigger value="ai-extract" className="text-xs sm:text-sm gap-1 text-purple-600 dark:text-purple-400"><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">استخراج AI</span></TabsTrigger>
+            <TabsTrigger value="database" className="text-xs sm:text-sm gap-1 text-sky-600 dark:text-sky-400"><Database className="h-4 w-4" /><span className="hidden sm:inline">قاعدة البيانات</span></TabsTrigger>
           </TabsList>
 
           <TabsContent value="students"><StudentsManager onStatsRefresh={fetchStats} /></TabsContent>
@@ -163,6 +165,7 @@ export function AdminDashboard() {
           <TabsContent value="social"><SocialLinksPanel /></TabsContent>
           <TabsContent value="payments"><PaymentsPanel onRefresh={fetchStats} /></TabsContent>
           <TabsContent value="ai-extract"><AIExtractionPanel onRefresh={fetchStats} /></TabsContent>
+          <TabsContent value="database"><DatabasePanel /></TabsContent>
         </Tabs>
 
         {/* Admin Settings Dialog */}
@@ -540,6 +543,10 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   const handleSubmit = async () => {
     if (!formTitle.trim() || !formGrade) { toast.error('أدخل العنوان واختر الصف'); return }
     if (!formUrl && !formFile) { toast.error('أدخل رابط YouTube أو ارفع ملف فيديو'); return }
+    if (formPrice.trim() === '' || isNaN(Number(formPrice)) || Number(formPrice) < 0) {
+      toast.error('حدد سعر الفيديو — اكتب 0 لو الفيديو مجاني للجميع')
+      return
+    }
     setSubmitting(true)
     setUploading(true)
     try {
@@ -640,7 +647,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                 <Input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} placeholder="مثال: الباب الأول - الكسور" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">السعر (ج.م) — اتركه فاضي للمجاني</Label>
+                <Label className="text-xs">السعر (ج.م) * — اكتب 0 لو مجاني للجميع</Label>
                 <Input value={formPrice} onChange={(e) => setFormPrice(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0" dir="ltr" type="number" min="0" step="0.01" />
               </div>
             </div>
@@ -1950,7 +1957,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   const [fileUrl, setFileUrl] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [extractedQuestions, setExtractedQuestions] = useState<Array<{ question: string; options: string[]; correct: number }>>([])
+  const [extractedQuestions, setExtractedQuestions] = useState<Array<{ question: string; options: string[]; correct: number; points?: number }>>([])
   const [statusMsg, setStatusMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -2009,13 +2016,13 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       fd.append('type', extractType)
       fd.append('grade', grade)
       var ctrl = new AbortController()
-      var tmr = setTimeout(function() { ctrl.abort() }, 90000)
-      var res = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl.signal })
+      var tmr = setTimeout(function() { ctrl.abort() }, 280000)
+      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd, signal: ctrl.signal })
       clearTimeout(tmr)
       var data = await res.json()
-      if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
-        var extracted = data.extracted.questions.map(function(q: any) {
-          return { question: q.question || '', options: (q.options || ['لا يوجد','لا يوجد','لا يوجد','لا يوجد']).slice(0, 4), correct: q.correct || 0 }
+      if (res.ok && data.questions && data.questions.length > 0) {
+        var extracted = data.questions.map(function(q: any) {
+          return { question: q.question || '', options: (q.options || ['لا يوجد','لا يوجد','لا يوجد','لا يوجد']).slice(0, 4), correct: q.correct || 0, points: q.points || 1 }
         })
         setExtractedQuestions(extracted)
         setStatusMsg('')
@@ -2095,7 +2102,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       var fd = new FormData()
       fd.append('type', extractType); fd.append('grade', grade); fd.append('title', title)
       fd.append('questions', JSON.stringify(extractedQuestions))
-      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd })
+      var res = await fetch('/api/ai/extract-and-save', { method: 'POST', body: fd })
       var data = await res.json()
       if (res.ok && data.success) { toast.success(data.message || 'تم الحفظ بنجاح!'); onRefresh(); resetAll() }
       else { toast.error(data.error || 'خطا في الحفظ') }
