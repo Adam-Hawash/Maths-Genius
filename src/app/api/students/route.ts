@@ -12,15 +12,20 @@ export async function GET(request: NextRequest) {
     var pageSize = parseInt(searchParams.get('pageSize') || '20')
 
     if (phone) {
+      var password = searchParams.get('password') || ''
       try {
         var student = await db.student.findFirst({
           where: { phone },
           include: { _count: { select: { activities: true } } },
         })
-        if (student) {
-          return NextResponse.json({ students: [{ ...student, watchedVideoCount: 0 }], total: 1, page: 1, pageSize: 1, totalPages: 1 })
+        if (!student) {
+          return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0 })
         }
-        return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0 })
+        // Password check for login
+        if (!password || student.password !== password) {
+          return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0 })
+        }
+        return NextResponse.json({ students: [{ ...student, watchedVideoCount: 0 }], total: 1, page: 1, pageSize: 1, totalPages: 1 })
       } catch (loginErr: any) {
         console.error('Student login error:', loginErr)
         return NextResponse.json({ students: [], total: 0, page: 1, pageSize: 1, totalPages: 0 })
