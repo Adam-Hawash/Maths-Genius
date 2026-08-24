@@ -1,6 +1,6 @@
 'use client'
 
-import { useAppStore, GRADES, GRADE_SHORT_NAMES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
+import { useAppStore, GRADES, GRADES_EN, GRADE_SHORT_NAMES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
