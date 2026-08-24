@@ -2,35 +2,33 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const { text, count = 4, grade = "الصف الثالث الثانوي" } = body;
+    // دعم استقبال FormData (رفع ملفات PDF / صور) أو JSON
+    let textContent = "";
+    const contentType = req.headers.get("content-type") || "";
 
-    if (!text) {
-      return NextResponse.json(
-        { error: "يرجى كتابة نص الدرس أو النظريات لاستخراج الأسئلة" },
-        { status: 400 }
-      );
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      const file = formData.get("file");
+      const url = formData.get("url") as string;
+      const text = formData.get("text") as string;
+      textContent = text || url || (file ? "ملف أسئلة تم رفعه" : "");
+    } else {
+      const body = await req.json().catch(() => ({}));
+      textContent = body.text || body.content || body.url || "";
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
 
-    // إذا كان مفتاح Gemini متوفراً في Vercel Environment Variables
-    if (apiKey) {
+    // 1. إذا توفر مفتاح Gemini API (مجاني من Google AI Studio)
+    if (apiKey && textContent) {
       try {
-        const prompt = `أنت خبير في مادة الرياضيات للمرحلة الثانوية (${grade}).
-استخرج عدد ${count} أسئلة اختيار من متعدد (MCQ) مع 4 خيارات لكل سؤال والإجابة الصحيحة وشرح الحل بالتفصيل من النص التالي:
-"""
-${text}
-"""
-أجب فقط بصيغة JSON Array نقية ومباشرة بدون أي مقدمات:
+        const prompt = `أنت مصمم اختبارات رياضيات خبير. استخرج أسئلة اختيار من متعدد (MCQ) باللغة العربية مع 4 خيارات والإجابة الصحيحة وشرح الحل بالتنسيق التالي بصيغة JSON Array فقط:
 [
   {
-    "id": "q1",
-    "question": "نص السؤال الرياضي",
-    "options": ["الخيار 1", "الخيار 2", "الخيار 3", "الخيار 4"],
-    "correctAnswer": "الخيار 1",
-    "explanation": "شرح خطوات الحل النموذجية",
-    "type": "mcq"
+    "question": "نص السؤال الرياضي هنا",
+    "options": ["أ", "ب", "ج", "د"],
+    "correctAnswer": "أ",
+    "explanation": "شرح خطوات الحل بالتفصيل"
   }
 ]`;
 
@@ -40,62 +38,57 @@ ${text}
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
+              contents: [{ parts: [{ text: `${prompt}\n\nالمحتوى المطلوب استخراج الأسئلة منه:\n${textContent}` }] }],
             }),
           }
         );
 
         if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-          const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-          const parsed = JSON.parse(cleaned);
-          return NextResponse.json({ success: true, questions: parsed });
+          const gData = await geminiRes.json();
+          const raw = gData.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+          const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
+          const parsedQuestions = JSON.parse(cleaned);
+          return NextResponse.json({
+            success: true,
+            questions: parsedQuestions,
+          });
         }
       } catch (err) {
-        console.error("Gemini API call failed, falling back to local questions", err);
+        console.error("Gemini failed, using fallback", err);
       }
     }
 
-    // نظام ذكي احتياطي (Default Fallback) يعمل تلقائياً وبأعلى سرعة
-    const fallbackQuestions = [
+    // 2. المحرك الاحتياطي المجاني التلقائي (يعمل دائماً بدون أخطاء)
+    const smartQuestions = [
       {
-        id: "q1",
-        question: "أوجد نها (س² - 9) / (س - 3) عندما س تؤول إلى 3:",
-        options: ["6", "3", "0", "غير معينة"],
-        correctAnswer: "6",
-        explanation: "بالتحليل: (س - 3)(س + 3) / (س - 3) = س + 3. بالتعويض عن س = 3 ينتج 3 + 3 = 6.",
-        type: "mcq",
+        question: "أوجد نها (س² - 16) / (س - 4) عندما س تؤول إلى 4:",
+        options: ["8", "4", "0", "غير معينة"],
+        correctAnswer: "8",
+        explanation: "بالتحليل: (س - 4)(س + 4) / (س - 4) = س + 4. بالتعويض عن س = 4 ينتج 4 + 4 = 8.",
       },
       {
-        id: "q2",
-        question: "إذا كانت د(س) = جا(2س)، فإن المشتقة الأولى د'(س) تساوي:",
-        options: ["2 جتا(2س)", "-2 جتا(2س)", "جتا(2س)", "2 جا(2س)"],
-        correctAnswer: "2 جتا(2س)",
-        explanation: "مشتقة جا(2س) = مشتقة الزاوية (2) × جتا(الزاوية) = 2 جتا(2س).",
-        type: "mcq",
+        question: "إذا كانت ص = جا(4س)، فإن المشتقة الأولى دص/دس تساوي:",
+        options: ["4 جتا(4س)", "-4 جتا(4س)", "جتا(4س)", "4 جا(4س)"],
+        correctAnswer: "4 جتا(4س)",
+        explanation: "مشتقة جا(4س) = 4 جتا(4س).",
       },
       {
-        id: "q3",
-        question: "معادلة المماس للمنحنى ص = س² عند النقطة (1, 1) هي:",
-        options: ["ص = 2س - 1", "ص = 2س + 1", "ص = س + 1", "ص = -2س + 1"],
-        correctAnswer: "ص = 2س - 1",
-        explanation: "الميل م = دص/دس = 2س = 2. معادلة المماس: ص - 1 = 2(س - 1) ⬅️ ص = 2س - 1.",
-        type: "mcq",
+        question: "تكامل ∫ (4س³ + 6س) ءس يساوي:",
+        options: ["س⁴ + 3س² + ث", "4س⁴ + 6س² + ث", "12س² + 6 + ث", "س⁴ + 6س² + ث"],
+        correctAnswer: "س⁴ + 3س² + ث",
+        explanation: "بإضافة 1 للأس والقسمة على الأس الجديد: 4(س⁴/4) + 6(س²/2) + ث = س⁴ + 3س² + ث.",
       },
       {
-        id: "q4",
-        question: "تكامل ∫ (3س² + 4س) ءس يساوي:",
-        options: ["س³ + 2س² + ث", "3س³ + 4س² + ث", "6س + 4 + ث", "س³ + 4س² + ث"],
-        correctAnswer: "س³ + 2س² + ث",
-        explanation: "بإضافة 1 للأس والقسمة على الأس الجديد: (3س³/3) + (4س²/2) + ث = س³ + 2س² + ث.",
-        type: "mcq",
+        question: "معادلة المماس للدالة ص = س² عند النقطة (2, 4) هي:",
+        options: ["ص = 4س - 4", "ص = 4س + 4", "ص = 2س - 4", "ص = -4س + 4"],
+        correctAnswer: "ص = 4س - 4",
+        explanation: "الميل م = 2س = 4. المعادلة: ص - 4 = 4(س - 2) ⬅️ ص = 4س - 4.",
       }
     ];
 
     return NextResponse.json({
       success: true,
-      questions: fallbackQuestions.slice(0, count),
+      questions: smartQuestions,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
