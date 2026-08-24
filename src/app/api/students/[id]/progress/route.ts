@@ -27,7 +27,7 @@ export async function GET(
 
     const videoProgressEnriched = videoProgress.map(vp => ({
       ...vp,
-      percent: vp.totalSeconds > 0 ? Math.round((vp.watchedSeconds / vp.totalSeconds) * 100) : 0,
+      percent: vp.totalSeconds > 0 ? Math.min(100, Math.round((vp.watchedSeconds / vp.totalSeconds) * 100)) : 0,
       videoTitle: videoMap[vp.videoId]?.title || 'فيديو محذوف',
       videoGrade: videoMap[vp.videoId]?.grade || '',
     }))
@@ -57,7 +57,7 @@ export async function GET(
     const totalVideosWatched = videoProgress.length
     const completedVideos = videoProgress.filter(vp => vp.completed).length
     const avgWatchPercent = videoProgress.length > 0
-      ? Math.round(videoProgress.reduce((sum, vp) => sum + (vp.totalSeconds > 0 ? (vp.watchedSeconds / vp.totalSeconds) * 100 : 0), 0) / videoProgress.length)
+      ? Math.min(100, Math.round(videoProgress.reduce((sum, vp) => sum + Math.min(100, (vp.totalSeconds > 0 ? (vp.watchedSeconds / vp.totalSeconds) * 100 : 0)), 0) / videoProgress.length))
       : 0
     const avgExamScore = examResults.length > 0
       ? Math.round(examResults.reduce((sum, er) => sum + er.score, 0) / examResults.length)
