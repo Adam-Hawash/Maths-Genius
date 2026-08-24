@@ -120,6 +120,15 @@ export const GRADES = [
   'الصف الثالث الاعدادي',
   'أولى بكالوريا',
 ] as const
+
+export const GRADE_SHORT_NAMES: Record<string, string> = {
+  'الصف السادس الابتدائي': 'Grade 6',
+  'الصف الأول الاعدادي': 'Prep 1',
+  'الصف الثاني الاعدادي': 'Prep 2',
+  'الصف الثالث الاعدادي': 'Prep 3',
+  'أولى بكالوريا': '1 Bac',
+}
+
 export const GRADES_EN = [
   { ar: 'الصف السادس الابتدائي', en: 'Grade 6' },
   { ar: 'الصف الأول الاعدادي', en: 'Prep 1' },
