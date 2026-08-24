@@ -130,7 +130,7 @@ export const GRADE_SHORT_NAMES: Record<string, string> = {
   'أولى بكالوريا': '1 Bac',
 }
 
-export const GRADES_EN = ['Grade 6', 'Prep 1', 'Prep 2', 'Prep 3', 'Bac'] as const;
+export const GRADES_EN = ['Grade 6', 'Prep 1', 'Prep 2', 'Prep 3', ' 1 Bac'] as const;
 
 export interface Stats {
   totalStudents: number
