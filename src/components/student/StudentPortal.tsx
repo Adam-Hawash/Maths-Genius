@@ -331,8 +331,9 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         const thumbSrc = video.thumbnail || getYouTubeThumbnail(video.url) || null
         const hasPrice = (video.price || 0) > 0
         const hasApprovedPayment = approvedVideoIds.has(video.id)
-        // Paid students and explicitly granted students can watch priced videos.
-        const needsPay = hasPrice && !hasApprovedPayment && !isPaidStudent && !isFreeStudent
+        // A paid account is not a purchase grant. Every priced video stays locked
+        // until this specific video has an approved payment/access record.
+        const needsPay = hasPrice && !hasApprovedPayment
         const progress = videoProgress[video.id] || 0
 
         return (

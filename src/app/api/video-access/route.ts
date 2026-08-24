@@ -18,13 +18,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ hasAccess: true, reason: 'free' })
       }
 
-      // Paid students and students with an explicit grant can watch priced videos.
-      // Keep this check server-side so the client cannot bypass authorization.
-      const student = await db.student.findUnique({ where: { id: studentId } })
-      if (student && (student.status === 'paid' || student.isPaidAccess === true)) {
-        return NextResponse.json({ hasAccess: true, reason: 'paid_student' })
-      }
-
+      // A student's paid status only means they are eligible to purchase.
+      // Access is granted only after this specific video's payment is approved.
       const access = await db.videoAccess.findUnique({
         where: { studentId_videoId: { studentId, videoId } },
       })
