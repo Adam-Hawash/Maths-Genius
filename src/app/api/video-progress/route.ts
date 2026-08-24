@@ -28,21 +28,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'studentId and videoId required' }, { status: 400 })
     }
 
-    const completed = totalSeconds > 0 && (watchedSeconds / totalSeconds) >= 0.9
+    // Cap watchedSeconds to never exceed totalSeconds
+    var safeTotal = Math.max(totalSeconds, 0)
+    var safeWatched = Math.max(watchedSeconds, 0)
+    if (safeTotal > 0 && safeWatched > safeTotal) {
+      safeWatched = safeTotal
+    }
+    // Also cap totalSeconds to a reasonable max (24 hours = 86400 seconds)
+    if (safeTotal > 86400) {
+      safeTotal = 86400
+      if (safeWatched > safeTotal) safeWatched = safeTotal
+    }
+
+    const completed = safeTotal > 0 && (safeWatched / safeTotal) >= 0.9
 
     const progress = await db.videoProgress.upsert({
       where: { studentId_videoId: { studentId, videoId } },
       update: {
-        watchedSeconds: Math.max(watchedSeconds, 0),
-        totalSeconds: Math.max(totalSeconds, 0),
+        watchedSeconds: safeWatched,
+        totalSeconds: safeTotal,
         completed,
         lastWatchedAt: new Date(),
       },
       create: {
         studentId,
         videoId,
-        watchedSeconds,
-        totalSeconds,
+        watchedSeconds: safeWatched,
+        totalSeconds: safeTotal,
         completed,
       },
     })
