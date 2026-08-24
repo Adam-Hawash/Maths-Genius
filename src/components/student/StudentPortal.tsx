@@ -221,7 +221,7 @@ export function StudentPortal() {
                 عرض الكل
               </Button>
             </div>
-            <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={initialData.videoProgress} studentStatus={currentStudent?.status} />
+            <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={initialData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} />
           </div>
 
           {/* Enter Full Portal */}
@@ -282,7 +282,7 @@ export function StudentPortal() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} />}
+        {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} />}
         {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} />}
         {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} studentId={studentId} />}
         {activeTab === 'announcements' && <AnnouncementsTab announcements={dashboardData.announcements} />}
@@ -292,12 +292,12 @@ export function StudentPortal() {
   )
 }
 
-function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, videoProgress, studentStatus }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string; videoProgress: Record<string, number>; studentStatus?: string }) {
+function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, videoProgress, studentStatus, isPaidAccess }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string; videoProgress: Record<string, number>; studentStatus?: string; isPaidAccess?: boolean }) {
   const { setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
 
-  // Approved students see ALL videos for free (no payment needed)
-  const isFreeStudent = studentStatus === 'approved'
+  // Only explicitly approved free students bypass payment. Paid students must see priced videos locked.
+  const isFreeStudent = studentStatus === 'approved' && !isPaidAccess
 
   const trackVideoWatch = (videoId: string) => {
     if (!studentId || localWatched.has(videoId)) return
