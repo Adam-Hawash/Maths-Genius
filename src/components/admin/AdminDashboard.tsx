@@ -2010,11 +2010,11 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       fd.append('grade', grade)
       var ctrl = new AbortController()
       var tmr = setTimeout(function() { ctrl.abort() }, 90000)
-      var res = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl.signal })
+      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd, signal: ctrl.signal })
       clearTimeout(tmr)
       var data = await res.json()
-      if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
-        var extracted = data.extracted.questions.map(function(q: any) {
+      if (res.ok && Array.isArray(data.questions) && data.questions.length > 0) {
+        var extracted = data.questions.map(function(q: any) {
           return { question: q.question || '', options: (q.options || ['لا يوجد','لا يوجد','لا يوجد','لا يوجد']).slice(0, 4), correct: q.correct || 0 }
         })
         setExtractedQuestions(extracted)
@@ -2095,7 +2095,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       var fd = new FormData()
       fd.append('type', extractType); fd.append('grade', grade); fd.append('title', title)
       fd.append('questions', JSON.stringify(extractedQuestions))
-      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd })
+      var res = await fetch('/api/ai/extract-and-save', { method: 'POST', body: fd })
       var data = await res.json()
       if (res.ok && data.success) { toast.success(data.message || 'تم الحفظ بنجاح!'); onRefresh(); resetAll() }
       else { toast.error(data.error || 'خطا في الحفظ') }
