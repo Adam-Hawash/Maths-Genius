@@ -4,7 +4,8 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  // The runtime Prisma adapter connects to Turso; this URL is only a schema placeholder.
+  url      = "file:./db/custom.db"
 }
 
 model Admin {

@@ -3,7 +3,7 @@ import { createClient } from '@libsql/client'
 
 export async function GET() {
   try {
-    var dbUrl = process.env.DATABASE_URL || ''
+    var dbUrl = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || ''
     var authToken = process.env.TURSO_AUTH_TOKEN || ''
     if (!dbUrl) return NextResponse.json({ ok: false, error: 'DATABASE_URL not set' }, { status: 500 })
     var client = createClient({ url: dbUrl, authToken: authToken || undefined })
