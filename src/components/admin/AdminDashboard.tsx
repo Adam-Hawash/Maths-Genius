@@ -334,10 +334,11 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
     setStudentProgress(null)
   }
 
-  const handleAction = async (id: string, status: 'approved' | 'rejected') => {
+  const handleAction = async (id: string, status: 'approved' | 'paid') => {
     try {
-      await fetch(`/api/students/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
-      toast.success(status === 'approved' ? 'تم قبول الطالب' : 'تم رفض الطالب')
+      const response = await fetch(`/api/students/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, isPaidAccess: status === 'paid' }) })
+      if (!response.ok) throw new Error('update failed')
+      toast.success(status === 'approved' ? 'تم قبول الطالب مجاناً' : 'تم تفعيل المشاهدة المدفوعة')
       loadStudents(false); onStatsRefresh()
     } catch { toast.error('خطأ في تحديث حالة الطالب') }
   }
@@ -441,9 +442,9 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
               {GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
             </select>
             <div className="flex gap-1 bg-muted rounded-lg p-1">
-              {(['pending', 'all', 'approved', 'rejected'] as const).map((f) => (
+              {(['pending', 'all', 'approved', 'paid'] as const).map((f) => (
                 <Button key={f} variant={filter === f ? 'default' : 'ghost'} size="sm" className="text-xs h-7 px-2" onClick={() => setFilter(f)}>
-                  {f === 'pending' ? 'بانتظار' : f === 'approved' ? 'مقبول' : f === 'rejected' ? 'مرفوض' : 'الكل'}
+                  {f === 'pending' ? 'بانتظار' : f === 'approved' ? 'مجاني' : f === 'paid' ? 'بفلوس' : 'الكل'}
                 </Button>
               ))}
             </div>
@@ -476,8 +477,8 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                   {s.status !== 'approved' && (
                     <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="قبول - يشوف مجانا"><Check className="h-4 w-4" /></Button>
                   )}
-                  {s.status !== 'rejected' && s.status !== 'paid' && (
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleAction(s.id, 'rejected')} title="رفض - يشوف بفلوس"><X className="h-4 w-4" /></Button>
+                  {s.status !== 'paid' && (
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleAction(s.id, 'paid')} title="تفعيل المشاهدة بفلوس"><Wallet className="h-4 w-4" /></Button>
                   )}
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(s.id)} title="حذف"><Trash2 className="h-4 w-4" /></Button>
                 </div>
