@@ -331,8 +331,8 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         const thumbSrc = video.thumbnail || getYouTubeThumbnail(video.url) || null
         const hasPrice = (video.price || 0) > 0
         const hasApprovedPayment = approvedVideoIds.has(video.id)
-        // Approved students never need to pay. Rejected/paid students pay for priced videos.
-        const needsPay = hasPrice && !hasApprovedPayment && !isFreeStudent
+        // Paid students and explicitly granted students can watch priced videos.
+        const needsPay = hasPrice && !hasApprovedPayment && !isPaidStudent && !isFreeStudent
         const progress = videoProgress[video.id] || 0
 
         return (
