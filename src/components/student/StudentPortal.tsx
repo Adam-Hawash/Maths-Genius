@@ -296,8 +296,9 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
   const { setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
 
-  // Only explicitly approved free students bypass payment. Paid students must see priced videos locked.
-  const isFreeStudent = studentStatus === 'approved' && !isPaidAccess
+  // Only an explicitly approved, non-paid student gets free access. A paid account always pays for priced videos.
+  const isFreeStudent = studentStatus === 'approved' && isPaidAccess !== true
+  const isPaidStudent = studentStatus === 'paid' || isPaidAccess === true
 
   const trackVideoWatch = (videoId: string) => {
     if (!studentId || localWatched.has(videoId)) return
