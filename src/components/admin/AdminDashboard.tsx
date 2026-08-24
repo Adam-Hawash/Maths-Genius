@@ -1,6 +1,6 @@
 'use client'
 
-import { useAppStore, GRADES, GRADES_EN, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
+import { useAppStore, GRADES, GRADE_SHORT_NAMES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -735,7 +735,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                   <div className="p-3 space-y-1.5">
                     <p className="font-semibold text-sm truncate">{v.title}</p>
                     <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-[10px]">{v.grade}</Badge>
+                    <Badge variant="outline" className="text-[10px]">{GRADE_SHORT_NAMES[v.grade] || v.grade}</Badge>
                       <div className="flex items-center gap-1">
                         {v.filePath && <Badge variant="secondary" className="text-[10px]">📎 ملف</Badge>}
                         {v.url && !v.filePath && <Badge variant="secondary" className="text-[10px]">▶ YouTube</Badge>}
