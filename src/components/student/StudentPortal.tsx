@@ -41,7 +41,7 @@ export function StudentPortal() {
     let cancelled = false
     ;(async () => {
       try {
-        const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes, payRes, progressRes] = await Promise.all([
+        const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes, payRes, accessRes, progressRes] = await Promise.all([
           fetch(`/api/videos?grade=${encodeURIComponent(grade)}&pageSize=100`).then(r => r.json()),
           fetch(`/api/homework?grade=${encodeURIComponent(grade)}&pageSize=50`).then(r => r.json()),
           fetch(`/api/exams?grade=${encodeURIComponent(grade)}&pageSize=50`).then(r => r.json()),
@@ -49,13 +49,16 @@ export function StudentPortal() {
           fetch(`/api/exam-results?grade=${encodeURIComponent(grade)}`).then(r => r.json()),
           fetch(`/api/activities?studentId=${studentId}&action=watched_video&pageSize=200`).then(r => r.json()),
           fetch(`/api/payments?studentId=${studentId}&status=approved&pageSize=200`).then(r => r.json()),
+          fetch(`/api/video-access?studentId=${studentId}`).then(r => r.json()).catch(() => ({ accesses: [] })),
           fetch(`/api/video-progress?studentId=${studentId}`).then(r => r.json()).catch(() => ({ progress: [] })),
         ])
         if (cancelled) return
         const videos = videosRes.videos || []
         const watchedIds = new Set<string>((actRes.activities || []).map((a: any) => a.details?.replace('Watched: ', '')))
         const approvedPayments = payRes.payments || []
-        const approvedVideoIds = new Set<string>(approvedPayments.map((p: any) => p.videoId).filter(Boolean))
+        const paidVideoIds = approvedPayments.map((p: any) => p.videoId).filter(Boolean)
+        const grantedVideoIds = (accessRes.accesses || []).map((a: any) => a.videoId).filter(Boolean)
+        const approvedVideoIds = new Set<string>([...paidVideoIds, ...grantedVideoIds])
         // Build progress map: videoId -> percentage (0-100)
         const progressMap: Record<string, number> = {}
         ;(progressRes.progress || []).forEach((p: any) => {
