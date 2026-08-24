@@ -13,15 +13,15 @@ export async function GET(request: NextRequest) {
       const video = await db.video.findUnique({ where: { id: videoId } })
       if (!video) return NextResponse.json({ error: 'Video not found' }, { status: 404 })
 
-      // Free video = always accessible
+      // Free video (price = 0 or not set) = always accessible
       if (!video.price || video.price === 0) {
         return NextResponse.json({ hasAccess: true, reason: 'free' })
       }
 
-      // Check if student has free access
+      // Check student status - approved students see everything for free
       const student = await db.student.findUnique({ where: { id: studentId } })
-      if (student && student.isFreeAccess) {
-        return NextResponse.json({ hasAccess: true, reason: 'free_access_student' })
+      if (student && student.status === 'approved') {
+        return NextResponse.json({ hasAccess: true, reason: 'approved_student' })
       }
 
       // Check explicit VideoAccess
