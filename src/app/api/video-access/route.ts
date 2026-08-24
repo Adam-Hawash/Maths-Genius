@@ -18,12 +18,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ hasAccess: true, reason: 'free' })
       }
 
-      // Paid students are entitled to paid videos; otherwise require access/payment for this video.
-      const student = await db.student.findUnique({ where: { id: studentId }, select: { status: true, isPaidAccess: true } })
-      if (student?.status === 'paid' || student?.isPaidAccess === true) {
-        return NextResponse.json({ hasAccess: true, reason: 'paid_student' })
-      }
-
+      // A paid student account is eligible to purchase paid videos; it is not
+      // itself a grant for every video. Access must be granted for this video.
       const access = await db.videoAccess.findUnique({
         where: { studentId_videoId: { studentId, videoId } },
       })
