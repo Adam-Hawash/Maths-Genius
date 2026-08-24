@@ -27,9 +27,17 @@ async function withRetry(fn, retries, delayMs) {
 }
 
 function createPrismaClient() {
-  var dbUrl = process.env.DATABASE_URL || 'file:./db/custom.db'
+  var dbUrl = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || 'file:./db/custom.db'
 
-  if (dbUrl.indexOf('libsql://') === 0 || dbUrl.indexOf('https://') === 0) {
+  // Prisma's generated client still reads DATABASE_URL at runtime. Mirror
+  // the Turso URL so existing and newly generated clients use the same source.
+  if (!process.env.DATABASE_URL && dbUrl !== 'file:./db/custom.db') {
+    process.env.DATABASE_URL = dbUrl
+  }
+
+  // Use the LibSQL adapter whenever Turso credentials are configured. This
+  // also handles Turso URLs copied with the https:// protocol.
+  if (process.env.TURSO_AUTH_TOKEN || dbUrl.indexOf('libsql://') === 0 || dbUrl.indexOf('https://') === 0) {
     var authToken = process.env.TURSO_AUTH_TOKEN || ''
     var libsqlOpts = { url: dbUrl }
     if (authToken) { libsqlOpts.authToken = authToken }
