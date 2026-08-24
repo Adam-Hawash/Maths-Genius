@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ hasAccess: true, reason: 'free' })
       }
 
-      // A student's paid status only means they are eligible to purchase.
-      // Access is granted only after this specific video's payment is approved.
+      // A paid student account is eligible to purchase paid videos; it is not
+      // itself a grant for every video. Access must be granted for this video.
       const access = await db.videoAccess.findUnique({
         where: { studentId_videoId: { studentId, videoId } },
       })
