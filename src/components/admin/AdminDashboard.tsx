@@ -347,8 +347,8 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
     catch { toast.error('خطأ في حذف الطالب') }
   }
 
-  const statusColors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
-  const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض' }
+  const statusColors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', paid: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' }
+  const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول (مجاني)', rejected: 'مرفوض (بفلوس)', paid: 'مدفوع (بفلوس)' }
 
   // Student Details Panel
   if (selectedStudentId && studentProgress) {
@@ -473,11 +473,13 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => loadStudentProgress(s.id)} title="تفاصيل"><BarChart3 className="h-4 w-4" /></Button>
-                  {s.status === 'pending' && (<>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')}><Check className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')}><X className="h-4 w-4" /></Button>
-                  </>)}
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(s.id)}><Trash2 className="h-4 w-4" /></Button>
+                  {s.status !== 'approved' && (
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="قبول - يشوف مجانا"><Check className="h-4 w-4" /></Button>
+                  )}
+                  {s.status !== 'rejected' && s.status !== 'paid' && (
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleAction(s.id, 'rejected')} title="رفض - يشوف بفلوس"><X className="h-4 w-4" /></Button>
+                  )}
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(s.id)} title="حذف"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
             ))}
@@ -1999,6 +2001,8 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       var fd = new FormData()
       if (file) { fd.append('file', file) }
       else if (fileUrl.trim()) { fd.append('fileUrl', fileUrl.trim()) }
+      fd.append('type', extractType)
+      fd.append('grade', grade)
       var ctrl = new AbortController()
       var tmr = setTimeout(function() { ctrl.abort() }, 90000)
       var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd, signal: ctrl.signal })
