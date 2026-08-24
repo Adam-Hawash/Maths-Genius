@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Wallet, Check, X, Loader2, Eye, Trash2, Smartphone, CreditCard,
   Image as ImageIcon, Search, Clock, CheckCircle2, XCircle, Receipt,
-  Users, UserCheck, Lock, Unlock, Video, ChevronDown, ChevronUp
+  Users, UserCheck, Lock, Unlock, Video, ChevronDown, ChevronUp, UserX, Ban
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
@@ -40,18 +40,6 @@ interface PaymentCounts {
   rejected: number
 }
 
-interface StudentAccess {
-  studentId: string
-  studentName: string
-  studentGrade: string
-  studentPhone: string
-  studentStatus: string
-  videoId: string
-  videoTitle: string
-  videoPrice: number
-  grantedAt: string
-}
-
 var methodLabels: Record<string, { label: string; icon: any; color: string }> = {
   vodafone_cash: { label: 'فودافون كاش', icon: Smartphone, color: 'text-red-600 bg-red-100 dark:bg-red-900/30' },
   instapay: { label: 'إنستا باي', icon: CreditCard, color: 'text-violet-600 bg-violet-100 dark:bg-violet-900/30' },
@@ -62,6 +50,13 @@ var statusConfig: Record<string, { label: string; color: string; icon: any }> = 
   pending: { label: 'قيد المراجعة', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', icon: Clock },
   approved: { label: 'مقبول', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', icon: CheckCircle2 },
   rejected: { label: 'مرفوض', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
+}
+
+var studentStatusConfig: Record<string, { label: string; color: string; icon: any }> = {
+  pending: { label: 'قيد المراجعة', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', icon: Clock },
+  approved: { label: 'مقبول (مجاني)', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', icon: CheckCircle2 },
+  rejected: { label: 'مرفوض (بفلوس)', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', icon: XCircle },
+  paid: { label: 'مدفوع (بفلوس)', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: CreditCard },
 }
 
 export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
@@ -87,6 +82,7 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
   const [studentVideos, setStudentVideos] = useState<any[]>([])
   const [studentVideosLoading, setStudentVideosLoading] = useState(false)
   const [accessActionLoading, setAccessActionLoading] = useState<string | null>(null)
+  const [statusLoading, setStatusLoading] = useState<string | null>(null)
 
   var loadPayments = async function(showLoader: boolean = true) {
     if (showLoader) setLoading(true)
@@ -121,27 +117,88 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
     if (subTab === 'students') loadStudents()
   }, [subTab])
 
-  /* ===== Load student's video accesses ===== */
-  var loadStudentVideos = async function(studentId: string) {
+  /* ===== Load student's grade videos ===== */
+  var loadStudentVideos = async function(studentId: string, studentGrade: string) {
     setStudentVideosLoading(true)
     try {
-      var res = await fetch('/api/video-access?studentId=' + studentId)
-      if (res.ok) {
-        var data = await res.json()
-        setStudentVideos(data.accesses || [])
-      }
+      // Load all videos for this student's grade
+      var videosRes = await fetch('/api/videos?grade=' + encodeURIComponent(studentGrade) + '&pageSize=100')
+      var videosData = await videosRes.json()
+      var gradeVideos = videosData.videos || []
+
+      // Load approved payments for this student
+      var payRes = await fetch('/api/payments?studentId=' + studentId + '&status=approved&pageSize=200')
+      var payData = await payRes.json()
+      var approvedPayments = payData.payments || []
+      var approvedVideoIds = new Set(approvedPayments.map(function(p: any) { return p.videoId }).filter(Boolean))
+
+      // Load explicit video accesses
+      var accessRes = await fetch('/api/video-access?studentId=' + studentId)
+      var accessData = await accessRes.json()
+      var accessVideoIds = new Set((accessData.accesses || []).map(function(a: any) { return a.videoId }))
+
+      // Merge: video is unlocked if student has approved payment OR explicit access
+      var unlockedIds = new Set([...approvedVideoIds, ...accessVideoIds])
+
+      var enriched = gradeVideos.map(function(v: any) {
+        return {
+          ...v,
+          isUnlocked: unlockedIds.has(v.id),
+          unlockReason: accessVideoIds.has(v.id) ? 'granted' : approvedVideoIds.has(v.id) ? 'payment' : 'none',
+        }
+      })
+
+      setStudentVideos(enriched)
     } catch { setStudentVideos([]) }
     setStudentVideosLoading(false)
   }
 
-  var handleToggleStudent = function(studentId: string) {
-    if (expandedStudent === studentId) {
+  var handleToggleStudent = function(student: any) {
+    if (expandedStudent === student.id) {
       setExpandedStudent(null)
       setStudentVideos([])
     } else {
-      setExpandedStudent(studentId)
-      loadStudentVideos(studentId)
+      setExpandedStudent(student.id)
+      loadStudentVideos(student.id, student.grade)
     }
+  }
+
+  /* ===== Change student status ===== */
+  var handleStatusChange = async function(studentId: string, newStatus: string) {
+    setStatusLoading(studentId)
+    try {
+      var res = await fetch('/api/students/' + studentId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (res.ok) {
+        var label = newStatus === 'approved' ? 'مقبول (مجاني)' : newStatus === 'rejected' ? 'مرفوض (بفلوس)' : newStatus
+        toast.success('تم تغيير حالة الطالب إلى: ' + label)
+        loadStudents()
+        onRefresh()
+        // Refresh videos if this student is expanded
+        if (expandedStudent === studentId) {
+          var st = students.find(function(s) { return s.id === studentId })
+          if (st) loadStudentVideos(studentId, st.grade)
+        }
+      } else { toast.error('خطأ في تغيير الحالة') }
+    } catch { toast.error('خطأ في الاتصال') }
+    setStatusLoading(null)
+  }
+
+  /* ===== Delete student ===== */
+  var handleDeleteStudent = async function(studentId: string) {
+    if (!confirm('هل أنت متأكد من حذف هذا الطالب؟ سيتم حذفه نهائياً من المنصة.')) return
+    try {
+      var res = await fetch('/api/students/' + studentId, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('تم حذف الطالب نهائياً')
+        if (expandedStudent === studentId) { setExpandedStudent(null); setStudentVideos([]) }
+        loadStudents()
+        onRefresh()
+      } else { toast.error('خطأ في الحذف') }
+    } catch { toast.error('خطأ في الاتصال') }
   }
 
   /* ===== Grant/Remove video access for a student ===== */
@@ -155,7 +212,8 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
       })
       if (res.ok) {
         toast.success('تم فتح الفيديو: ' + videoTitle)
-        loadStudentVideos(studentId)
+        var st = students.find(function(s) { return s.id === studentId })
+        if (st) loadStudentVideos(studentId, st.grade)
       } else { toast.error('خطأ') }
     } catch { toast.error('خطأ في الاتصال') }
     setAccessActionLoading(null)
@@ -171,7 +229,8 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
       })
       if (res.ok) {
         toast.success('تم إغلاق الفيديو: ' + videoTitle)
-        loadStudentVideos(studentId)
+        var st = students.find(function(s) { return s.id === studentId })
+        if (st) loadStudentVideos(studentId, st.grade)
       } else { toast.error('خطأ') }
     } catch { toast.error('خطأ في الاتصال') }
     setAccessActionLoading(null)
@@ -350,8 +409,8 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
                         <div className="flex items-center gap-2 flex-wrap">
                           {p.receiptPath && (<Button size="sm" variant="outline" className="text-xs h-8" onClick={function() { handleViewReceipt(p.id) }}><Eye className="h-3.5 w-3.5 ml-1" />الإيصال</Button>)}
                           {p.status === 'pending' && (<>
-                            <Button size="sm" className="text-xs h-8 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={function() { setShowApproveConfirm(p.id) }} disabled={actionLoading === p.id}>{actionLoading === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5 ml-1" />}قبول</Button>
-                            <Button size="sm" variant="outline" className="text-xs h-8 text-destructive" onClick={function() { setShowRejectNotes(p.id); setRejectNotes('') }} disabled={actionLoading === p.id}>{actionLoading === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5 ml-1" />}رفض</Button>
+                            <Button size="sm" className="text-xs h-8 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={function() { setShowApproveConfirm(p.id) }} disabled={actionLoading === p.id}>{actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 ml-1" />}قبول</Button>
+                            <Button size="sm" variant="outline" className="text-xs h-8 text-destructive" onClick={function() { setShowRejectNotes(p.id); setRejectNotes('') }} disabled={actionLoading === p.id}>{actionLoading === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3 ml-1" />}رفض</Button>
                           </>)}
                           <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive ml-auto" onClick={function() { handleDelete(p.id) }}><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>
@@ -390,47 +449,78 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
               <div className="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar">
                 {filteredStudents.map(function(st) {
                   var isExpanded = expandedStudent === st.id
+                  var stConf = studentStatusConfig[st.status] || studentStatusConfig.pending
+                  var StIcon = stConf.icon
                   return (
                     <div key={st.id} className="rounded-xl border bg-card overflow-hidden">
-                      <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/30 transition-colors" onClick={function() { handleToggleStudent(st.id) }}>
-                        <div className={"h-9 w-9 rounded-full flex items-center justify-center shrink-0 " + (st.status === 'approved' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-amber-100 dark:bg-amber-900/30')}>
-                          <UserCheck className={"h-4 w-4 " + (st.status === 'approved' ? 'text-emerald-600' : 'text-amber-600')} />
+                      <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/30 transition-colors" onClick={function() { handleToggleStudent(st) }}>
+                        <div className={"h-9 w-9 rounded-full flex items-center justify-center shrink-0 " + (st.status === 'approved' ? 'bg-emerald-100 dark:bg-emerald-900/30' : st.status === 'rejected' ? 'bg-red-100 dark:bg-red-900/30' : 'bg-amber-100 dark:bg-amber-900/30')}>
+                          <UserCheck className={"h-4 w-4 " + (st.status === 'approved' ? 'text-emerald-600' : st.status === 'rejected' ? 'text-red-600' : 'text-amber-600')} />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold truncate">{st.name}</p>
                           <p className="text-[10px] text-muted-foreground">{st.grade} · {st.phone}</p>
                         </div>
-                        <Badge className={"text-[10px] " + (st.status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' : st.status === 'pending' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30' : 'bg-red-100 text-red-700 dark:bg-red-900/30')}>
-                          {st.status === 'approved' ? 'مقبول' : st.status === 'pending' ? 'معلق' : st.status}
+                        <Badge className={"text-[10px] " + stConf.color}>
+                          <StIcon className={"h-3 w-3 ml-1"} />
+                          {stConf.label}
                         </Badge>
                         {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
                       </div>
 
                       {isExpanded && (
-                        <div className="border-t p-3 bg-muted/20">
+                        <div className="border-t p-3 bg-muted/20 space-y-3">
+                          {/* Status change buttons */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] text-muted-foreground ml-1">تغيير الحالة:</span>
+                            {st.status !== 'approved' && (
+                              <Button size="sm" variant="outline" className={"text-xs h-7 " + (st.status === 'approved' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : '')} onClick={function(e) { e.stopPropagation(); handleStatusChange(st.id, 'approved') }} disabled={statusLoading === st.id}>
+                                {statusLoading === st.id ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <Check className="h-3 w-3 ml-1" />}
+                                مقبول (مجاني)
+                              </Button>
+                            )}
+                            {st.status !== 'rejected' && (
+                              <Button size="sm" variant="outline" className={"text-xs h-7 " + (st.status === 'rejected' ? 'border-red-500 bg-red-50 text-red-700' : '')} onClick={function(e) { e.stopPropagation(); handleStatusChange(st.id, 'rejected') }} disabled={statusLoading === st.id}>
+                                {statusLoading === st.id ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <X className="h-3 w-3 ml-1" />}
+                                مرفوض (بفلوس)
+                              </Button>
+                            )}
+                            <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive hover:bg-destructive/10" onClick={function(e) { e.stopPropagation(); handleDeleteStudent(st.id) }}>
+                              <Trash2 className="h-3 w-3 ml-1" />
+                              حذف من المنصة
+                            </Button>
+                          </div>
+
+                          {/* Videos list */}
                           {studentVideosLoading ? (<div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>) : studentVideos.length === 0 ? (
                             <div className="text-center py-6">
                               <Video className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                              <p className="text-xs text-muted-foreground">لا يوجد فيديوهات مفتوحة لهذا الطالب</p>
-                              <p className="text-[10px] text-muted-foreground mt-1">الفيديوهات المفتوحة هتظهر هنا بعد ما يتم الدفع والقبول</p>
+                              <p className="text-xs text-muted-foreground">لا توجد فيديوهات لهذا الصف</p>
                             </div>
                           ) : (
                             <div className="space-y-2">
-                              <p className="text-xs font-semibold text-muted-foreground mb-2">الفيديوهات المفتوحة ({studentVideos.length})</p>
-                              {studentVideos.map(function(va: any) {
-                                var loading = accessActionLoading === (st.id + '_' + va.videoId)
+                              <p className="text-xs font-semibold text-muted-foreground mb-2">فيديوهات الصف ({studentVideos.length}) — {st.status === 'approved' ? 'الطالب يشوف الكل مجاناً' : 'الطالب محتاج يدفع للفيديوهات المدفوعة'}</p>
+                              {studentVideos.map(function(v: any) {
+                                var loading = accessActionLoading === (st.id + '_' + v.id)
+                                var isFree = !v.price || v.price === 0
+                                var isUnlocked = v.isUnlocked || st.status === 'approved'
                                 return (
-                                  <div key={va.videoId} className="flex items-center gap-3 p-2.5 rounded-lg bg-background border">
-                                    <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
-                                      <Unlock className="h-4 w-4 text-emerald-600" />
+                                  <div key={v.id} className={"flex items-center gap-3 p-2.5 rounded-lg bg-background border " + (isUnlocked ? 'border-emerald-500/30' : '')}>
+                                    <div className={"h-8 w-8 rounded-lg flex items-center justify-center shrink-0 " + (isUnlocked ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30')}>
+                                      {isUnlocked ? <Unlock className="h-4 w-4 text-emerald-600" /> : <Lock className="h-4 w-4 text-red-600" />}
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                      <p className="text-xs font-medium truncate">{va.video?.title || va.videoId}</p>
-                                      <p className="text-[10px] text-muted-foreground">تم الفتح: {va.grantedAt ? new Date(va.grantedAt).toLocaleDateString('ar-EG') : '—'}</p>
+                                      <p className="text-xs font-medium truncate">{v.title}</p>
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-[10px] text-muted-foreground">{isFree ? 'مجاني' : v.price + ' ج.م'}</p>
+                                        {isUnlocked && <span className="text-[9px] text-emerald-600">{v.unlockReason === 'payment' ? '✓ مدفوع' : v.unlockReason === 'granted' ? '✓ مفتوح' : '✓ مجاني (مقبول)'}</span>}
+                                      </div>
                                     </div>
-                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10 shrink-0" onClick={function() { handleRemoveAccess(st.id, va.videoId, va.video?.title || '') }} disabled={loading}>
-                                      {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Lock className="h-3 w-3" />}
-                                    </Button>
+                                    {!isFree && st.status !== 'approved' && (
+                                      <Button size="sm" variant="ghost" className={"h-7 w-7 p-0 shrink-0 " + (isUnlocked ? 'text-emerald-600 hover:bg-emerald-50' : 'text-blue-600 hover:bg-blue-50')} onClick={function(e) { e.stopPropagation(); isUnlocked ? handleRemoveAccess(st.id, v.id, v.title) : handleGrantAccess(st.id, v.id, v.title) }} disabled={loading}>
+                                        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : isUnlocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                                      </Button>
+                                    )}
                                   </div>
                                 )
                               })}
