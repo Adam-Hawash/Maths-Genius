@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       const watchedCount = gradeVp.length
       const completedCount = gradeVp.filter(p => p.completed).length
       const avgWatchPercent = gradeVp.length > 0
-        ? Math.round(gradeVp.reduce((sum, p) => sum + (p.totalSeconds > 0 ? (p.watchedSeconds / p.totalSeconds) * 100 : 0), 0) / gradeVp.length)
+        ? Math.min(100, Math.round(gradeVp.reduce((sum, p) => sum + Math.min(100, (p.totalSeconds > 0 ? (p.watchedSeconds / p.totalSeconds) * 100 : 0)), 0) / gradeVp.length))
         : 0
 
       // Only count exam results for exams in this grade
