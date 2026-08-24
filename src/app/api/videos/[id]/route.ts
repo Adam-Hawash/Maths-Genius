@@ -1,76 +1,84 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
 
-// GET /api/videos/[id]
 export async function GET(
-  _request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
-    const video = await db.video.findUnique({ where: { id } })
+    const { id } = await params;
+    const { searchParams } = new URL(req.url);
+    const studentId = searchParams.get("studentId");
+
+    const video = await db.video.findUnique({
+      where: { id },
+    });
 
     if (!video) {
-      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+      return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
     }
 
-    return NextResponse.json({ video })
-  } catch (error) {
-    console.error('Video fetch error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
-  }
-}
-
-// PUT /api/videos/[id]
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const body = await request.json()
-    const { title, url, grade, price } = body
-
-    const existing = await db.video.findUnique({ where: { id } })
-    if (!existing) {
-      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+    // 1. إذا كان الفيديو مجانياً للجميع (سعره 0)
+    if (!video.price || video.price === 0) {
+      return NextResponse.json({
+        ...video,
+        isLocked: false,
+      });
     }
 
-    const video = await db.video.update({
-      where: { id },
-      data: {
-        ...(title !== undefined && { title }),
-        ...(url !== undefined && { url }),
-        ...(grade !== undefined && { grade }),
-        ...(price !== undefined && { price: parseFloat(price) || 0 }),
+    // 2. إذا لم يكن الطالب مسجل دخول، يتم قفل الفيديو فوراً
+    if (!studentId) {
+      return NextResponse.json({
+        id: video.id,
+        title: video.title,
+        grade: video.grade,
+        price: video.price,
+        thumbnail: video.thumbnail,
+        url: null, // حجب الرابط
+        isLocked: true,
+      });
+    }
+
+    // 3. التحقق من صلاحية الطالب في قاعدة البيانات
+    const student = await db.student.findUnique({
+      where: { id: studentId },
+    });
+
+    // إذا كان الطالب مفعلاً بالاشتراك الشامل المجاني (✓)
+    if (student?.isPaidAccess) {
+      return NextResponse.json({
+        ...video,
+        isLocked: false,
+      });
+    }
+
+    // 4. إذا كان نظام الطالب هو الدفع ($)، نتحقق هل اشترى هذا الفيديو تحديداً
+    const purchase = await db.purchase.findFirst({
+      where: {
+        studentId: studentId,
+        videoId: id,
+        status: "approved",
       },
-    })
+    });
 
-    return NextResponse.json({ message: 'Video updated', video })
-  } catch (error) {
-    console.error('Video update error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
-  }
-}
-
-// DELETE /api/videos/[id]
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-
-    const existing = await db.video.findUnique({ where: { id } })
-    if (!existing) {
-      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+    if (purchase) {
+      return NextResponse.json({
+        ...video,
+        isLocked: false,
+      });
     }
 
-    await db.video.delete({ where: { id } })
-
-    return NextResponse.json({ message: 'Video deleted' })
-  } catch (error) {
-    console.error('Video delete error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    // غير ذلك: الفيديو مقفل برقم سري وسعر
+    return NextResponse.json({
+      id: video.id,
+      title: video.title,
+      grade: video.grade,
+      price: video.price,
+      thumbnail: video.thumbnail,
+      url: null, // حجب الرابط الحقيقي تماماً
+      isLocked: true,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
