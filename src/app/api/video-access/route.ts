@@ -18,19 +18,19 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ hasAccess: true, reason: 'free' })
       }
 
-      // Check student status - approved students see everything for free
+      // Paid students and students with an explicit grant can watch priced videos.
+      // Keep this check server-side so the client cannot bypass authorization.
       const student = await db.student.findUnique({ where: { id: studentId } })
-      if (student && student.status === 'approved') {
-        return NextResponse.json({ hasAccess: true, reason: 'approved_student' })
+      if (student && (student.status === 'paid' || student.isPaidAccess === true)) {
+        return NextResponse.json({ hasAccess: true, reason: 'paid_student' })
       }
 
-      // Check explicit VideoAccess
       const access = await db.videoAccess.findUnique({
         where: { studentId_videoId: { studentId, videoId } },
       })
 
       return NextResponse.json({
-        hasAccess: !!access,
+        hasAccess: Boolean(access),
         reason: access ? 'granted' : 'payment_required',
       })
     }
