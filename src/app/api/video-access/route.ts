@@ -34,8 +34,7 @@ export async function GET(request: NextRequest) {
     if (studentId) {
       const accesses = await db.videoAccess.findMany({
         where: { studentId },
-        include: { video: { select: { id: true, title: true, thumbnail: true } } },
-        orderBy: { grantedAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
       })
       return NextResponse.json({ accesses })
     }
