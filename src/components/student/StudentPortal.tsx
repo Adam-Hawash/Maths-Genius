@@ -10,7 +10,7 @@ import {
   Video, ClipboardList, FileText, Megaphone, MessageSquare, Send,
   LogOut, Loader2, FileDown, Bell, PlayCircle, CheckCircle2,
   BookOpen, Target, TrendingUp, GraduationCap, ChevronLeft, ExternalLink,
-  User, Phone, Award, Maximize, Minimize, Lock, X,
+  User, Phone, Award, Maximize, Minimize, Lock, X, ListTodo,
 } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Image from 'next/image'
@@ -27,9 +27,11 @@ export function StudentPortal() {
     examResults: ExamResult[]
     watchedIds: Set<string>
     approvedVideoIds: Set<string>
+    videoProgress: Record<string, number>
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [showFullPortal, setShowFullPortal] = useState(false)
+  const [activeTab, setActiveTab] = useState('videos')
 
   const grade = currentStudent?.grade || ''
   const studentId = currentStudent?.id || ''
@@ -39,7 +41,7 @@ export function StudentPortal() {
     let cancelled = false
     ;(async () => {
       try {
-        const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes, payRes] = await Promise.all([
+        const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes, payRes, progressRes] = await Promise.all([
           fetch(`/api/videos?grade=${encodeURIComponent(grade)}&pageSize=100`).then(r => r.json()),
           fetch(`/api/homework?grade=${encodeURIComponent(grade)}&pageSize=50`).then(r => r.json()),
           fetch(`/api/exams?grade=${encodeURIComponent(grade)}&pageSize=50`).then(r => r.json()),
@@ -47,12 +49,22 @@ export function StudentPortal() {
           fetch(`/api/exam-results?grade=${encodeURIComponent(grade)}`).then(r => r.json()),
           fetch(`/api/activities?studentId=${studentId}&action=watched_video&pageSize=200`).then(r => r.json()),
           fetch(`/api/payments?studentId=${studentId}&status=approved&pageSize=200`).then(r => r.json()),
+          fetch(`/api/video-progress?studentId=${studentId}`).then(r => r.json()).catch(() => ({ progress: [] })),
         ])
         if (cancelled) return
         const videos = videosRes.videos || []
         const watchedIds = new Set<string>((actRes.activities || []).map((a: any) => a.details?.replace('Watched: ', '')))
         const approvedPayments = payRes.payments || []
         const approvedVideoIds = new Set<string>(approvedPayments.map((p: any) => p.videoId).filter(Boolean))
+        // Build progress map: videoId -> percentage (0-100)
+        const progressMap: Record<string, number> = {}
+        ;(progressRes.progress || []).forEach((p: any) => {
+          if (p.videoId && p.totalSeconds > 0) {
+            var pct = Math.min(100, Math.round((p.watchedSeconds / p.totalSeconds) * 100))
+            progressMap[p.videoId] = pct
+            if (pct >= 90) watchedIds.add(p.videoId)
+          }
+        })
         setDashboardData({
           videos,
           homework: hwRes.homework || [],
@@ -61,14 +73,13 @@ export function StudentPortal() {
           examResults: resultsRes.results || [],
           watchedIds,
           approvedVideoIds,
+          videoProgress: progressMap,
         })
       } catch { /* silent */ }
       if (!cancelled) setLoading(false)
     })()
     return () => { cancelled = true }
   }, [grade, studentId])
-
-  const activeTab = 'videos'
 
   // Dashboard overview before entering full portal
   if (!showFullPortal) {
@@ -83,20 +94,46 @@ export function StudentPortal() {
     const initialData = dashboardData
     if (!initialData) return null
 
+    // Calculate summary stats
+    var totalVideos = initialData.videos.length
+    var watchedCount = 0
+    var avgProgress = 0
+    var progressCount = 0
+    initialData.videos.forEach(function(v) {
+      var prog = initialData.videoProgress[v.id]
+      if (prog !== undefined) {
+        avgProgress += prog
+        progressCount++
+      }
+      if (initialData.watchedIds.has(v.id)) watchedCount++
+    })
+    if (progressCount > 0) avgProgress = Math.round(avgProgress / progressCount)
+
+    var pendingHomework = initialData.homework.length
+    var pendingExams = initialData.exams.filter(function(e) {
+      return !initialData.examResults.find(function(r) { return r.examId === e.id })
+    }).length
+
     return (
       <div className="flex-1 py-6 px-4 sm:px-6">
         <div className="mx-auto max-w-4xl space-y-6">
           {/* Welcome Card */}
           <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/20">
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-full bg-primary/20 flex items-center justify-center">
-                  <User className="h-7 w-7 text-primary" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-full bg-primary/20 flex items-center justify-center">
+                    <User className="h-7 w-7 text-primary" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold">أهلاً بك، {currentStudent?.name}</h1>
+                    <p className="text-sm text-muted-foreground">صفحتك الشخصية — كل حاجتك في مكان واحد</p>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold">أهلاً بك، {currentStudent?.name}</h1>
-                  <p className="text-sm text-muted-foreground">صفحتك الشخصية — كل حاجتك في مكان واحد</p>
-                </div>
+                <Button variant="ghost" size="sm" onClick={logout} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                  <LogOut className="h-4 w-4 ml-1" />
+                  <span className="hidden sm:inline">خروج</span>
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -104,28 +141,91 @@ export function StudentPortal() {
           {/* Quick Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { icon: Video, label: 'الدروس', value: initialData.videos.length, color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30' },
-              { icon: ClipboardList, label: 'الواجبات', value: initialData.homework.length, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30' },
-              { icon: FileText, label: 'الامتحانات', value: initialData.exams.length, color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30' },
-              { icon: CheckCircle2, label: 'تمت المشاهدة', value: initialData.watchedIds.size, color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30' },
+              { icon: Video, label: 'الدروس', value: totalVideos, sub: watchedCount + ' مشاهدة', color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30' },
+              { icon: ClipboardList, label: 'الواجبات', value: pendingHomework, sub: pendingHomework > 0 ? 'مطلوب حلها' : 'لا توجد', color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30' },
+              { icon: FileText, label: 'الامتحانات', value: pendingExams, sub: pendingExams > 0 ? 'لم تقدم بعد' : 'تم الكل', color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30' },
+              { icon: TrendingUp, label: 'معدل المشاهدة', value: avgProgress + '%', sub: progressCount + ' فيديو', color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30' },
             ].map((s, i) => (
-              <Card key={i} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setShowFullPortal(true)}>
-                <CardContent className="p-4 text-center">
-                  <div className={`h-10 w-10 rounded-lg ${s.color} flex items-center justify-center mx-auto mb-2`}>
-                    <s.icon className="h-5 w-5" />
+              <Card key={i} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-10 w-10 rounded-lg ${s.color} flex items-center justify-center shrink-0`}>
+                      <s.icon className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-2xl font-bold leading-tight">{s.value}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{s.label}</p>
+                      <p className="text-[10px] text-muted-foreground/70 truncate">{s.sub}</p>
+                    </div>
                   </div>
-                  <p className="text-2xl font-bold">{s.value}</p>
-                  <p className="text-xs text-muted-foreground">{s.label}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
 
-          {/* Videos Preview */}
-          {activeTab === 'videos' && <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} />}
+          {/* Pending Tasks Section */}
+          {(pendingHomework > 0 || pendingExams > 0) && (
+            <Card className="border-amber-500/30 bg-amber-50/50 dark:bg-amber-900/10">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <ListTodo className="h-5 w-5 text-amber-600" />
+                  <h2 className="font-bold text-sm">المهام المعلقة عليك</h2>
+                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 mr-auto">{pendingHomework + pendingExams} مهمة</Badge>
+                </div>
+                <div className="space-y-2">
+                  {initialData.homework.slice(0, 3).map(function(hw) {
+                    var hasMCQ = false
+                    try { if ((hw as any).questions) { var parsed = JSON.parse((hw as any).questions); hasMCQ = parsed.length > 0 } } catch {}
+                    return (
+                      <div key={hw.id} className="flex items-center gap-3 p-2 rounded-lg bg-white dark:bg-white/5">
+                        <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                          <ClipboardList className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium truncate">{hw.title}</p>
+                          <p className="text-[10px] text-muted-foreground">واجب {hasMCQ ? '· ' + JSON.parse((hw as any).questions || '[]').length + ' أسئلة' : ''}</p>
+                        </div>
+                        <Badge variant="outline" className="text-[9px] border-blue-500/30 text-blue-500">واجب</Badge>
+                      </div>
+                    )
+                  })}
+                  {initialData.exams.filter(function(e) {
+                    return !initialData.examResults.find(function(r) { return r.examId === e.id })
+                  }).slice(0, 2).map(function(exam) {
+                    return (
+                      <div key={exam.id} className="flex items-center gap-3 p-2 rounded-lg bg-white dark:bg-white/5">
+                        <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+                          <FileText className="h-4 w-4 text-orange-500" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium truncate">{exam.title}</p>
+                          <p className="text-[10px] text-muted-foreground">امتحان</p>
+                        </div>
+                        <Badge variant="outline" className="text-[9px] border-orange-500/30 text-orange-500">امتحان</Badge>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Videos Preview with Progress */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-sm flex items-center gap-2">
+                <Video className="h-4 w-4 text-purple-600" />
+                الدروس ({watchedCount}/{totalVideos} مشاهدة)
+              </h2>
+              <Button variant="link" size="sm" className="text-xs p-0 h-auto" onClick={() => setShowFullPortal(true)}>
+                عرض الكل
+              </Button>
+            </div>
+            <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={initialData.videoProgress} />
+          </div>
 
           {/* Enter Full Portal */}
-          <div className="flex justify-center pt-4">
+          <div className="flex justify-center pt-2">
             <Button variant="outline" onClick={() => setShowFullPortal(true)} className="gap-2">
               <GraduationCap className="h-4 w-4" />
               دخول البوابة الكاملة
@@ -169,7 +269,7 @@ export function StudentPortal() {
         {tabs.map(tab => (
           <button
             key={tab.id}
-            onClick={() => {}}
+            onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
@@ -182,7 +282,7 @@ export function StudentPortal() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} />}
+        {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} />}
         {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} />}
         {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} studentId={studentId} />}
         {activeTab === 'announcements' && <AnnouncementsTab announcements={dashboardData.announcements} />}
@@ -192,7 +292,7 @@ export function StudentPortal() {
   )
 }
 
-function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string }) {
+function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, videoProgress }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string; videoProgress: Record<string, number> }) {
   const { setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
 
@@ -228,6 +328,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade }: {
         const hasPrice = (video.price || 0) > 0
         const hasApprovedPayment = approvedVideoIds.has(video.id)
         const needsPay = hasPrice && !hasApprovedPayment
+        const progress = videoProgress[video.id] || 0
 
         return (
           <Card key={video.id} className={`overflow-hidden transition-all ${isWatched ? 'border-emerald-500/30' : ''}`}>
@@ -298,6 +399,17 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade }: {
                   <Video className="h-10 w-10 text-white/30" />
                 </div>
               )}
+              {/* Progress Bar Overlay */}
+              {progress > 0 && !needsPay && (
+                <div className="absolute bottom-0 left-0 right-0 z-30">
+                  <div className="w-full h-1.5 bg-black/30">
+                    <div
+                      className={`h-full transition-all ${progress >= 90 ? 'bg-emerald-500' : progress >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                      style={{ width: progress + '%' }}
+                    />
+                  </div>
+                </div>
+              )}
               {isWatched && (
                 <div className="absolute top-2 right-2 z-30">
                   <Badge className="bg-emerald-500 text-white text-[10px] gap-1">
@@ -307,7 +419,16 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade }: {
               )}
             </div>
             <CardContent className="p-3">
-              <h3 className="font-semibold text-sm truncate">{video.title}</h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-semibold text-sm truncate flex-1">{video.title}</h3>
+                {progress > 0 && !needsPay && (
+                  <span className={`text-[11px] font-bold shrink-0 ${
+                    progress >= 90 ? 'text-emerald-600' : progress >= 50 ? 'text-amber-600' : 'text-red-500'
+                  }`}>
+                    {progress}%
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground mt-1">{new Date(video.createdAt).toLocaleDateString('ar-EG')}</p>
             </CardContent>
           </Card>
