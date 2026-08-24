@@ -121,7 +121,7 @@ export const GRADES = [
   'أولى بكالوريا',
 ] as const
 
-// Mapping from Arabic grade to English short name (for video cards, exam labels, etc.)
+// Mapping from Arabic Grade to English short name (for video cards, exam labels, etc.)
 export const GRADE_SHORT_NAMES: Record<string, string> = {
   'الصف السادس الابتدائي': 'Grade 6',
   'الصف الأول الاعدادي': 'Prep 1',
@@ -130,7 +130,7 @@ export const GRADE_SHORT_NAMES: Record<string, string> = {
   'أولى بكالوريا': '1 Bac',
 }
 
-export const GRADES_EN = ['Grade 6', 'Prep 1', 'Prep 2', 'Prep 3', ' 1 Bac'] as const;
+export const GRADES_EN = ['Grade 6', 'Prep 1', 'Prep 2', 'Prep 3', '1 Bac'] as const;
 
 export interface Stats {
   totalStudents: number
