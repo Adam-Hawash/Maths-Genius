@@ -1,79 +1,69 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { NextRequest, NextResponse } from 'next/server'
+import { db, safeWrite } from '@/lib/db'
 
-const prisma = new PrismaClient();
-
-// ===== POST: تسليم واجب + تصحيح تلقائي =====
+// POST /api/homework/submit - Submit homework answers and auto-grade
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { studentId, homeworkId, answers } = body;
+    const body = await request.json()
+    const { studentId, homeworkId, answers, shuffledQuestions } = body
 
     if (!studentId || !homeworkId || !answers) {
-      return NextResponse.json(
-        { error: 'بيانات مفقودة' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
     }
 
-    // منع التسليم مرتين
-    const existing = await prisma.homeworkResult.findUnique({
-      where: {
-        studentId_homeworkId: { studentId, homeworkId },
-      },
-    });
-
+    // Prevent double submission
+    const existing = await db.homeworkResult.findUnique({
+      where: { studentId_homeworkId: { studentId, homeworkId } },
+    })
     if (existing) {
-      return NextResponse.json(
-        { error: 'تم تقديم هذا الواجب بالفعل' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'تم تقديم هذا الواجب بالفعل', alreadySubmitted: true }, { status: 400 })
     }
 
-    // جلب الأسئلة
-    const questions = await prisma.question.findMany({
-      where: { homeworkId },
-      orderBy: { id: 'asc' },
-    });
+    // Fetch homework
+    const homework = await db.homework.findUnique({ where: { id: homeworkId } })
+    if (!homework) {
+      return NextResponse.json({ error: 'الواجب غير موجود' }, { status: 404 })
+    }
+
+    // Parse questions
+    let questions: any[] = []
+    if (shuffledQuestions && Array.isArray(shuffledQuestions) && shuffledQuestions.length > 0) {
+      questions = shuffledQuestions
+    } else if (homework.questions) {
+      try {
+        questions = typeof homework.questions === 'string' ? JSON.parse(homework.questions) : homework.questions
+      } catch { questions = [] }
+    }
 
     if (questions.length === 0) {
-      return NextResponse.json(
-        { error: 'لا توجد أسئلة في هذا الواجب' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'لا توجد أسئلة في هذا الواجب' }, { status: 400 })
     }
 
-    // التصحيح التلقائي
-    let score = 0;
-    const questionDetails = questions.map((q) => {
-      const studentAnswer = answers[q.id] || null;
-      const isCorrect = studentAnswer === q.correctAnswer;
-      if (isCorrect) score++;
+    // Auto-grade
+    let score = 0
+    questions.forEach(function(q: any, i: number) {
+      const studentAnswer = Array.isArray(answers) ? answers[i] : (answers[i] !== undefined ? answers[i] : answers[String(i)])
+      const correctIdx = typeof q.correct === 'number' ? q.correct : 0
+      if (studentAnswer !== undefined && studentAnswer === correctIdx) {
+        score++
+      }
+    })
 
-      return {
-        questionId: q.id,
-        questionText: q.text,
-        optionA: q.optionA,
-        optionB: q.optionB,
-        optionC: q.optionC,
-        optionD: q.optionD,
-        correctAnswer: q.correctAnswer,
-        studentAnswer,
-        isCorrect,
-        explanation: q.explanation || null,
-      };
-    });
+    const maxScore = questions.length
+    const passed = score >= Math.ceil(maxScore * 0.5)
+    const resultMessage = passed ? 'شاطر' : 'عايز مراجعة على الدروس'
 
-    // حفظ النتيجة
-    const result = await prisma.homeworkResult.create({
-      data: {
-        studentId,
-        homeworkId,
-        score,
-        totalQuestions: questions.length,
-        questionDetails: JSON.stringify(questionDetails),
-      },
-    });
+    // Save result
+    const result = await safeWrite(function() {
+      return db.homeworkResult.create({
+        data: {
+          studentId: studentId,
+          homeworkId: homeworkId,
+          score: score,
+          maxScore: maxScore,
+        },
+      })
+    })
 
     return NextResponse.json({
       success: true,
@@ -82,100 +72,14 @@ export async function POST(request: NextRequest) {
         studentId: result.studentId,
         homeworkId: result.homeworkId,
         score: result.score,
-        totalQuestions: result.totalQuestions,
-        questionDetails,
-        createdAt: result.createdAt,
+        maxScore: result.maxScore,
+        passed: passed,
+        resultMessage: resultMessage,
+        submittedAt: result.submittedAt,
       },
-    });
+    })
   } catch (error: any) {
-    console.error('Homework submit error:', error);
-    return NextResponse.json(
-      { error: 'حدث خطأ أثناء تسليم الواجب' },
-      { status: 500 }
-    );
-  }
-}
-
-// ===== GET: نتائج الطلاب + التحليلات =====
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const homeworkId = searchParams.get('homeworkId');
-
-    if (!homeworkId) {
-      return NextResponse.json(
-        { error: 'homeworkId مطلوب' },
-        { status: 400 }
-      );
-    }
-
-    // جلب النتائج
-    const results = await prisma.homeworkResult.findMany({
-      where: { homeworkId },
-      include: { student: true },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    // الطلاب اللي لم يسلموا بعد
-    const takenStudentIds = results.map((r) => r.studentId);
-    const allStudents = await prisma.user.findMany({
-      where: { role: 'student' },
-    });
-    const notTaken = allStudents.filter(
-      (s) => !takenStudentIds.includes(s.id)
-    );
-
-    // الأسئلة الأكثر خطأ
-    const questions = await prisma.question.findMany({
-      where: { homeworkId },
-    });
-
-    const questionStats: Record<
-      string,
-      {
-        wrongCount: number;
-        totalAttempts: number;
-        questionText: string;
-        correctAnswer: string;
-      }
-    > = {};
-
-    questions.forEach((q) => {
-      questionStats[q.id] = {
-        wrongCount: 0,
-        totalAttempts: 0,
-        questionText: q.text,
-        correctAnswer: q.correctAnswer,
-      };
-    });
-
-    results.forEach((result) => {
-      try {
-        const details: any[] = JSON.parse(result.questionDetails);
-        details.forEach((d) => {
-          if (questionStats[d.questionId]) {
-            questionStats[d.questionId].totalAttempts++;
-            if (!d.isCorrect) {
-              questionStats[d.questionId].wrongCount++;
-            }
-          }
-        });
-      } catch {}
-    });
-
-    const mostMissed = Object.values(questionStats)
-      .filter((s) => s.totalAttempts > 0)
-      .sort(
-        (a, b) =>
-          b.wrongCount / b.totalAttempts - a.wrongCount / a.totalAttempts
-      );
-
-    return NextResponse.json({ results, notTaken, mostMissed });
-  } catch (error: any) {
-    console.error('Homework results error:', error);
-    return NextResponse.json(
-      { error: 'فشل في جلب النتائج' },
-      { status: 500 }
-    );
+    console.error('Homework submit error:', error)
+    return NextResponse.json({ error: 'حدث خطأ أثناء تسليم الواجب: ' + (error.message || '') }, { status: 500 })
   }
 }
