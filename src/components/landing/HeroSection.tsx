@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/stores/app-store'
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { Award, GraduationCap, Users, BookOpen, Clock } from 'lucide-react'
 
 export default function HeroSection() {
@@ -14,9 +15,12 @@ export default function HeroSection() {
     stats,
   } = useAppStore()
 
+  const [heroLoaded, setHeroLoaded] = useState(false)
+  const [photoLoaded, setPhotoLoaded] = useState(false)
   const [fallbackBgExists, setFallbackBgExists] = useState(false)
   const [fallbackPhotoExists, setFallbackPhotoExists] = useState(false)
 
+  // Use server-injected config instantly, fallback to fetch
   var initialCfg = (typeof window !== 'undefined' && (window as any).__INITIAL_CONFIG__) || {}
   var cfg = configLoaded ? siteConfig : (Object.keys(siteConfig).length > 0 ? siteConfig : initialCfg)
 
@@ -32,13 +36,13 @@ export default function HeroSection() {
     }
   }, [configLoaded, setSiteConfig, siteConfig])
 
+  // Check if fallback images exist by preloading them
   useEffect(() => {
     var hasDbBg = !!(siteConfig.hero_bg_image || '')
     var hasDbPhoto = !!(siteConfig.instructor_photo || '')
     if (!hasDbBg) {
       var img = new Image()
       img.onload = function () { setFallbackBgExists(true) }
-      img.onerror = function () { setFallbackBgExists(false) }
       img.src = '/images/hero-bg.jpg'
     } else {
       setFallbackBgExists(false)
@@ -46,7 +50,6 @@ export default function HeroSection() {
     if (!hasDbPhoto) {
       var img2 = new Image()
       img2.onload = function () { setFallbackPhotoExists(true) }
-      img2.onerror = function () { setFallbackPhotoExists(false) }
       img2.src = '/images/instructor.jpg'
     } else {
       setFallbackPhotoExists(false)
@@ -66,10 +69,17 @@ export default function HeroSection() {
       {/* Banner Image at Top */}
       {showBg && (
         <div className="relative w-full">
-          <img
+          {!heroLoaded && (
+            <div className="w-full h-auto max-h-[360px] bg-gradient-to-br from-[#1A1714] via-[#0F0D0A] to-[#1A1714] animate-pulse" style={{ minHeight: '200px' }} />
+          )}
+          <Image
             src={heroBg}
             alt="Maths Genius Banner"
-            className="w-full h-auto max-h-[360px] object-cover object-center"
+            width={1600}
+            height={360}
+            className={`w-full h-auto max-h-[360px] object-cover object-center transition-opacity duration-300 ${heroLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
+            priority
+            onLoad={function() { setHeroLoaded(true) }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0F0D0A] via-[#0F0D0A]/50 to-transparent" />
         </div>
@@ -90,7 +100,6 @@ export default function HeroSection() {
         </div>
       </div>
 
-      {/* Subtle gradient when no banner */}
       {!showBg && (
         <div className="absolute inset-0 bg-gradient-to-br from-[#0F0D0A] via-[#1A1714] to-[#0F0D0A] -z-10" />
       )}
@@ -104,7 +113,7 @@ export default function HeroSection() {
               <Award className="h-4 w-4" />
               <span>
                 {cfg.hero_badge ||
-                  'Comprehensive Learning Platform | منصة تعليمية متكاملة'}
+                  'منصة تعليمية متكاملة'}
               </span>
             </div>
 
@@ -114,14 +123,19 @@ export default function HeroSection() {
                 {cfg.hero_title_line1 || 'Maths Genius'}
               </span>
               <span className="block mt-1 text-2xl sm:text-3xl lg:text-4xl font-semibold text-white/80">
-                {cfg.hero_title_line2 || 'Mr Wael Khodier'}
+                {cfg.hero_title_line2 || 'مستر وائل خضير'}
               </span>
             </h1>
 
-            {/* Subtitle */}
+            {/* Subtitle - colloquial */}
             <p className="max-w-xl text-white/60 text-base sm:text-lg leading-relaxed lg:mx-0 mx-auto">
               {cfg.hero_subtitle ||
-                'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.'}
+                'هنبسطلك الرياضيات ونخليها سهلة وممتعة! جبر، هندسة، قوانين، واجبات أسبوعية، امتحانات، ومتابعة مستمرة لLevel بتاعك.'}
+            </p>
+
+            {/* Motivational sentence */}
+            <p className="text-[#E5BE5A]/60 text-sm font-medium italic">
+              إنت قادر وتوصل لكل اللي بتتمناه، بس استمر!
             </p>
 
             {/* CTA Buttons */}
@@ -131,7 +145,7 @@ export default function HeroSection() {
                 className="text-base px-8 py-6 min-h-[44px] bg-[#C49A38] hover:bg-[#D4A843] text-white font-semibold transition-colors duration-200"
                 onClick={() => setView('auth-register')}
               >
-                سجّل الآن | Register Now
+                اعمل حسابك دلوقتي
               </Button>
               <Button
                 variant="outline"
@@ -139,7 +153,7 @@ export default function HeroSection() {
                 className="text-base px-8 py-6 min-h-[44px] border-[#C49A38]/40 text-[#E5BE5A] hover:bg-[#C49A38]/10 hover:text-[#E5BE5A] transition-colors duration-200"
                 onClick={() => setView('auth-login')}
               >
-                لديّ حساب | I Have an Account
+                عندي حساب
               </Button>
             </div>
 
@@ -176,7 +190,7 @@ export default function HeroSection() {
                   </p>
                 </div>
                 <p className="text-xs text-white/40">
-                  {cfg.hero_stat1_label || 'Video Lessons | دروس فيديو'}
+                  {cfg.hero_stat1_label || 'درس فيديو'}
                 </p>
               </div>
 
@@ -192,7 +206,7 @@ export default function HeroSection() {
                   </p>
                 </div>
                 <p className="text-xs text-white/40">
-                  {cfg.hero_stat2_label || 'Students | طالب'}
+                  {cfg.hero_stat2_label || 'طالب'}
                 </p>
               </div>
 
@@ -206,7 +220,7 @@ export default function HeroSection() {
                   </p>
                 </div>
                 <p className="text-xs text-white/40">
-                  {cfg.hero_stat3_label || 'Tracking | متابعة'}
+                  {cfg.hero_stat3_label || 'متابعة'}
                 </p>
               </div>
             </div>
@@ -219,11 +233,20 @@ export default function HeroSection() {
               <div className="absolute -inset-4 rounded-full bg-gradient-to-br from-[#E5BE5A]/30 via-[#C49A38]/10 to-transparent blur-2xl transition-opacity duration-500 group-hover:opacity-80" />
               <div className="relative w-56 h-56 sm:w-72 sm:h-72 lg:w-80 lg:h-80 rounded-full overflow-hidden border-2 border-[#C49A38]/30 gold-glow bg-[#1A1714]">
                 {showPhoto ? (
-                  <img
-                    src={heroPhoto}
-                    alt={cfg.instructor_name || 'Mr Wael Khodier'}
-                    className="w-full h-full object-cover"
-                  />
+                  <>
+                    {!photoLoaded && (
+                      <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#2A1F00] via-[#1A1714] to-[#0F0D0A]" />
+                    )}
+                    <Image
+                      src={heroPhoto}
+                      alt={cfg.instructor_name || 'مستر وائل خضير'}
+                      width={320}
+                      height={320}
+                      className={`w-full h-full object-cover transition-all duration-300 ${photoLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
+                      priority
+                      onLoad={function() { setPhotoLoaded(true) }}
+                    />
+                  </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[#C49A38]/30">
                     <GraduationCap className="h-24 w-24" />
