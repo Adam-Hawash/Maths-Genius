@@ -4,8 +4,10 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  // The runtime Prisma adapter connects to Turso; this URL is only a schema placeholder.
-  url      = "file:./db/custom.db"
+  // Relative paths resolve against this schema's folder (prisma/), so the local
+  // SQLite file at <root>/db/custom.db needs "../". The runtime adapter in
+  // src/lib/db.ts connects to Turso instead when its env vars are set.
+  url      = "file:../db/custom.db"
 }
 
 model Admin {
