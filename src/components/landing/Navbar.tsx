@@ -25,7 +25,6 @@ import {
   LayoutDashboard,
   Shield,
   Youtube,
-  Settings,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -53,7 +52,7 @@ export function Navbar() {
   const instructorPhoto = cfg.instructor_photo || ''
   const youtubeLink = cfg.social_youtube || ''
   const navBrand = cfg.navbar_brand || 'Maths Genius'
-  const navSubtitle = cfg.navbar_subtitle || 'Mr Wael Khodier'
+  const navSubtitle = cfg.navbar_subtitle || 'مستر وائل خضير'
 
   const isAuthenticated = !!currentStudent || isAdminLoggedIn
   const isAuthPage = currentView === 'auth-login' || currentView === 'auth-register'
@@ -61,7 +60,7 @@ export function Navbar() {
   const handleLogout = () => {
     logout()
     setMobileMenu(false)
-    toast.success('تم تسجيل الخروج بنجاح')
+    toast.success('تم تسجيل الخروج')
   }
 
   const handleGoHome = () => {
@@ -82,7 +81,7 @@ export function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-[#0F0D0A]/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           {/* Brand - Right side (RTL start) */}
           <button
@@ -92,21 +91,21 @@ export function Navbar() {
             {instructorPhoto ? (
               <Image
                 src={instructorPhoto}
-                alt="Mr Wael Khodier"
+                alt="مستر وائل خضير"
                 width={36}
                 height={36}
-                className="h-9 w-9 rounded-lg object-cover border border-primary/30"
+                className="h-9 w-9 rounded-lg object-cover border border-[#C49A38]/30"
               />
             ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C49A38] text-white">
                 <span className="text-xs font-bold">MG</span>
               </div>
             )}
             <div className="hidden sm:block">
-              <h1 className="text-sm font-bold leading-tight text-foreground">
+              <h1 className="text-sm font-bold leading-tight text-white">
                 {navBrand}
               </h1>
-              <p className="text-[11px] text-muted-foreground leading-tight">
+              <p className="text-[11px] text-white/40 leading-tight">
                 {navSubtitle}
               </p>
             </div>
@@ -116,16 +115,16 @@ export function Navbar() {
           <nav className="hidden md:flex items-center gap-2">
             {currentStudent ? (
               <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">
-                  مرحباً،{' '}
-                  <span className="font-semibold text-foreground">
+                <span className="text-sm text-white/50">
+                  أهلاً بـ{' '}
+                  <span className="font-semibold text-white">
                     {currentStudent.name}
                   </span>
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="min-h-[44px]"
+                  className="min-h-[44px] border-white/10 text-white/70 hover:text-white"
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4 ml-1" />
@@ -137,7 +136,7 @@ export function Navbar() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="min-h-[44px] text-foreground"
+                  className="min-h-[44px] text-white/70 hover:text-white"
                   onClick={() => setView('admin-dashboard')}
                 >
                   <LayoutDashboard className="h-4 w-4 ml-1" />
@@ -146,7 +145,7 @@ export function Navbar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="min-h-[44px]"
+                  className="min-h-[44px] border-white/10 text-white/70 hover:text-white"
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4 ml-1" />
@@ -158,29 +157,28 @@ export function Navbar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="min-h-[44px]"
+                  className="min-h-[44px] border-white/10 text-white/70 hover:text-white"
                   onClick={handleLoginClick}
                 >
                   <LogIn className="h-4 w-4 ml-1" />
-                  تسجيل الدخول
+                  سجل دخولك
                 </Button>
                 <Button
                   size="sm"
-                  className="min-h-[44px]"
+                  className="min-h-[44px] bg-[#C49A38] hover:bg-[#D4A843] text-white"
                   onClick={handleRegisterClick}
                 >
                   <UserPlus className="h-4 w-4 ml-1" />
-                  حساب جديد
+                  اعمل حساب
                 </Button>
                 {/* Discreet Admin Entry - hidden for auth pages */}
                 {!isAuthPage && (
                   <button
                     onClick={() => setShowAdminLogin(true)}
-                    className="text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors cursor-pointer px-1 flex items-center gap-1"
-                    aria-label="الإعدادات"
+                    className="text-[10px] text-white/15 hover:text-white/40 transition-colors cursor-pointer px-1"
+                    aria-label="Admin"
                   >
-                    <Settings className="h-3 w-3" />
-                    <span>إعدادات</span>
+                    Admin
                   </button>
                 )}
               </>
@@ -194,7 +192,7 @@ export function Navbar() {
                 href={youtubeLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center min-h-[44px] min-w-[44px] text-muted-foreground hover:text-red-500 transition-colors"
+                className="flex items-center justify-center min-h-[44px] min-w-[44px] text-white/40 hover:text-red-400 transition-colors"
                 title="YouTube"
               >
                 <Youtube className="h-4 w-4" />
@@ -205,7 +203,7 @@ export function Navbar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="min-h-[44px] min-w-[44px]"
+                className="min-h-[44px] min-w-[44px] text-white/40 hover:text-white"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 aria-label="Toggle theme"
               >
@@ -221,9 +219,9 @@ export function Navbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden min-h-[44px] min-w-[44px]"
+              className="md:hidden min-h-[44px] min-w-[44px] text-white/60 hover:text-white"
               onClick={() => setMobileMenu(!mobileMenu)}
-              aria-label={mobileMenu ? 'إغلاق القائمة' : 'فتح القائمة'}
+              aria-label={mobileMenu ? 'اقفل القائمة' : 'افتح القائمة'}
             >
               {mobileMenu ? (
                 <X className="h-5 w-5" />
@@ -236,19 +234,19 @@ export function Navbar() {
 
         {/* Mobile Menu */}
         {mobileMenu && (
-          <div className="md:hidden border-t bg-background/95 backdrop-blur-md px-4 py-3 space-y-2">
+          <div className="md:hidden border-t border-white/5 bg-[#0F0D0A]/95 backdrop-blur-md px-4 py-3 space-y-2">
             {currentStudent ? (
               <>
-                <p className="text-sm text-muted-foreground py-2">
-                  مرحباً،{' '}
-                  <span className="font-semibold text-foreground">
+                <p className="text-sm text-white/50 py-2">
+                  أهلاً بـ{' '}
+                  <span className="font-semibold text-white">
                     {currentStudent.name}
                   </span>
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full min-h-[44px]"
+                  className="w-full min-h-[44px] border-white/10 text-white/70"
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4 ml-1" />
@@ -260,7 +258,7 @@ export function Navbar() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full min-h-[44px] justify-start text-foreground"
+                  className="w-full min-h-[44px] justify-start text-white/70 hover:text-white"
                   onClick={() => {
                     setView('admin-dashboard')
                     setMobileMenu(false)
@@ -272,7 +270,7 @@ export function Navbar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full min-h-[44px]"
+                  className="w-full min-h-[44px] border-white/10 text-white/70"
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4 ml-1" />
@@ -284,19 +282,19 @@ export function Navbar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full min-h-[44px]"
+                  className="w-full min-h-[44px] border-white/10 text-white/70"
                   onClick={handleLoginClick}
                 >
                   <LogIn className="h-4 w-4 ml-1" />
-                  تسجيل الدخول
+                  سجل دخولك
                 </Button>
                 <Button
                   size="sm"
-                  className="w-full min-h-[44px]"
+                  className="w-full min-h-[44px] bg-[#C49A38] hover:bg-[#D4A843] text-white"
                   onClick={handleRegisterClick}
                 >
                   <UserPlus className="h-4 w-4 ml-1" />
-                  حساب جديد
+                  اعمل حساب
                 </Button>
                 {!isAuthPage && (
                   <button
@@ -304,10 +302,9 @@ export function Navbar() {
                       setShowAdminLogin(true)
                       setMobileMenu(false)
                     }}
-                    className="w-full text-center text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 py-2 transition-colors cursor-pointer flex items-center justify-center gap-1"
+                    className="w-full text-center text-[10px] text-white/15 hover:text-white/40 py-2 transition-colors cursor-pointer"
                   >
-                    <Settings className="h-3 w-3" />
-                    <span>إعدادات</span>
+                    Admin
                   </button>
                 )}
               </>
@@ -316,7 +313,7 @@ export function Navbar() {
         )}
       </header>
 
-      {/* Admin Login Dialog - Hidden Entry Point */}
+      {/* Admin Login Dialog */}
       <AdminLoginDialog />
     </>
   )
@@ -338,18 +335,18 @@ function AdminLoginDialog() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      toast.error('الرجاء إدخال البريد وكلمة المرور')
+      toast.error('اكتب الايميل والباسورد')
       return
     }
-    if (loading) return // Prevent double-submit
+    if (loading) return
     setLoading(true)
-    setStatusMsg('جاري الاتصال بالسيرفر...')
+    setStatusMsg('بيحاول يوصل بالسيرفر...')
 
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 15000) // 15s hard timeout
+    const timeout = setTimeout(() => controller.abort(), 15000)
 
     try {
-      setStatusMsg('جاري التحقق من البيانات...')
+      setStatusMsg('بيحقق من البيانات...')
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -358,20 +355,20 @@ function AdminLoginDialog() {
       })
       const data = await res.json()
       if (res.ok) {
-        setStatusMsg('جاري تحميل لوحة التحكم...')
+        setStatusMsg('بيحمل لوحة التحكم...')
         setCurrentAdmin(data.admin)
         setAdminLoggedIn(true)
         setShowAdminLogin(false)
         setView('admin-dashboard')
-        toast.success('مرحباً بك في لوحة التحكم')
+        toast.success('أهلاً بيك في لوحة التحكم')
       } else {
-        toast.error(data.error || 'خطأ في تسجيل الدخول')
+        toast.error(data.error || 'البيانات غلط')
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        toast.error('انتهت مهلة الاتصال — حاول مرة أخرى')
+        toast.error('الانترنت بطيء شوية... حاول تاني')
       } else {
-        toast.error('حدث خطأ في الاتصال')
+        toast.error('حصل مشكلة في الاتصال')
       }
     } finally {
       clearTimeout(timeout)
@@ -385,31 +382,31 @@ function AdminLoginDialog() {
       <DialogContent className="sm:max-w-md" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-center gap-2 text-lg">
-            <Shield className="h-5 w-5 text-primary" />
+            <Shield className="h-5 w-5 text-[#C49A38]" />
             دخول المشرفين
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
-            <Label htmlFor="admin-dialog-email" className="text-foreground">
-              البريد الإلكتروني
+            <Label htmlFor="admin-dialog-email" className="text-white">
+              الايميل
             </Label>
             <Input
               id="admin-dialog-email"
               type="email"
-              placeholder="البريد الإلكتروني"
+              placeholder="البريد الالكتروني"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !loading && handleLogin()}
               dir="ltr"
-              className="min-h-[44px]"
+              className="min-h-[44px] bg-white/5 border-white/10 text-white"
               disabled={loading}
               autoComplete="email"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="admin-dialog-password" className="text-foreground">
-              كلمة المرور
+            <Label htmlFor="admin-dialog-password" className="text-white">
+              الباسورد
             </Label>
             <Input
               id="admin-dialog-password"
@@ -419,23 +416,23 @@ function AdminLoginDialog() {
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !loading && handleLogin()}
               dir="ltr"
-              className="min-h-[44px]"
+              className="min-h-[44px] bg-white/5 border-white/10 text-white"
               disabled={loading}
               autoComplete="current-password"
             />
           </div>
           {statusMsg && (
-            <p className="text-xs text-center text-muted-foreground animate-pulse">{statusMsg}</p>
+            <p className="text-xs text-center text-white/40 animate-pulse">{statusMsg}</p>
           )}
           <Button
-            className="w-full min-h-[44px] font-semibold"
+            className="w-full min-h-[44px] font-semibold bg-[#C49A38] hover:bg-[#D4A843] text-white"
             onClick={handleLogin}
             disabled={loading}
           >
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                جاري تسجيل الدخول...
+                بيسجل دخول...
               </>
             ) : (
               'دخول لوحة التحكم'
