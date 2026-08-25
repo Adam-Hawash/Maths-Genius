@@ -801,7 +801,7 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
               })
               const data = await res.json()
               if (res.ok) {
-                toast.success(`الدرجة: ${data.result.score}/${data.result.maxScore} ${data.passed ? '✅ ناجح' : '❌ راسب'}`)
+                                toast.success(`الدرجة: ${data.result.score}/${data.result.maxScore} ${data.passed ? '✅ شاطر' : '❌ عايز مرجعه علي الدروس'} — لا يمكنك تقديم هذا الامتحان مرة أخرى`, { duration: 6000 })
                 setTakingExam(null); setAnswers({}); setExamQuestions([])
                 window.location.reload()
               } else {
