@@ -1585,7 +1585,7 @@ function MyStudentsPanel() {
                         <div key={hr.id} className="flex items-center justify-between p-1.5 rounded-lg border bg-card">
                           <p className="text-[11px] font-medium truncate max-w-[200px]">{hr.homeworkTitle}</p>
                           <div className="flex items-center gap-2">
-                            <span className={\`text-xs font-bold \${hr.passed ? 'text-teal-600' : 'text-amber-600'}\`}>{hr.score}/{hr.maxScore}</span>
+                          <span className={`text-xs font-bold ${hr.passed ? 'text-teal-600' : 'text-amber-600'}`}> 
                             <Badge variant={hr.passed ? 'default' : 'secondary'} className="text-[9px] h-5">{hr.resultMessage}</Badge>
                           </div>
                         </div>
