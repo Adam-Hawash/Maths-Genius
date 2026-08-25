@@ -1,6 +1,6 @@
 'use client'
 
-import { useAppStore, GRADES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
+import { useAppStore, GRADES, GRADES_EN, GRADE_SHORT_NAMES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -118,8 +118,8 @@ export function AdminDashboard() {
           <div className="grid gap-4 grid-cols-2 lg:grid-cols-5 mb-6">
             <StatCard icon={Users} label="إجمالي الطلاب" value={stats.totalStudents} color="bg-[#C49A38]/10 text-[#C49A38]" />
             <StatCard icon={Clock} label="بانتظار الموافقة" value={stats.pendingStudents} color="bg-amber-500/10 text-amber-600 dark:text-amber-400" />
-            <StatCard icon={UserCheck} label="طلاب مفعلين" value={stats.approvedStudents} color="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
-            <StatCard icon={Video} label="إجمالي الفيديوهات" value={stats.totalVideos} color="bg-purple-500/10 text-purple-600 dark:text-purple-400" />
+            <StatCard icon={UserCheck} label="طلاب مفعلين" value={stats.approvedStudents} color="bg-teal-50 text-teal-600 dark:text-teal-400" />
+            <StatCard icon={Video} label="إجمالي الفيديوهات" value={stats.totalVideos} color="bg-violet-50 text-violet-500 dark:text-violet-400" />
             <StatCard icon={Wallet} label="مدفوعات معلقة" value={(stats as any).pendingPayments || 0} color="bg-amber-500/10 text-amber-600 dark:text-amber-400" />
           </div>
         )}
@@ -248,7 +248,7 @@ export function AdminDashboard() {
                       <Label className="text-xs">فوري</Label>
                       <Input value={fawry} onChange={(e) => setFawry(e.target.value)} placeholder="01098765432" dir="ltr" className="font-mono text-xs" />
                     </div>
-                    <Button size="sm" variant="outline" onClick={async () => {
+                    <Button className="w-full" onClick={async () => {
                       setPaymentSaving(true)
                       try {
                         const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_vodafone_cash: vodafoneCash, payment_instapay: instapay, payment_fawry: fawry }) })
@@ -260,7 +260,8 @@ export function AdminDashboard() {
                       } catch { toast.error('خطأ في الحفظ') }
                       setPaymentSaving(false)
                     }} disabled={paymentSaving}>
-                      {paymentSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                      {paymentSaving ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Save className="h-4 w-4 ml-1" />}
+                      {paymentSaving ? 'جاري الحفظ...' : 'حفظ أرقام الدفع'}
                     </Button>
                   </div>
                   <div className="flex gap-2 pt-2">
@@ -296,7 +297,7 @@ function StatCard({ icon: Icon, label, value, color }: { icon: any; label: strin
 function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'paid'>('pending')
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending')
   const [filterGrade, setFilterGrade] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [studentProgress, setStudentProgress] = useState<any>(null)
@@ -333,10 +334,10 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
     setStudentProgress(null)
   }
 
-  const handleAction = async (id: string, status: 'approved' | 'paid') => {
+  const handleAction = async (id: string, status: 'approved' | 'rejected') => {
     try {
       await fetch(`/api/students/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
-      toast.success(status === 'approved' ? 'تم قبول الطالب - مجاني' : 'تم تحويل الطالب لبفلوس')
+      toast.success(status === 'approved' ? 'تم قبول الطالب' : 'تم رفض الطالب')
       loadStudents(false); onStatsRefresh()
     } catch { toast.error('خطأ في تحديث حالة الطالب') }
   }
@@ -346,8 +347,8 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
     catch { toast.error('خطأ في حذف الطالب') }
   }
 
-  const statusColors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', paid: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }
-  const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول (مجاني)', paid: 'بفلوس' }
+  const statusColors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', approved: 'bg-teal-50 text-teal-700 dark:bg-emerald-900/30 dark:text-emerald-400', rejected: 'bg-rose-50 text-rose-400 dark:bg-red-900/30 dark:text-red-400' }
+  const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض' }
 
   // Student Details Panel
   if (selectedStudentId && studentProgress) {
@@ -367,7 +368,7 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
             <div className="text-center p-3 rounded-lg bg-purple-500/10"><p className="text-xl font-bold text-purple-600 dark:text-purple-400">{summary.totalVideosWatched}</p><p className="text-[10px] text-muted-foreground">فيديو شاهده</p></div>
             <div className="text-center p-3 rounded-lg bg-blue-500/10"><p className="text-xl font-bold text-blue-600 dark:text-blue-400">{summary.avgWatchPercent}%</p><p className="text-[10px] text-muted-foreground">متوسط المشاهدة</p></div>
             <div className="text-center p-3 rounded-lg bg-emerald-500/10"><p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{summary.avgExamScore}</p><p className="text-[10px] text-muted-foreground">متوسط الامتحانات</p></div>
-            <div className="text-center p-3 rounded-lg bg-amber-500/10"><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{summary.examsPassed}/{summary.totalExamsTaken}</p><p className="text-[10px] text-muted-foreground">ناجح/إجمالي</p></div>
+            <div className="text-center p-3 rounded-lg bg-amber-500/10"><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{summary.examsPassed}/{summary.totalExamsTaken}</p><p className="text-[10px] text-muted-foreground">شاطر/إجمالي</p></div>
           </div>
 
           {/* Video Progress */}
@@ -384,8 +385,8 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                       <p className="text-[10px] text-muted-foreground">{v.videoGrade} | آخر مشاهدة: {new Date(v.lastWatchedAt).toLocaleDateString('ar-EG')}</p>
                     </div>
                     <div className="shrink-0 text-left" style={{ minWidth: '60px' }}>
-                      <div className={`text-xs font-bold ${v.percent >= 90 ? 'text-emerald-600' : v.percent >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{v.percent}%</div>
-                      <div className="h-1.5 w-full bg-muted rounded-full mt-1"><div className={`h-full rounded-full ${v.percent >= 90 ? 'bg-emerald-500' : v.percent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${v.percent}%` }} /></div>
+                      <div className={`text-xs font-bold ${v.percent >= 90 ? 'text-teal-600' : v.percent >= 50 ? 'text-amber-600' : 'text-rose-400'}`}>{v.percent}%</div>
+                      <div className="h-1.5 w-full bg-muted rounded-full mt-1"><div className={`h-full rounded-full ${v.percent >= 90 ? 'bg-teal-500' : v.percent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${v.percent}%` }} /></div>
                     </div>
                   </div>
                 ))}
@@ -407,8 +408,8 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                       <p className="text-[10px] text-muted-foreground">{e.examGrade} | {new Date(e.submittedAt).toLocaleDateString('ar-EG')}</p>
                     </div>
                     <div className="shrink-0 text-left" style={{ minWidth: '60px' }}>
-                      <div className={`text-xs font-bold ${e.passed ? 'text-emerald-600' : 'text-red-500'}`}>{e.score}/{e.maxScore}</div>
-                      <Badge className={`text-[9px] mt-1 ${e.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{e.passed ? 'ناجح' : 'راسب'}</Badge>
+                      <div className={`text-xs font-bold ${e.passed ? 'text-emerald-600' : 'text-rose-400'}`}>{e.score}/{e.maxScore}</div>
+                      <Badge className={`text-[9px] mt-1 ${e.passed ? 'bg-teal-50 text-teal-700' : 'bg-rose-50 text-rose-400'}`}>{e.passed ? 'شاطر' : 'عايز مراجعة على الدروس'}</Badge>
                     </div>
                   </div>
                 ))}
@@ -437,12 +438,12 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
           <div className="flex gap-1 flex-wrap items-center">
             <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-8 rounded-md border border-input bg-transparent px-2 text-xs">
               <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
             </select>
             <div className="flex gap-1 bg-muted rounded-lg p-1">
-              {(['pending', 'all', 'approved', 'paid'] as const).map((f) => (
+              {(['pending', 'all', 'approved', 'rejected'] as const).map((f) => (
                 <Button key={f} variant={filter === f ? 'default' : 'ghost'} size="sm" className="text-xs h-7 px-2" onClick={() => setFilter(f)}>
-                  {f === 'pending' ? 'بانتظار' : f === 'approved' ? 'مقبول (مجاني)' : f === 'paid' ? 'بفلوس' : 'الكل'}
+                  {f === 'pending' ? 'بانتظار' : f === 'approved' ? 'مقبول' : f === 'rejected' ? 'مرفوض' : 'الكل'}
                 </Button>
               ))}
             </div>
@@ -473,16 +474,10 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                 <div className="flex items-center gap-1 shrink-0">
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => loadStudentProgress(s.id)} title="تفاصيل"><BarChart3 className="h-4 w-4" /></Button>
                   {s.status === 'pending' && (<>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="مقبول - مجاني"><Check className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleAction(s.id, 'paid')} title="بفلوس"><span className="text-sm font-bold">$</span></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')}><Check className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')}><X className="h-4 w-4" /></Button>
                   </>)}
-                  {s.status === 'approved' && (
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleAction(s.id, 'paid')} title="تحويل لبفلوس"><span className="text-sm font-bold">$</span></Button>
-                  )}
-                  {s.status === 'paid' && (
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="تحويل لمجاني"><Check className="h-4 w-4" /></Button>
-                  )}
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(s.id)} title="حذف من النظام"><Trash2 className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(s.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
             ))}
@@ -617,7 +612,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
           <div className="flex gap-2 items-center flex-wrap">
             <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
               <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
             </select>
             <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4 ml-1" />إضافة فيديو</Button>
           </div>
@@ -632,7 +627,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
               <div className="space-y-1.5">
                 <Label className="text-xs">الصف الدراسي *</Label>
                 <select value={formGrade} onChange={(e) => setFormGrade(e.target.value)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                  <option value="">اختر الصف</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                  <option value="">اختر الصف</option>{GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -740,7 +735,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                   <div className="p-3 space-y-1.5">
                     <p className="font-semibold text-sm truncate">{v.title}</p>
                     <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-[10px]">{v.grade}</Badge>
+                    <Badge variant="outline" className="text-[10px]">{GRADE_SHORT_NAMES[v.grade] || v.grade}</Badge>
                       <div className="flex items-center gap-1">
                         {v.filePath && <Badge variant="secondary" className="text-[10px]">📎 ملف</Badge>}
                         {v.url && !v.filePath && <Badge variant="secondary" className="text-[10px]">▶ YouTube</Badge>}
@@ -943,7 +938,7 @@ function ExamTrackingPanel() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5"><Label className="text-xs">الصف</Label>
                 <select value={formGrade} onChange={(e) => setFormGrade(e.target.value)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                  <option value="">اختر الصف</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                  <option value="">اختر الصف</option>{GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5"><Label className="text-xs">العنوان</Label>
@@ -1383,7 +1378,7 @@ interface StudentAnalytics {
   watchedVideos: number; completedVideos: number; totalVideos: number
   avgWatchPercent: number
   examsTaken: number; examsPassed: number; totalExams: number
-  avgExamScore: number; activityScore: number
+  avgExamScore: number; hwTaken: number; avgHwScore: number; activityScore: number
 }
 
 function MyStudentsPanel() {
@@ -1423,7 +1418,7 @@ function MyStudentsPanel() {
   const getActivityColor = (score: number) => {
     if (score >= 70) return 'text-emerald-600 dark:text-emerald-400'
     if (score >= 40) return 'text-amber-600 dark:text-amber-400'
-    return 'text-red-500'
+    return 'text-rose-400'
   }
 
   const getActivityBg = (score: number) => {
@@ -1440,7 +1435,7 @@ function MyStudentsPanel() {
             <CardTitle className="text-lg flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" />طلابي | My Students</CardTitle>
             <select value={grade} onChange={(e) => setGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm min-w-[200px]">
               <option value="">اختر الصف لعرض التحليلات</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
             </select>
           </div>
         </CardHeader>
@@ -1477,6 +1472,7 @@ function MyStudentsPanel() {
                     <th className="text-center py-2 px-1 font-medium">المشاهدة</th>
                     <th className="text-center py-2 px-1 font-medium">الامتحانات</th>
                     <th className="text-center py-2 px-1 font-medium">الدرجة</th>
+                    <th className="text-center py-2 px-1 font-medium">الواجبات</th>
                     <th className="text-center py-2 px-1 font-medium">النشاط</th>
                     <th className="text-center py-2 px-1 font-medium">آخر دخول</th>
                     <th className="text-center py-2 px-1 font-medium">تفاصيل</th>
@@ -1489,15 +1485,19 @@ function MyStudentsPanel() {
                           <p className="text-[10px] text-muted-foreground" dir="ltr">{s.phone}</p>
                         </td>
                         <td className="text-center py-2 px-1">
-                          <div className={`text-xs font-bold ${s.avgWatchPercent >= 70 ? 'text-emerald-600' : s.avgWatchPercent >= 40 ? 'text-amber-600' : 'text-red-500'}`}>{s.avgWatchPercent}%</div>
+                          <div className={`text-xs font-bold ${s.avgWatchPercent >= 70 ? 'text-emerald-600' : s.avgWatchPercent >= 40 ? 'text-amber-600' : 'text-rose-400'}`}>{s.avgWatchPercent}%</div>
                           <p className="text-[9px] text-muted-foreground">{s.watchedVideos}/{s.totalVideos}</p>
                         </td>
                         <td className="text-center py-2 px-1">
                           <div className="text-xs font-medium">{s.examsTaken}/{s.totalExams}</div>
-                          <p className={`text-[9px] ${s.examsPassed === s.examsTaken && s.examsTaken > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>{s.examsPassed} نجح</p>
+                          <p className={`text-[9px] ${s.examsPassed === s.examsTaken && s.examsTaken > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>{s.examsPassed} شاطر</p>
                         </td>
                         <td className="text-center py-2 px-1">
-                          <span className={`text-xs font-bold ${s.avgExamScore >= 50 ? 'text-emerald-600' : s.avgExamScore > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>{s.avgExamScore || '—'}</span>
+                          <span className={`text-xs font-bold ${s.avgExamScore >= 50 ? 'text-teal-600' : s.avgExamScore > 0 ? 'text-rose-400' : 'text-muted-foreground'}`}>{s.avgExamScore || '—'}</span>
+                        </td>
+                        <td className="text-center py-2 px-1">
+                          <div className="text-xs font-medium">{(s as any).hwTaken || 0}</div>
+                          <p className="text-[9px] text-muted-foreground">{(s as any).avgHwScore || '—'}%</p>
                         </td>
                         <td className="text-center py-2 px-1">
                           <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full text-xs font-bold ${getActivityColor(s.activityScore)} ${getActivityBg(s.activityScore)}`}>{s.activityScore}</div>
@@ -1535,7 +1535,8 @@ function MyStudentsPanel() {
                 <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-primary">{detail.summary?.totalVideosWatched || 0}</p><p className="text-[10px] text-muted-foreground">فيديوهات شاهدها</p></div>
                 <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{detail.summary?.avgWatchPercent || 0}%</p><p className="text-[10px] text-muted-foreground">متوسط المشاهدة</p></div>
                 <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-amber-600 dark:text-amber-400">{detail.summary?.avgExamScore || 0}</p><p className="text-[10px] text-muted-foreground">متوسط الدرجات</p></div>
-                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-purple-600 dark:text-purple-400">{detail.summary?.examsPassed || 0}/{detail.summary?.totalExamsTaken || 0}</p><p className="text-[10px] text-muted-foreground">نجح/قدم</p></div>
+                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-violet-500 dark:text-violet-400">{detail.summary?.examsPassed || 0}/{detail.summary?.totalExamsTaken || 0}</p><p className="text-[10px] text-muted-foreground">شاطر/قدم</p></div>
+                <div className="text-center p-3 rounded-lg border"><p className="text-lg font-bold text-sky-600 dark:text-sky-400">{detail.summary?.avgHwScore || 0}%</p><p className="text-[10px] text-muted-foreground">متوسط الواجبات</p></div>
 
                 {/* Video Progress Detail */}
                 {detail.videoProgress && detail.videoProgress.length > 0 && (
@@ -1548,7 +1549,7 @@ function MyStudentsPanel() {
                             <p className="text-[11px] font-medium truncate">{vp.videoTitle}</p>
                           </div>
                           <div className="shrink-0" style={{ minWidth: '50px' }}>
-                            <span className={`text-[11px] font-bold ${vp.percent >= 90 ? 'text-emerald-600' : vp.percent >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{vp.percent}%</span>
+                            <span className={`text-[11px] font-bold ${vp.percent >= 90 ? 'text-emerald-600' : vp.percent >= 50 ? 'text-amber-600' : 'text-rose-400'}`}>{vp.percent}%</span>
                           </div>
                           <div className="h-1.5 w-16 bg-muted rounded-full shrink-0"><div className={`h-full rounded-full ${vp.percent >= 90 ? 'bg-emerald-500' : vp.percent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${vp.percent}%` }} /></div>
                         </div>
@@ -1566,8 +1567,26 @@ function MyStudentsPanel() {
                         <div key={er.id} className="flex items-center justify-between p-1.5 rounded border bg-card">
                           <p className="text-[11px] font-medium truncate max-w-[200px]">{er.examTitle}</p>
                           <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold ${er.passed ? 'text-emerald-600' : 'text-red-500'}`}>{er.score}/{er.maxScore}</span>
-                            <Badge variant={er.passed ? 'default' : 'destructive'} className="text-[9px] h-5">{er.passed ? 'ناجح' : 'راسب'}</Badge>
+                            <span className={`text-xs font-bold ${er.passed ? 'text-emerald-600' : 'text-rose-400'}`}>{er.score}/{er.maxScore}</span>
+                            <Badge variant={er.passed ? 'default' : 'destructive'} className="text-[9px] h-5">{er.passed ? 'شاطر' : 'عايز مراجعة على الدروس'}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Homework Results Detail */}
+                {detail.homeworkResults && detail.homeworkResults.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5 text-sky-500" />نتائج الواجبات</h4>
+                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
+                      {detail.homeworkResults.map((hr: any) => (
+                        <div key={hr.id} className="flex items-center justify-between p-1.5 rounded-lg border bg-card">
+                          <p className="text-[11px] font-medium truncate max-w-[200px]">{hr.homeworkTitle}</p>
+                          <div className="flex items-center gap-2">
+                            <span className={\`text-xs font-bold \${hr.passed ? 'text-teal-600' : 'text-amber-600'}\`}>{hr.score}/{hr.maxScore}</span>
+                            <Badge variant={hr.passed ? 'default' : 'secondary'} className="text-[9px] h-5">{hr.resultMessage}</Badge>
                           </div>
                         </div>
                       ))}
@@ -1576,7 +1595,7 @@ function MyStudentsPanel() {
                 )}
               </div>
             ) : (
-              <p className="text-center text-muted-foreground py-6 text-sm">لم يتم تحميل البيانات</p>
+              <p className="text-center text-muted-foreground py-6 text-sm">مفيش بيانات</p>
             )}
           </CardContent>
         </Card>
@@ -1723,15 +1742,13 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       if (formFile) { fd.append('file', formFile) }
       else if (formFileUrl.trim()) { fd.append('fileUrl', formFileUrl.trim()) }
       else { toast.error('ارفع ملف الأسئلة أولاً أو حط رابط'); setAiExtracting(false); setUploadMsg(''); return }
-      fd.append('type', 'exam')
-      fd.append('grade', formGrade)
       var ctrl = new AbortController()
       var tmr = setTimeout(function() { ctrl.abort() }, 60000)
-      var res = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl.signal })
+      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd, signal: ctrl.signal })
       clearTimeout(tmr)
       var data = await res.json()
-      if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
-        var extracted = data.extracted.questions.map(function(q: any) { return { question: q.question || '', options: (q.options || ['','','','']).slice(0, 4), correct: q.correct || 0 } })
+      if (res.ok && data.questions && data.questions.length > 0) {
+        var extracted = data.questions.map(function(q: any) { return { question: q.question || '', options: (q.options || ['','','','']).slice(0, 4), correct: q.correct || 0 } })
         setMcqQuestions(extracted)
         toast.success('تم استخراج ' + extracted.length + ' سؤال بنجاح!')
       } else { toast.error(data.error || 'لم يتم استخراج أسئلة') }
@@ -1796,7 +1813,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
           <div className="flex gap-2 items-center flex-wrap">
             <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
               <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
             </select>
             <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4 ml-1" />إضافة</Button>
           </div>
@@ -1809,7 +1826,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
             <div className="space-y-1.5">
               <Label className="text-xs">الصف الدراسي</Label>
               <select value={formGrade} onChange={(e) => setFormGrade(e.target.value)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                <option value="">اختر الصف</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                <option value="">اختر الصف</option>{GRADES_EN.map((g) => <option key={g.ar} value={g.ar}>{g.en}</option>)}
               </select>
             </div>
             {Object.entries(fields).map(([key, field]) => (
@@ -1986,7 +2003,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
           <Label className="text-xs font-medium">الصف الدراسي *</Label>
           <select value={grade} onChange={function(e) { setGrade(e.target.value) }} className="w-full h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
             <option value="">اختر الصف</option>
-            {GRADES.map(function(g) { return <option key={g} value={g}>{g}</option> })}
+            {GRADES_EN.map(function(g) { return <option key={g.ar} value={g.ar}>{g.en}</option> })}
           </select>
         </div>
         <div className="space-y-1.5">
@@ -2006,15 +2023,13 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       var fd = new FormData()
       if (file) { fd.append('file', file) }
       else if (fileUrl.trim()) { fd.append('fileUrl', fileUrl.trim()) }
-      fd.append('type', extractType)
-      fd.append('grade', grade)
       var ctrl = new AbortController()
       var tmr = setTimeout(function() { ctrl.abort() }, 90000)
-      var res = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl.signal })
+      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd, signal: ctrl.signal })
       clearTimeout(tmr)
       var data = await res.json()
-      if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
-        var extracted = data.extracted.questions.map(function(q: any) {
+      if (res.ok && data.questions && data.questions.length > 0) {
+        var extracted = data.questions.map(function(q: any) {
           return { question: q.question || '', options: (q.options || ['لا يوجد','لا يوجد','لا يوجد','لا يوجد']).slice(0, 4), correct: q.correct || 0 }
         })
         setExtractedQuestions(extracted)
@@ -2061,7 +2076,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
             <Input placeholder="https://example.com/exam.pdf" value={fileUrl} onChange={function(e) { setFileUrl(e.target.value); if (e.target.value.trim()) { setFile(null) } }} dir="ltr" />
           </div>
         </div>
-        {statusMsg && <div className="flex items-center gap-2 p-3 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400"><Loader2 className="h-4 w-4 animate-spin" /><p className="text-sm">{statusMsg}</p></div>}
+        {statusMsg && <div className="flex items-center gap-2 p-3 rounded-lg bg-violet-50 text-violet-500 dark:text-violet-400"><Loader2 className="h-4 w-4 animate-spin" /><p className="text-sm">{statusMsg}</p></div>}
         <Button className="w-full" size="lg" onClick={handleExtract} disabled={!canExtract || extracting}>
           {extracting ? <Loader2 className="h-5 w-5 ml-2 animate-spin" /> : <Sparkles className="h-5 w-5 ml-2" />}
           {extracting ? 'جاري الاستخراج...' : 'استخراج الاسئلة'}
@@ -2088,22 +2103,22 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   var deleteQuestion = function(qi: number) { setExtractedQuestions(extractedQuestions.filter(function(_, i) { return i !== qi })) }
   var addQuestion = function() { setExtractedQuestions([...extractedQuestions, { question: '', options: ['لا يوجد','لا يوجد','لا يوجد','لا يوجد'], correct: 0 }]) }
 
-    var handleSave = async function() {
-    if (extractedQuestions.length === 0) { toast.error('لا يوجد اسئلة للحفظ'); return }
-    setSaving(true); setStatusMsg('جاري الحفظ في قاعدة البيانات...')
+  var handleSave = async function() {
+    if (extractedQuestions.length === 0) { toast.error('مفيش أسئلة للحفظ'); return }
+    setSaving(true); setStatusMsg('بنحفظ دلوقتي...')
     try {
       var savePath = extractType === 'exam' ? '/api/exams' : '/api/homework'
       var saveBody: Record<string, string> = {
-        title: title,
-        grade: grade,
-        content: extractedQuestions.length + ' سؤال مستخرج بالذكاء الاصطناعي',
+        title: title, grade: grade,
+        content: extractedQuestions.length + ' سؤال مستخرج بالذكاء',
         questions: JSON.stringify(extractedQuestions),
       }
       if (extractType === 'exam') { saveBody.passScore = '50' }
       var res = await fetch(savePath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saveBody) })
-      if (res.ok) { toast.success('تم الحفظ بنجاح!'); onRefresh(); resetAll() }
-      else { try { var data = await res.json(); toast.error(data.error || 'خطا في الحفظ') } catch { toast.error('خطا في الحفظ') } }
-    } catch (err: any) { toast.error('خطا في الاتصال: ' + (err.message || '')) }
+      var data = await res.json()
+      if (res.ok) { toast.success('تم الحفظ!'); onRefresh(); resetAll() }
+      else { try { toast.error(data.error || 'حصل مشكلة في الحفظ') } catch { toast.error('حصل مشكلة في الحفظ') } }
+    } catch (err: any) { toast.error('مفيش نت: ' + (err.message || '')) }
     setSaving(false); setStatusMsg('')
   }
 
@@ -2117,10 +2132,10 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
             <span className="text-sm font-medium truncate">{title}</span>
             <Badge variant="secondary" className="text-xs">{grade}</Badge>
           </div>
-          <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-0">{extractedQuestions.length} سؤال</Badge>
+          <Badge className="bg-violet-50 text-violet-500 dark:text-violet-400 border-0">{extractedQuestions.length} سؤال</Badge>
         </div>
         <p className="text-xs text-muted-foreground">راجع الاسئلة المستخرجة وعدلها قبل الحفظ. اختر الاجابة الصحيحة بجانب كل اختيار.</p>
-        {statusMsg && <div className="flex items-center gap-2 p-3 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400"><Loader2 className="h-4 w-4 animate-spin" /><p className="text-sm">{statusMsg}</p></div>}
+        {statusMsg && <div className="flex items-center gap-2 p-3 rounded-lg bg-violet-50 text-violet-500 dark:text-violet-400"><Loader2 className="h-4 w-4 animate-spin" /><p className="text-sm">{statusMsg}</p></div>}
         <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
           {extractedQuestions.map(function(q, qi) {
             return (
