@@ -4,10 +4,15 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Send, Loader2, MessageSquare, Users } from 'lucide-react'
+import { Send, Loader2, MessageSquare, Users, UserCheck } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import type { Discussion } from '@/stores/app-store'
+
+const ADMIN_IDENTITIES = [
+  { name: 'Wael Khodier', label: 'Mr Wael Khodier' },
+  { name: 'Adam Hawash', label: 'Adam Hawash' },
+]
 
 const GRADES = [
   'الصف الثالث الابتدائي',
@@ -26,6 +31,7 @@ export function CommunityPanel() {
   const [replyText, setReplyText] = useState('')
   const [replyTo, setReplyTo] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [adminIdentity, setAdminIdentity] = useState(0)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   const loadDiscussions = async () => {
@@ -58,6 +64,7 @@ export function CommunityPanel() {
           grade: selectedGrade,
           content: replyText.trim(),
           isAdminReply: true,
+          studentName: ADMIN_IDENTITIES[adminIdentity].name,
         }),
       })
       setReplyText('')
@@ -97,6 +104,13 @@ export function CommunityPanel() {
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>
+            <button
+              onClick={() => setAdminIdentity((adminIdentity + 1) % ADMIN_IDENTITIES.length)}
+              className="h-10 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary px-3 text-sm font-medium flex items-center gap-2 transition-colors shrink-0"
+            >
+              <UserCheck className="h-4 w-4" />
+              {ADMIN_IDENTITIES[adminIdentity].label}
+            </button>
             {selectedGrade && (
               <Badge variant="outline" className="text-xs border-primary/30 text-primary h-10 px-3 flex items-center">
                 {discussions.length} رسالة | messages
