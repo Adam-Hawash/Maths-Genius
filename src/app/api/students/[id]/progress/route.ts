@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/students/[id]/progress - Get student's video progress + exam results
+// GET /api/students/[id]/progress - Student video progress + exam results + homework results
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,13 +12,12 @@ export async function GET(
     const student = await db.student.findUnique({ where: { id } })
     if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 })
 
-    // Get video progress
+    // Video progress
     const videoProgress = await db.videoProgress.findMany({
       where: { studentId: id },
       orderBy: { lastWatchedAt: 'desc' },
     })
 
-    // Get video details separately
     const videoIds = [...new Set(videoProgress.map(vp => vp.videoId))]
     const videos = videoIds.length > 0
       ? await db.video.findMany({ where: { id: { in: videoIds } }, select: { id: true, title: true, grade: true } })
@@ -32,42 +31,73 @@ export async function GET(
       videoGrade: videoMap[vp.videoId]?.grade || '',
     }))
 
-    // Get exam results
+    // Exam results
     const examResults = await db.examResult.findMany({
       where: { studentId: id },
       orderBy: { submittedAt: 'desc' },
     })
 
-    // Get exam details separately
-    const examIds = [...new Set(examResults.map(er => er.examId))]
+    const examIds = [...new Set(examResults.map((er: any) => er.examId))]
     const exams = examIds.length > 0
       ? await db.exam.findMany({ where: { id: { in: examIds } }, select: { id: true, title: true, grade: true, passScore: true } })
       : []
     const examMap = Object.fromEntries(exams.map(e => [e.id, e]))
 
-    const examResultsEnriched = examResults.map(er => ({
-      ...er,
-      examTitle: examMap[er.examId]?.title || 'امتحان محذوف',
-      examGrade: examMap[er.examId]?.grade || '',
-      passScore: examMap[er.examId]?.passScore || 50,
-      passed: er.score >= (examMap[er.examId]?.passScore || 50),
-    }))
+    const examResultsEnriched = examResults.map((er: any) => {
+      var ps = examMap[er.examId]?.passScore || 50
+      var passed = er.score >= Math.ceil(er.maxScore * ps / 100)
+      return {
+        ...er,
+        examTitle: examMap[er.examId]?.title || 'امتحان محذوف',
+        examGrade: examMap[er.examId]?.grade || '',
+        passScore: ps,
+        passed: passed,
+        resultMessage: passed ? 'شاطر' : 'عايز مراجعة على الدروس',
+      }
+    })
 
-    // Summary stats
+    // Homework results
+    const homeworkResults = await db.homeworkResult.findMany({
+      where: { studentId: id },
+      orderBy: { submittedAt: 'desc' },
+    })
+
+    const hwIds = [...new Set(homeworkResults.map((hr: any) => hr.homeworkId))]
+    const homeworks = hwIds.length > 0
+      ? await db.homework.findMany({ where: { id: { in: hwIds } }, select: { id: true, title: true, grade: true } })
+      : []
+    const hwMap = Object.fromEntries(homeworks.map(h => [h.id, h]))
+
+    const homeworkResultsEnriched = homeworkResults.map((hr: any) => {
+      var passed = hr.score >= Math.ceil(hr.maxScore * 0.5)
+      return {
+        ...hr,
+        homeworkTitle: hwMap[hr.homeworkId]?.title || 'واجب محذوف',
+        homeworkGrade: hwMap[hr.homeworkId]?.grade || '',
+        passed: passed,
+        resultMessage: passed ? 'شاطر' : 'عايز مراجعة على الدروس',
+      }
+    })
+
+    // Summary
     const totalVideosWatched = videoProgress.length
     const completedVideos = videoProgress.filter(vp => vp.completed).length
     const avgWatchPercent = videoProgress.length > 0
       ? Math.min(100, Math.round(videoProgress.reduce((sum, vp) => sum + Math.min(100, (vp.totalSeconds > 0 ? (vp.watchedSeconds / vp.totalSeconds) * 100 : 0)), 0) / videoProgress.length))
       : 0
     const avgExamScore = examResults.length > 0
-      ? Math.round(examResults.reduce((sum, er) => sum + er.score, 0) / examResults.length)
+      ? Math.round(examResults.reduce((sum, er: any) => sum + er.score, 0) / examResults.length)
       : 0
-    const examsPassed = examResults.filter(er => er.score >= (er.exam?.passScore || 50)).length
+    const examsPassed = examResults.filter((er: any) => er.score >= Math.ceil(er.maxScore * (examMap[er.examId]?.passScore || 50) / 100)).length
+    const avgHwScore = homeworkResults.length > 0
+      ? Math.round(homeworkResults.reduce((sum, hr: any) => sum + hr.score, 0) / homeworkResults.length)
+      : 0
 
     return NextResponse.json({
       student: { id: student.id, name: student.name, grade: student.grade },
       videoProgress: videoProgressEnriched,
       examResults: examResultsEnriched,
+      homeworkResults: homeworkResultsEnriched,
       summary: {
         totalVideosWatched,
         completedVideos,
@@ -75,6 +105,8 @@ export async function GET(
         totalExamsTaken: examResults.length,
         examsPassed,
         avgExamScore,
+        totalHomeworkTaken: homeworkResults.length,
+        avgHwScore,
       },
     })
   } catch (error) {
