@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
+
 // POST - Student submits a payment receipt
 export async function POST(request: NextRequest) {
   try {
@@ -58,9 +59,9 @@ export async function POST(request: NextRequest) {
         videoId,
         videoTitle,
         amount,
-        paymentMethod,
+        method: paymentMethod,
         receiptPath,
-        notes,
+        note: notes,
         status: 'pending',
       },
     })
