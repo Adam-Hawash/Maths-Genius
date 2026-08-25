@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, seedInitialDataIfNeeded } from "@/lib/db";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    if (seedInitialDataIfNeeded) {
-      await seedInitialDataIfNeeded();
-    }
-
     const body = await req.json().catch(() => ({}));
     const { name, phone, password, grade, parentName, parentPhone } = body;
 
@@ -20,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanPhone = String(phone).trim();
-    
+
     // التحقق هل رقم الهاتف مسجل مسبقاً
     const existing = await db.student.findUnique({
       where: { phone: cleanPhone },
