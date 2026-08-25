@@ -41,27 +41,48 @@ export async function POST(request: NextRequest) {
     var parts: any[] = [{ text: prompt }]
     parts.push({ inlineData: { mimeType: mimeType.includes('pdf') ? 'application/pdf' : mimeType, data: base64Data } })
 
+    // المحاولة الأولى: gemini-2.0-flash
     var geminiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } }),
     })
 
+    // لو gemini-2.0-flash فشل، جرب gemini-1.5-pro
+    if (!geminiRes.ok) {
+      console.error('gemini-2.0-flash failed, trying gemini-1.5-pro:', geminiRes.status)
+      geminiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=' + apiKey, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } }),
+      })
+    }
+
+    // لو gemini-1.5-pro فشل كمان، جرب gemini-1.5-flash
+    if (!geminiRes.ok) {
+      console.error('gemini-1.5-pro failed, trying gemini-1.5-flash:', geminiRes.status)
+      geminiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } }),
+      })
+    }
+
     if (!geminiRes.ok) {
       var errText = await geminiRes.text()
-      console.error('Gemini error:', geminiRes.status, errText)
-      return NextResponse.json({ error: 'خطأ من Gemini: ' + geminiRes.status }, { status: 500 })
+      console.error('All Gemini models failed:', errText)
+      return NextResponse.json({ error: 'خطأ من Gemini — تأكد إن GEMINI_API_KEY صحيح في Environment Variables' }, { status: 500 })
     }
 
     var geminiData = await geminiRes.json()
     var text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
     if (!text.trim()) {
-      return NextResponse.json({ error: 'لم يتم استخراج أي نص' }, { status: 500 })
+      return NextResponse.json({ error: 'لم يتم استخراج أي نص من الملف' }, { status: 500 })
     }
 
     var jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return NextResponse.json({ error: 'لم يتم التعرف على JSON' }, { status: 500 })
+      return NextResponse.json({ error: 'لم يتم التعرف على JSON في رد Gemini' }, { status: 500 })
     }
 
     var extracted = JSON.parse(jsonMatch[0])
