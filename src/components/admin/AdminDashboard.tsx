@@ -2088,17 +2088,21 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   var deleteQuestion = function(qi: number) { setExtractedQuestions(extractedQuestions.filter(function(_, i) { return i !== qi })) }
   var addQuestion = function() { setExtractedQuestions([...extractedQuestions, { question: '', options: ['لا يوجد','لا يوجد','لا يوجد','لا يوجد'], correct: 0 }]) }
 
-  var handleSave = async function() {
+    var handleSave = async function() {
     if (extractedQuestions.length === 0) { toast.error('لا يوجد اسئلة للحفظ'); return }
     setSaving(true); setStatusMsg('جاري الحفظ في قاعدة البيانات...')
     try {
-      var fd = new FormData()
-      fd.append('type', extractType); fd.append('grade', grade); fd.append('title', title)
-      fd.append('questions', JSON.stringify(extractedQuestions))
-      var res = await fetch('/api/ai/extract-questions', { method: 'POST', body: fd })
-      var data = await res.json()
-      if (res.ok && data.success) { toast.success(data.message || 'تم الحفظ بنجاح!'); onRefresh(); resetAll() }
-      else { toast.error(data.error || 'خطا في الحفظ') }
+      var savePath = extractType === 'exam' ? '/api/exams' : '/api/homework'
+      var saveBody: Record<string, string> = {
+        title: title,
+        grade: grade,
+        content: extractedQuestions.length + ' سؤال مستخرج بالذكاء الاصطناعي',
+        questions: JSON.stringify(extractedQuestions),
+      }
+      if (extractType === 'exam') { saveBody.passScore = '50' }
+      var res = await fetch(savePath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saveBody) })
+      if (res.ok) { toast.success('تم الحفظ بنجاح!'); onRefresh(); resetAll() }
+      else { try { var data = await res.json(); toast.error(data.error || 'خطا في الحفظ') } catch { toast.error('خطا في الحفظ') } }
     } catch (err: any) { toast.error('خطا في الاتصال: ' + (err.message || '')) }
     setSaving(false); setStatusMsg('')
   }
