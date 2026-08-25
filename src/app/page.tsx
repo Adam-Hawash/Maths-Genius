@@ -8,7 +8,8 @@ import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
 import { useEffect, useState, useRef } from 'react'
-import { GraduationCap, Loader2 } from 'lucide-react'
+import { GraduationCap, Loader2, ArrowUp, LogIn } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
   loading: () => <div className="min-h-[70vh] bg-[#0F0D0A]" />,
@@ -29,6 +30,10 @@ const GallerySection = dynamic(() => import('@/components/landing/GallerySection
   loading: () => <div className="h-20" />,
 })
 const LessonsSection = dynamic(() => import('@/components/landing/LessonsSection'), {
+  loading: () => <div className="h-20" />,
+  ssr: false,
+})
+const AnnouncementsSection = dynamic(() => import('@/components/landing/AnnouncementsSection'), {
   loading: () => <div className="h-20" />,
   ssr: false,
 })
@@ -53,6 +58,7 @@ var MAX_LOADING_MS = 5000
 export default function HomePage() {
   var store = useAppStore()
   var currentView = store.currentView || 'landing'
+  var setView = store.setView
   var setGalleryImages = (store as any).setGalleryImages || function(){}
   var siteConfig = store.siteConfig || {}
   var configLoaded = store.configLoaded
@@ -115,6 +121,7 @@ export default function HomePage() {
 
   const showFooter = currentView === 'landing'
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
+  const showLoginButton = currentView === 'landing'
 
   // Full-page loading screen
   if (!appReady) {
@@ -132,7 +139,7 @@ export default function HomePage() {
           </h1>
           <div className="flex items-center gap-3 justify-center">
             <Loader2 className="h-4 w-4 animate-spin text-[#C49A38]" />
-            <p className="text-white/40 text-sm">جاري التحميل...</p>
+            <p className="text-white/40 text-sm">بيحمل...</p>
           </div>
         </div>
       </div>
@@ -147,6 +154,7 @@ export default function HomePage() {
       {currentView === 'landing' && (
         <main className="flex-1">
           <HeroSection />
+          <AnnouncementsSection />
           <FeaturesGuideSection />
           <FeaturesSection />
           <GradesSection />
@@ -175,6 +183,18 @@ export default function HomePage() {
 
       {showFooter && <Footer />}
       {showWhatsApp && <WhatsAppButton />}
+
+      {/* Floating Blue Login Button */}
+      {showLoginButton && (
+        <Button
+          onClick={function() { setView('auth-login') }}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm sm:text-base px-8 py-3 rounded-full shadow-lg shadow-blue-600/25 flex items-center gap-2 transition-all duration-200 hover:shadow-blue-600/40 hover:scale-105"
+        >
+          <LogIn className="h-4 w-4" />
+          سجل دخولك
+          <ArrowUp className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   )
 }
