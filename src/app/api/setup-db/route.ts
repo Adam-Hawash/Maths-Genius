@@ -84,7 +84,8 @@ export async function GET() {
     await addColumn('Payment', 'note', 'TEXT', "DEFAULT ''")
     await addColumn('Payment', 'reviewedAt', 'DATETIME', '')
     await addColumn('Payment', 'reviewedBy', 'TEXT', "DEFAULT ''")
-
+    // Add missing UNIQUE constraints
+    try { await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_result_unique ON ExamResult(studentId, examId)'); results.push({ index: 'ExamResult(studentId,examId)', ok: true }) } catch(e: any) { results.push({ index: 'ExamResult(studentId,examId)', ok: false, error: e.message }) }
     // Fix NULLs
     var fixes = [
       'UPDATE Student SET password = \'\' WHERE password IS NULL',
