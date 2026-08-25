@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +21,8 @@ export async function POST(request: NextRequest) {
       console.error('GEMINI_API_KEY is empty')
       return NextResponse.json({ error: 'مفتاح Gemini غير موجود في Environment Variables' }, { status: 500 })
     }
+
+    console.log('AI Extract: file=' + (file ? file.name + ' (' + file.size + ' bytes)' : 'none') + ' fileUrl=' + fileUrl + ' type=' + type + ' grade=' + grade)
 
     var base64Data = ''
     var mimeType = ''
@@ -48,20 +51,26 @@ export async function POST(request: NextRequest) {
     var parts: any[] = [{ text: prompt }]
     parts.push({ inlineData: { mimeType: mimeType.includes('pdf') ? 'application/pdf' : mimeType, data: base64Data } })
 
-    var models = ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash']
+    var models = ['gemini-2.0-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-1.5-pro', 'gemini-1.5-flash']
     var geminiRes: Response | null = null
     var lastError = ''
 
     for (var mi = 0; mi < models.length; mi++) {
       try {
         var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[mi] + ':generateContent?key=' + apiKey
+        console.log('AI Extract: trying model ' + models[mi] + '...')
         geminiRes = await fetch(modelUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } }),
         })
-        if (geminiRes.ok) break
-        lastError = 'Model ' + models[mi] + ' returned ' + geminiRes.status
+        if (geminiRes.ok) {
+          console.log('AI Extract: model ' + models[mi] + ' succeeded!')
+          break
+        }
+        var errBody = ''
+        try { errBody = await geminiRes.text() } catch(e) {}
+        lastError = 'Model ' + models[mi] + ' returned ' + geminiRes.status + ': ' + errBody.substring(0, 200)
         console.error(lastError)
       } catch (e: any) {
         lastError = 'Model ' + models[mi] + ' error: ' + (e.message || '')
@@ -71,21 +80,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (!geminiRes || !geminiRes.ok) {
-      var errText = ''
-      try { errText = await geminiRes!.text() } catch (e) {}
-      console.error('All Gemini models failed. Last:', lastError, errText)
-      return NextResponse.json({ error: 'خطأ من Gemini: ' + lastError }, { status: 500 })
+      console.error('All Gemini models failed. Last:', lastError)
+      return NextResponse.json({ error: 'خطأ من Gemini: ' + lastError.substring(0, 300) }, { status: 500 })
     }
 
     var geminiData = await geminiRes.json()
     var text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
     if (!text.trim()) {
-      return NextResponse.json({ error: 'لم يتم استخراج أي نص من الملف' }, { status: 500 })
+      var blockReason = geminiData.candidates?.[0]?.finishReason || ''
+      return NextResponse.json({ error: 'لم يتم استخراج أي نص من الملف' + (blockReason ? ' (سبب: ' + blockReason + ')' : '') }, { status: 500 })
     }
 
     var jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return NextResponse.json({ error: 'لم يتم التعرف على JSON في رد Gemini' }, { status: 500 })
+      return NextResponse.json({ error: 'لم يتم التعرف على JSON في رد Gemini. الرد: ' + text.substring(0, 200) }, { status: 500 })
     }
 
     var extracted = JSON.parse(jsonMatch[0])
