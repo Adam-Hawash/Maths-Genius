@@ -42,16 +42,13 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
   if (loading) return <div className="p-12 text-center font-bold text-slate-600">جاري تحميل الدرس...</div>;
   if (!video) return <div className="p-12 text-center text-red-500 font-bold">الفيديو غير موجود</div>;
 
-  // التحقق الحاسم من إمكانية المشاهدة:
   const isFreeVideo = !video.price || Number(video.price) === 0;
   const hasFreePass = student?.isPaidAccess === true || student?.role === "admin";
   const isPurchased = video.isPurchased === true;
-
-  // إذا لم يكن مجانياً ولم يدفع الطالب، يتم قفل الفيديو تماماً
   const isLocked = !isFreeVideo && !hasFreePass && !isPurchased;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 py-8 space-y-6" dir="rtl">
       <Link href="/videos" className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-blue-600">
         <ArrowRight className="w-4 h-4" /> العودة للمكتبة
       </Link>
@@ -59,7 +56,7 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
         <div>
           <span className="text-xs bg-blue-100 text-blue-800 font-bold px-3 py-1 rounded-lg">
-            {video.grade || "الصف الثالث الاعدادي"}
+            {video.grade || "الصف الثالث الثانوي"}
           </span>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">{video.title}</h1>
         </div>
@@ -72,14 +69,13 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
           ) : isFreeVideo ? (
             <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-xl font-bold text-xs">درس مجاني</span>
           ) : (
-            <span className="bg-amber-100 text-amber-900 px-3.5 py-1.5 rounded-xl font-bold text-xs">
+            <span className="bg-amber-100 text-amber-900 px-3 py-1 rounded-xl font-bold text-xs">
               سعر الدرس: {video.price} ج.م
             </span>
           )}
         </div>
       </div>
 
-      {/* منطقة المشغل / أو القفل */}
       <div className="bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border border-slate-800">
         {isLocked ? (
           <div className="aspect-video flex flex-col items-center justify-center p-8 text-center text-white space-y-4">
