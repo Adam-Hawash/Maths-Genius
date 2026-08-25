@@ -10,14 +10,20 @@ export default function StudentHomePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let currentStudent: any = null;
     try {
       const stored = localStorage.getItem("mg_student") || localStorage.getItem("student") || localStorage.getItem("user");
-      if (stored) setStudent(JSON.parse(stored));
+      if (stored) {
+        currentStudent = JSON.parse(stored);
+        setStudent(currentStudent);
+      }
     } catch (e) {}
 
     async function loadVideos() {
       try {
-        const res = await fetch("/api/videos");
+        // The API needs studentId to report which paid lessons are unlocked.
+        const sId = currentStudent?.id || "";
+        const res = await fetch(`/api/videos?pageSize=100${sId ? `&studentId=${sId}` : ""}`);
         if (res.ok) {
           const data = await res.json();
           setVideos(Array.isArray(data) ? data : data.videos || []);

@@ -11,12 +11,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'videoId and studentId required' }, { status: 400 })
     }
 
-    await db.$executeRawUnsafe(
-      `INSERT OR IGNORE INTO VideoAccess (id, studentId, videoId, grantedAt) VALUES (?, ?, ?, datetime('now'))`,
-      'va_' + videoId + '_' + studentId, studentId, videoId
-    )
+    // Use Prisma instead of raw SQL: the old query wrote to a "grantedAt"
+    // column that does not exist in the schema (it is createdAt).
+    const access = await db.videoAccess.upsert({
+      where: { videoId_studentId: { videoId, studentId } },
+      update: {},
+      create: { videoId, studentId },
+    })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, access })
   } catch (error) {
     console.error('Grant access error:', error)
     return NextResponse.json({ error: 'Failed to grant access' }, { status: 500 })

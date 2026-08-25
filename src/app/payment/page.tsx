@@ -62,7 +62,8 @@ function PaymentContent() {
       const res = await fetch(`/api/payments?studentId=${sId}`);
       if (res.ok) {
         const data = await res.json();
-        setMyPayments(data);
+        // The API returns { payments, counts }, not a bare array.
+        setMyPayments(Array.isArray(data) ? data : data.payments || []);
       }
     } catch (e) {
       console.error(e);
@@ -91,8 +92,18 @@ function PaymentContent() {
     setErrorMsg("");
     setSuccessMsg("");
 
+    if (!student?.id) {
+      setErrorMsg("يجب تسجيل الدخول بحسابك أولاً قبل إرسال إيصال الدفع.");
+      return;
+    }
+
     if (!studentPhone) {
       setErrorMsg("يرجى إدخال رقم الهاتف");
+      return;
+    }
+
+    if (!receiptImage) {
+      setErrorMsg("يرجى رفع صورة إيصال التحويل.");
       return;
     }
 

@@ -42,7 +42,8 @@ export function StudentPortal() {
     ;(async () => {
       try {
         const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes, payRes, accessRes, progressRes] = await Promise.all([
-          fetch(`/api/videos?grade=${encodeURIComponent(grade)}&pageSize=100`).then(r => r.json()),
+          // studentId is required so the API returns playable URLs for unlocked paid lessons.
+          fetch(`/api/videos?grade=${encodeURIComponent(grade)}&pageSize=100&studentId=${studentId}`).then(r => r.json()),
           fetch(`/api/homework?grade=${encodeURIComponent(grade)}&pageSize=50`).then(r => r.json()),
           fetch(`/api/exams?grade=${encodeURIComponent(grade)}&pageSize=50`).then(r => r.json()),
           fetch(`/api/announcements?grade=${encodeURIComponent(grade)}&pageSize=10`).then(r => r.json()),

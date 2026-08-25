@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const grade = searchParams.get('grade')
     const keyword = searchParams.get('keyword')
+    const studentId = searchParams.get('studentId') || ''
     const page = parseInt(searchParams.get('page') || '1')
     const pageSize = parseInt(searchParams.get('pageSize') || '20')
 
@@ -28,8 +29,34 @@ export async function GET(request: NextRequest) {
       db.video.count({ where }),
     ])
 
+    // Work out which paid videos this student already owns so the client can
+    // render unlock state without ever receiving a playable URL it shouldn't.
+    const paidIds = videos.filter((v) => (v.price || 0) > 0).map((v) => v.id)
+    let ownedIds: string[] = []
+    if (studentId && paidIds.length > 0) {
+      const grants = await db.videoAccess.findMany({
+        where: { studentId, videoId: { in: paidIds } },
+        select: { videoId: true },
+      })
+      ownedIds = grants.map((g) => g.videoId)
+    }
+
+    const safeVideos = videos.map((v) => {
+      const isPaid = (v.price || 0) > 0
+      const isPurchased = !isPaid || ownedIds.indexOf(v.id) !== -1
+      return {
+        ...v,
+        // Never leak the source of a paid video the student has not unlocked.
+        url: isPurchased ? v.url : '',
+        filePath: isPurchased ? v.filePath : '',
+        isPaid,
+        isPurchased,
+        isLocked: !isPurchased,
+      }
+    })
+
     return NextResponse.json({
-      videos,
+      videos: safeVideos,
       total,
       page,
       pageSize,

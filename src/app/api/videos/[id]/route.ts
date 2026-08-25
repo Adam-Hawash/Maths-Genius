@@ -34,8 +34,12 @@ export async function GET(
     return NextResponse.json({
       ...video,
       url: isUnlocked ? video.url : null, // إخفاء الرابط تماماً عن غير المشتركين
+      filePath: isUnlocked ? video.filePath : "",
       isUnlocked,
       isLocked: !isUnlocked,
+      // The client components read `isPurchased`, so expose it under that name too.
+      isPurchased: isUnlocked,
+      isPaid: Number(video.price || 0) > 0,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
