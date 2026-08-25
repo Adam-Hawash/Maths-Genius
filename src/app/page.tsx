@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Lock, CreditCard, Play, Video, CheckCircle2 } from "lucide-react";
-
+ 
 export default function StudentHomePage() {
   const [student, setStudent] = useState<any>(null);
   const [videos, setVideos] = useState<any[]>([]);
