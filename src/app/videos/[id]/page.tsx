@@ -4,7 +4,7 @@ import { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { Lock, CreditCard, ArrowRight, CheckCircle2 } from "lucide-react";
 
-export default function VideoViewPage({ params }: { params: Promise<{ id: string }> }) {
+export default function VideoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const videoId = resolvedParams.id;
 
@@ -42,10 +42,13 @@ export default function VideoViewPage({ params }: { params: Promise<{ id: string
   if (loading) return <div className="p-12 text-center font-bold text-slate-600">جاري تحميل الدرس...</div>;
   if (!video) return <div className="p-12 text-center text-red-500 font-bold">الفيديو غير موجود</div>;
 
+  // التحقق الحاسم من إمكانية المشاهدة:
+  const isFreeVideo = !video.price || Number(video.price) === 0;
   const hasFreePass = student?.isPaidAccess === true || student?.role === "admin";
-  const isFreeVideo = !video.price || video.price === 0;
   const isPurchased = video.isPurchased === true;
-  const isLocked = !hasFreePass && !isFreeVideo && !isPurchased;
+
+  // إذا لم يكن مجانياً ولم يدفع الطالب، يتم قفل الفيديو تماماً
+  const isLocked = !isFreeVideo && !hasFreePass && !isPurchased;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -53,23 +56,30 @@ export default function VideoViewPage({ params }: { params: Promise<{ id: string
         <ArrowRight className="w-4 h-4" /> العودة للمكتبة
       </Link>
 
-      <div className="flex flex-col sm:flex-row justify-between gap-4 border-b pb-4">
-        <h1 className="text-2xl sm:text-3xl font-black text-slate-900">{video.title}</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
+        <div>
+          <span className="text-xs bg-blue-100 text-blue-800 font-bold px-3 py-1 rounded-lg">
+            {video.grade || "الصف الثالث الاعدادي"}
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">{video.title}</h1>
+        </div>
+
         <div>
           {hasFreePass ? (
             <span className="bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-xl font-bold text-xs inline-flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> حسابك مجاني شامل
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> حسابك مفعل (اشتراك شامل)
             </span>
           ) : isFreeVideo ? (
             <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-xl font-bold text-xs">درس مجاني</span>
           ) : (
-            <span className="bg-amber-100 text-amber-900 px-3 py-1 rounded-xl font-bold text-xs">
+            <span className="bg-amber-100 text-amber-900 px-3.5 py-1.5 rounded-xl font-bold text-xs">
               سعر الدرس: {video.price} ج.م
             </span>
           )}
         </div>
       </div>
 
+      {/* منطقة المشغل / أو القفل */}
       <div className="bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border border-slate-800">
         {isLocked ? (
           <div className="aspect-video flex flex-col items-center justify-center p-8 text-center text-white space-y-4">
@@ -78,14 +88,15 @@ export default function VideoViewPage({ params }: { params: Promise<{ id: string
             </div>
             <h2 className="text-2xl font-black">هذا الدرس مقفل</h2>
             <p className="text-slate-400 text-sm">
-              سعر فتح وتفعيل هذا الفيديو: <span className="text-amber-400 font-bold text-lg">{video.price} ج.م</span>
+              لم يتم تفعيل هذا الفيديو لحسابك بعد. سعر التفعيل:{" "}
+              <span className="text-amber-400 font-bold text-lg">{video.price} ج.م</span>
             </p>
             <Link
               href={`/payment?videoId=${video.id}&price=${video.price}&title=${encodeURIComponent(video.title)}`}
               className="px-8 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-2xl text-sm transition-all inline-flex items-center gap-2 shadow-lg"
             >
               <CreditCard className="w-5 h-5" />
-              الانتقال لصفحة الدفع لفتح الفيديو
+              الانتقال لصفحة الدفع لتفعيل الدرس
             </Link>
           </div>
         ) : (
@@ -98,6 +109,7 @@ export default function VideoViewPage({ params }: { params: Promise<{ id: string
               }
               title={video.title}
               className="w-full h-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
           </div>
