@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-// جلب الفيديو وفحص هل هو مقفل أم مفتوح
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -19,21 +18,27 @@ export async function GET(
     }
 
     let isUnlocked = Number(video.price || 0) <= 0;
-    if (studentId) {
-      const student = await db.student.findUnique({ where: { id: studentId } });
-      if (student?.isPaidAccess) {
-        isUnlocked = true;
-      } else {
-        const access = await db.videoAccess.findUnique({
-          where: { videoId_studentId: { videoId: id, studentId } },
+
+    if (studentId && !isUnlocked) {
+      // فقط نشوف لو في payment مقبول أو access مخصص لهذا الفيديو بالذات
+      // مش بنعتمد على isPaidAccess لأن ده للاشتراك الشامل فقط
+      const access = await db.videoAccess.findUnique({
+        where: { videoId_studentId: { videoId: id, studentId } },
+      });
+      if (access) isUnlocked = true;
+
+      // كمان نشوف لو في payment مقبول للفيديو ده
+      if (!isUnlocked) {
+        const approvedPayment = await db.payment.findFirst({
+          where: { studentId, videoId: id, status: 'approved' },
         });
-        if (access) isUnlocked = true;
+        if (approvedPayment) isUnlocked = true;
       }
     }
 
     return NextResponse.json({
       ...video,
-      url: isUnlocked ? video.url : null, // إخفاء الرابط تماماً عن غير المشتركين
+      url: isUnlocked ? video.url : null,
       isUnlocked,
       isLocked: !isUnlocked,
     });
@@ -42,7 +47,6 @@ export async function GET(
   }
 }
 
-// تعديل الفيديو
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -63,20 +67,16 @@ export async function PATCH(
   }
 }
 
-// حذف الفيديو بنجاح 100%
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-
-    // حذف العمليات المرتبطة بالفيديو أولاً لمنع تعارض قاعدة البيانات
     try {
       await db.videoAccess.deleteMany({ where: { videoId: id } });
       await db.videoProgress.deleteMany({ where: { videoId: id } });
     } catch (e) {}
-
     await db.video.delete({ where: { id } });
     return NextResponse.json({ success: true, message: "تم حذف الفيديو بنجاح" });
   } catch (error: any) {
