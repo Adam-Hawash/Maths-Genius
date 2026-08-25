@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const runtime = 'nodejs'
+
 export async function POST(request: NextRequest) {
   try {
     var formData = await request.formData()
@@ -13,6 +15,11 @@ export async function POST(request: NextRequest) {
     }
 
     var apiKey = process.env.GEMINI_API_KEY || ''
+
+    if (!apiKey) {
+      console.error('GEMINI_API_KEY is empty')
+      return NextResponse.json({ error: 'مفتاح Gemini غير موجود في Environment Variables' }, { status: 500 })
+    }
 
     var base64Data = ''
     var mimeType = ''
@@ -41,37 +48,33 @@ export async function POST(request: NextRequest) {
     var parts: any[] = [{ text: prompt }]
     parts.push({ inlineData: { mimeType: mimeType.includes('pdf') ? 'application/pdf' : mimeType, data: base64Data } })
 
-    // المحاولة الأولى: gemini-2.0-flash
-    var geminiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } }),
-    })
+    var models = ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash']
+    var geminiRes: Response | null = null
+    var lastError = ''
 
-    // لو gemini-2.0-flash فشل، جرب gemini-1.5-pro
-    if (!geminiRes.ok) {
-      console.error('gemini-2.0-flash failed, trying gemini-1.5-pro:', geminiRes.status)
-      geminiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=' + apiKey, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } }),
-      })
+    for (var mi = 0; mi < models.length; mi++) {
+      try {
+        var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[mi] + ':generateContent?key=' + apiKey
+        geminiRes = await fetch(modelUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } }),
+        })
+        if (geminiRes.ok) break
+        lastError = 'Model ' + models[mi] + ' returned ' + geminiRes.status
+        console.error(lastError)
+      } catch (e: any) {
+        lastError = 'Model ' + models[mi] + ' error: ' + (e.message || '')
+        console.error(lastError)
+        geminiRes = null
+      }
     }
 
-    // لو gemini-1.5-pro فشل كمان، جرب gemini-1.5-flash
-    if (!geminiRes.ok) {
-      console.error('gemini-1.5-pro failed, trying gemini-1.5-flash:', geminiRes.status)
-      geminiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } }),
-      })
-    }
-
-    if (!geminiRes.ok) {
-      var errText = await geminiRes.text()
-      console.error('All Gemini models failed:', errText)
-      return NextResponse.json({ error: 'خطأ من Gemini — تأكد إن GEMINI_API_KEY صحيح في Environment Variables' }, { status: 500 })
+    if (!geminiRes || !geminiRes.ok) {
+      var errText = ''
+      try { errText = await geminiRes!.text() } catch (e) {}
+      console.error('All Gemini models failed. Last:', lastError, errText)
+      return NextResponse.json({ error: 'خطأ من Gemini: ' + lastError }, { status: 500 })
     }
 
     var geminiData = await geminiRes.json()
