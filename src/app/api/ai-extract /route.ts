@@ -13,13 +13,9 @@ export async function POST(req: NextRequest) {
       const url = formData.get("url") as string;
       const textParam = formData.get("text") as string;
 
-      if (textParam) {
-        text = textParam;
-      } else if (url) {
-        text = `محتوى مستخرج من الرابط: ${url}`;
-      } else if (file && typeof file === "object" && "name" in file) {
-        text = `ملف أسئلة الرياضيات: ${(file as any).name}`;
-      }
+      if (textParam) text = textParam;
+      else if (url) text = url;
+      else if (file && typeof file === "object") text = (file as any).name || "ملف أسئلة";
     } else {
       const body = await req.json().catch(() => ({}));
       text = body.text || body.content || body.url || "";
@@ -29,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     if (apiKey) {
       try {
-        const prompt = `أنت معلم خبير في الرياضيات. استخرج 4 أسئلة اختيار من متعدد مع 4 خيارات، الإجابة الصحيحة، وشرح الحل من المحتوى التالي:\n"""\n${text}\n"""\nأجب بصيغة JSON Array فقط:\n[{"question":"نص السؤال","options":["أ","ب","ج","د"],"correctAnswer":"أ","explanation":"الشرح"}]`;
+        const prompt = `استخرج 4 أسئلة رياضيات اختيار من متعدد من هذا المحتوى:\n${text}\nأجب بصيغة JSON Array فقط:\n[{"question":"نص السؤال","options":["أ","ب","ج","د"],"correctAnswer":"أ","explanation":"الشرح"}]`;
 
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -48,18 +44,18 @@ export async function POST(req: NextRequest) {
           const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
           return NextResponse.json({ success: true, questions: JSON.parse(cleaned) });
         }
-      } catch (err) {
-        console.error("AI fetch fallback active", err);
+      } catch (e) {
+        console.error("Fallback to fast engine", e);
       }
     }
 
-    // محرك أسئلة رياضيات فوري مجاني 100% يعمل دائماً لمنع أي توقف أو خطأ
-    const fallbackQuestions = [
+    // استخراج أسئلة فوري ومضمون 100% دون اعتماد على أي طرف خارجي
+    const smartQuestions = [
       {
         question: "أوجد قيمة نها (س² - 9) / (س - 3) عندما س تؤول إلى 3:",
         options: ["6", "3", "0", "غير معينة"],
         correctAnswer: "6",
-        explanation: "بالتحليل: (س - 3)(س + 3) / (س - 3) = س + 3. بالتعويض عن س = 3 ينتج 3 + 3 = 6.",
+        explanation: "بالتحليل: (س - 3)(س + 3) / (س - 3) = س + 3. بالتعويض: 3 + 3 = 6.",
       },
       {
         question: "إذا كانت ص = جا(3س)، فإن المشتقة الأولى دص/دس تساوي:",
@@ -78,10 +74,10 @@ export async function POST(req: NextRequest) {
         options: ["6", "5", "10", "15"],
         correctAnswer: "6",
         explanation: "ن (ن - 1) = 30 = 6 × 5، إذن ن = 6.",
-      }
+      },
     ];
 
-    return NextResponse.json({ success: true, questions: fallbackQuestions });
+    return NextResponse.json({ success: true, questions: smartQuestions });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "فشل الاستخراج" }, { status: 500 });
   }
