@@ -17,22 +17,23 @@ model Admin {
 }
 
 model Student {
-  id           String            @id @default(cuid())
-  name         String
-  phone        String            @unique
-  password     String            @default("")
-  grade        String
-  status       String            @default("pending")
-  parentName   String            @default("")
-  parentPhone  String            @default("")
-  loginCount   Int               @default(0)
-  lastLogin    DateTime?
-  isPaidAccess Boolean           @default(false)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  examResults  ExamResult[]
-  activities   StudentActivity[]
-  payments     Payment[]
+  id               String            @id @default(cuid())
+  name             String
+  phone            String            @unique
+  password         String            @default("")
+  grade            String
+  status           String            @default("pending")
+  parentName       String            @default("")
+  parentPhone      String            @default("")
+  loginCount       Int               @default(0)
+  lastLogin        DateTime?
+  isPaidAccess     Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  examResults      ExamResult[]
+  homeworkResults  HomeworkResult[]
+  activities       StudentActivity[]
+  payments         Payment[]
 }
 
 model StudentActivity {
@@ -58,18 +59,32 @@ model Video {
 }
 
 model Homework {
-  id            String   @id @default(cuid())
+  id            String           @id @default(cuid())
   title         String
-  content       String   @default("")
-  filePath      String   @default("")
-  fileType      String   @default("")
-  thumbnail     String   @default("")
-  answerKeyPath String   @default("")
-  answerKeyType String   @default("")
+  content       String           @default("")
+  filePath      String           @default("")
+  fileType      String           @default("")
+  thumbnail     String           @default("")
+  answerKeyPath String           @default("")
+  answerKeyType String           @default("")
   grade         String
-  questions     String   @default("")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  questions     String           @default("")
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  results       HomeworkResult[]
+}
+
+model HomeworkResult {
+  id          String   @id @default(cuid())
+  homeworkId  String
+  studentId   String
+  score       Float    @default(0)
+  maxScore    Float    @default(0)
+  submittedAt DateTime @default(now())
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  homework    Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, homeworkId])
 }
 
 model Exam {
@@ -157,8 +172,8 @@ model GalleryImage {
   id        String   @id @default(cuid())
   title     String   @default("")
   filePath  String   @default("")
-  type      String   @default("image")
   videoUrl  String   @default("")
+  type      String   @default("image")
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
