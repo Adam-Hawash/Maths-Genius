@@ -33,10 +33,6 @@ const LessonsSection = dynamic(() => import('@/components/landing/LessonsSection
   loading: () => <div className="h-20" />,
   ssr: false,
 })
-const AnnouncementsSection = dynamic(() => import('@/components/landing/AnnouncementsSection'), {
-  loading: () => <div className="h-20" />,
-  ssr: false,
-})
 const WhatsAppButton = dynamic(() => import('@/components/landing/WhatsAppButton').then(m => ({ default: m.WhatsAppButton })), {
   ssr: false,
 })
