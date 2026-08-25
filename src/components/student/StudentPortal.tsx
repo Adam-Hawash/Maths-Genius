@@ -838,10 +838,20 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
                         الدرجة: {examResult.score}/{examResult.maxScore}
                       </Badge>
                     ) : hasMCQ ? (
-                      <Button size="sm" onClick={() => {
+                                          <Button size="sm" onClick={() => {
                         try {
                           const parsed = JSON.parse((exam as any).questions)
-                          setExamQuestions(parsed)
+                          var shuffled = parsed.map(function(q: any) {
+                            var correctAnswer = q.options[q.correct]
+                            var optsWithIndex = q.options.map(function(opt: string, i: number) { return { opt: opt, idx: i } })
+                            for (var i = optsWithIndex.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var tmp = optsWithIndex[i]; optsWithIndex[i] = optsWithIndex[j]; optsWithIndex[j] = tmp }
+                            var newOptions = optsWithIndex.map(function(o: any) { return o.opt })
+                            var newCorrect = 0
+                            for (var k = 0; k < newOptions.length; k++) { if (newOptions[k] === correctAnswer) { newCorrect = k; break } }
+                            return { question: q.question || q.q, options: newOptions, correct: newCorrect, points: q.points || 1 }
+                          })
+                          for (var i = shuffled.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp }
+                          setExamQuestions(shuffled)
                           setTakingExam(exam.id)
                           setAnswers({})
                         } catch { toast.error('خطأ في تحميل الأسئلة') }
