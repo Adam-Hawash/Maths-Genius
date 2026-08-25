@@ -7,17 +7,17 @@ export async function POST(req: NextRequest) {
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
-      text = (formData.get("text") as string) || (formData.get("url") as string) || "رياضيات المرحلة الثانوية";
+      text = (formData.get("text") as string) || (formData.get("url") as string) || "رياضيات";
     } else {
       const body = await req.json().catch(() => ({}));
-      text = body.text || body.content || body.url || "رياضيات المرحلة الثانوية";
+      text = body.text || body.content || body.url || "رياضيات";
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (apiKey) {
       try {
-        const prompt = `أنت معلم رياضيات خبير. استخرج 4 أسئلة اختيار من متعدد (MCQ) مع 4 خيارات والإجابة الصحيحة وشرح الحل من النص التالي:\n${text}\nأجب بصيغة JSON Array فقط:\n[{"question":"نص السؤال","options":["أ","ب","ج","د"],"correctAnswer":"أ","explanation":"شرح الحل"}]`;
+        const prompt = `أنت معلم رياضيات خبير. استخرج 4 أسئلة اختيار من متعدد (MCQ) مع 4 خيارات والإجابة الصحيحة وشرح الحل بالتفصيل من النص التالي:\n"""\n${text}\n"""\nأجب بصيغة JSON Array فقط:\n[\n  {\n    "question": "نص السؤال",\n    "options": ["أ", "ب", "ج", "د"],\n    "correctAnswer": "أ",\n    "explanation": "شرح الحل"\n  }\n]`;
 
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -36,21 +36,21 @@ export async function POST(req: NextRequest) {
           const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
           return NextResponse.json({ success: true, questions: JSON.parse(cleaned) });
         }
-      } catch (e) {
-        console.error("Gemini fallback", e);
+      } catch (err) {
+        console.error("Gemini fallback", err);
       }
     }
 
-    // بديل فوري يعمل مجاناً 100% ويمنع الـ 404
+    // بديل مجاني فوري يعمل 100%
     const fallbackQuestions = [
       {
         question: "أوجد نها (س² - 9) / (س - 3) عندما س تؤول إلى 3:",
         options: ["6", "3", "0", "غير معينة"],
         correctAnswer: "6",
-        explanation: "بالتحليل: (س - 3)(س + 3) / (س - 3) = س + 3. بالتعويض: 3 + 3 = 6.",
+        explanation: "بالتحليل: (س - 3)(س + 3) / (س - 3) = س + 3. بالتعويض عن س = 3 ينتج 6.",
       },
       {
-        question: "إذا كانت ص = جا(3س)، فإن المشتقة الأولى دص/دس تساوي:",
+        question: "إذا كانت ص = جا(3س)، فإن دص/دس تساوي:",
         options: ["3 جتا(3س)", "-3 جتا(3س)", "جتا(3س)", "3 جا(3س)"],
         correctAnswer: "3 جتا(3س)",
         explanation: "مشتقة جا(3س) = 3 جتا(3س).",
