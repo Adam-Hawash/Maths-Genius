@@ -12,8 +12,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Prevent double submission
-    const existing = await db.examResult.findUnique({
-      where: { studentId_examId: { studentId, examId } },
+      const existing = await db.examResult.findFirst({
+      where: { studentId: studentId, examId: examId },
     })
     if (existing) {
       return NextResponse.json({ error: 'تم تقديم هذا الامتحان بالفعل ولا يمكنك إعادته' }, { status: 400 })
