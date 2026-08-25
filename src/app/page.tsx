@@ -150,7 +150,6 @@ export default function HomePage() {
       {currentView === 'landing' && (
         <main className="flex-1">
           <HeroSection />
-          <AnnouncementsSection />
           <FeaturesGuideSection />
           <FeaturesSection />
           <GradesSection />
