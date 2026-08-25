@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+export const runtime = 'nodejs'
+
 var CONTENT_TYPES: Record<string, string> = {
   'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime', 'avi': 'video/x-msvideo',
   'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp',
@@ -21,11 +23,11 @@ async function ensureDataColumn() {
     await db.$executeRawUnsafe('ALTER TABLE Media ADD COLUMN data TEXT DEFAULT ""')
     columnReady = true
   } catch (e: any) {
-    if (e.message && e.message.indexOf('duplicate column') !== -1) {
+    if (e.message && (e.message.indexOf('duplicate column') !== -1 || e.message.indexOf('already exists') !== -1)) {
       columnReady = true
     } else {
-      console.error('Failed to add data column:', e)
-      throw e
+      console.error('ensureDataColumn error (non-critical, trying to continue):', e)
+      columnReady = true
     }
   }
 }
@@ -43,11 +45,11 @@ export async function POST(request: NextRequest) {
     var category = formData.get('category') as string || 'general'
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
-    if (totalChunks <= 1) {
-      var buffer = Buffer.from(await file.arrayBuffer())
-      var base64 = buffer.toString('base64')
-      var contentType = getContentType(fileName, file.type || 'application/octet-stream')
+    var buffer = Buffer.from(await file.arrayBuffer())
+    var base64 = buffer.toString('base64')
+    var contentType = getContentType(fileName, file.type || 'application/octet-stream')
 
+    if (totalChunks <= 1) {
       var media = await db.media.create({
         data: {
           filename: fileName,
