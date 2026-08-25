@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
@@ -61,7 +60,7 @@ export async function POST(request: NextRequest) {
         filePath: filePath || '',
         fileType: fileType || '',
         thumbnail: thumbnail || '',
-        price: typeof price === 'number' ? price : 0,
+        price: Number(price) || 0,
       },
     })
 
