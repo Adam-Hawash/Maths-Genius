@@ -1,131 +1,180 @@
-"use client";
- 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Lock, CreditCard, Play, Video, CheckCircle2 } from "lucide-react";
- 
-export default function StudentHomePage() {
-  const [student, setStudent] = useState<any>(null);
-  const [videos, setVideos] = useState<any[]>([]); 
-  const [loading, setLoading] = useState(true);
+'use client'
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("mg_student") || localStorage.getItem("student") || localStorage.getItem("user");
-      if (stored) setStudent(JSON.parse(stored));
-    } catch (e) {}
+import { useAppStore } from '@/stores/app-store'
+import { Navbar } from '@/components/landing/Navbar'
+import { Footer } from '@/components/landing/Footer'
+import { StudentPendingView } from '@/components/landing/StudentPendingView'
+import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
+import { LoginView, RegisterView } from '@/components/landing/AuthPages'
+import dynamic from 'next/dynamic'
+import { useEffect, useState, useRef } from 'react'
+import { GraduationCap, Loader2 } from 'lucide-react'
 
-    async function loadVideos() {
-      try {
-        const res = await fetch("/api/videos");
-        if (res.ok) {
-          const data = await res.json();
-          setVideos(Array.isArray(data) ? data : data.videos || []);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
+const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
+  loading: () => <div className="min-h-[70vh] bg-[#0F0D0A]" />,
+})
+const FeaturesGuideSection = dynamic(() => import('@/components/landing/FeaturesGuideSection'), {
+  loading: () => <div className="h-20" />,
+})
+const FeaturesSection = dynamic(() => import('@/components/landing/FeaturesSection').then(function(m) { return { default: m.FeaturesSection } }), {
+  loading: () => <div className="h-20" />,
+})
+const GradesSection = dynamic(() => import('@/components/landing/GradesSection').then(function(m) { return { default: m.GradesSection } }), {
+  loading: () => <div className="h-20" />,
+})
+const TipsSection = dynamic(() => import('@/components/landing/TipsSection'), {
+  loading: () => <div className="h-20" />,
+})
+const GallerySection = dynamic(() => import('@/components/landing/GallerySection'), {
+  loading: () => <div className="h-20" />,
+})
+const LessonsSection = dynamic(() => import('@/components/landing/LessonsSection'), {
+  loading: () => <div className="h-20" />,
+  ssr: false,
+})
+const WhatsAppButton = dynamic(() => import('@/components/landing/WhatsAppButton').then(m => ({ default: m.WhatsAppButton })), {
+  ssr: false,
+})
+const VideoProtection = dynamic(() => import('@/components/landing/VideoProtection').then(m => ({ default: m.VideoProtection })), {
+  ssr: false,
+})
+const StudentPortal = dynamic(() => import('@/components/student/StudentPortal').then(m => ({ default: m.default || m.StudentPortal })), {
+  loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
+})
+const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard').then(m => ({ default: m.default || m.AdminDashboard })), {
+  loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
+})
+
+// Minimum loading screen duration (ms)
+var MIN_LOADING_MS = 2000
+// Maximum loading screen duration - force show content even if APIs fail (ms)
+var MAX_LOADING_MS = 5000
+
+export default function HomePage() {
+  var store = useAppStore()
+  var currentView = store.currentView || 'landing'
+  var setGalleryImages = (store as any).setGalleryImages || function(){}
+  var siteConfig = store.siteConfig || {}
+  var configLoaded = store.configLoaded
+  var setSiteConfig = store.setSiteConfig
+  var setConfigLoaded = store.setConfigLoaded
+  var setStats = store.setStats
+
+  const [appReady, setAppReady] = useState(false)
+  const startTimeRef = useRef(Date.now())
+
+  // Load config + gallery + stats on mount
+  useEffect(function() {
+    var dataReady = false
+    var minTimerDone = false
+
+    // Minimum display timer - ensures loading screen shows for at least 2s
+    var minTimer = setTimeout(function() {
+      minTimerDone = true
+      if (dataReady) setAppReady(true)
+    }, MIN_LOADING_MS)
+
+    // Safety timer - force show content after 5s no matter what
+    var maxTimer = setTimeout(function() {
+      setAppReady(true)
+    }, MAX_LOADING_MS)
+
+    Promise.all([
+      fetch('/api/config').then(function(r) { return r.json() }).catch(function() { return {} }),
+      fetch('/api/gallery').then(function(r) { return r.json() }).catch(function() { return {} }),
+      fetch('/api/stats').then(function(r) { return r.json() }).catch(function() { return {} }),
+    ]).then(function(results) {
+      var cfg = results[0]
+      var gal = results[1]
+      var sta = results[2]
+      if (cfg && cfg.error && cfg.defaults) {
+        cfg = cfg.defaults
       }
-    }
-    loadVideos();
-  }, []);
+      if (cfg && !configLoaded) {
+        setSiteConfig(cfg)
+        setConfigLoaded(true)
+      }
+      if (gal && gal.images) {
+        setGalleryImages(gal.images)
+      }
+      if (sta && sta.totalStudents !== undefined) {
+        setStats(sta)
+      }
+      dataReady = true
+      if (minTimerDone) {
+        clearTimeout(maxTimer)
+        setAppReady(true)
+      }
+    })
 
-  const hasFreePass = student?.isPaidAccess === true || student?.role === "admin";
+    return function() {
+      clearTimeout(minTimer)
+      clearTimeout(maxTimer)
+    }
+  }, [])
+
+  const showFooter = currentView === 'landing'
+  const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
+
+  // Full-page loading screen
+  if (!appReady) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-[#0F0D0A] flex flex-col items-center justify-center gap-6">
+        <div className="relative">
+          <div className="absolute -inset-6 rounded-full bg-[#C49A38]/10 blur-xl" />
+          <div className="relative w-20 h-20 rounded-2xl bg-[#1A1714] border border-[#C49A38]/30 flex items-center justify-center">
+            <GraduationCap className="h-10 w-10 text-[#E5BE5A]" />
+          </div>
+        </div>
+        <div className="text-center space-y-3">
+          <h1 className="text-2xl font-bold text-white tracking-wide">
+            <span className="text-[#E5BE5A]">Maths</span> Genius
+          </h1>
+          <div className="flex items-center gap-3 justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-[#C49A38]" />
+            <p className="text-white/40 text-sm">جاري التحميل...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8" dir="rtl">
-      {/* رأس الصفحة */}
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900">
-            مرحباً، {student?.name || "طالبنا المتميز"} 👋
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">منصة الرياضيات التعليمية</p>
-        </div>
+    <div className="min-h-screen flex flex-col">
+      <VideoProtection />
+      <Navbar />
 
-        <div>
-          {hasFreePass ? (
-            <span className="bg-emerald-100 text-emerald-800 px-4 py-2 rounded-2xl font-black text-xs inline-flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> اشتراك شامل مفعّل ✓
-            </span>
-          ) : (
-            <span className="bg-amber-100 text-amber-900 px-4 py-2 rounded-2xl font-black text-xs inline-flex items-center gap-1.5">
-              الحساب: نظام الدفع لكل درس
-            </span>
-          )}
-        </div>
-      </div>
+      {currentView === 'landing' && (
+        <main className="flex-1">
+          <HeroSection />
+          <FeaturesGuideSection />
+          <FeaturesSection />
+          <GradesSection />
+          <LessonsSection />
+          <TipsSection />
+          <GallerySection />
+        </main>
+      )}
 
-      {/* قائمة الفيديوهات المقفولة والمفتوحة */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <Video className="w-5 h-5 text-blue-600" /> المحاضرات والدروس
-          </h2>
-          <Link href="/videos" className="text-sm font-bold text-blue-600 hover:underline">
-            عرض الكل
-          </Link>
-        </div>
+      {currentView === 'auth-login' && (
+        <main className="flex-1">
+          <LoginView />
+        </main>
+      )}
 
-        {loading ? (
-          <div className="p-12 text-center text-slate-500 font-bold">جاري تحميل الدروس...</div>
-        ) : videos.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 bg-white rounded-3xl border">لا توجد دروس حالياً</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {videos.map((vid) => {
-              const isFree = !vid.price || Number(vid.price) === 0;
-              const isUnlocked = hasFreePass || isFree || vid.isPurchased;
+      {currentView === 'auth-register' && (
+        <main className="flex-1">
+          <RegisterView />
+        </main>
+      )}
 
-              return (
-                <div key={vid.id} className="bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-sm flex flex-col justify-between">
-                  {/* شاشة الفيديو */}
-                  <div className="aspect-video bg-slate-950 relative flex items-center justify-center text-white">
-                    {isUnlocked ? (
-                      <Link href={`/videos/${vid.id}`} className="flex flex-col items-center gap-2 hover:scale-105 transition-all">
-                        <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                          <Play className="w-6 h-6 fill-white" />
-                        </div>
-                        <span className="text-xs font-bold">مشاهدة الدرس</span>
-                      </Link>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2 text-red-400">
-                        <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center border border-red-500/30">
-                          <Lock className="w-6 h-6" />
-                        </div>
-                        <span className="text-xs font-black text-amber-400">درس مدفوع ({vid.price} ج.م)</span>
-                      </div>
-                    )}
-                  </div>
+      {currentView === 'student-pending' && <StudentPendingView />}
+      {currentView === 'student-portal' && <StudentPortal />}
+      {currentView === 'student-payment' && <StudentPaymentView />}
+      {currentView === 'admin-dashboard' && <AdminDashboard />}
 
-                  {/* التفاصيل والأزرار */}
-                  <div className="p-5 space-y-3">
-                    <h3 className="font-black text-slate-900 line-clamp-1">{vid.title}</h3>
-                    <div>
-                      {isUnlocked ? (
-                        <Link
-                          href={`/videos/${vid.id}`}
-                          className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
-                        >
-                          <Play className="w-3.5 h-3.5" /> فتح ومشاهدة
-                        </Link>
-                      ) : (
-                        <Link
-                          href={`/payment?videoId=${vid.id}&price=${vid.price}&title=${encodeURIComponent(vid.title)}`}
-                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
-                        >
-                          <CreditCard className="w-3.5 h-3.5" /> شراء وتفعيل الدرس ({vid.price} ج.م)
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {showFooter && <Footer />}
+      {showWhatsApp && <WhatsAppButton />}
     </div>
-  );
+  )
 }
