@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
+// جلب الفيديو وفحص هل هو مقفل أم مفتوح
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,7 +18,7 @@ export async function GET(
       return NextResponse.json({ error: "الفيديو غير موجود" }, { status: 404 });
     }
 
-    let isUnlocked = video.price <= 0;
+    let isUnlocked = Number(video.price || 0) <= 0;
     if (studentId) {
       const student = await db.student.findUnique({ where: { id: studentId } });
       if (student?.isPaidAccess) {
@@ -30,6 +33,7 @@ export async function GET(
 
     return NextResponse.json({
       ...video,
+      url: isUnlocked ? video.url : null, // إخفاء الرابط تماماً عن غير المشتركين
       isUnlocked,
       isLocked: !isUnlocked,
     });
@@ -38,6 +42,7 @@ export async function GET(
   }
 }
 
+// تعديل الفيديو
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -58,21 +63,22 @@ export async function PATCH(
   }
 }
 
+// حذف الفيديو بنجاح 100%
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    
-    // حذف أي سجلات مرتبطة لتجنب قيود قاعدة البيانات
+
+    // حذف العمليات المرتبطة بالفيديو أولاً لمنع تعارض قاعدة البيانات
     try {
       await db.videoAccess.deleteMany({ where: { videoId: id } });
       await db.videoProgress.deleteMany({ where: { videoId: id } });
     } catch (e) {}
 
     await db.video.delete({ where: { id } });
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message: "تم حذف الفيديو بنجاح" });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
