@@ -14,7 +14,7 @@ const GRADES = [
   'الصف الأول الاعدادي',
   'الصف الثاني الاعدادي',
   'الصف الثالث الاعدادي',
-  'اولي باكالوريا',
+    'اولي باكالوريا',
 ]
 
 export function CommunityPanel() {
@@ -186,7 +186,7 @@ export function CommunityPanel() {
                               <p className={`text-xs font-semibold ${isAdmin ? 'text-sky-600 dark:text-sky-400' : 'text-foreground'}`}>
                                 {d.studentName}
                               </p>
-                              {isAdmin && <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-sky-300/40 text-sky-600">المستر</Badge>}
+                              {isAdmin && <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-sky-300/40 text-sky-600">admin</Badge>}
                             </div>
 
                             {isEditing ? (
