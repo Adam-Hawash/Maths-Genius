@@ -1,13 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/exam-results?examId=xxx - Get results for an exam with analytics
+// GET /api/exam-results?examId=xxx OR ?studentId=xxx
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const examId = searchParams.get('examId')
+  const studentId = searchParams.get('studentId')
 
+  // === Student view: return this student's results ===
+  if (studentId) {
+    try {
+      const results = await db.examResult.findMany({
+        where: { studentId },
+        orderBy: { submittedAt: 'desc' },
+      })
+      // Enrich with exam title and passScore
+      const examIds = [...new Set(results.map((r: any) => r.examId))]
+      const exams = examIds.length > 0
+        ? await db.exam.findMany({ where: { id: { in: examIds } }, select: { id: true, title: true, passScore: true } })
+        : []
+      const examMap = Object.fromEntries(exams.map((e: any) => [e.id, e]))
+      const enriched = results.map((r: any) => ({
+        id: r.id,
+        examId: r.examId,
+        studentId: r.studentId,
+        score: r.score,
+        maxScore: r.maxScore,
+        submittedAt: r.submittedAt,
+        examTitle: examMap[r.examId]?.title || '',
+        passScore: examMap[r.examId]?.passScore || 50,
+        passed: r.score >= (examMap[r.examId]?.passScore || 50),
+      }))
+      return NextResponse.json({ results: enriched })
+    } catch (error) {
+      console.error('Exam results student error:', error)
+      return NextResponse.json({ error: 'Failed to fetch results' }, { status: 500 })
+    }
+  }
+
+  // === Admin view: return all results for an exam ===
   if (!examId) {
-    return NextResponse.json({ error: 'examId required' }, { status: 400 })
+    return NextResponse.json({ error: 'examId or studentId required' }, { status: 400 })
   }
 
   try {
@@ -17,7 +50,6 @@ export async function GET(request: NextRequest) {
       orderBy: { submittedAt: 'desc' },
     })
 
-    // Get all approved students in the exam's grade who haven't submitted
     const exam = await db.exam.findUnique({ where: { id: examId } })
     const submittedStudentIds = new Set(results.map((r: any) => r.studentId))
     const notTaken = exam ? await db.student.findMany({
@@ -25,7 +57,6 @@ export async function GET(request: NextRequest) {
       select: { id: true, name: true, phone: true },
     }) : []
 
-    // Analyze most-missed questions
     const questionMisses: Record<number, { question: string; total: number; wrong: number }> = {}
     results.forEach((r: any) => {
       if (r.details) {
@@ -42,8 +73,8 @@ export async function GET(request: NextRequest) {
       }
     })
     const mostMissed = Object.values(questionMisses)
-      .filter(q => q.wrong > 0)
-      .sort((a, b) => b.wrong - a.wrong)
+      .filter((q: any) => q.wrong > 0)
+      .sort((a: any, b: any) => b.wrong - a.wrong)
 
     return NextResponse.json({ results, notTaken, mostMissed })
   } catch (error) {
