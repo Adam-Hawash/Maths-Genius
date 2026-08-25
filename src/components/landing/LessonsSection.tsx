@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAppStore, GRADES } from '@/stores/app-store'
 import { Badge } from '@/components/ui/badge'
-import { BookOpen, Lock, PlayCircle, ChevronRight, ChevronLeft } from 'lucide-react'
+import { BookOpen, PlayCircle, ChevronRight, ChevronLeft } from 'lucide-react'
 import Image from 'next/image'
 
 export default function LessonsSection() {
@@ -193,7 +193,7 @@ export default function LessonsSection() {
                       }
                     >
                       {/* Thumbnail */}
-                      <div className={isCenter ? 'relative aspect-[4/3] bg-black/50' : 'relative aspect-[4/3] bg-black/50'}>
+                      <div className="relative aspect-[4/3] bg-black/50 overflow-hidden">
                         {thumb ? (
                           <Image
                             src={thumb}
@@ -209,30 +209,6 @@ export default function LessonsSection() {
                           </div>
                         )}
 
-                        {/* Lock Overlay */}
-                        <div
-                          className={
-                            'absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ' +
-                            (isCenter ? 'opacity-80' : 'opacity-50')
-                          }
-                        >
-                          <div className="w-14 h-14 rounded-full bg-[#C49A38]/90 flex items-center justify-center shadow-lg">
-                            <Lock className="h-7 w-7 text-white" />
-                          </div>
-                        </div>
-
-                        {/* Price Badge */}
-                        {v.price > 0 && (
-                          <Badge className="absolute top-3 left-3 bg-[#C49A38] text-white border-0 text-xs font-bold">
-                            {v.price} ج.م
-                          </Badge>
-                        )}
-                        {v.price === 0 && (
-                          <Badge className="absolute top-3 left-3 bg-teal-500/90 text-white border-0 text-xs font-bold">
-                            مجاني
-                          </Badge>
-                        )}
-
                         {/* Play Icon overlay for center card */}
                         {isCenter && (
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -243,31 +219,25 @@ export default function LessonsSection() {
                         )}
                       </div>
 
-                      {/* Info */}
-                      <div className={isCenter ? 'p-4 space-y-2' : 'p-3 space-y-1.5'}>
+                      {/* Info - only title + grade */}
+                      <div className={isCenter ? 'p-3 space-y-1.5' : 'p-2.5 space-y-1'}>
                         <p
                           className={
                             'font-bold truncate transition-colors ' +
-                            (isCenter ? 'text-base text-white' : 'text-sm text-white/70')
+                            (isCenter ? 'text-sm text-white' : 'text-xs text-white/70')
                           }
                         >
                           {v.title}
                         </p>
-                        <div className="flex items-center justify-between">
-                          <Badge
-                            variant="outline"
-                            className={
-                              'border-[#C49A38]/30 text-[#C49A38] ' +
-                              (isCenter ? 'text-xs' : 'text-[10px]')
-                            }
-                          >
-                            {v.grade}
-                          </Badge>
-                          <div className="flex items-center gap-1 text-[10px] text-white/30">
-                            <Lock className="h-3 w-3" />
-                            <span>سجل دخولك</span>
-                          </div>
-                        </div>
+                        <Badge
+                          variant="outline"
+                          className={
+                            'border-[#C49A38]/30 text-[#C49A38] ' +
+                            (isCenter ? 'text-[10px]' : 'text-[9px]')
+                          }
+                        >
+                          {v.grade}
+                        </Badge>
                       </div>
                     </div>
                   </div>
