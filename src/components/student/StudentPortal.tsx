@@ -336,7 +336,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         const hasApprovedPayment = approvedVideoIds.has(video.id)
         // A paid account is not a purchase grant. Every priced video stays locked
         // until this specific video has an approved payment/access record.
-        const needsPay = hasPrice && !hasApprovedPayment
+        const needsPay = hasPrice && !hasApprovedPayment && !isFreeStudent
         const progress = videoProgress[video.id] || 0
 
         return (
