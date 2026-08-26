@@ -46,9 +46,7 @@ const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard')
   loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
 })
 
-// Minimum loading screen duration (ms)
 var MIN_LOADING_MS = 2000
-// Maximum loading screen duration - force show content even if APIs fail (ms)
 var MAX_LOADING_MS = 5000
 
 export default function HomePage() {
@@ -65,18 +63,15 @@ export default function HomePage() {
   const [appReady, setAppReady] = useState(false)
   const startTimeRef = useRef(Date.now())
 
-  // Load config + gallery + stats on mount
   useEffect(function() {
     var dataReady = false
     var minTimerDone = false
 
-    // Minimum display timer - ensures loading screen shows for at least 2s
     var minTimer = setTimeout(function() {
       minTimerDone = true
       if (dataReady) setAppReady(true)
     }, MIN_LOADING_MS)
 
-    // Safety timer - force show content after 5s no matter what
     var maxTimer = setTimeout(function() {
       setAppReady(true)
     }, MAX_LOADING_MS)
@@ -119,7 +114,6 @@ export default function HomePage() {
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
   const showLoginButton = currentView === 'landing'
 
-  // Full-page loading screen
   if (!appReady) {
     return (
       <div className="fixed inset-0 z-[9999] bg-[#0F0D0A] flex flex-col items-center justify-center gap-6">
@@ -179,7 +173,6 @@ export default function HomePage() {
       {showFooter && <Footer />}
       {showWhatsApp && <WhatsAppButton />}
 
-      {/* Floating Blue Login Button */}
       {showLoginButton && (
         <Button
           onClick={function() { setView('auth-login') }}
