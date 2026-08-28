@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     var parts: any[] = [{ text: prompt }]
     parts.push({ inlineData: { mimeType: mimeType.includes('pdf') ? 'application/pdf' : mimeType, data: base64Data } })
 
-    var models = ['gemini-3.7-pro', 'gemini-3.6-pro']
+    var models = ['gemini-3.6-pro', 'gemini-3.7-pro']
     var geminiRes: Response | null = null
     var lastError = ''
 
