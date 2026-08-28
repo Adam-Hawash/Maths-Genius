@@ -32,6 +32,8 @@ export function StudentPortal() {
   const [loading, setLoading] = useState(true)
   const [showFullPortal, setShowFullPortal] = useState(false)
   const [activeTab, setActiveTab] = useState('videos')
+  const [completedExamIds, setCompletedExamIds] = useState<Set<string>>(new Set())
+  const [completedHwIds, setCompletedHwIds] = useState<Set<string>>(new Set())
 
   const grade = currentStudent?.grade || ''
   const studentId = currentStudent?.id || ''
@@ -286,8 +288,8 @@ export function StudentPortal() {
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} />}
-        {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} studentId={studentId} />}
-        {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} studentId={studentId} />}
+        {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} studentId={studentId} completedHwIds={completedHwIds} onHwSubmitted={(id) => setCompletedHwIds(prev => new Set([...prev, id]))} />}
+        {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} completedExamIds={completedExamIds} onExamSubmitted={(id) => setCompletedExamIds(prev => new Set([...prev, id]))} studentId={studentId} />}
         {activeTab === 'announcements' && <AnnouncementsTab announcements={dashboardData.announcements} />}
         {activeTab === 'discussions' && <DiscussionsTab grade={grade} studentId={studentId} studentName={currentStudent?.name || ''} />}
       </div>
@@ -642,7 +644,7 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
 }
 
 /* ========== HOMEWORK TAB ========== */
-function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId: string }) {
+function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { homework: Homework[]; studentId: string; completedHwIds: Set<string>; onHwSubmitted: (hwId: string) => void }) {
   const [expandedHw, setExpandedHw] = useState<string | null>(null)
   const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number>>>({})
   const [hwSubmitting, setHwSubmitting] = useState<string | null>(null)
@@ -672,7 +674,7 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
         var hasMCQ = Array.isArray(mcq) && mcq.length > 0
         var isExpanded = expandedHw === hw.id
         var existingResult = hwResults[hw.id]
-        var isSubmitted = !!existingResult
+        var isSubmitted = !!existingResult || completedHwIds.has(hw.id)
         var myAnswers = hwAnswers[hw.id] || {}
         var wrongQuestions = hwWrongQuestions[hw.id] || []
 
@@ -767,9 +769,10 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
                         body: JSON.stringify({ studentId, homeworkId: hw.id, answers: mappedAnswers }),
                       })
                       var data = await res.json()
-                      if (res.ok && data.result) {
+                      if ((res.ok || data.alreadySubmitted) && data.result) {
                         toast.success('تم تقديم الواجب بنجاح')
                         setHwResults(function(prev) { return { ...prev, [hw.id]: { score: data.result.score, maxScore: data.result.maxScore } } })
+                        onHwSubmitted(hw.id)
                         if (data.result.wrongQuestions && data.result.wrongQuestions.length > 0) {
                           setHwWrongQuestions(function(prev) { return { ...prev, [hw.id]: data.result.wrongQuestions } })
                         }
@@ -828,17 +831,19 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
 }
 
 /* ========== EXAMS TAB ========== */
-function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamResult[]; studentId: string }) {
+function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId }: { exams: Exam[]; results: ExamResult[]; completedExamIds: Set<string>; onExamSubmitted: (examId: string) => void; studentId: string }) {
   const [takingExam, setTakingExam] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [submitting, setSubmitting] = useState(false)
   const [examQuestions, setExamQuestions] = useState<any[]>([])
   const [examShuffleMap, setExamShuffleMap] = useState<number[]>([])
   const [examSubmitted, setExamSubmitted] = useState(false)
+  const [submittedExamId, setSubmittedExamId] = useState<string | null>(null)
+  const [checkingServer, setCheckingServer] = useState(false)
 
   if (exams.length === 0) return <EmptyState message="لا توجد امتحانات حالياً" />
 
-  // EXAM SUBMITTED SUCCESS SCREEN
+  // EXAM SUBMITTED SUCCESS SCREEN — NO window.location.reload(), NO score shown
   if (examSubmitted) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 space-y-6">
@@ -851,12 +856,15 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
         </div>
         <Button
           onClick={() => {
+            // Notify parent so exam list shows "تم تقديم الامتحان"
+            if (submittedExamId) onExamSubmitted(submittedExamId)
+            // Reset local state — NO reload, session stays intact
             setExamSubmitted(false)
+            setSubmittedExamId(null)
             setTakingExam(null)
             setAnswers({})
             setExamQuestions([])
             setExamShuffleMap([])
-            window.location.reload()
           }}
           className="mt-4"
         >
@@ -923,9 +931,12 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
                 body: JSON.stringify({ studentId, examId: takingExam, answers: mappedAnswers }),
               })
               const data = await res.json()
-              if (res.ok && data.submitted) {
-                // Show success screen - NO score revealed
+              if (res.ok && (data.submitted || data.alreadySubmitted)) {
+                // Show success screen — NO score revealed
+                setSubmittedExamId(takingExam)
                 setExamSubmitted(true)
+                // Notify parent immediately so exam list updates even if they don't click return
+                onExamSubmitted(takingExam)
               } else {
                 toast.error(data.error || 'خطأ في التقديم')
               }
@@ -944,10 +955,12 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
     <div className="space-y-3">
       {exams.map((exam) => {
         const examResult = results.find(r => r.examId === exam.id)
+        const isCompleted = examResult || completedExamIds.has(exam.id)
         let hasMCQ = false
-        try { if ((exam as any).questions) { const parsed = JSON.parse((exam as any).questions); hasMCQ = parsed.length > 0 } } catch {}
+        let parsedQuestions: any[] = []
+        try { if ((exam as any).questions) { parsedQuestions = JSON.parse((exam as any).questions); hasMCQ = parsedQuestions.length > 0 } } catch {}
         return (
-          <Card key={exam.id} className={examResult ? 'border-emerald-500/30' : ''}>
+          <Card key={exam.id} className={isCompleted ? 'border-emerald-500/30' : ''}>
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -956,27 +969,39 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
                   </div>
                   <div className="min-w-0 space-y-1.5">
                     <h3 className="font-semibold text-sm">{exam.title}</h3>
-                    {examResult ? (
+                    {isCompleted ? (
                       <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                         تم تقديم الامتحان
                       </Badge>
                     ) : hasMCQ ? (
-                      <Button size="sm" onClick={() => {
+                      <Button size="sm" disabled={checkingServer} onClick={async () => {
+                        // Double-check server before allowing start
+                        setCheckingServer(true)
                         try {
-                          const parsed = JSON.parse((exam as any).questions)
-                          // Shuffle questions uniquely per student
-                          var indices = parsed.map(function(_: any, i: number) { return i })
+                          var checkRes = await fetch('/api/exam-results?studentId=' + studentId + '&examId=' + exam.id)
+                          var checkData = await checkRes.json()
+                          if (checkData.results && checkData.results.length > 0) {
+                            onExamSubmitted(exam.id)
+                            toast.info('تم تقديم هذا الامتحان بالفعل')
+                            setCheckingServer(false)
+                            return
+                          }
+                        } catch { /* proceed anyway */ }
+                        setCheckingServer(false)
+                        // Start exam
+                        try {
+                          var indices = parsedQuestions.map(function(_: any, i: number) { return i })
                           for (var si = indices.length - 1; si > 0; si--) {
                             var sj = Math.floor(Math.random() * (si + 1))
                             var st = indices[si]; indices[si] = indices[sj]; indices[sj] = st
                           }
-                          var shuffled = indices.map(function(i: number) { return parsed[i] })
+                          var shuffled = indices.map(function(i: number) { return parsedQuestions[i] })
                           setExamQuestions(shuffled)
                           setExamShuffleMap(indices)
                           setTakingExam(exam.id)
                           setAnswers({})
                         } catch { toast.error('خطأ في تحميل الأسئلة') }
-                      }}>ابدأ الامتحان</Button>
+                      }}>{checkingServer ? <Loader2 className="h-4 w-4 animate-spin" /> : 'ابدأ الامتحان'}</Button>
                     ) : (
                       <Badge variant="secondary" className="text-xs">لم يتم بعد</Badge>
                     )}

@@ -13,17 +13,21 @@ export async function POST(request) {
     var examId = body.examId
     var answers = body.answers
 
-    if (!studentId || !examId || !answers) {
+    if (!studentId || !examId || answers === undefined || answers === null) {
       return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
     }
 
-    // Prevent double submission
+    // Prevent double submission - check DB first
     try {
       var existing = await db.examResult.findUnique({
         where: { studentId_examId: { studentId: studentId, examId: examId } },
       })
       if (existing) {
-        return NextResponse.json({ error: 'تم تقديم هذا الامتحان بالفعل', alreadySubmitted: true }, { status: 400 })
+        return NextResponse.json({ 
+          error: 'تم تقديم هذا الامتحان بالفعل', 
+          alreadySubmitted: true,
+          submitted: true 
+        }, { status: 200 })
       }
     } catch (e) {
       console.error('Check existing exam result error:', e)
@@ -78,7 +82,9 @@ export async function POST(request) {
         studentAnswer = answers[i] !== undefined ? answers[i] : answers[String(i)]
       }
 
-      if (studentAnswer !== undefined && studentAnswer === correctIdx) {
+      // Compare: student answer index vs correct answer index
+      // Both should be the original DB option indices (frontend remaps shuffled options)
+      if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === correctIdx) {
         score += pts
       } else {
         wrongQuestions.push({
