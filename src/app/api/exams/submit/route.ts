@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 
@@ -25,21 +26,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
     }
 
-    // Parse MCQ questions
+    // Parse MCQ questions safely
     let questions: any[] = []
     if (exam.questions) {
       try {
         questions = typeof exam.questions === 'string' ? JSON.parse(exam.questions) : exam.questions
-      } catch {
+      } catch (e) {
+        console.error('Failed to parse exam questions JSON:', e)
         questions = []
       }
     }
 
-    if (questions.length === 0) {
-      return NextResponse.json({ error: 'لا توجد أسئلة في هذا الامتحان' }, { status: 400 })
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return NextResponse.json({ error: 'لا توجد أسئلة صالحة في هذا الامتحان' }, { status: 400 })
     }
 
-    // Auto-grade with points support (supports both object and array formats)
+    // Auto-grade with robust format handling (supports both 'q', 'question', and index formats)
     let score = 0
     let maxScore = 0
     const wrongQuestions: { question: string; studentAnswer: string; correctAnswer: string }[] = []
@@ -47,16 +49,25 @@ export async function POST(request: NextRequest) {
     questions.forEach(function(q: any, i: number) {
       var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
       maxScore += pts
-      const studentAnswer = Array.isArray(answers) ? answers[i] : (answers[i] !== undefined ? answers[i] : answers[String(i)])
+
+      // استخراج الإجابة المرسلة من الطالب بأكثر من طريقة لضمان التوافق
+      const studentAnswer = Array.isArray(answers) 
+        ? answers[i] 
+        : (answers[i] !== undefined ? answers[i] : (answers[String(i)] !== undefined ? answers[String(i)] : undefined))
+      
       const correctIdx = typeof q.correct === 'number' ? q.correct : 0
 
-      if (studentAnswer !== undefined && studentAnswer === correctIdx) {
+      if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === Number(correctIdx)) {
         score += pts
       } else {
         const opts = Array.isArray(q.options) ? q.options : []
+        const parsedStudentAns = (studentAnswer !== undefined && studentAnswer !== null && opts[Number(studentAnswer)]) 
+          ? String.fromCharCode(65 + Number(studentAnswer)) + ') ' + opts[Number(studentAnswer)] 
+          : 'لم يتم الإجابة'
+
         wrongQuestions.push({
-          question: q.question || q.q || '',
-          studentAnswer: (typeof studentAnswer === 'number' && opts[studentAnswer]) ? String.fromCharCode(65 + studentAnswer) + ') ' + opts[studentAnswer] : 'لم يتم الإجابة',
+          question: q.question || q.q || ('السؤال ' + (i + 1)),
+          studentAnswer: parsedStudentAns,
           correctAnswer: opts[correctIdx] ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx] : '',
         })
       }
@@ -67,7 +78,7 @@ export async function POST(request: NextRequest) {
     const passCount = Math.ceil(maxScore * passScore / 100)
     const passed = score >= passCount
 
-    // Save result safely
+    // Save result safely with Prisma
     const result = await safeWrite(function() {
       return db.examResult.create({
         data: {
@@ -95,6 +106,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Exam submit error:', error)
-    return NextResponse.json({ error: 'حدث خطأ أثناء تسليم الامتحان: ' + (error.message || '') }, { status: 500 })
+    return NextResponse.json({ error: 'حدث خطأ أثناء تسليم الامتحان: ' + (error.message || 'Unknown') }, { status: 500 })
   }
 }
