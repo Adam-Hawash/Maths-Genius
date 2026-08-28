@@ -1,5 +1,5 @@
 // @ts-nocheck
-// POST /api/homework/submit - Submit homework answers, auto-grade, save result with score + wrong answers
+// POST /api/homework/submit - Submit homework answers, auto-grade, save result safely
 
 import { NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
@@ -65,7 +65,6 @@ export async function POST(request) {
     var wrongQuestions = []
 
     mcq.forEach(function(q, i) {
-      // Handle both 'q' and 'question' field names
       var qText = q.question || q.q || ''
       var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
       maxScore += pts
@@ -73,7 +72,6 @@ export async function POST(request) {
       var correctIdx = typeof q.correct === 'number' ? q.correct : 0
       if (correctIdx < 0 || correctIdx >= opts.length) { correctIdx = 0 }
 
-      // Get student answer - support both array and object formats
       var studentAnswer = undefined
       if (Array.isArray(answers)) {
         studentAnswer = answers[i]
@@ -81,7 +79,6 @@ export async function POST(request) {
         studentAnswer = answers[i] !== undefined ? answers[i] : answers[String(i)]
       }
 
-      // Compare: both indices should be original DB indices (frontend remaps shuffled)
       if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === correctIdx) {
         score += pts
       } else {
@@ -99,7 +96,7 @@ export async function POST(request) {
 
     if (maxScore === 0) { maxScore = mcq.length }
 
-    // Save result using safeWrite for Turso compatibility
+    // Save result using safeWrite (removed 'answers' field to prevent Prisma schema mismatch crash)
     var result = await safeWrite(function() {
       return db.homeworkResult.create({
         data: {
@@ -107,12 +104,10 @@ export async function POST(request) {
           homeworkId: homeworkId,
           score: score,
           maxScore: maxScore,
-          answers: JSON.stringify(answers),
         },
       })
     })
 
-    // Return result WITH score and wrong questions (student sees immediate feedback)
     return NextResponse.json({
       success: true,
       result: {
