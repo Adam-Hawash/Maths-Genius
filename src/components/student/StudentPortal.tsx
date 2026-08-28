@@ -703,9 +703,10 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
               {isExpanded && hasMCQ && !isSubmitted && (
                 <div className="mt-4 pt-4 border-t space-y-4">
                   {mcq.map(function(q: any, qi: number) {
+                    var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
                     return (
                       <div key={qi} className="space-y-2 rounded-lg p-2">
-                        <p className="font-medium text-sm">{qi + 1}. {q.question}</p>
+                        <p className="font-medium text-sm" dir="ltr" style={{ textAlign: 'left' }}>{qi + 1}. {q.question} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
                         <div className="space-y-1.5">
                           {q.options.map(function(opt: string, oi: number) {
                             var isSelected = myAnswers[qi] === oi
@@ -713,12 +714,14 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
                               <button
                                 key={oi}
                                 onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [qi]: oi }; return a }) }}
-                                className={"w-full text-right p-3 rounded-lg border text-sm transition-colors " + (
+                                className={"w-full p-3 rounded-lg border text-sm transition-colors " + (
                                   isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
                                   'border-border hover:bg-muted/50'
                                 )}
+                                dir="ltr"
+                                style={{ textAlign: 'left' }}
                               >
-                                <span className="ml-2">{String.fromCharCode(65 + oi)})</span>{opt}
+                                <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
                               </button>
                             )
                           })}
@@ -745,6 +748,36 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
                     } catch { toast.error('خطأ في الاتصال') }
                     setHwSubmitting(null)
                   }}>{hwSubmitting === hw.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم الإجابات (' + Object.keys(myAnswers).length + '/' + mcq.length + ')'}</Button>
+                </div>
+              )}
+              {isSubmitted && hasMCQ && isExpanded && (
+                <div className="mt-4 pt-4 border-t space-y-4">
+                  {mcq.map(function(q: any, qi: number) {
+                    var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+                    return (
+                      <div key={qi} className="space-y-2 rounded-lg p-2">
+                        <p className="font-medium text-sm" dir="ltr" style={{ textAlign: 'left' }}>{qi + 1}. {q.question} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
+                        <div className="space-y-1.5">
+                          {q.options.map(function(opt: string, oi: number) {
+                            var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+                            var isCorrect = oi === correctIdx
+                            return (
+                              <div
+                                key={oi}
+                                className={"w-full p-3 rounded-lg border text-sm " + (
+                                  isCorrect ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium' : 'border-border text-muted-foreground'
+                                )}
+                                dir="ltr"
+                                style={{ textAlign: 'left' }}
+                              >
+                                <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
@@ -776,26 +809,31 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
           <h3 className="font-bold">{exam.title}</h3>
           <Button variant="outline" size="sm" onClick={() => { setTakingExam(null); setAnswers({}); setExamQuestions([]) }}>رجوع</Button>
         </div>
-        {examQuestions.map((q, qi) => (
+        {examQuestions.map((q: any, qi: number) => {
+          var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+          return (
           <Card key={qi}>
             <CardContent className="p-4 space-y-3">
-              <p className="font-medium text-sm text-right">{qi + 1}. {q.question || q.q}</p>
+              <p className="font-medium text-sm" dir="ltr" style={{ textAlign: 'left' }}>{qi + 1}. {q.question || q.q} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
               <div className="space-y-2">
                 {q.options.map((opt: string, oi: number) => (
                   <button
                     key={oi}
                     onClick={() => setAnswers(prev => ({ ...prev, [qi]: oi }))}
-                    className={`w-full text-right p-3 rounded-lg border text-sm transition-colors ${
+                    className={`w-full p-3 rounded-lg border text-sm transition-colors ${
                       answers[qi] === oi ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
                     }`}
+                    dir="ltr"
+                    style={{ textAlign: 'left' }}
                   >
-                    <span className="ml-2 font-bold">{String.fromCharCode(65 + oi)}.</span> {opt}
+                    <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
                   </button>
                 ))}
               </div>
             </CardContent>
           </Card>
-        ))}
+          )
+        })}
         <Button
           className="w-full"
           disabled={Object.keys(answers).length < examQuestions.length || submitting}

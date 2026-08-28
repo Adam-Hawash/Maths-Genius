@@ -67,7 +67,7 @@ export default async function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "document.documentElement.style.backgroundColor='#09090b';window.__INITIAL_CONFIG__=" +
+              "window.__INITIAL_CONFIG__=" +
               JSON.stringify(initialConfig),
           }}
         />
