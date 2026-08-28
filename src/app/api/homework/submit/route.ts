@@ -11,9 +11,9 @@ export async function POST(request) {
     var body = await request.json()
     var studentId = body.studentId
     var homeworkId = body.homeworkId
-    var answers = body.answers // { [questionIndex]: selectedOptionIndex }
+    var answers = body.answers // { [originalDBQuestionIndex]: selectedOptionIndex }
 
-    if (!studentId || !homeworkId || !answers) {
+    if (!studentId || !homeworkId || answers === undefined || answers === null) {
       return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
     }
 
@@ -24,10 +24,10 @@ export async function POST(request) {
       })
       if (existing) {
         return NextResponse.json({
-          error: 'تم تقديم هذا الواجب بالفعل',
+          success: true,
           alreadySubmitted: true,
-          result: { score: existing.score, maxScore: existing.maxScore }
-        }, { status: 400 })
+          result: { score: existing.score, maxScore: existing.maxScore, wrongQuestions: [] },
+        }, { status: 200 })
       }
     } catch (e) {
       console.error('Check existing homework result error:', e)
@@ -81,7 +81,8 @@ export async function POST(request) {
         studentAnswer = answers[i] !== undefined ? answers[i] : answers[String(i)]
       }
 
-      if (studentAnswer !== undefined && studentAnswer === correctIdx) {
+      // Compare: both indices should be original DB indices (frontend remaps shuffled)
+      if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === correctIdx) {
         score += pts
       } else {
         wrongQuestions.push({

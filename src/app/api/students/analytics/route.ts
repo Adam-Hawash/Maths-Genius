@@ -44,8 +44,21 @@ export async function GET(request: NextRequest) {
     })
     const totalGradeExams = gradeExams.length
 
+    // Get all homework for this grade
+    const gradeHomework = await db.homework.findMany({
+      where: { grade },
+      select: { id: true, title: true },
+    })
+    const totalGradeHomework = gradeHomework.length
+    const gradeHwIds = new Set(gradeHomework.map(h => h.id))
+
     // Get exam results for all students
     const allExamResults = await db.examResult.findMany({
+      where: { studentId: { in: studentIds } },
+    })
+
+    // Get homework results for all students
+    const allHwResults = await db.homeworkResult.findMany({
       where: { studentId: { in: studentIds } },
     })
 
@@ -69,12 +82,19 @@ export async function GET(request: NextRequest) {
         return r.score >= (exam?.passScore || 50)
       }).length
 
+      // Homework stats
+      const hw = allHwResults.filter(r => r.studentId === student.id && gradeHwIds.has(r.homeworkId))
+      const hwDone = hw.length
+      const avgHwScore = hw.length > 0 ? Math.round(hw.reduce((s, r) => s + r.score, 0) / hw.length) : 0
+
       // Activity score (composite)
-      const videoScore = totalGradeVideos > 0 ? (watchedCount / totalGradeVideos) * 40 : 0
-      const examScore = totalGradeExams > 0 ? (examsTaken / totalGradeExams) * 30 : 0
-      const qualityScore = examsTaken > 0 ? (avgScore / 100) * 20 : 0
-      const loginScore = Math.min(student.loginCount, 10) * 1
-      const activityScore = Math.round(videoScore + examScore + qualityScore + loginScore)
+      const videoScore = totalGradeVideos > 0 ? (watchedCount / totalGradeVideos) * 30 : 0
+      const examScore = totalGradeExams > 0 ? (examsTaken / totalGradeExams) * 25 : 0
+      const hwScore = totalGradeHomework > 0 ? (hwDone / totalGradeHomework) * 15 : 0
+      const qualityScore = examsTaken > 0 ? (avgScore / 100) * 15 : 0
+      const hwQualityScore = hwDone > 0 ? (avgHwScore / 100) * 10 : 0
+      const loginScore = Math.min(student.loginCount, 10) * 0.5
+      const activityScore = Math.round(videoScore + examScore + hwScore + qualityScore + hwQualityScore + loginScore)
 
       return {
         ...student,
@@ -86,6 +106,9 @@ export async function GET(request: NextRequest) {
         examsPassed,
         totalExams: totalGradeExams,
         avgExamScore: avgScore,
+        homeworkDone: hwDone,
+        totalHomework: totalGradeHomework,
+        avgHwScore,
         activityScore: Math.min(activityScore, 100),
       }
     })
@@ -95,11 +118,15 @@ export async function GET(request: NextRequest) {
       totalStudents: students.length,
       totalVideos: totalGradeVideos,
       totalExams: totalGradeExams,
+      totalHomework: totalGradeHomework,
       avgWatchPercent: studentAnalytics.length > 0
         ? Math.round(studentAnalytics.reduce((s, a) => s + a.avgWatchPercent, 0) / studentAnalytics.length)
         : 0,
       avgExamScore: studentAnalytics.length > 0
         ? Math.round(studentAnalytics.reduce((s, a) => s + a.avgExamScore, 0) / studentAnalytics.length)
+        : 0,
+      avgHwScore: studentAnalytics.length > 0
+        ? Math.round(studentAnalytics.reduce((s, a) => s + (a.avgHwScore || 0), 0) / studentAnalytics.length)
         : 0,
       avgActivity: studentAnalytics.length > 0
         ? Math.round(studentAnalytics.reduce((s, a) => s + a.activityScore, 0) / studentAnalytics.length)
