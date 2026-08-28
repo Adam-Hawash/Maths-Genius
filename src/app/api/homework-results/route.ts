@@ -7,11 +7,13 @@ export async function GET(request: NextRequest) {
     var studentId = new URL(request.url).searchParams.get('studentId')
     if (!studentId) return NextResponse.json({ results: [] })
 
-    var results = await db.homeworkResult.findMany({
-      where: { studentId },
-    })
+    // Use raw SQL to avoid Prisma RETURN column mismatch
+    var rows = await db.$queryRawUnsafe(
+      'SELECT id, homeworkId, studentId, score, maxScore FROM HomeworkResult WHERE studentId = ?',
+      studentId
+    )
 
-    return NextResponse.json({ results })
+    return NextResponse.json({ results: rows || [] })
   } catch (error) {
     console.error('Homework results error:', error)
     return NextResponse.json({ results: [] })

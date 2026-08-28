@@ -2,50 +2,54 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/exam-results?examId=xxx - Admin: results for a specific exam with analytics
-// GET /api/exam-results?studentId=xxx - Student: all exam results for a student
-// GET /api/exam-results?studentId=xxx&examId=xxx - Check if student submitted specific exam
+// GET /api/exam-results?studentId=xxx&examId=yyy - Student pre-submit check (raw SQL)
+// GET /api/exam-results?studentId=xxx - Student: all exam results
+// GET /api/exam-results?examId=xxx - Admin: results for exam with analytics
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const examId = searchParams.get('examId')
   const studentId = searchParams.get('studentId')
-  const grade = searchParams.get('grade')
 
-  // Student mode: return all results for this student
+  // Student mode: all exam results for this student (raw SQL)
   if (studentId && !examId) {
     try {
-      var results = await db.examResult.findMany({
-        where: { studentId },
-        orderBy: { submittedAt: 'desc' },
-      })
-      return NextResponse.json({ results })
+      var rows = await db.$queryRawUnsafe(
+        'SELECT id, examId, studentId, score, maxScore FROM ExamResult WHERE studentId = ?',
+        studentId
+      )
+      return NextResponse.json({ results: rows || [] })
     } catch (error) {
       console.error('Student exam results error:', error)
       return NextResponse.json({ results: [] })
     }
   }
 
-  // Admin mode: results for a specific exam with analytics
+  // Student pre-submit check: specific exam + student (raw SQL)
+  if (studentId && examId) {
+    try {
+      var rows = await db.$queryRawUnsafe(
+        'SELECT id FROM ExamResult WHERE studentId = ? AND examId = ? LIMIT 1',
+        studentId, examId
+      )
+      return NextResponse.json({ results: rows || [] })
+    } catch (error) {
+      console.error('Exam result check error:', error)
+      return NextResponse.json({ results: [] })
+    }
+  }
+
+  // Admin mode: results for a specific exam with analytics (Prisma OK here - admin page)
   if (!examId) {
     return NextResponse.json({ error: 'examId required' }, { status: 400 })
   }
 
   try {
     var whereClause: any = { examId }
-    if (studentId) {
-      whereClause.studentId = studentId
-    }
-
     const results = await db.examResult.findMany({
       where: whereClause,
       include: { student: { select: { name: true, phone: true, grade: true, status: true } } },
       orderBy: { submittedAt: 'desc' },
     })
-
-    // If studentId is provided with examId, return simple result (used for pre-submit check)
-    if (studentId) {
-      return NextResponse.json({ results })
-    }
 
     // Full admin analytics
     const exam = await db.exam.findUnique({ where: { id: examId } })
@@ -55,7 +59,6 @@ export async function GET(request: NextRequest) {
       select: { id: true, name: true, phone: true },
     }) : []
 
-    // Analyze most-missed questions
     const questionMisses: Record<number, { question: string; total: number; wrong: number }> = {}
     results.forEach((r: any) => {
       if (r.details) {
