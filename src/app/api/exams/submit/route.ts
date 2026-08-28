@@ -1,85 +1,105 @@
 // @ts-nocheck
-import { NextRequest, NextResponse } from 'next/server'
+// POST /api/exams/submit - Submit exam answers, auto-grade, save result (no score returned to student)
+
+import { NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 
-// POST /api/exams/submit - Submit exam answers and auto-grade
-export async function POST(request: NextRequest) {
+export const runtime = 'nodejs'
+
+export async function POST(request) {
   try {
-    const body = await request.json()
-    const { studentId, examId, answers } = body
+    var body = await request.json()
+    var studentId = body.studentId
+    var examId = body.examId
+    var answers = body.answers
 
     if (!studentId || !examId || !answers) {
       return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
     }
 
     // Prevent double submission
-    const existing = await db.examResult.findUnique({
-      where: { studentId_examId: { studentId, examId } },
-    })
-    if (existing) {
-      return NextResponse.json({ error: 'تم تقديم هذا الامتحان بالفعل ولا يمكنك إعادته' }, { status: 400 })
+    try {
+      var existing = await db.examResult.findUnique({
+        where: { studentId_examId: { studentId: studentId, examId: examId } },
+      })
+      if (existing) {
+        return NextResponse.json({ error: 'تم تقديم هذا الامتحان بالفعل', alreadySubmitted: true }, { status: 400 })
+      }
+    } catch (e) {
+      console.error('Check existing exam result error:', e)
     }
 
-    // Fetch exam with questions
-    const exam = await db.exam.findUnique({ where: { id: examId } })
+    // Fetch exam
+    var exam = null
+    try {
+      exam = await db.exam.findUnique({ where: { id: examId } })
+    } catch (e) {
+      console.error('Fetch exam error:', e)
+      return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
+    }
     if (!exam) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
     }
 
-    // Parse MCQ questions safely
-    let questions: any[] = []
+    // Parse questions - handle both string JSON and raw array, both 'q' and 'question' fields
+    var questions = []
     if (exam.questions) {
       try {
-        questions = typeof exam.questions === 'string' ? JSON.parse(exam.questions) : exam.questions
+        var raw = typeof exam.questions === 'string' ? JSON.parse(exam.questions) : exam.questions
+        if (Array.isArray(raw)) { questions = raw }
       } catch (e) {
-        console.error('Failed to parse exam questions JSON:', e)
-        questions = []
+        console.error('Parse exam questions error:', e)
       }
     }
 
-    if (!Array.isArray(questions) || questions.length === 0) {
-      return NextResponse.json({ error: 'لا توجد أسئلة صالحة في هذا الامتحان' }, { status: 400 })
+    if (questions.length === 0) {
+      return NextResponse.json({ error: 'لا توجد أسئلة في هذا الامتحان' }, { status: 400 })
     }
 
-    // Auto-grade with robust format handling (supports both 'q', 'question', and index formats)
-    let score = 0
-    let maxScore = 0
-    const wrongQuestions: { question: string; studentAnswer: string; correctAnswer: string }[] = []
+    // Grade
+    var score = 0
+    var maxScore = 0
+    var wrongQuestions = []
 
-    questions.forEach(function(q: any, i: number) {
+    questions.forEach(function(q, i) {
+      // Handle both 'q' and 'question' field names
+      var qText = q.question || q.q || ''
       var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
       maxScore += pts
+      var opts = Array.isArray(q.options) ? q.options : []
+      var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+      if (correctIdx < 0 || correctIdx >= opts.length) { correctIdx = 0 }
 
-      // استخراج الإجابة المرسلة من الطالب بأكثر من طريقة لضمان التوافق
-      const studentAnswer = Array.isArray(answers) 
-        ? answers[i] 
-        : (answers[i] !== undefined ? answers[i] : (answers[String(i)] !== undefined ? answers[String(i)] : undefined))
-      
-      const correctIdx = typeof q.correct === 'number' ? q.correct : 0
+      // Get student answer - support both array and object formats
+      var studentAnswer = undefined
+      if (Array.isArray(answers)) {
+        studentAnswer = answers[i]
+      } else if (answers !== null && typeof answers === 'object') {
+        studentAnswer = answers[i] !== undefined ? answers[i] : answers[String(i)]
+      }
 
-      if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === Number(correctIdx)) {
+      if (studentAnswer !== undefined && studentAnswer === correctIdx) {
         score += pts
       } else {
-        const opts = Array.isArray(q.options) ? q.options : []
-        const parsedStudentAns = (studentAnswer !== undefined && studentAnswer !== null && opts[Number(studentAnswer)]) 
-          ? String.fromCharCode(65 + Number(studentAnswer)) + ') ' + opts[Number(studentAnswer)] 
-          : 'لم يتم الإجابة'
-
         wrongQuestions.push({
-          question: q.question || q.q || ('السؤال ' + (i + 1)),
-          studentAnswer: parsedStudentAns,
-          correctAnswer: opts[correctIdx] ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx] : '',
+          question: qText,
+          studentAnswer: (typeof studentAnswer === 'number' && opts[studentAnswer])
+            ? String.fromCharCode(65 + studentAnswer) + ') ' + opts[studentAnswer]
+            : 'لم يتم الإجابة',
+          correctAnswer: opts[correctIdx]
+            ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
+            : '',
         })
       }
     })
 
-    if (maxScore === 0) maxScore = questions.length
-    const passScore = exam.passScore || 50
-    const passCount = Math.ceil(maxScore * passScore / 100)
-    const passed = score >= passCount
+    if (maxScore === 0) { maxScore = questions.length }
+    var passScore = exam.passScore || 50
+    var passCount = Math.ceil(maxScore * passScore / 100)
+    var passed = score >= passCount
 
-    // Save result safely with Prisma
-    const result = await safeWrite(function() {
+    // Save result to DB using safeWrite for Turso compatibility
+    var result = await safeWrite(function() {
       return db.examResult.create({
         data: {
           studentId: studentId,
@@ -90,22 +110,15 @@ export async function POST(request: NextRequest) {
       })
     })
 
+    // Return success WITHOUT score details (student must wait for teacher)
     return NextResponse.json({
       success: true,
-      result: {
-        id: result.id,
-        studentId: result.studentId,
-        examId: result.examId,
-        score: result.score,
-        maxScore: result.maxScore,
-        passed: passed,
-        passScore: passScore,
-        wrongQuestions: wrongQuestions,
-        submittedAt: result.submittedAt,
-      },
+      submitted: true,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Exam submit error:', error)
-    return NextResponse.json({ error: 'حدث خطأ أثناء تسليم الامتحان: ' + (error.message || 'Unknown') }, { status: 500 })
+    return NextResponse.json({
+      error: 'حدث خطأ أثناء تسليم الامتحان: ' + (error && error.message ? error.message : 'Unknown')
+    }, { status: 500 })
   }
 }

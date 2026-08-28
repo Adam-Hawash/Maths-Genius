@@ -647,6 +647,7 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
   const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number>>>({})
   const [hwSubmitting, setHwSubmitting] = useState<string | null>(null)
   const [hwResults, setHwResults] = useState<Record<string, { score: number; maxScore: number }>>({})
+  const [hwWrongQuestions, setHwWrongQuestions] = useState<Record<string, { question: string; studentAnswer: string; correctAnswer: string }[]>>({})
   const hwShuffleMaps = useRef<Record<string, number[]>>({})
 
   useEffect(() => {
@@ -673,6 +674,7 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
         var existingResult = hwResults[hw.id]
         var isSubmitted = !!existingResult
         var myAnswers = hwAnswers[hw.id] || {}
+        var wrongQuestions = hwWrongQuestions[hw.id] || []
 
         // Shuffle questions uniquely per student when expanding
         var shuffleMap: number[] = []
@@ -692,14 +694,16 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
         var displayQuestions = shuffleMap.length > 0 ? shuffleMap.map(function(oi) { return mcq[oi] }) : mcq
 
         var score = 0
+        var maxScore = 0
         if (isSubmitted && hasMCQ) {
           score = existingResult.score
+          maxScore = existingResult.maxScore
         }
 
         return (
           <Card key={hw.id} className={isSubmitted ? 'border-emerald-500/30' : hasMCQ ? 'cursor-pointer' : ''}>
             <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-3" onClick={hasMCQ && !isSubmitted ? function() { setExpandedHw(isExpanded ? null : hw.id) } : undefined}>
+              <div className="flex items-start justify-between gap-3" onClick={hasMCQ ? function() { setExpandedHw(isExpanded ? null : hw.id) } : undefined}>
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (isSubmitted ? 'bg-emerald-500/10' : hasMCQ ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
                     <ClipboardList className={"h-4 w-4 " + (isSubmitted ? 'text-emerald-500' : hasMCQ ? 'text-emerald-500' : 'text-blue-500')} />
@@ -710,14 +714,15 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-[10px] text-muted-foreground">{new Date(hw.createdAt).toLocaleDateString('ar-EG')}</p>
                       {hasMCQ && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">{mcq.length} سؤال</Badge>}
-                      {isSubmitted && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {score}/{existingResult.maxScore}</Badge>}
+                      {isSubmitted && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {score}/{maxScore}</Badge>}
                     </div>
                   </div>
                 </div>
                 {hw.filePath && !hasMCQ && <FileAttachment filePath={hw.filePath} fileType={hw.fileType} />}
-                {hasMCQ && !isSubmitted && <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform shrink-0 mt-1 " + (isExpanded ? 'rotate-90' : '')} />}
+                {hasMCQ && <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform shrink-0 mt-1 " + (isExpanded ? 'rotate-90' : '')} />}
               </div>
 
+              {/* ACTIVE HOMEWORK - not yet submitted */}
               {isExpanded && hasMCQ && !isSubmitted && (
                 <div className="mt-4 pt-4 border-t space-y-4" dir="ltr">
                   {displayQuestions.map(function(q: any, di: number) {
@@ -762,10 +767,12 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
                         body: JSON.stringify({ studentId, homeworkId: hw.id, answers: mappedAnswers }),
                       })
                       var data = await res.json()
-                      if (res.ok) {
-                        toast.success('تم تقديم الواجب - الدرجة: ' + data.result.score + '/' + data.result.maxScore)
+                      if (res.ok && data.result) {
+                        toast.success('تم تقديم الواجب بنجاح')
                         setHwResults(function(prev) { return { ...prev, [hw.id]: { score: data.result.score, maxScore: data.result.maxScore } } })
-                        setExpandedHw(null)
+                        if (data.result.wrongQuestions && data.result.wrongQuestions.length > 0) {
+                          setHwWrongQuestions(function(prev) { return { ...prev, [hw.id]: data.result.wrongQuestions } })
+                        }
                       } else {
                         toast.error(data.error || 'خطأ')
                       }
@@ -774,34 +781,42 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
                   }}>{hwSubmitting === hw.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم الإجابات (' + Object.keys(myAnswers).length + '/' + mcq.length + ')'}</Button>
                 </div>
               )}
+
+              {/* SUBMITTED HOMEWORK - show score + wrong answers breakdown */}
               {isSubmitted && hasMCQ && isExpanded && (
-                <div className="mt-4 pt-4 border-t space-y-4" dir="ltr">
-                  {mcq.map(function(q: any, qi: number) {
-                    var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
-                    var qText = q.question || q.q || ''
-                    return (
-                      <div key={qi} className="space-y-2 rounded-lg p-2">
-                        <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{qi + 1}. {qText} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
-                        <div className="space-y-1.5">
-                          {q.options.map(function(opt: string, oi: number) {
-                            var correctIdx = typeof q.correct === 'number' ? q.correct : 0
-                            var isCorrect = oi === correctIdx
-                            return (
-                              <div
-                                key={oi}
-                                className={"w-full p-3 rounded-lg border text-sm " + (
-                                  isCorrect ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium' : 'border-border text-muted-foreground'
-                                )}
-                                style={{ textAlign: 'left' }}
-                              >
-                                <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
+                <div className="mt-4 pt-4 border-t space-y-4">
+                  {/* Score summary */}
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+                    <div>
+                      <p className="font-bold text-sm text-emerald-700 dark:text-emerald-400">تم تقديم الواجب بنجاح</p>
+                      <p className="text-xs text-muted-foreground">النتيجة: {score}/{maxScore}</p>
+                    </div>
+                  </div>
+
+                  {/* Wrong answers breakdown */}
+                  {wrongQuestions.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-red-600">الإجابات الخاطئة ({wrongQuestions.length}):</p>
+                      {wrongQuestions.map(function(wq, wi) {
+                        return (
+                          <Card key={wi} className="border-red-200 dark:border-red-900/40">
+                            <CardContent className="p-3 space-y-2">
+                              <p className="text-sm font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wi + 1}. {wq.question}</p>
+                              <div className="space-y-1">
+                                <p className="text-xs text-red-600">إجابتك: <span dir="ltr">{wq.studentAnswer}</span></p>
+                                <p className="text-xs text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
                               </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })}
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {wrongQuestions.length === 0 && (
+                    <p className="text-sm text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -819,9 +834,39 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
   const [submitting, setSubmitting] = useState(false)
   const [examQuestions, setExamQuestions] = useState<any[]>([])
   const [examShuffleMap, setExamShuffleMap] = useState<number[]>([])
+  const [examSubmitted, setExamSubmitted] = useState(false)
 
   if (exams.length === 0) return <EmptyState message="لا توجد امتحانات حالياً" />
 
+  // EXAM SUBMITTED SUCCESS SCREEN
+  if (examSubmitted) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-6 space-y-6">
+        <div className="h-24 w-24 rounded-full bg-emerald-500/10 flex items-center justify-center">
+          <CheckCircle2 className="h-14 w-14 text-emerald-500" />
+        </div>
+        <div className="text-center space-y-2">
+          <h2 className="text-xl font-bold text-emerald-600">تم تقديم الامتحان بنجاح</h2>
+          <p className="text-sm text-muted-foreground">انتظر النتيجة من مستر وائل خضير</p>
+        </div>
+        <Button
+          onClick={() => {
+            setExamSubmitted(false)
+            setTakingExam(null)
+            setAnswers({})
+            setExamQuestions([])
+            setExamShuffleMap([])
+            window.location.reload()
+          }}
+          className="mt-4"
+        >
+          العودة إلى صفحتك الرئيسية
+        </Button>
+      </div>
+    )
+  }
+
+  // EXAM TAKING VIEW
   if (takingExam) {
     const exam = exams.find(e => e.id === takingExam)
     if (!exam || examQuestions.length === 0) {
@@ -878,10 +923,9 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
                 body: JSON.stringify({ studentId, examId: takingExam, answers: mappedAnswers }),
               })
               const data = await res.json()
-              if (res.ok) {
-                toast.success(`الدرجة: ${data.result.score}/${data.result.maxScore} ${data.passed ? '✅ ناجح' : '❌ راسب'}`)
-                setTakingExam(null); setAnswers({}); setExamQuestions([])
-                window.location.reload()
+              if (res.ok && data.submitted) {
+                // Show success screen - NO score revealed
+                setExamSubmitted(true)
               } else {
                 toast.error(data.error || 'خطأ في التقديم')
               }
@@ -895,6 +939,7 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
     )
   }
 
+  // EXAM LIST VIEW
   return (
     <div className="space-y-3">
       {exams.map((exam) => {
@@ -912,8 +957,8 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
                   <div className="min-w-0 space-y-1.5">
                     <h3 className="font-semibold text-sm">{exam.title}</h3>
                     {examResult ? (
-                      <Badge className={`text-xs ${examResult.score >= examResult.maxScore * 0.5 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                        الدرجة: {examResult.score}/{examResult.maxScore}
+                      <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        تم تقديم الامتحان
                       </Badge>
                     ) : hasMCQ ? (
                       <Button size="sm" onClick={() => {
