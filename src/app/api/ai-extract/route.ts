@@ -83,7 +83,7 @@ export async function POST(request) {
     var parts = [{ text: prompt }]
     parts.push({ inlineData: { mimeType: mimeType, data: base64Data } })
 
-    var models = ['gemini-3.6-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-2.0-flash']
+    var models = ['gemini-3.6-pro', 'gemini-2.5-pro']
     var geminiRes = null
     var lastError = ''
 
