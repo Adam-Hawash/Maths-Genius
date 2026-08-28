@@ -3,6 +3,9 @@
 // FILE: src/app/api/ai-extract-and-save/route.ts
 // ROUTE: POST /api/ai-extract-and-save
 // PURPOSE: Extract questions from file AND save to database in one step
+//          Alternative to the 3-step flow (extract -> review -> save)
+//          Accepts: file or fileUrl, type, grade, title
+//          Uses Gemini to extract, shuffles, then saves to DB directly
 // ============================================================
 
 import { NextResponse } from 'next/server'
@@ -100,7 +103,6 @@ export async function POST(request) {
       var parts = [{ text: prompt }]
       parts.push({ inlineData: { mimeType: mimeType, data: base64Data } })
 
-      // الموديل الأساسي Gemini 3.6، والموديل الاحتياطي Gemini 2.5
       var models = ['gemini-3.6-flash', 'gemini-2.5-flash']
       var geminiRes = null
       var lastError = ''
