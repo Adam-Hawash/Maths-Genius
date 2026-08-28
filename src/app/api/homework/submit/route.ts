@@ -1,50 +1,68 @@
 // @ts-nocheck
-// POST /api/homework/submit - Submit homework answers, auto-grade, save result safely
+// POST /api/homework/submit - Submit homework answers, auto-grade, save result
+// Uses raw SQL to bypass Prisma RETURN clause issues with missing DB columns
 
 import { NextResponse } from 'next/server'
-import { db, safeWrite } from '@/lib/db'
+import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
+
+// Ensure table exists with only the columns we actually use
+async function ensureTable() {
+  try {
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS HomeworkResult (
+        id TEXT PRIMARY KEY,
+        homeworkId TEXT NOT NULL,
+        studentId TEXT NOT NULL,
+        score REAL NOT NULL DEFAULT 0,
+        maxScore REAL NOT NULL DEFAULT 100
+      )
+    `)
+  } catch (e) {
+    console.error('Ensure HomeworkResult table error:', e)
+  }
+}
 
 export async function POST(request) {
   try {
     var body = await request.json()
     var studentId = body.studentId
     var homeworkId = body.homeworkId
-    var answers = body.answers // { [originalDBQuestionIndex]: selectedOptionIndex }
+    var answers = body.answers
 
     if (!studentId || !homeworkId || answers === undefined || answers === null) {
       return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
     }
 
-    // Check double submission - use findFirst as fallback if unique constraint missing
+    // Ensure table exists before anything else
+    await ensureTable()
+
+    // Check double submission using raw SQL
     try {
-      var existing = null
-      try {
-        existing = await db.homeworkResult.findUnique({
-          where: { studentId_homeworkId: { studentId: studentId, homeworkId: homeworkId } },
-        })
-      } catch (_) {
-        // Fallback if unique constraint doesn't exist in DB
-        existing = await db.homeworkResult.findFirst({
-          where: { studentId: studentId, homeworkId: homeworkId },
-        })
-      }
-      if (existing) {
+      var existing = await db.$queryRawUnsafe(
+        'SELECT score, maxScore FROM HomeworkResult WHERE studentId = ? AND homeworkId = ? LIMIT 1',
+        studentId, homeworkId
+      )
+      if (existing && existing.length > 0) {
         return NextResponse.json({
           success: true,
           alreadySubmitted: true,
-          result: { score: existing.score, maxScore: existing.maxScore, wrongQuestions: [] },
+          result: { score: existing[0].score, maxScore: existing[0].maxScore, wrongQuestions: [] },
         }, { status: 200 })
       }
     } catch (e) {
-      console.error('Check existing homework result error:', e)
+      console.error('Check existing hw error:', e)
     }
 
-    // Fetch homework and parse questions
+    // Fetch homework using raw SQL (safer than Prisma if columns mismatch)
     var homework = null
     try {
-      homework = await db.homework.findUnique({ where: { id: homeworkId } })
+      var hwRows = await db.$queryRawUnsafe(
+        'SELECT id, title, questions FROM Homework WHERE id = ? LIMIT 1',
+        homeworkId
+      )
+      homework = hwRows && hwRows.length > 0 ? hwRows[0] : null
     } catch (e) {
       console.error('Fetch homework error:', e)
       return NextResponse.json({ error: 'الواجب غير موجود' }, { status: 404 })
@@ -104,25 +122,48 @@ export async function POST(request) {
 
     if (maxScore === 0) { maxScore = mcq.length }
 
-    // Save result using safeWrite — only fields guaranteed in DB schema
-    var result = await safeWrite(function() {
-      return db.homeworkResult.create({
-        data: {
-          studentId: studentId,
-          homeworkId: homeworkId,
-          score: score,
-          maxScore: maxScore,
-        },
-      })
-    })
+    // Save result using raw SQL — only insert columns that definitely exist
+    var resultId = 'hwr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+    try {
+      await db.$executeRawUnsafe(
+        'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore) VALUES (?, ?, ?, ?, ?)',
+        resultId, studentId, homeworkId, score, maxScore
+      )
+    } catch (insertErr) {
+      console.error('Insert homework result error:', insertErr)
+      // If INSERT fails, try creating table with more columns then retry
+      try {
+        await db.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS HomeworkResult (
+            id TEXT PRIMARY KEY,
+            homeworkId TEXT NOT NULL,
+            studentId TEXT NOT NULL,
+            score REAL NOT NULL DEFAULT 0,
+            maxScore REAL NOT NULL DEFAULT 100,
+            answers TEXT DEFAULT '',
+            submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `)
+        await db.$executeRawUnsafe(
+          'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore) VALUES (?, ?, ?, ?, ?)',
+          resultId, studentId, homeworkId, score, maxScore
+        )
+      } catch (retryErr) {
+        console.error('Retry insert homework result error:', retryErr)
+        return NextResponse.json({
+          error: 'حصلت مشكلة في حفظ النتيجة: ' + (retryErr && retryErr.message ? retryErr.message : 'Unknown')
+        }, { status: 500 })
+      }
+    }
 
+    // Return result WITH score and wrong questions
     return NextResponse.json({
       success: true,
       result: {
-        id: result.id,
-        score: result.score,
-        maxScore: result.maxScore,
-        submittedAt: result.submittedAt,
+        id: resultId,
+        score: score,
+        maxScore: maxScore,
+        submittedAt: new Date().toISOString(),
         wrongQuestions: wrongQuestions,
       },
     })

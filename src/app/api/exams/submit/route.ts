@@ -1,10 +1,28 @@
 // @ts-nocheck
-// POST /api/exams/submit - Submit exam answers, auto-grade, save result (no score returned to student)
+// POST /api/exams/submit - Submit exam answers, auto-grade, save result
+// Uses raw SQL to bypass Prisma RETURN clause issues with missing DB columns
 
 import { NextResponse } from 'next/server'
-import { db, safeWrite } from '@/lib/db'
+import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
+
+// Ensure table exists with only the columns we actually use
+async function ensureTable() {
+  try {
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ExamResult (
+        id TEXT PRIMARY KEY,
+        examId TEXT NOT NULL,
+        studentId TEXT NOT NULL,
+        score REAL NOT NULL DEFAULT 0,
+        maxScore REAL NOT NULL DEFAULT 100
+      )
+    `)
+  } catch (e) {
+    console.error('Ensure ExamResult table error:', e)
+  }
+}
 
 export async function POST(request) {
   try {
@@ -17,33 +35,34 @@ export async function POST(request) {
       return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
     }
 
-    // Prevent double submission - check DB first (fallback to findFirst if unique constraint missing)
+    // Ensure table exists
+    await ensureTable()
+
+    // Check double submission using raw SQL
     try {
-      var existing = null
-      try {
-        existing = await db.examResult.findUnique({
-          where: { studentId_examId: { studentId: studentId, examId: examId } },
-        })
-      } catch (_) {
-        existing = await db.examResult.findFirst({
-          where: { studentId: studentId, examId: examId },
-        })
-      }
-      if (existing) {
-        return NextResponse.json({ 
+      var existing = await db.$queryRawUnsafe(
+        'SELECT id FROM ExamResult WHERE studentId = ? AND examId = ? LIMIT 1',
+        studentId, examId
+      )
+      if (existing && existing.length > 0) {
+        return NextResponse.json({
           alreadySubmitted: true,
           submitted: true,
-          blocked: true
+          blocked: true,
         }, { status: 200 })
       }
     } catch (e) {
       console.error('Check existing exam result error:', e)
     }
 
-    // Fetch exam
+    // Fetch exam using raw SQL
     var exam = null
     try {
-      exam = await db.exam.findUnique({ where: { id: examId } })
+      var examRows = await db.$queryRawUnsafe(
+        'SELECT id, title, questions, passScore FROM Exam WHERE id = ? LIMIT 1',
+        examId
+      )
+      exam = examRows && examRows.length > 0 ? examRows[0] : null
     } catch (e) {
       console.error('Fetch exam error:', e)
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
@@ -52,7 +71,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
     }
 
-    // Parse questions - handle both string JSON and raw array, both 'q' and 'question' fields
+    // Parse questions
     var questions = []
     if (exam.questions) {
       try {
@@ -62,7 +81,6 @@ export async function POST(request) {
         console.error('Parse exam questions error:', e)
       }
     }
-
     if (questions.length === 0) {
       return NextResponse.json({ error: 'لا توجد أسئلة في هذا الامتحان' }, { status: 400 })
     }
@@ -70,18 +88,14 @@ export async function POST(request) {
     // Grade
     var score = 0
     var maxScore = 0
-    var wrongQuestions = []
 
     questions.forEach(function(q, i) {
-      // Handle both 'q' and 'question' field names
-      var qText = q.question || q.q || ''
       var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
       maxScore += pts
       var opts = Array.isArray(q.options) ? q.options : []
       var correctIdx = typeof q.correct === 'number' ? q.correct : 0
       if (correctIdx < 0 || correctIdx >= opts.length) { correctIdx = 0 }
 
-      // Get student answer - support both array and object formats
       var studentAnswer = undefined
       if (Array.isArray(answers)) {
         studentAnswer = answers[i]
@@ -89,41 +103,47 @@ export async function POST(request) {
         studentAnswer = answers[i] !== undefined ? answers[i] : answers[String(i)]
       }
 
-      // Compare: student answer index vs correct answer index
-      // Both should be the original DB option indices (frontend remaps shuffled options)
       if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === correctIdx) {
         score += pts
-      } else {
-        wrongQuestions.push({
-          question: qText,
-          studentAnswer: (typeof studentAnswer === 'number' && opts[studentAnswer])
-            ? String.fromCharCode(65 + studentAnswer) + ') ' + opts[studentAnswer]
-            : 'لم يتم الإجابة',
-          correctAnswer: opts[correctIdx]
-            ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
-            : '',
-        })
       }
     })
 
     if (maxScore === 0) { maxScore = questions.length }
-    var passScore = exam.passScore || 50
-    var passCount = Math.ceil(maxScore * passScore / 100)
-    var passed = score >= passCount
 
-    // Save result to DB using safeWrite for Turso compatibility
-    var result = await safeWrite(function() {
-      return db.examResult.create({
-        data: {
-          studentId: studentId,
-          examId: examId,
-          score: score,
-          maxScore: maxScore,
-        },
-      })
-    })
+    // Save result using raw SQL
+    var resultId = 'exr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+    try {
+      await db.$executeRawUnsafe(
+        'INSERT INTO ExamResult (id, studentId, examId, score, maxScore) VALUES (?, ?, ?, ?, ?)',
+        resultId, studentId, examId, score, maxScore
+      )
+    } catch (insertErr) {
+      console.error('Insert exam result error:', insertErr)
+      // Retry with full column set
+      try {
+        await db.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS ExamResult (
+            id TEXT PRIMARY KEY,
+            examId TEXT NOT NULL,
+            studentId TEXT NOT NULL,
+            score REAL NOT NULL DEFAULT 0,
+            maxScore REAL NOT NULL DEFAULT 100,
+            submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `)
+        await db.$executeRawUnsafe(
+          'INSERT INTO ExamResult (id, studentId, examId, score, maxScore) VALUES (?, ?, ?, ?, ?)',
+          resultId, studentId, examId, score, maxScore
+        )
+      } catch (retryErr) {
+        console.error('Retry insert exam result error:', retryErr)
+        return NextResponse.json({
+          error: 'حدث خطأ أثناء تسليم الامتحان: ' + (retryErr && retryErr.message ? retryErr.message : 'Unknown')
+        }, { status: 500 })
+      }
+    }
 
-    // Return success WITHOUT score details (student must wait for teacher)
+    // Return success WITHOUT score
     return NextResponse.json({
       success: true,
       submitted: true,
