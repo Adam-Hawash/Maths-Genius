@@ -1,105 +1,155 @@
-import { NextRequest, NextResponse } from 'next/server'
+// @ts-nocheck
+// FILE: src/app/api/ai-extract-youtube/route.ts
+// ROUTE: POST /api/ai-extract-youtube
+// PURPOSE: Extract questions from YouTube video using Gemini native video
+//          Returns questions ONLY (does NOT save to database)
 
-export async function POST(request: NextRequest) {
+import { NextResponse } from 'next/server'
+
+export const runtime = 'nodejs'
+export const maxDuration = 300
+
+function extractYouTubeId(url) {
+  if (!url) return null
+  var m1 = url.match(/youtu\.be\/([\w-]{11})/) ; if (m1) return m1[1]
+  var m2 = url.match(/youtube\.com\/watch\?v=([\w-]{11})/) ; if (m2) return m2[1]
+  var m3 = url.match(/youtube\.com\/embed\/([\w-]{11})/) ; if (m3) return m3[1]
+  var m4 = url.match(/youtube\.com\/shorts\/([\w-]{11})/) ; if (m4) return m4[1]
+  var m5 = url.match(/youtube\.com\/live\/([\w-]{11})/) ; if (m5) return m5[1]
+  var m6 = url.match(/youtube\.com\/v\/([\w-]{11})/) ; if (m6) return m6[1]
+  var m7 = url.match(/youtube\.com\/([\w-]{11})(?:[?\/]|$)/) ; if (m7) return m7[1]
+  return null
+}
+
+function buildPrompt(numQuestions) {
+  var lines = []
+  lines.push('You are an expert math teacher. Watch this video carefully.')
+  lines.push('')
+  lines.push('CRITICAL RULES:')
+  lines.push('- ONLY create questions based on what is actually taught/shown in this video')
+  lines.push('- Do NOT add any topic, concept, or question that does not appear in the video')
+  lines.push('- If the video covers exponents, ALL questions must be about exponents')
+  lines.push('- If the video solves specific problems, create questions about those exact same types of problems')
+  lines.push('- Use the same numbers, equations, and methods shown in the video')
+  lines.push('')
+  lines.push('Create exactly ' + numQuestions + ' MCQ questions from the video content:')
+  lines.push('- Each question: exactly 4 options')
+  lines.push('- correct = index (0, 1, 2, or 3)')
+  lines.push('- ALL text in English')
+  lines.push('- Write math using proper math symbols. Use Unicode superscripts for powers: x² for squared, x³ for cubed, x⁴ for to the power of 4. Use √ for square root, ∛ for cubic root. Use × for multiplication. Use ÷ for division. Do NOT write "squared", "cubed", "to the power of" as words. Do NOT use ^ or * symbols.')
+  lines.push('- No repeated concepts')
+  lines.push('- If the video shows solved examples, create similar questions with the same concept but different numbers')
+  lines.push('')
+  lines.push('JSON only:')
+  lines.push('{"questions": [{"question": "...", "options": ["A", "B", "C", "D"], "correct": 0}]}')
+  return lines.join('\n')
+}
+
+export async function POST(request) {
   try {
-    var formData = await request.formData()
-    var file = formData.get('file') as File | null
-    var fileUrl = formData.get('fileUrl') as string || ''
-    var type = formData.get('type') as string || 'homework'
-    var grade = formData.get('grade') as string || ''
+    var body = await request.json()
+    var youtubeUrl = body.youtubeUrl || ''
+    var numQuestions = parseInt(body.numQuestions) || 10
 
-    if ((!file || file.size === 0) && !fileUrl.trim()) {
-      return NextResponse.json({ error: 'ارفع ملف أو أدخل رابط' }, { status: 400 })
+    if (!youtubeUrl.trim()) {
+      return NextResponse.json({ error: 'Enter a YouTube URL' }, { status: 400 })
     }
 
-    var apiKey = process.env.GEMINI_API_KEY || 'AQ.Ab8RN6J1lUbn5oxF_0PsuobEDkoAEoRR5BcTZx1HVJEnIkN46Q'
-
-    var base64Data = ''
-    var mimeType = ''
-
-    if (file && file.size > 0) {
-      var bytes = new Uint8Array(await file.arrayBuffer())
-      base64Data = Buffer.from(bytes).toString('base64')
-      mimeType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg')
-    } else if (fileUrl.trim()) {
-      try {
-        var fetchRes = await fetch(fileUrl.trim())
-        if (!fetchRes.ok) throw new Error('فشل تحميل الرابط')
-        var arrayBuf = await fetchRes.arrayBuffer()
-        base64Data = Buffer.from(new Uint8Array(arrayBuf)).toString('base64')
-        var ct = fetchRes.headers.get('content-type') || ''
-        mimeType = ct.includes('pdf') ? 'application/pdf' : ct.includes('image') ? ct : 'image/jpeg'
-      } catch (err: any) {
-        return NextResponse.json({ error: 'فشل تحميل الملف: ' + (err.message || '') }, { status: 400 })
-      }
+    var videoId = extractYouTubeId(youtubeUrl)
+    if (!videoId) {
+      return NextResponse.json({ error: 'Invalid YouTube URL' }, { status: 400 })
     }
 
-    var prompt = type === 'exam'
-      ? 'أنت خبير في استخراج أسئلة الامتحانات. حلل هذا الملف واستخرج جميع الأسئلة (اختيار من متعدد MCQ فقط - 4 اختيارات لكل سؤال ورقم الصحيح 0-3). الصف: ' + grade + '\n\nرد بـ JSON فقط بدون أي نص إضافي:\n{"questions":[{"question":"نص السؤال","options":["أ","ب","ج","د"],"correct":0,"points":1}]}'
-      : 'أنت خبير في استخراج أسئلة الواجبات. حلل هذا الملف واستخرج جميع الأسئلة (اختيار من متعدد MCQ فقط - 4 اختيارات لكل سؤال ورقم الصحيح 0-3). الصف: ' + grade + '\n\nرد بـ JSON فقط بدون أي نص إضافي:\n{"questions":[{"question":"نص السؤال","options":["أ","ب","ج","د"],"correct":0,"points":1}]}'
+    console.log('Video ID:', videoId)
 
-    var parts: any[] = [{ text: prompt }]
-    parts.push({ inlineData: { mimeType: mimeType.includes('pdf') ? 'application/pdf' : mimeType, data: base64Data } })
+    var apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      return NextResponse.json({ error: 'GEMINI_API_KEY not found' }, { status: 500 })
+    }
 
-    var models = ['gemini-3.6-pro', 'gemini-3.7-pro']
-    var geminiRes: Response | null = null
+    var prompt = buildPrompt(numQuestions)
+    var fullUrl = 'https://www.youtube.com/watch?v=' + videoId
+
+    var requestBody = {
+      contents: [{
+        parts: [
+          { text: prompt },
+          { fileData: { fileUri: fullUrl, mimeType: 'video/mp4' } }
+        ]
+      }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 8192 }
+    }
+
+    var models = ['gemini-3.6-flash', 'gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash-preview-05-20', 'gemini-2.0-flash']
+    var geminiRes = null
     var lastError = ''
 
     for (var mi = 0; mi < models.length; mi++) {
       try {
         var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[mi] + ':generateContent?key=' + apiKey
+        console.log('Trying:', models[mi])
         geminiRes = await fetch(modelUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } }),
+          body: JSON.stringify(requestBody)
         })
-        if (geminiRes.ok) break
-        lastError = 'Model ' + models[mi] + ' returned ' + geminiRes.status
-        console.error(lastError)
-      } catch (e: any) {
-        lastError = 'Model ' + models[mi] + ' error: ' + (e.message || '')
-        console.error(lastError)
+        if (geminiRes.ok) {
+          console.log('Success:', models[mi])
+          break
+        }
+        var errBody = ''
+        try { errBody = await geminiRes.text() } catch (e) {}
+        lastError = models[mi] + ': ' + geminiRes.status
+        console.error('Failed:', lastError)
+      } catch (e) {
+        lastError = models[mi] + ': ' + (e.message || '')
+        console.error('Error:', lastError)
         geminiRes = null
       }
     }
 
     if (!geminiRes || !geminiRes.ok) {
-      var errText = ''
-      try { errText = await geminiRes!.text() } catch (e) {}
-      console.error('All Gemini models failed. Last:', lastError, errText)
-      return NextResponse.json({ error: 'خطأ من Gemini: ' + lastError }, { status: 500 })
+      return NextResponse.json({ error: 'AI error: ' + lastError }, { status: 500 })
     }
 
     var geminiData = await geminiRes.json()
-    var text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    var text = ''
+    try { text = geminiData.candidates[0].content.parts[0].text || '' } catch (e) {}
+
     if (!text.trim()) {
-      return NextResponse.json({ error: 'لم يتم استخراج أي نص' }, { status: 500 })
+      return NextResponse.json({ error: 'No response from AI' }, { status: 500 })
     }
 
     var jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return NextResponse.json({ error: 'لم يتم التعرف على JSON في الرد' }, { status: 500 })
+      return NextResponse.json({ error: 'Could not parse AI response' }, { status: 500 })
     }
 
     var parsed = JSON.parse(jsonMatch[0])
-    var questions = parsed.questions || []
+    var questions = (parsed.questions || []).map(function(q) {
+      var opts = Array.isArray(q.options) ? q.options.slice() : ['N/A', 'N/A', 'N/A', 'N/A']
+      while (opts.length < 4) { opts.push('N/A') }
+      var c = typeof q.correct === 'number' ? q.correct : 0
+      if (c < 0 || c > 3) { c = 0 }
+      return { question: q.question || '', options: opts.slice(0, 4), correct: c }
+    }).filter(function(q) { return q.question.trim().length > 0 })
 
-    if (!Array.isArray(questions) || questions.length === 0) {
-      return NextResponse.json({ error: 'لم يتم العثور على أسئلة في الملف' }, { status: 500 })
+    if (questions.length === 0) {
+      return NextResponse.json({ error: 'No questions extracted. Try a math video.' }, { status: 400 })
     }
 
-    var cleaned = questions.map(function(q: any) {
-      return {
-        question: q.question || '',
-        options: (q.options || ['لا يوجد','لا يوجد','لا يوجد','لا يوجد']).slice(0, 4),
-        correct: typeof q.correct === 'number' ? Math.min(3, Math.max(0, q.correct)) : 0,
-        points: q.points || 1,
+    console.log('Extracted:', questions.length, 'questions')
+    return NextResponse.json({
+      success: true,
+      extracted: {
+        questions: questions,
+        title: '',
+        content: 'Extracted from YouTube (' + questions.length + ' questions)',
+        answerKey: ''
       }
     })
-
-    return NextResponse.json({ questions: cleaned })
-  } catch (error: any) {
-    console.error('AI extract questions error:', error)
-    return NextResponse.json({ error: 'خطأ: ' + (error.message || 'Unknown') }, { status: 500 })
+  } catch (error) {
+    console.error('YouTube error:', error)
+    return NextResponse.json({ error: 'Error: ' + (error.message || 'Unknown') }, { status: 500 })
   }
 }
