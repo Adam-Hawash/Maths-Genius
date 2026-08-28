@@ -67,9 +67,22 @@ model Homework {
   answerKeyPath String   @default("")
   answerKeyType String   @default("")
   grade         String
-  questions     String   @default("")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  questions     String           @default("")
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  results       HomeworkResult[]
+}
+
+model HomeworkResult {
+  id          String   @id @default(cuid())
+  homeworkId  String
+  studentId   String
+  score       Float    @default(0)
+  maxScore    Float    @default(100)
+  answers     String   @default("")
+  submittedAt DateTime @default(now())
+
+  @@unique([studentId, homeworkId])
 }
 
 model Exam {
