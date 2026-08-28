@@ -71,7 +71,6 @@ export default function HeroSection() {
             alt="Maths Genius Banner"
             className="w-full h-auto max-h-[360px] object-cover object-center"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#F9F7F4] dark:from-[#0F0D0A] via-[#F9F7F4]/30 dark:via-[#0F0D0A]/30 to-transparent" />
         </div>
       )}
 
