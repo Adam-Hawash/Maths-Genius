@@ -45,9 +45,14 @@ export async function POST(request) {
     }
 
     var lines = []
-    lines.push('You are an expert math teacher. Watch this video carefully.')
+    lines.push('You are an expert math teacher. You will receive a YouTube video to analyze.')
     lines.push('')
-    lines.push('CRITICAL RULES:')
+    lines.push('CRITICAL INSTRUCTIONS:')
+    lines.push('- You MUST watch and analyze this video NATIVELY — its actual visual content, on-screen text, drawings, equations, and spoken audio explanations.')
+    lines.push('- Do NOT rely on text transcriptions, subtitles, or captions alone. You must understand the VISUAL explanations, numbers, and mathematical steps shown on screen.')
+    lines.push('- Pay close attention to: handwritten or typed equations on screen, step-by-step solution methods, visual diagrams, graphs, and any numerical examples worked through in the video.')
+    lines.push('')
+    lines.push('QUESTION CREATION RULES:')
     lines.push('- ONLY create questions based on what is actually taught/shown in this video')
     lines.push('- Do NOT add any topic, concept, or question that does not appear in the video')
     lines.push('- If the video covers exponents, ALL questions must be about exponents')
@@ -73,7 +78,7 @@ export async function POST(request) {
       contents: [{
         parts: [
           { text: prompt },
-          { fileData: { fileUri: fullUrl, mimeType: 'video/mp4' } }
+          { fileData: { fileUri: fullUrl, mimeType: 'video/x-youtube' } }
         ]
       }],
       generationConfig: { temperature: 0.2, maxOutputTokens: 8192 }
