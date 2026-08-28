@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export const runtime = 'nodejs'
-
 export async function POST(request: NextRequest) {
   try {
     var formData = await request.formData()
@@ -14,12 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'ارفع ملف أو أدخل رابط' }, { status: 400 })
     }
 
-    var apiKey = process.env.GEMINI_API_KEY || ''
-
-    if (!apiKey) {
-      console.error('GEMINI_API_KEY is empty')
-      return NextResponse.json({ error: 'مفتاح Gemini غير موجود في Environment Variables' }, { status: 500 })
-    }
+    var apiKey = process.env.GEMINI_API_KEY || 'AQ.Ab8RN6J1lUbn5oxF_0PsuobEDkoAEoRR5BcTZx1HVJEnIkN46Q'
 
     var base64Data = ''
     var mimeType = ''
@@ -42,8 +35,8 @@ export async function POST(request: NextRequest) {
     }
 
     var prompt = type === 'exam'
-      ? 'أنت خبير في استخراج أسئلة الامتحانات. حلل هذا الملف واستخرج:\n- عنوان الامتحان\n- محتوى تعريفي قصير\n- جميع الأسئلة (اختيار من متعدد MCQ فقط - 4 اختيارات لكل سؤال ورقم الصحيح 0-3)\n- نموذج الإجابة إن وُجد\n\nالصف: ' + grade + '\n\nرد بـ JSON فقط:\n{"title":"عنوان","content":"وصف","questions":[{"question":"نص","options":["أ","ب","ج","د"],"correct":0,"points":1}],"answerKey":"نموذج"}'
-      : 'أنت خبير في استخراج أسئلة الواجبات. حلل هذا الملف واستخرج:\n- عنوان الواجب\n- محتوى تعريفي قصير\n- جميع الأسئلة (اختيار من متعدد MCQ فقط - 4 اختيارات لكل سؤال ورقم الصحيح 0-3)\n- نموذج الإجابة إن وُجد\n\nالصف: ' + grade + '\n\nرد بـ JSON فقط:\n{"title":"عنوان","content":"وصف","questions":[{"question":"نص","options":["أ","ب","ج","د"],"correct":0,"points":1}],"answerKey":"نموذج"}'
+      ? 'أنت خبير في استخراج أسئلة الامتحانات. حلل هذا الملف واستخرج جميع الأسئلة (اختيار من متعدد MCQ فقط - 4 اختيارات لكل سؤال ورقم الصحيح 0-3). الصف: ' + grade + '\n\nرد بـ JSON فقط بدون أي نص إضافي:\n{"questions":[{"question":"نص السؤال","options":["أ","ب","ج","د"],"correct":0,"points":1}]}'
+      : 'أنت خبير في استخراج أسئلة الواجبات. حلل هذا الملف واستخرج جميع الأسئلة (اختيار من متعدد MCQ فقط - 4 اختيارات لكل سؤال ورقم الصحيح 0-3). الصف: ' + grade + '\n\nرد بـ JSON فقط بدون أي نص إضافي:\n{"questions":[{"question":"نص السؤال","options":["أ","ب","ج","د"],"correct":0,"points":1}]}'
 
     var parts: any[] = [{ text: prompt }]
     parts.push({ inlineData: { mimeType: mimeType.includes('pdf') ? 'application/pdf' : mimeType, data: base64Data } })
@@ -80,32 +73,33 @@ export async function POST(request: NextRequest) {
     var geminiData = await geminiRes.json()
     var text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
     if (!text.trim()) {
-      return NextResponse.json({ error: 'لم يتم استخراج أي نص من الملف' }, { status: 500 })
+      return NextResponse.json({ error: 'لم يتم استخراج أي نص' }, { status: 500 })
     }
 
     var jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return NextResponse.json({ error: 'لم يتم التعرف على JSON في رد Gemini' }, { status: 500 })
+      return NextResponse.json({ error: 'لم يتم التعرف على JSON في الرد' }, { status: 500 })
     }
 
-    var extracted = JSON.parse(jsonMatch[0])
-    if (!extracted.title) extracted.title = (type === 'exam' ? 'امتحان' : 'واجب') + ' - ' + grade
-    if (!extracted.content) extracted.content = ''
-    if (!Array.isArray(extracted.questions)) extracted.questions = []
-    if (!extracted.answerKey) extracted.answerKey = ''
+    var parsed = JSON.parse(jsonMatch[0])
+    var questions = parsed.questions || []
 
-    extracted.questions = extracted.questions.map(function(q: any) {
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return NextResponse.json({ error: 'لم يتم العثور على أسئلة في الملف' }, { status: 500 })
+    }
+
+    var cleaned = questions.map(function(q: any) {
       return {
         question: q.question || '',
         options: (q.options || ['لا يوجد','لا يوجد','لا يوجد','لا يوجد']).slice(0, 4),
-        correct: typeof q.correct === 'number' ? q.correct : 0,
+        correct: typeof q.correct === 'number' ? Math.min(3, Math.max(0, q.correct)) : 0,
         points: q.points || 1,
       }
     })
 
-    return NextResponse.json({ success: true, extracted: extracted })
+    return NextResponse.json({ questions: cleaned })
   } catch (error: any) {
-    console.error('AI extract error:', error)
+    console.error('AI extract questions error:', error)
     return NextResponse.json({ error: 'خطأ: ' + (error.message || 'Unknown') }, { status: 500 })
   }
 }
