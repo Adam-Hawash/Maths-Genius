@@ -11,9 +11,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Grade is required' }, { status: 400 })
     }
 
-    // Get all approved students in this grade
+    // Get all active students in this grade (approved or paid)
     const students = await db.student.findMany({
-      where: { grade, status: 'approved' },
+      where: { grade, status: { in: ['approved', 'paid'] } },
       orderBy: { name: 'asc' },
       select: { id: true, name: true, phone: true, grade: true, loginCount: true, lastLogin: true, createdAt: true },
     })

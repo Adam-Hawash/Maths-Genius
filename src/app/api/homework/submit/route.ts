@@ -33,12 +33,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'مفيش أسئلة في الواجب' }, { status: 400 })
     }
 
-    // Grade
+    // Grade with points support
     var score = 0
+    var maxScore = 0
+    var wrongQuestions: { question: string; studentAnswer: string; correctAnswer: string }[] = []
+
     mcq.forEach(function(q, i) {
-      if (answers[i] === q.correct) score++
+      var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+      maxScore += pts
+      var studentAnswer = Array.isArray(answers) ? answers[i] : (answers[i] !== undefined ? answers[i] : answers[String(i)])
+      var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+      if (studentAnswer !== undefined && studentAnswer === correctIdx) {
+        score += pts
+      } else {
+        var opts = Array.isArray(q.options) ? q.options : []
+        wrongQuestions.push({
+          question: q.question || q.q || '',
+          studentAnswer: (typeof studentAnswer === 'number' && opts[studentAnswer]) ? String.fromCharCode(65 + studentAnswer) + ') ' + opts[studentAnswer] : 'لم يتم الإجابة',
+          correctAnswer: opts[correctIdx] ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx] : '',
+        })
+      }
     })
-    var maxScore = mcq.length
 
     // Save
     var result = await db.homeworkResult.create({
@@ -57,6 +72,7 @@ export async function POST(request: NextRequest) {
         score: result.score,
         maxScore: result.maxScore,
         submittedAt: result.submittedAt,
+        wrongQuestions: wrongQuestions,
       },
     })
   } catch (error: any) {

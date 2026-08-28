@@ -39,17 +39,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'لا توجد أسئلة في هذا الامتحان' }, { status: 400 })
     }
 
-    // Auto-grade with safe answer checking (supports both object and array formats)
+    // Auto-grade with points support (supports both object and array formats)
     let score = 0
+    let maxScore = 0
     const wrongQuestions: { question: string; studentAnswer: string; correctAnswer: string }[] = []
 
     questions.forEach(function(q: any, i: number) {
-      // التعامل مع answers سواء كانت Array أو Object بـ Keys رقمية
+      var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+      maxScore += pts
       const studentAnswer = Array.isArray(answers) ? answers[i] : (answers[i] !== undefined ? answers[i] : answers[String(i)])
       const correctIdx = typeof q.correct === 'number' ? q.correct : 0
 
       if (studentAnswer !== undefined && studentAnswer === correctIdx) {
-        score++
+        score += pts
       } else {
         const opts = Array.isArray(q.options) ? q.options : []
         wrongQuestions.push({
@@ -60,7 +62,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    const maxScore = questions.length
+    if (maxScore === 0) maxScore = questions.length
     const passScore = exam.passScore || 50
     const passCount = Math.ceil(maxScore * passScore / 100)
     const passed = score >= passCount

@@ -45,7 +45,9 @@ export async function GET(request: NextRequest) {
       .filter(q => q.wrong > 0)
       .sort((a, b) => b.wrong - a.wrong)
 
-    return NextResponse.json({ results, notTaken, mostMissed })
+    const avgScore = results.length > 0 ? (results.reduce((sum, r) => sum + r.score, 0) / results.length).toFixed(1) : '—'
+
+    return NextResponse.json({ results, notTaken, mostMissed, avgScore })
   } catch (error) {
     console.error('Exam results error:', error)
     return NextResponse.json({ error: 'Failed to fetch results' }, { status: 500 })
