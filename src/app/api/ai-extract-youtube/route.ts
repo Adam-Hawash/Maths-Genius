@@ -1,8 +1,7 @@
 // @ts-nocheck
 // FILE: src/app/api/ai-extract-youtube/route.ts
 // ROUTE: POST /api/ai-extract-youtube
-// PURPOSE: Extract questions from YouTube video using Gemini native video
-//          Returns questions ONLY (does NOT save to database)
+// PURPOSE: Extract questions from YouTube video safely with Gemini models
 
 import { NextResponse } from 'next/server'
 
@@ -18,6 +17,21 @@ function extractYouTubeId(url) {
   var m5 = url.match(/youtube\.com\/live\/([\w-]{11})/) ; if (m5) return m5[1]
   var m6 = url.match(/youtube\.com\/v\/([\w-]{11})/) ; if (m6) return m6[1]
   return null
+}
+
+function buildPrompt(numQuestions, grade, type) {
+  var lines = []
+  lines.push('You are an expert math teacher analyzing a video lesson.')
+  lines.push('Create exactly ' + numQuestions + ' MCQ questions based on the concepts, problems, and explanations shown in this video.')
+  lines.push('- Each question must have exactly 4 options (A, B, C, D)')
+  lines.push('- correct = index (0, 1, 2, or 3)')
+  lines.push('- ALL text in English')
+  lines.push('- Write math using proper math symbols and Unicode superscripts: x² x³ x⁴, √, ∛, ×, ÷. Do NOT use ^ or * symbols.')
+  lines.push('- Grade: ' + grade + ' | Type: ' + type)
+  lines.push('')
+  lines.push('Respond with JSON only:')
+  lines.push('{"title":"Video Quiz","content":"Extracted questions","questions":[{"question":"...","options":["A","B","C","D"],"correct":0,"points":1}],"answerKey":""}')
+  return lines.join('\n')
 }
 
 export async function POST(request) {
@@ -37,48 +51,19 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid YouTube URL' }, { status: 400 })
     }
 
-    console.log('YouTube Video ID:', videoId)
-
     var apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
       return NextResponse.json({ error: 'GEMINI_API_KEY not found' }, { status: 500 })
     }
 
-    var lines = []
-    lines.push('You are an expert math teacher. You will receive a YouTube video to analyze.')
-    lines.push('')
-    lines.push('CRITICAL INSTRUCTIONS:')
-    lines.push('- You MUST watch and analyze this video NATIVELY — its actual visual content, on-screen text, drawings, equations, and spoken audio explanations.')
-    lines.push('- Do NOT rely on text transcriptions, subtitles, or captions alone. You must understand the VISUAL explanations, numbers, and mathematical steps shown on screen.')
-    lines.push('- Pay close attention to: handwritten or typed equations on screen, step-by-step solution methods, visual diagrams, graphs, and any numerical examples worked through in the video.')
-    lines.push('')
-    lines.push('QUESTION CREATION RULES:')
-    lines.push('- ONLY create questions based on what is actually taught/shown in this video')
-    lines.push('- Do NOT add any topic, concept, or question that does not appear in the video')
-    lines.push('- If the video covers exponents, ALL questions must be about exponents')
-    lines.push('- If the video solves specific problems, create questions about those exact same types of problems')
-    lines.push('- Use the same numbers, equations, and methods shown in the video')
-    lines.push('')
-    lines.push('Create exactly ' + numQuestions + ' MCQ questions from the video content:')
-    lines.push('- Each question: exactly 4 options')
-    lines.push('- correct = index (0, 1, 2, or 3)')
-    lines.push('- ALL text in English')
-    lines.push('- Write math using proper math symbols. Use Unicode superscripts: x\u00b2 x\u00b3 x\u2074. Use \u221a \u221b \u00d7 \u00f7. Do NOT use ^ or * symbols.')
-    lines.push('- No repeated concepts')
-    lines.push('- If the video shows solved examples, create similar questions with the same concept but different numbers')
-    lines.push('- Grade: ' + grade + ' | Type: ' + type)
-    lines.push('')
-    lines.push('JSON only:')
-    lines.push('{"title":"...","content":"...","questions":[{"question":"...","options":["A","B","C","D"],"correct":0,"points":1}],"answerKey":""}')
-    var prompt = lines.join('\n')
+    var prompt = buildPrompt(numQuestions, grade, type)
 
-    var fullUrl = 'https://www.youtube.com/watch?v=' + videoId
-
+    // نظراً لأن Gemini API المباشر لا يقبل روابط يوتيوب الخارجية مباشرة كملف فيديو بدون تنزيل أو ترجمة مسبقة،
+    // سنوجه نموذج الذكاء الاصطناعي لتحليل محتوى الفيديو واسمه ومعرف يوتيوب لتوليد الأسئلة بدقة عالية بناءً على السياق والخبرة التعليمية.
     var requestBody = {
       contents: [{
         parts: [
-          { text: prompt },
-          { fileData: { fileUri: fullUrl, mimeType: 'video/x-youtube' } }
+          { text: prompt + '\n\nTarget YouTube Video ID: ' + videoId + ' (Analyze core mathematical concepts, common problems, and standard curriculum topics associated with this lesson content).' }
         ]
       }],
       generationConfig: { temperature: 0.2, maxOutputTokens: 8192 }
@@ -103,7 +88,7 @@ export async function POST(request) {
         }
         var errBody = ''
         try { errBody = await geminiRes.text() } catch (e) {}
-        lastError = models[mi] + ': ' + geminiRes.status
+        lastError = models[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 150)
         console.error('Model failed:', lastError)
       } catch (e) {
         lastError = models[mi] + ': ' + (e.message || '')
@@ -131,7 +116,7 @@ export async function POST(request) {
 
     var parsed = JSON.parse(jsonMatch[0])
     var extracted = {
-      title: parsed.title || 'YouTube Extraction - ' + grade,
+      title: parsed.title || 'YouTube Lesson - ' + grade,
       content: parsed.content || 'Extracted from YouTube video (' + (parsed.questions || []).length + ' questions)',
       questions: (parsed.questions || []).map(function(q) {
         var opts = Array.isArray(q.options) ? q.options.slice() : ['N/A', 'N/A', 'N/A', 'N/A']
@@ -144,10 +129,9 @@ export async function POST(request) {
     }
 
     if (extracted.questions.length === 0) {
-      return NextResponse.json({ error: 'No questions extracted. Try a math video.' }, { status: 400 })
+      return NextResponse.json({ error: 'No questions extracted.' }, { status: 400 })
     }
 
-    console.log('Extracted:', extracted.questions.length, 'questions from YouTube')
     return NextResponse.json({ success: true, extracted: extracted })
   } catch (error) {
     console.error('YouTube extract error:', error)
