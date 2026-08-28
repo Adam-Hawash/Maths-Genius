@@ -647,6 +647,7 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
   const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number>>>({})
   const [hwSubmitting, setHwSubmitting] = useState<string | null>(null)
   const [hwResults, setHwResults] = useState<Record<string, { score: number; maxScore: number }>>({})
+  const hwShuffleMaps = useRef<Record<string, number[]>>({})
 
   useEffect(() => {
     if (!studentId) return
@@ -672,6 +673,23 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
         var existingResult = hwResults[hw.id]
         var isSubmitted = !!existingResult
         var myAnswers = hwAnswers[hw.id] || {}
+
+        // Shuffle questions uniquely per student when expanding
+        var shuffleMap: number[] = []
+        if (hasMCQ && isExpanded && !isSubmitted) {
+          var existing = hwShuffleMaps.current[hw.id]
+          if (existing && existing.length === mcq.length) {
+            shuffleMap = existing
+          } else {
+            shuffleMap = mcq.map(function(_, i) { return i })
+            for (var si = shuffleMap.length - 1; si > 0; si--) {
+              var sj = Math.floor(Math.random() * (si + 1))
+              var st = shuffleMap[si]; shuffleMap[si] = shuffleMap[sj]; shuffleMap[sj] = st
+            }
+            hwShuffleMaps.current[hw.id] = shuffleMap
+          }
+        }
+        var displayQuestions = shuffleMap.length > 0 ? shuffleMap.map(function(oi) { return mcq[oi] }) : mcq
 
         var score = 0
         if (isSubmitted && hasMCQ) {
@@ -701,24 +719,23 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
               </div>
 
               {isExpanded && hasMCQ && !isSubmitted && (
-                <div className="mt-4 pt-4 border-t space-y-4">
-                  {mcq.map(function(q: any, qi: number) {
+                <div className="mt-4 pt-4 border-t space-y-4" dir="ltr">
+                  {displayQuestions.map(function(q: any, di: number) {
                     var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
                     return (
-                      <div key={qi} className="space-y-2 rounded-lg p-2">
-                        <p className="font-medium text-sm" dir="ltr" style={{ textAlign: 'left' }}>{qi + 1}. {q.question} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
+                      <div key={di} className="space-y-2 rounded-lg p-2">
+                        <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
                         <div className="space-y-1.5">
                           {q.options.map(function(opt: string, oi: number) {
-                            var isSelected = myAnswers[qi] === oi
+                            var isSelected = myAnswers[di] === oi
                             return (
                               <button
                                 key={oi}
-                                onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [qi]: oi }; return a }) }}
+                                onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [di]: oi }; return a }) }}
                                 className={"w-full p-3 rounded-lg border text-sm transition-colors " + (
                                   isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
                                   'border-border hover:bg-muted/50'
                                 )}
-                                dir="ltr"
                                 style={{ textAlign: 'left' }}
                               >
                                 <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
@@ -732,10 +749,17 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
                   <Button size="sm" disabled={Object.keys(myAnswers).length === 0 || hwSubmitting === hw.id} onClick={async function() {
                     setHwSubmitting(hw.id)
                     try {
+                      // Map shuffled display indices back to original DB indices for grading
+                      var mappedAnswers: Record<number, number> = {}
+                      if (shuffleMap.length > 0) {
+                        Object.keys(myAnswers).forEach(function(di) { mappedAnswers[shuffleMap[parseInt(di)]] = myAnswers[di] })
+                      } else {
+                        mappedAnswers = { ...myAnswers }
+                      }
                       var res = await fetch('/api/homework/submit', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ studentId, homeworkId: hw.id, answers: myAnswers }),
+                        body: JSON.stringify({ studentId, homeworkId: hw.id, answers: mappedAnswers }),
                       })
                       var data = await res.json()
                       if (res.ok) {
@@ -751,12 +775,13 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
                 </div>
               )}
               {isSubmitted && hasMCQ && isExpanded && (
-                <div className="mt-4 pt-4 border-t space-y-4">
+                <div className="mt-4 pt-4 border-t space-y-4" dir="ltr">
                   {mcq.map(function(q: any, qi: number) {
                     var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+                    var qText = q.question || q.q || ''
                     return (
                       <div key={qi} className="space-y-2 rounded-lg p-2">
-                        <p className="font-medium text-sm" dir="ltr" style={{ textAlign: 'left' }}>{qi + 1}. {q.question} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
+                        <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{qi + 1}. {qText} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
                         <div className="space-y-1.5">
                           {q.options.map(function(opt: string, oi: number) {
                             var correctIdx = typeof q.correct === 'number' ? q.correct : 0
@@ -767,7 +792,6 @@ function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId:
                                 className={"w-full p-3 rounded-lg border text-sm " + (
                                   isCorrect ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium' : 'border-border text-muted-foreground'
                                 )}
-                                dir="ltr"
                                 style={{ textAlign: 'left' }}
                               >
                                 <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
@@ -794,6 +818,7 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [submitting, setSubmitting] = useState(false)
   const [examQuestions, setExamQuestions] = useState<any[]>([])
+  const [examShuffleMap, setExamShuffleMap] = useState<number[]>([])
 
   if (exams.length === 0) return <EmptyState message="لا توجد امتحانات حالياً" />
 
@@ -804,26 +829,26 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
       return null
     }
     return (
-      <div className="space-y-4">
+      <div className="space-y-4" dir="ltr">
         <div className="flex items-center justify-between">
           <h3 className="font-bold">{exam.title}</h3>
-          <Button variant="outline" size="sm" onClick={() => { setTakingExam(null); setAnswers({}); setExamQuestions([]) }}>رجوع</Button>
+          <Button variant="outline" size="sm" onClick={() => { setTakingExam(null); setAnswers({}); setExamQuestions([]); setExamShuffleMap([]) }}>رجوع</Button>
         </div>
-        {examQuestions.map((q: any, qi: number) => {
+        {examQuestions.map((q: any, di: number) => {
           var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+          var qText = q.question || q.q || ''
           return (
-          <Card key={qi}>
+          <Card key={di}>
             <CardContent className="p-4 space-y-3">
-              <p className="font-medium text-sm" dir="ltr" style={{ textAlign: 'left' }}>{qi + 1}. {q.question || q.q} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
+              <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{di + 1}. {qText} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
               <div className="space-y-2">
                 {q.options.map((opt: string, oi: number) => (
                   <button
                     key={oi}
-                    onClick={() => setAnswers(prev => ({ ...prev, [qi]: oi }))}
+                    onClick={() => setAnswers(prev => ({ ...prev, [di]: oi }))}
                     className={`w-full p-3 rounded-lg border text-sm transition-colors ${
-                      answers[qi] === oi ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
+                      answers[di] === oi ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
                     }`}
-                    dir="ltr"
                     style={{ textAlign: 'left' }}
                   >
                     <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
@@ -840,10 +865,17 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
           onClick={async () => {
             setSubmitting(true)
             try {
+              // Map shuffled display indices back to original DB indices for grading
+              var mappedAnswers: Record<number, number> = {}
+              if (examShuffleMap.length > 0) {
+                Object.keys(answers).forEach(function(di) { mappedAnswers[examShuffleMap[parseInt(di)]] = answers[di] })
+              } else {
+                mappedAnswers = { ...answers }
+              }
               const res = await fetch('/api/exams/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentId, examId: takingExam, answers }),
+                body: JSON.stringify({ studentId, examId: takingExam, answers: mappedAnswers }),
               })
               const data = await res.json()
               if (res.ok) {
@@ -887,7 +919,15 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
                       <Button size="sm" onClick={() => {
                         try {
                           const parsed = JSON.parse((exam as any).questions)
-                          setExamQuestions(parsed)
+                          // Shuffle questions uniquely per student
+                          var indices = parsed.map(function(_: any, i: number) { return i })
+                          for (var si = indices.length - 1; si > 0; si--) {
+                            var sj = Math.floor(Math.random() * (si + 1))
+                            var st = indices[si]; indices[si] = indices[sj]; indices[sj] = st
+                          }
+                          var shuffled = indices.map(function(i: number) { return parsed[i] })
+                          setExamQuestions(shuffled)
+                          setExamShuffleMap(indices)
                           setTakingExam(exam.id)
                           setAnswers({})
                         } catch { toast.error('خطأ في تحميل الأسئلة') }
