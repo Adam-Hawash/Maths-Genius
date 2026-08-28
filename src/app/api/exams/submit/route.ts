@@ -17,16 +17,23 @@ export async function POST(request) {
       return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
     }
 
-    // Prevent double submission - check DB first
+    // Prevent double submission - check DB first (fallback to findFirst if unique constraint missing)
     try {
-      var existing = await db.examResult.findUnique({
-        where: { studentId_examId: { studentId: studentId, examId: examId } },
-      })
+      var existing = null
+      try {
+        existing = await db.examResult.findUnique({
+          where: { studentId_examId: { studentId: studentId, examId: examId } },
+        })
+      } catch (_) {
+        existing = await db.examResult.findFirst({
+          where: { studentId: studentId, examId: examId },
+        })
+      }
       if (existing) {
         return NextResponse.json({ 
-          error: 'تم تقديم هذا الامتحان بالفعل', 
           alreadySubmitted: true,
-          submitted: true 
+          submitted: true,
+          blocked: true
         }, { status: 200 })
       }
     } catch (e) {
