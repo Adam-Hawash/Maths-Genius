@@ -286,7 +286,7 @@ export function StudentPortal() {
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} />}
-        {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} />}
+        {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} studentId={studentId} />}
         {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} studentId={studentId} />}
         {activeTab === 'announcements' && <AnnouncementsTab announcements={dashboardData.announcements} />}
         {activeTab === 'discussions' && <DiscussionsTab grade={grade} studentId={studentId} studentName={currentStudent?.name || ''} />}
@@ -642,10 +642,25 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
 }
 
 /* ========== HOMEWORK TAB ========== */
-function HomeworkTab({ homework }: { homework: Homework[] }) {
+function HomeworkTab({ homework, studentId }: { homework: Homework[]; studentId: string }) {
   const [expandedHw, setExpandedHw] = useState<string | null>(null)
   const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number>>>({})
-  const [hwSubmitted, setHwSubmitted] = useState<Record<string, boolean>>({})
+  const [hwSubmitting, setHwSubmitting] = useState<string | null>(null)
+  const [hwResults, setHwResults] = useState<Record<string, { score: number; maxScore: number }>>({})
+
+  useEffect(() => {
+    if (!studentId) return
+    fetch('/api/homework-results?studentId=' + studentId)
+      .then(function(r) { return r.json() })
+      .then(function(data) {
+        var map: Record<string, { score: number; maxScore: number }> = {}
+        ;(data.results || []).forEach(function(r: any) {
+          map[r.homeworkId] = { score: r.score, maxScore: r.maxScore }
+        })
+        setHwResults(map)
+      })
+      .catch(function() {})
+  }, [studentId])
 
   if (homework.length === 0) return <EmptyState message="لا توجد واجبات حالياً" />
   return (
@@ -654,21 +669,22 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
         var mcq = (hw as any).questions ? JSON.parse((hw as any).questions) : []
         var hasMCQ = Array.isArray(mcq) && mcq.length > 0
         var isExpanded = expandedHw === hw.id
-        var isSubmitted = !!hwSubmitted[hw.id]
+        var existingResult = hwResults[hw.id]
+        var isSubmitted = !!existingResult
         var myAnswers = hwAnswers[hw.id] || {}
 
         var score = 0
         if (isSubmitted && hasMCQ) {
-          mcq.forEach(function(q: any, i: number) { if (myAnswers[i] === q.correct) score++ })
+          score = existingResult.score
         }
 
         return (
-          <Card key={hw.id} className={hasMCQ ? 'cursor-pointer' : ''}>
+          <Card key={hw.id} className={isSubmitted ? 'border-emerald-500/30' : hasMCQ ? 'cursor-pointer' : ''}>
             <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-3" onClick={hasMCQ ? function() { setExpandedHw(isExpanded ? null : hw.id) } : undefined}>
+              <div className="flex items-start justify-between gap-3" onClick={hasMCQ && !isSubmitted ? function() { setExpandedHw(isExpanded ? null : hw.id) } : undefined}>
                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (hasMCQ ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
-                    <ClipboardList className={"h-4 w-4 " + (hasMCQ ? 'text-emerald-500' : 'text-blue-500')} />
+                  <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (isSubmitted ? 'bg-emerald-500/10' : hasMCQ ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
+                    <ClipboardList className={"h-4 w-4 " + (isSubmitted ? 'text-emerald-500' : hasMCQ ? 'text-emerald-500' : 'text-blue-500')} />
                   </div>
                   <div className="min-w-0 space-y-1">
                     <h3 className="font-semibold text-sm">{hw.title}</h3>
@@ -676,39 +692,28 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-[10px] text-muted-foreground">{new Date(hw.createdAt).toLocaleDateString('ar-EG')}</p>
                       {hasMCQ && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">{mcq.length} سؤال</Badge>}
-                      {isSubmitted && hasMCQ && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {score}/{mcq.length}</Badge>}
+                      {isSubmitted && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {score}/{existingResult.maxScore}</Badge>}
                     </div>
                   </div>
                 </div>
                 {hw.filePath && !hasMCQ && <FileAttachment filePath={hw.filePath} fileType={hw.fileType} />}
-                {hasMCQ && <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform shrink-0 mt-1 " + (isExpanded ? 'rotate-90' : '')} />}
+                {hasMCQ && !isSubmitted && <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform shrink-0 mt-1 " + (isExpanded ? 'rotate-90' : '')} />}
               </div>
 
-              {isExpanded && hasMCQ && (
+              {isExpanded && hasMCQ && !isSubmitted && (
                 <div className="mt-4 pt-4 border-t space-y-4">
                   {mcq.map(function(q: any, qi: number) {
-                    var ansWrong = isSubmitted && myAnswers[qi] !== undefined && myAnswers[qi] !== q.correct
-                    var ansCorrect = isSubmitted && myAnswers[qi] === q.correct
                     return (
-                      <div key={qi} className={"space-y-2 rounded-lg p-2 " + (ansWrong ? 'bg-destructive/5 border border-destructive/20' : ansCorrect ? 'bg-emerald-500/5 border border-emerald-500/20' : '')}>
-                        <div className="flex items-start gap-2">
-                          <p className="font-medium text-sm flex-1">{qi + 1}. {q.question}</p>
-                          {isSubmitted && ansCorrect && <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />}
-                          {isSubmitted && ansWrong && <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />}
-                        </div>
+                      <div key={qi} className="space-y-2 rounded-lg p-2">
+                        <p className="font-medium text-sm">{qi + 1}. {q.question}</p>
                         <div className="space-y-1.5">
                           {q.options.map(function(opt: string, oi: number) {
                             var isSelected = myAnswers[qi] === oi
-                            var isCorrect = isSubmitted && oi === q.correct
-                            var isWrong = isSubmitted && isSelected && oi !== q.correct
                             return (
                               <button
                                 key={oi}
-                                disabled={isSubmitted}
                                 onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [qi]: oi }; return a }) }}
                                 className={"w-full text-right p-3 rounded-lg border text-sm transition-colors " + (
-                                  isCorrect ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 font-medium' :
-                                  isWrong ? 'border-destructive bg-destructive/10 text-destructive' :
                                   isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
                                   'border-border hover:bg-muted/50'
                                 )}
@@ -718,25 +723,28 @@ function HomeworkTab({ homework }: { homework: Homework[] }) {
                             )
                           })}
                         </div>
-                        {isSubmitted && ansWrong && (
-                          <p className="text-xs text-destructive">الإجابة الصحيحة: {String.fromCharCode(65 + q.correct)}) {q.options[q.correct]}</p>
-                        )}
                       </div>
                     )
                   })}
-                  {!isSubmitted ? (
-                    <Button size="sm" onClick={function() { setHwSubmitted(function(prev) { var n = { ...prev }; n[hw.id] = true; return n }) }} disabled={Object.keys(myAnswers).length === 0}>تسليم الإجابات ({Object.keys(myAnswers).length}/{mcq.length})</Button>
-                  ) : (
-                    <div className={"p-4 rounded-lg border " + (score === mcq.length ? 'bg-emerald-500/10 border-emerald-500/30' : score >= mcq.length * 0.5 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-destructive/10 border-destructive/30')}>
-                      <div className="flex items-center justify-between mb-2">
-                        <p className={"text-base font-bold " + (score === mcq.length ? 'text-emerald-700' : score >= mcq.length * 0.5 ? 'text-amber-700' : 'text-destructive')}>نتيجتك: {score} من {mcq.length}</p>
-                        <Badge className={score === mcq.length ? 'bg-emerald-500 text-white' : score >= mcq.length * 0.5 ? 'bg-amber-500 text-white' : 'bg-destructive text-white'}>{Math.round(score / mcq.length * 100)}%</Badge>
-                      </div>
-                      {score < mcq.length && (
-                        <p className="text-xs text-muted-foreground">الأسئلة الغلط: {mcq.filter(function(q: any, i: number) { return myAnswers[i] !== undefined && myAnswers[i] !== q.correct }).map(function(q: any, i: number) { return 'سؤال ' + (i + 1) }).join(', ')}</p>
-                      )}
-                    </div>
-                  )}
+                  <Button size="sm" disabled={Object.keys(myAnswers).length === 0 || hwSubmitting === hw.id} onClick={async function() {
+                    setHwSubmitting(hw.id)
+                    try {
+                      var res = await fetch('/api/homework/submit', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ studentId, homeworkId: hw.id, answers: myAnswers }),
+                      })
+                      var data = await res.json()
+                      if (res.ok) {
+                        toast.success('تم تقديم الواجب - الدرجة: ' + data.result.score + '/' + data.result.maxScore)
+                        setHwResults(function(prev) { return { ...prev, [hw.id]: { score: data.result.score, maxScore: data.result.maxScore } } })
+                        setExpandedHw(null)
+                      } else {
+                        toast.error(data.error || 'خطأ')
+                      }
+                    } catch { toast.error('خطأ في الاتصال') }
+                    setHwSubmitting(null)
+                  }}>{hwSubmitting === hw.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم الإجابات (' + Object.keys(myAnswers).length + '/' + mcq.length + ')'}</Button>
                 </div>
               )}
             </CardContent>
@@ -771,7 +779,7 @@ function ExamsTab({ exams, results, studentId }: { exams: Exam[]; results: ExamR
         {examQuestions.map((q, qi) => (
           <Card key={qi}>
             <CardContent className="p-4 space-y-3">
-              <p className="font-medium text-sm">{qi + 1}. {q.question || q.q}</p>
+              <p className="font-medium text-sm text-right">{qi + 1}. {q.question || q.q}</p>
               <div className="space-y-2">
                 {q.options.map((opt: string, oi: number) => (
                   <button

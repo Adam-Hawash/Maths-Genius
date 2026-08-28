@@ -62,7 +62,7 @@ export async function GET(
     const avgExamScore = examResults.length > 0
       ? Math.round(examResults.reduce((sum, er) => sum + er.score, 0) / examResults.length)
       : 0
-    const examsPassed = examResults.filter(er => er.score >= (er.exam?.passScore || 50)).length
+    const examsPassed = examResults.filter(function(er) { return er.score >= (examMap[er.examId]?.passScore || 50) }).length
 
     return NextResponse.json({
       student: { id: student.id, name: student.name, grade: student.grade },
