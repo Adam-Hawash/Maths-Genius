@@ -71,7 +71,7 @@ export async function POST(request) {
     lines.push('')
     lines.push('Rules:')
     lines.push('- ALL output text in English')
-    lines.push('- Write math using proper math symbols. Use Unicode superscripts for powers: x² for squared, x³ for cubed, x⁴ for to the power of 4. Use √ for square root, ∛ for cubic root. Use × for multiplication. Use ÷ for division. Do NOT write "squared", "cubed", "to the power of" as words. Do NOT use ^ or * symbols.')
+    lines.push('- Write math using proper math symbols. Use Unicode superscripts for powers: x\u00b2 for squared, x\u00b3 for cubed, x\u2074 for to the power of 4. Use \u221a for square root, \u221b for cubic root. Use \u00d7 for multiplication. Use \u00f7 for division. Do NOT write "squared", "cubed", "to the power of" as words. Do NOT use ^ or * symbols.')
     lines.push('- Do NOT add questions from outside the document')
     lines.push('- Do NOT skip any question from the document')
     lines.push('- Grade: ' + grade + ' | Type: ' + type)
@@ -83,7 +83,7 @@ export async function POST(request) {
     var parts = [{ text: prompt }]
     parts.push({ inlineData: { mimeType: mimeType, data: base64Data } })
 
-    var models = ['gemini-3.6-pro', 'gemini-2.5-pro']
+    var models = ['gemini-3.6-flash', 'gemini-2.5-flash']
     var geminiRes = null
     var lastError = ''
 

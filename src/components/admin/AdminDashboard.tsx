@@ -1953,77 +1953,76 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   const [extractedQuestions, setExtractedQuestions] = useState<Array<{ question: string; options: string[]; correct: number }>>([])
   const [statusMsg, setStatusMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  // YouTube state
+  const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [numQuestions, setNumQuestions] = useState(10)
+  const [inputMode, setInputMode] = useState<'file' | 'youtube'>('file')
 
   var resetAll = function() {
     setStep(1); setExtractType('exam'); setGrade(''); setTitle('')
     setFile(null); setFileUrl(''); setExtractedQuestions([]); setStatusMsg('')
+    setYoutubeUrl(''); setNumQuestions(10); setInputMode('file')
   }
 
   var canProceedStep1 = extractType && grade.trim() && title.trim()
-  var canExtract = file || fileUrl.trim()
-
-  var renderStep1 = function() {
-    return (
-      <div className="space-y-4">
-        <div className="text-center py-4">
-          <Sparkles className="h-10 w-10 text-purple-500 mx-auto mb-3" />
-          <h3 className="text-lg font-bold">استخراج الذكاء الاصطناعي</h3>
-          <p className="text-sm text-muted-foreground mt-1">ارفع ملف أو صورة واستخرج الأسئلة تلقائيا واحفظها مباشرة</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <button type="button" onClick={function() { setExtractType('exam') }} className={"p-4 rounded-xl border-2 text-center transition-all " + (extractType === 'exam' ? 'border-primary bg-primary/5 shadow-md' : 'border-muted hover:border-primary/30')}>
-            <FileText className={"h-8 w-8 mx-auto mb-2 " + (extractType === 'exam' ? 'text-primary' : 'text-muted-foreground')} />
-            <p className={"font-bold text-sm " + (extractType === 'exam' ? 'text-primary' : '')}>امتحان</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Exam</p>
-          </button>
-          <button type="button" onClick={function() { setExtractType('homework') }} className={"p-4 rounded-xl border-2 text-center transition-all " + (extractType === 'homework' ? 'border-primary bg-primary/5 shadow-md' : 'border-muted hover:border-primary/30')}>
-            <ClipboardList className={"h-8 w-8 mx-auto mb-2 " + (extractType === 'homework' ? 'text-primary' : 'text-muted-foreground')} />
-            <p className={"font-bold text-sm " + (extractType === 'homework' ? 'text-primary' : '')}>واجب</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Homework</p>
-          </button>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">الصف الدراسي *</Label>
-          <select value={grade} onChange={function(e) { setGrade(e.target.value) }} className="w-full h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
-            <option value="">اختر الصف</option>
-            {GRADES.map(function(g) { return <option key={g} value={g}>{g}</option> })}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">العنوان *</Label>
-          <Input value={title} onChange={function(e) { setTitle(e.target.value) }} placeholder={extractType === 'exam' ? 'مثال: امتحان الباب الاول' : 'مثال: واجب الكسور الاسبوعي'} />
-        </div>
-        <Button className="w-full" onClick={function() { if (canProceedStep1) setStep(2) }} disabled={!canProceedStep1}>التالي - رفع الملف</Button>
-      </div>
-    )
-  }
+  var canExtractFile = file || fileUrl.trim()
+  var canExtractYoutube = youtubeUrl.trim().length > 5
+  var canExtract = inputMode === 'youtube' ? canExtractYoutube : canExtractFile
 
   var handleExtract = async function() {
     if (!canExtract || extracting) return
     setExtracting(true)
     setStatusMsg('جاري استخراج الاسئلة بالذكاء الاصطناعي... قد يستغرق ذلك دقيقة')
     try {
-      var fd = new FormData()
-      if (file) { fd.append('file', file) }
-      else if (fileUrl.trim()) { fd.append('fileUrl', fileUrl.trim()) }
-      fd.append('type', extractType)
-      fd.append('grade', grade)
-      var ctrl = new AbortController()
-      var tmr = setTimeout(function() { ctrl.abort() }, 90000)
-      var res = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl.signal })
-      clearTimeout(tmr)
-      var data = await res.json()
-      if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
-        var extracted = data.extracted.questions.map(function(q: any) {
-          return { question: q.question || '', options: (q.options || ['لا يوجد','لا يوجد','لا يوجد','لا يوجد']).slice(0, 4), correct: q.correct || 0 }
+      if (inputMode === 'youtube') {
+        // YouTube extraction
+        var ctrl = new AbortController()
+        var tmr = setTimeout(function() { ctrl.abort() }, 180000)
+        var res = await fetch('/api/ai-extract-youtube', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ youtubeUrl: youtubeUrl.trim(), numQuestions: numQuestions, type: extractType, grade: grade }),
+          signal: ctrl.signal
         })
-        setExtractedQuestions(extracted)
-        setStatusMsg('')
-        setStep(3)
-        toast.success('تم استخراج ' + extracted.length + ' سؤال بنجاح!')
+        clearTimeout(tmr)
+        var data = await res.json()
+        if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
+          if (data.extracted.title && !title) { setTitle(data.extracted.title) }
+          var extracted = data.extracted.questions.map(function(q: any) {
+            return { question: q.question || '', options: (q.options || ['N/A','N/A','N/A','N/A']).slice(0, 4), correct: q.correct || 0 }
+          })
+          setExtractedQuestions(extracted)
+          setStatusMsg('')
+          setStep(3)
+          toast.success('تم استخراج ' + extracted.length + ' سؤال من يوتيوب بنجاح!')
+        } else {
+          toast.error(data.error || 'لم يتم استخراج اسئلة من الفيديو')
+          setStatusMsg('')
+        }
       } else {
-        toast.error(data.error || 'لم يتم استخراج اسئلة')
-        setStatusMsg('')
+        // File/image extraction
+        var fd = new FormData()
+        if (file) { fd.append('file', file) }
+        else if (fileUrl.trim()) { fd.append('fileUrl', fileUrl.trim()) }
+        fd.append('type', extractType)
+        fd.append('grade', grade)
+        var ctrl2 = new AbortController()
+        var tmr2 = setTimeout(function() { ctrl2.abort() }, 90000)
+        var res2 = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl2.signal })
+        clearTimeout(tmr2)
+        var data2 = await res2.json()
+        if (res2.ok && data2.extracted && data2.extracted.questions && data2.extracted.questions.length > 0) {
+          var extracted2 = data2.extracted.questions.map(function(q: any) {
+            return { question: q.question || '', options: (q.options || ['لا يوجد','لا يوجد','لا يوجد','لا يوجد']).slice(0, 4), correct: q.correct || 0 }
+          })
+          setExtractedQuestions(extracted2)
+          setStatusMsg('')
+          setStep(3)
+          toast.success('تم استخراج ' + extracted2.length + ' سؤال بنجاح!')
+        } else {
+          toast.error(data2.error || 'لم يتم استخراج اسئلة')
+          setStatusMsg('')
+        }
       }
     } catch (err: any) {
       if (err && err.name === 'AbortError') { toast.error('انتهت مهلة الاستخراج - حاول مرة اخرى') }
@@ -2031,43 +2030,6 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       setStatusMsg('')
     }
     setExtracting(false)
-  }
-
-  var renderStep2 = function() {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 mb-2">
-          <button type="button" onClick={function() { setStep(1) }} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"><X className="h-4 w-4" /> رجوع</button>
-          <div className="flex items-center gap-2 flex-1">
-            <Badge variant="outline" className={"text-xs " + (extractType === 'exam' ? 'border-blue-500/50 text-blue-600' : 'border-emerald-500/50 text-emerald-600')}>{extractType === 'exam' ? 'امتحان' : 'واجب'}</Badge>
-            <span className="text-sm font-medium truncate">{title}</span>
-            <Badge variant="secondary" className="text-xs">{grade}</Badge>
-          </div>
-        </div>
-        <div className="p-4 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 space-y-3">
-          <div className="text-center">
-            <Upload className="h-8 w-8 text-primary mx-auto mb-2" />
-            <p className="text-sm font-medium">ارفع ملف الاسئلة او صورة</p>
-            <p className="text-[10px] text-muted-foreground">PDF, صورة, او اي ملف يحتوي على اسئلة</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,image/*" className="hidden" onChange={function(e) { setFile(e.target.files?.[0] || null); setFileUrl('') }} />
-            <Button type="button" variant="outline" onClick={function() { fileRef.current?.click() }} className="flex-1"><Upload className="h-4 w-4 ml-2" />{file ? file.name : 'اختر ملف من الجهاز'}</Button>
-          </div>
-          {file && <p className="text-xs text-muted-foreground text-center">{(file.size / 1024 / 1024).toFixed(1)} MB</p>}
-          <div className="flex items-center gap-3"><div className="flex-grow h-px bg-border" /><span className="text-[11px] text-muted-foreground">او</span><div className="flex-grow h-px bg-border" /></div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">او لصق رابط الملف</Label>
-            <Input placeholder="https://example.com/exam.pdf" value={fileUrl} onChange={function(e) { setFileUrl(e.target.value); if (e.target.value.trim()) { setFile(null) } }} dir="ltr" />
-          </div>
-        </div>
-        {statusMsg && <div className="flex items-center gap-2 p-3 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400"><Loader2 className="h-4 w-4 animate-spin" /><p className="text-sm">{statusMsg}</p></div>}
-        <Button className="w-full" size="lg" onClick={handleExtract} disabled={!canExtract || extracting}>
-          {extracting ? <Loader2 className="h-5 w-5 ml-2 animate-spin" /> : <Sparkles className="h-5 w-5 ml-2" />}
-          {extracting ? 'جاري الاستخراج...' : 'استخراج الاسئلة'}
-        </Button>
-      </div>
-    )
   }
 
   var updateQuestion = function(qi: number, field: string, value: any) {
@@ -2103,6 +2065,125 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
     setSaving(false); setStatusMsg('')
   }
 
+  var getYtId = function(url: string) {
+    var m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/|v\/))([\w-]{11})/)
+    return m ? m[1] : null
+  }
+
+  var renderStep1 = function() {
+    return (
+      <div className="space-y-4">
+        <div className="text-center py-4">
+          <Sparkles className="h-10 w-10 text-purple-500 mx-auto mb-3" />
+          <h3 className="text-lg font-bold">استخراج الذكاء الاصطناعي</h3>
+          <p className="text-sm text-muted-foreground mt-1">ارفع ملف او استخرج من فيديو يوتيوب واحفظ الاسئلة مباشرة</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" onClick={function() { setExtractType('exam') }} className={"p-4 rounded-xl border-2 text-center transition-all " + (extractType === 'exam' ? 'border-primary bg-primary/5 shadow-md' : 'border-muted hover:border-primary/30')}>
+            <FileText className={"h-8 w-8 mx-auto mb-2 " + (extractType === 'exam' ? 'text-primary' : 'text-muted-foreground')} />
+            <p className={"font-bold text-sm " + (extractType === 'exam' ? 'text-primary' : '')}>امتحان</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Exam</p>
+          </button>
+          <button type="button" onClick={function() { setExtractType('homework') }} className={"p-4 rounded-xl border-2 text-center transition-all " + (extractType === 'homework' ? 'border-primary bg-primary/5 shadow-md' : 'border-muted hover:border-primary/30')}>
+            <ClipboardList className={"h-8 w-8 mx-auto mb-2 " + (extractType === 'homework' ? 'text-primary' : 'text-muted-foreground')} />
+            <p className={"font-bold text-sm " + (extractType === 'homework' ? 'text-primary' : '')}>واجب</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Homework</p>
+          </button>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">الصف الدراسي *</Label>
+          <select value={grade} onChange={function(e) { setGrade(e.target.value) }} className="w-full h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
+            <option value="">اختر الصف</option>
+            {GRADES.map(function(g) { return <option key={g} value={g}>{g}</option> })}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">العنوان *</Label>
+          <Input value={title} onChange={function(e) { setTitle(e.target.value) }} placeholder={extractType === 'exam' ? 'مثال: امتحان الباب الاول' : 'مثال: واجب الكسور الاسبوعي'} />
+        </div>
+        <Button className="w-full" onClick={function() { if (canProceedStep1) setStep(2) }} disabled={!canProceedStep1}>التالي - اختيار المصدر</Button>
+      </div>
+    )
+  }
+
+  var renderStep2 = function() {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 mb-2">
+          <button type="button" onClick={function() { setStep(1) }} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"><X className="h-4 w-4" /> رجوع</button>
+          <div className="flex items-center gap-2 flex-1">
+            <Badge variant="outline" className={"text-xs " + (extractType === 'exam' ? 'border-blue-500/50 text-blue-600' : 'border-emerald-500/50 text-emerald-600')}>{extractType === 'exam' ? 'امتحان' : 'واجب'}</Badge>
+            <span className="text-sm font-medium truncate">{title}</span>
+            <Badge variant="secondary" className="text-xs">{grade}</Badge>
+          </div>
+        </div>
+
+        {/* Input Mode Toggle */}
+        <div className="flex gap-2 p-1 rounded-lg bg-muted">
+          <button type="button" onClick={function() { setInputMode('file') }} className={"flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-all " + (inputMode === 'file' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <Upload className="h-4 w-4" /> رفع ملف
+          </button>
+          <button type="button" onClick={function() { setInputMode('youtube') }} className={"flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-all " + (inputMode === 'youtube' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <PlayCircle className="h-4 w-4" /> يوتيوب
+          </button>
+        </div>
+
+        {inputMode === 'file' ? (
+          <div className="p-4 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 space-y-3">
+            <div className="text-center">
+              <Upload className="h-8 w-8 text-primary mx-auto mb-2" />
+              <p className="text-sm font-medium">ارفع ملف الاسئلة او صورة</p>
+              <p className="text-[10px] text-muted-foreground">PDF, صورة, او اي ملف يحتوي على اسئلة</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,image/*" className="hidden" onChange={function(e) { setFile(e.target.files?.[0] || null); setFileUrl('') }} />
+              <Button type="button" variant="outline" onClick={function() { fileRef.current?.click() }} className="flex-1"><Upload className="h-4 w-4 ml-2" />{file ? file.name : 'اختر ملف من الجهاز'}</Button>
+            </div>
+            {file && <p className="text-xs text-muted-foreground text-center">{(file.size / 1024 / 1024).toFixed(1)} MB</p>}
+            <div className="flex items-center gap-3"><div className="flex-grow h-px bg-border" /><span className="text-[11px] text-muted-foreground">او</span><div className="flex-grow h-px bg-border" /></div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">او لصق رابط الملف</Label>
+              <Input placeholder="https://example.com/exam.pdf" value={fileUrl} onChange={function(e) { setFileUrl(e.target.value); if (e.target.value.trim()) { setFile(null) } }} dir="ltr" />
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl border-2 border-dashed border-red-300 bg-red-50 dark:bg-red-950/20 space-y-3">
+            <div className="text-center">
+              <PlayCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+              <p className="text-sm font-medium">استخراج من فيديو يوتيوب</p>
+              <p className="text-[10px] text-muted-foreground">الصق رابط فيديو يوتيوب وسيتم استخراج الاسئلة منه</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">رابط يوتيوب *</Label>
+              <Input placeholder="https://youtube.com/watch?v=..." value={youtubeUrl} onChange={function(e) { setYoutubeUrl(e.target.value) }} dir="ltr" />
+            </div>
+            {getYtId(youtubeUrl) && (
+              <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+                <Image src={'https://img.youtube.com/vi/' + getYtId(youtubeUrl) + '/mqdefault.jpg'} alt="YouTube thumbnail" fill className="object-cover" sizes="400px" unoptimized />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <PlayCircle className="h-12 w-12 text-white/80" />
+                </div>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">عدد الاسئلة المطلوبة</Label>
+              <div className="flex items-center gap-3">
+                <input type="range" min={3} max={30} value={numQuestions} onChange={function(e) { setNumQuestions(parseInt(e.target.value)) }} className="flex-1" />
+                <span className="text-sm font-bold text-primary w-8 text-center">{numQuestions}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {statusMsg && <div className="flex items-center gap-2 p-3 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400"><Loader2 className="h-4 w-4 animate-spin" /><p className="text-sm">{statusMsg}</p></div>}
+        <Button className="w-full" size="lg" onClick={handleExtract} disabled={!canExtract || extracting}>
+          {extracting ? <Loader2 className="h-5 w-5 ml-2 animate-spin" /> : <Sparkles className="h-5 w-5 ml-2" />}
+          {extracting ? 'جاري الاستخراج...' : (inputMode === 'youtube' ? 'استخراج من يوتيوب' : 'استخراج الاسئلة')}
+        </Button>
+      </div>
+    )
+  }
+
   var renderStep3 = function() {
     return (
       <div className="space-y-4">
@@ -2112,6 +2193,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
             <Badge variant="outline" className={"text-xs " + (extractType === 'exam' ? 'border-blue-500/50 text-blue-600' : 'border-emerald-500/50 text-emerald-600')}>{extractType === 'exam' ? 'امتحان' : 'واجب'}</Badge>
             <span className="text-sm font-medium truncate">{title}</span>
             <Badge variant="secondary" className="text-xs">{grade}</Badge>
+            {inputMode === 'youtube' && <Badge variant="outline" className="text-xs border-red-300 text-red-600"><PlayCircle className="h-3 w-3 ml-1" />يوتيوب</Badge>}
           </div>
           <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-0">{extractedQuestions.length} سؤال</Badge>
         </div>
@@ -2172,7 +2254,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
         </div>
         <div className="flex justify-center gap-6 mb-4 text-[10px] text-muted-foreground">
           <span className={step >= 1 ? 'text-primary font-medium' : ''}>النوع والبيانات</span>
-          <span className={step >= 2 ? 'text-primary font-medium' : ''}>رفع واستخراج</span>
+          <span className={step >= 2 ? 'text-primary font-medium' : ''}>اختيار المصدر</span>
           <span className={step >= 3 ? 'text-primary font-medium' : ''}>مراجعة وحفظ</span>
         </div>
         {step === 1 && renderStep1()}
