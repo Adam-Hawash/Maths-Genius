@@ -17,11 +17,19 @@ export async function POST(request) {
       return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
     }
 
-    // Check double submission
+    // Check double submission - use findFirst as fallback if unique constraint missing
     try {
-      var existing = await db.homeworkResult.findUnique({
-        where: { studentId_homeworkId: { studentId: studentId, homeworkId: homeworkId } },
-      })
+      var existing = null
+      try {
+        existing = await db.homeworkResult.findUnique({
+          where: { studentId_homeworkId: { studentId: studentId, homeworkId: homeworkId } },
+        })
+      } catch (_) {
+        // Fallback if unique constraint doesn't exist in DB
+        existing = await db.homeworkResult.findFirst({
+          where: { studentId: studentId, homeworkId: homeworkId },
+        })
+      }
       if (existing) {
         return NextResponse.json({
           success: true,
@@ -96,7 +104,7 @@ export async function POST(request) {
 
     if (maxScore === 0) { maxScore = mcq.length }
 
-    // Save result using safeWrite (removed 'answers' field to prevent Prisma schema mismatch crash)
+    // Save result using safeWrite — only fields guaranteed in DB schema
     var result = await safeWrite(function() {
       return db.homeworkResult.create({
         data: {

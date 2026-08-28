@@ -840,8 +840,36 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   const [examSubmitted, setExamSubmitted] = useState(false)
   const [submittedExamId, setSubmittedExamId] = useState<string | null>(null)
   const [checkingServer, setCheckingServer] = useState(false)
+  const [blockedExamId, setBlockedExamId] = useState<string | null>(null)
 
   if (exams.length === 0) return <EmptyState message="لا توجد امتحانات حالياً" />
+
+  // PERMANENT BLOCK SCREEN — exam already submitted, cannot retake
+  if (blockedExamId) {
+    const blockedExam = exams.find(e => e.id === blockedExamId)
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-6 space-y-6">
+        <div className="h-24 w-24 rounded-full bg-red-500/10 flex items-center justify-center">
+          <X className="h-14 w-14 text-red-500" />
+        </div>
+        <div className="text-center space-y-2">
+          <h2 className="text-xl font-bold text-red-600">تم تقديم هذا الامتحان بالفعل ولا يمكنك إعادته</h2>
+          {blockedExam && <p className="text-sm text-muted-foreground">{blockedExam.title}</p>}
+          <p className="text-sm text-muted-foreground">انتظر النتيجة من مستر وائل خضير</p>
+        </div>
+        <Button
+          onClick={() => {
+            onExamSubmitted(blockedExamId)
+            setBlockedExamId(null)
+          }}
+          variant="outline"
+          className="mt-4"
+        >
+          العودة إلى قائمة الامتحانات
+        </Button>
+      </div>
+    )
+  }
 
   // EXAM SUBMITTED SUCCESS SCREEN — NO window.location.reload(), NO score shown
   if (examSubmitted) {
@@ -937,6 +965,10 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                 setExamSubmitted(true)
                 // Notify parent immediately so exam list updates even if they don't click return
                 onExamSubmitted(takingExam)
+              } else if (data.blocked || data.alreadySubmitted) {
+                // Server blocked re-submission
+                onExamSubmitted(takingExam)
+                setBlockedExamId(takingExam)
               } else {
                 toast.error(data.error || 'خطأ في التقديم')
               }
@@ -982,8 +1014,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                           var checkData = await checkRes.json()
                           if (checkData.results && checkData.results.length > 0) {
                             onExamSubmitted(exam.id)
-                            toast.info('تم تقديم هذا الامتحان بالفعل')
                             setCheckingServer(false)
+                            setBlockedExamId(exam.id)
                             return
                           }
                         } catch { /* proceed anyway */ }
