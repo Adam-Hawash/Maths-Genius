@@ -81,6 +81,7 @@ model HomeworkResult {
   maxScore    Float    @default(100)
   answers     String   @default("")
   submittedAt DateTime @default(now())
+  homework    Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, homeworkId])
 }
