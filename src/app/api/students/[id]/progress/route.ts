@@ -10,23 +10,54 @@ export async function GET(
   try {
     const { id } = await params
 
-    const student = await db.student.findUnique({ where: { id } })
+    // Use raw SQL for student lookup (Prisma schema out of sync - isPaidAccess column missing in DB)
+    var student: any = null
+    try {
+      var studentRows = await db.$queryRawUnsafe('SELECT id, name, grade FROM Student WHERE id = ? LIMIT 1', id)
+      student = studentRows && studentRows.length > 0 ? studentRows[0] : null
+    } catch (e) {
+      console.error('Student lookup raw SQL error, trying Prisma:', e)
+      try { student = await db.student.findUnique({ where: { id }, select: { id: true, name: true, grade: true } }) } catch(e2) {}
+    }
     if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 })
 
-    // Get video progress
-    const videoProgress = await db.videoProgress.findMany({
-      where: { studentId: id },
-      orderBy: { lastWatchedAt: 'desc' },
-    })
+    // Get video progress using RAW SQL (avoid Prisma schema mismatches)
+    var videoProgress: any[] = []
+    try {
+      videoProgress = await db.$queryRawUnsafe(
+        'SELECT * FROM VideoProgress WHERE studentId = ? ORDER BY lastWatchedAt DESC',
+        id
+      ) || []
+    } catch (e) {
+      console.error('VideoProgress raw SQL error, trying Prisma:', e)
+      try {
+        videoProgress = await db.videoProgress.findMany({ where: { studentId: id }, orderBy: { lastWatchedAt: 'desc' } })
+      } catch(e2) { videoProgress = [] }
+    }
 
-    const videoIds = [...new Set(videoProgress.map(vp => vp.videoId))]
-    const videos = videoIds.length > 0
-      ? await db.video.findMany({ where: { id: { in: videoIds } }, select: { id: true, title: true, grade: true } })
-      : []
-    const videoMap = Object.fromEntries(videos.map(v => [v.id, v]))
+    const videoIds = [...new Set(videoProgress.map((vp: any) => vp.videoId))]
+    var videoMap: any = {}
+    try {
+      if (videoIds.length > 0) {
+        var placeholders = videoIds.map(function() { return '?' }).join(',')
+        var videos = await db.$queryRawUnsafe(
+          'SELECT id, title, grade FROM Video WHERE id IN (' + placeholders + ')',
+          ...videoIds
+        ) || []
+        videoMap = Object.fromEntries((videos as any[]).map((v: any) => [v.id, v]))
+      }
+    } catch (e) {
+      console.error('Video lookup error:', e)
+    }
 
-    const videoProgressEnriched = videoProgress.map(vp => ({
-      ...vp,
+    const videoProgressEnriched = videoProgress.map((vp: any) => ({
+      id: vp.id,
+      studentId: vp.studentId,
+      videoId: vp.videoId,
+      watchedSeconds: vp.watchedSeconds || 0,
+      totalSeconds: vp.totalSeconds || 0,
+      completed: !!vp.completed,
+      lastWatchedAt: vp.lastWatchedAt,
       percent: vp.totalSeconds > 0 ? Math.min(100, Math.round((vp.watchedSeconds / vp.totalSeconds) * 100)) : 0,
       videoTitle: videoMap[vp.videoId]?.title || 'فيديو محذوف',
       videoGrade: videoMap[vp.videoId]?.grade || '',
@@ -184,9 +215,9 @@ export async function GET(
 
     // Summary stats
     const totalVideosWatched = videoProgress.length
-    const completedVideos = videoProgress.filter(vp => vp.completed).length
+    const completedVideos = videoProgress.filter((vp: any) => vp.completed).length
     const avgWatchPercent = videoProgress.length > 0
-      ? Math.min(100, Math.round(videoProgress.reduce((sum, vp) => sum + Math.min(100, (vp.totalSeconds > 0 ? (vp.watchedSeconds / vp.totalSeconds) * 100 : 0)), 0) / videoProgress.length))
+      ? Math.min(100, Math.round(videoProgress.reduce((sum: number, vp: any) => sum + Math.min(100, (vp.totalSeconds > 0 ? (vp.watchedSeconds / vp.totalSeconds) * 100 : 0)), 0) / videoProgress.length))
       : 0
     const avgExamScore = examResultsEnriched.length > 0
       ? Math.round(examResultsEnriched.reduce(function(s, er) { return s + er.score }, 0) / examResultsEnriched.length)
