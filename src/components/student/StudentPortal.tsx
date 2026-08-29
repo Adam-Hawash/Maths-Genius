@@ -651,6 +651,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
   const [hwSubmitted, setHwSubmitted] = useState(false)
   const [submittedHwId, setSubmittedHwId] = useState<string | null>(null)
   const [blockedHwId, setBlockedHwId] = useState<string | null>(null)
+  const [hwResults, setHwResults] = useState<Record<string, { score: number; maxScore: number }>>({})
+  const [hwWrongQuestions, setHwWrongQuestions] = useState<Record<string, { question: string; studentAnswer: string; correctAnswer: string }[]>>({})
   const hwShuffleMaps = useRef<Record<string, number[]>>({})
 
   useEffect(() => {
@@ -658,61 +660,122 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     fetch('/api/homework-results?studentId=' + studentId)
       .then(function(r) { return r.json() })
       .then(function(data) {
+        var map: Record<string, { score: number; maxScore: number }> = {}
         ;(data.results || []).forEach(function(r: any) {
+          map[r.homeworkId] = { score: r.score, maxScore: r.maxScore }
           onHwSubmitted(r.homeworkId)
         })
+        setHwResults(map)
       })
       .catch(function() {})
   }, [studentId])
 
   if (homework.length === 0) return <EmptyState message="لا توجد واجبات حالياً" />
 
-  // BLOCK SCREEN — homework already submitted, cannot re-enter
+  // BLOCK SCREEN — homework already submitted, cannot re-enter, but show score + wrong answers
   if (blockedHwId) {
     var blockedHw = homework.find(function(h) { return h.id === blockedHwId })
+    var bScore = hwResults[blockedHwId]
+    var bWrong = hwWrongQuestions[blockedHwId] || []
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-6 space-y-6">
-        <div className="h-24 w-24 rounded-full bg-red-500/10 flex items-center justify-center">
-          <X className="h-14 w-14 text-red-500" />
+      <div className="space-y-4">
+        {/* Block header */}
+        <div className="flex flex-col items-center justify-center py-10 px-6 space-y-4">
+          <div className="h-20 w-20 rounded-full bg-red-500/10 flex items-center justify-center">
+            <X className="h-12 w-12 text-red-500" />
+          </div>
+          <div className="text-center space-y-2">
+            <h2 className="text-lg font-bold text-red-600">تم تقديم هذا الواجب بالفعل ولا يمكنك إعادته</h2>
+            {blockedHw && <p className="text-sm text-muted-foreground">{blockedHw.title}</p>}
+          </div>
+          <Button onClick={function() { onHwSubmitted(blockedHwId); setBlockedHwId(null) }} variant="outline">العودة إلى قائمة الواجبات</Button>
         </div>
-        <div className="text-center space-y-2">
-          <h2 className="text-xl font-bold text-red-600">تم تقديم هذا الواجب بالفعل ولا يمكنك إعادته</h2>
-          {blockedHw && <p className="text-sm text-muted-foreground">{blockedHw.title}</p>}
-          <p className="text-sm text-muted-foreground">انتظر النتيجة من مستر وائل</p>
-        </div>
-        <Button
-          onClick={function() { onHwSubmitted(blockedHwId); setBlockedHwId(null) }}
-          variant="outline"
-          className="mt-4"
-        >
-          العودة إلى قائمة الواجبات
-        </Button>
+        {/* Score + wrong answers */}
+        {bScore && (
+          <div className="mx-4">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+              <div>
+                <p className="font-bold text-sm text-emerald-700 dark:text-emerald-400">تم تقديم الواجب بنجاح</p>
+                <p className="text-xs text-muted-foreground">النتيجة: {bScore.score}/{bScore.maxScore}</p>
+              </div>
+            </div>
+            {bWrong.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-sm font-semibold text-red-600">الإجابات الخاطئة ({bWrong.length}):</p>
+                {bWrong.map(function(wq, wi) {
+                  return (
+                    <Card key={wi} className="border-red-200 dark:border-red-900/40">
+                      <CardContent className="p-3 space-y-2">
+                        <p className="text-sm font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wi + 1}. {wq.question}</p>
+                        <div className="space-y-1">
+                          <p className="text-xs text-red-600">إجابتك: <span dir="ltr">{wq.studentAnswer}</span></p>
+                          <p className="text-xs text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+            {bWrong.length === 0 && (
+              <p className="mt-3 text-sm text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
+            )}
+          </div>
+        )}
       </div>
     )
   }
 
-  // SUCCESS SCREEN — just submitted
-  if (hwSubmitted) {
+  // SUCCESS SCREEN — just submitted, show score + wrong answers
+  if (hwSubmitted && submittedHwId) {
+    var sScore = hwResults[submittedHwId]
+    var sWrong = hwWrongQuestions[submittedHwId] || []
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-6 space-y-6">
-        <div className="h-24 w-24 rounded-full bg-emerald-500/10 flex items-center justify-center">
-          <CheckCircle2 className="h-14 w-14 text-emerald-500" />
+      <div className="space-y-4">
+        <div className="flex flex-col items-center justify-center py-10 px-6 space-y-4">
+          <div className="h-20 w-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+          </div>
+          <div className="text-center space-y-2">
+            <h2 className="text-lg font-bold text-emerald-600">تم تقديم الواجب بنجاح</h2>
+          </div>
+          <Button onClick={function() {
+            setHwSubmitted(false); setSubmittedHwId(null); setExpandedHw(null)
+          }} className="mt-2">العودة إلى قائمة الواجبات</Button>
         </div>
-        <div className="text-center space-y-2">
-          <h2 className="text-xl font-bold text-emerald-600">تم تقديم الواجب بنجاح</h2>
-          <p className="text-sm text-muted-foreground">انتظر النتيجة من مستر وائل</p>
-        </div>
-        <Button
-          onClick={function() {
-            if (submittedHwId) onHwSubmitted(submittedHwId)
-            setHwSubmitted(false)
-            setSubmittedHwId(null)
-            setExpandedHw(null)
-          }}
-          className="mt-4"
-        >
-          العودة إلى قائمة الواجبات
-        </Button>
+        {/* Score + wrong answers */}
+        {sScore && (
+          <div className="mx-4">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+              <div>
+                <p className="font-bold text-sm text-emerald-700 dark:text-emerald-400">النتيجة: {sScore.score}/{sScore.maxScore}</p>
+              </div>
+            </div>
+            {sWrong.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-sm font-semibold text-red-600">الإجابات الخاطئة ({sWrong.length}):</p>
+                {sWrong.map(function(wq, wi) {
+                  return (
+                    <Card key={wi} className="border-red-200 dark:border-red-900/40">
+                      <CardContent className="p-3 space-y-2">
+                        <p className="text-sm font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wi + 1}. {wq.question}</p>
+                        <div className="space-y-1">
+                          <p className="text-xs text-red-600">إجابتك: <span dir="ltr">{wq.studentAnswer}</span></p>
+                          <p className="text-xs text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+            {sWrong.length === 0 && (
+              <p className="mt-3 text-sm text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -725,6 +788,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         var isExpanded = expandedHw === hw.id
         var isSubmitted = completedHwIds.has(hw.id)
         var myAnswers = hwAnswers[hw.id] || {}
+        var existingResult = hwResults[hw.id]
 
         // Shuffle questions uniquely per student when expanding
         var shuffleMap: number[] = []
@@ -760,7 +824,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-[10px] text-muted-foreground">{new Date(hw.createdAt).toLocaleDateString('ar-EG')}</p>
                       {hasMCQ && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">{mcq.length} سؤال</Badge>}
-                      {isSubmitted && <Badge className="text-[10px] bg-emerald-500 text-white">تم التسليم</Badge>}
+                      {isSubmitted && existingResult && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {existingResult.score}/{existingResult.maxScore}</Badge>}
+                      {isSubmitted && !existingResult && <Badge className="text-[10px] bg-emerald-500 text-white">تم التسليم</Badge>}
                     </div>
                   </div>
                 </div>
@@ -800,7 +865,6 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                   <Button size="sm" disabled={Object.keys(myAnswers).length === 0 || hwSubmitting === hw.id} onClick={async function() {
                     setHwSubmitting(hw.id)
                     try {
-                      // Map shuffled display indices back to original DB indices
                       var mappedAnswers: Record<number, number> = {}
                       if (shuffleMap.length > 0) {
                         Object.keys(myAnswers).forEach(function(di) { mappedAnswers[shuffleMap[parseInt(di)]] = myAnswers[di] })
@@ -815,6 +879,12 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                       var data = await res.json()
                       if (res.ok || data.alreadySubmitted) {
                         toast.success('تم تقديم الواجب بنجاح')
+                        if (data.result) {
+                          setHwResults(function(prev) { return { ...prev, [hw.id]: { score: data.result.score, maxScore: data.result.maxScore } } })
+                          if (data.result.wrongQuestions && data.result.wrongQuestions.length > 0) {
+                            setHwWrongQuestions(function(prev) { return { ...prev, [hw.id]: data.result.wrongQuestions } })
+                          }
+                        }
                         onHwSubmitted(hw.id)
                         setSubmittedHwId(hw.id)
                         setHwSubmitted(true)

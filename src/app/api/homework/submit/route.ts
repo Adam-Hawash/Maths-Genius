@@ -1,5 +1,5 @@
 // @ts-nocheck
-// POST /api/homework/submit - Submit homework answers (NO auto-grading, teacher grades from admin)
+// POST /api/homework/submit - Submit homework answers, auto-grade, save result, return score + wrong answers
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -20,14 +20,9 @@ async function ensureTable() {
         submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `)
-    // Try adding answers column if missing
-    try {
-      await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN answers TEXT DEFAULT ""')
-    } catch(e) { /* column already exists */ }
-    // Try adding submittedAt column if missing
-    try {
-      await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP')
-    } catch(e) { /* column already exists */ }
+    // Try adding columns if missing
+    try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN answers TEXT DEFAULT ""') } catch(e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP') } catch(e) {}
   } catch (e) {
     console.error('Ensure HomeworkResult table error:', e)
   }
@@ -50,20 +45,88 @@ export async function POST(request) {
     // Check double submission
     try {
       var existing = await db.$queryRawUnsafe(
-        'SELECT id FROM HomeworkResult WHERE studentId = ? AND homeworkId = ? LIMIT 1',
+        'SELECT id, score, maxScore FROM HomeworkResult WHERE studentId = ? AND homeworkId = ? LIMIT 1',
         studentId, homeworkId
       )
       if (existing && existing.length > 0) {
         return NextResponse.json({
           success: true,
           alreadySubmitted: true,
+          result: { id: existing[0].id, score: existing[0].score, maxScore: existing[0].maxScore },
         }, { status: 200 })
       }
     } catch (e) {
       console.error('Check existing hw error:', e)
     }
 
-    // Save submission — NO auto-grading, teacher will set score from admin
+    // Fetch homework questions using raw SQL
+    var homework = null
+    try {
+      var hwRows = await db.$queryRawUnsafe(
+        'SELECT id, title, questions FROM Homework WHERE id = ? LIMIT 1',
+        homeworkId
+      )
+      homework = hwRows && hwRows.length > 0 ? hwRows[0] : null
+    } catch (e) {
+      console.error('Fetch homework error:', e)
+      return NextResponse.json({ error: 'الواجب غير موجود' }, { status: 404 })
+    }
+    if (!homework) {
+      return NextResponse.json({ error: 'الواجب غير موجود' }, { status: 404 })
+    }
+
+    // Parse questions
+    var mcq = []
+    if (homework.questions) {
+      try {
+        var raw = typeof homework.questions === 'string' ? JSON.parse(homework.questions) : homework.questions
+        if (Array.isArray(raw)) { mcq = raw }
+      } catch (e) {
+        console.error('Parse homework questions error:', e)
+      }
+    }
+    if (mcq.length === 0) {
+      return NextResponse.json({ error: 'لا توجد أسئلة في الواجب' }, { status: 400 })
+    }
+
+    // Auto-grade with points support
+    var score = 0
+    var maxScore = 0
+    var wrongQuestions = []
+
+    mcq.forEach(function(q, i) {
+      var qText = q.question || q.q || ''
+      var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+      maxScore += pts
+      var opts = Array.isArray(q.options) ? q.options : []
+      var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+      if (correctIdx < 0 || correctIdx >= opts.length) { correctIdx = 0 }
+
+      var studentAnswer = undefined
+      if (Array.isArray(answers)) {
+        studentAnswer = answers[i]
+      } else if (answers !== null && typeof answers === 'object') {
+        studentAnswer = answers[i] !== undefined ? answers[i] : answers[String(i)]
+      }
+
+      if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === correctIdx) {
+        score += pts
+      } else {
+        wrongQuestions.push({
+          question: qText,
+          studentAnswer: (typeof studentAnswer === 'number' && opts[studentAnswer])
+            ? String.fromCharCode(65 + studentAnswer) + ') ' + opts[studentAnswer]
+            : 'لم يتم الإجابة',
+          correctAnswer: opts[correctIdx]
+            ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
+            : '',
+        })
+      }
+    })
+
+    if (maxScore === 0) { maxScore = mcq.length }
+
+    // Save result with score
     var resultId = 'hwr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
     var answersJson = ''
     if (answers !== undefined && answers !== null) {
@@ -72,37 +135,37 @@ export async function POST(request) {
 
     try {
       await db.$executeRawUnsafe(
-        'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore, answers) VALUES (?, ?, ?, 0, 100, ?)',
-        resultId, studentId, homeworkId, answersJson
+        'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore, answers) VALUES (?, ?, ?, ?, ?, ?)',
+        resultId, studentId, homeworkId, score, maxScore, answersJson
       )
     } catch (insertErr) {
       console.error('Insert homework result error:', insertErr)
       // Retry without answers column
       try {
         await db.$executeRawUnsafe(
-          'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore) VALUES (?, ?, ?, 0, 100)',
-          resultId, studentId, homeworkId
+          'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore) VALUES (?, ?, ?, ?, ?)',
+          resultId, studentId, homeworkId, score, maxScore
         )
       } catch (retryErr) {
         console.error('Retry insert homework result error:', retryErr)
-        return NextResponse.json({
-          error: 'حصلت مشكلة في حفظ النتيجة'
-        }, { status: 500 })
+        return NextResponse.json({ error: 'حصلت مشكلة في حفظ النتيجة' }, { status: 500 })
       }
     }
 
-    // Return success — NO score, teacher grades later
+    // Return result WITH score and wrong questions (for both student and teacher)
     return NextResponse.json({
       success: true,
       submitted: true,
       result: {
         id: resultId,
+        score: score,
+        maxScore: maxScore,
+        submittedAt: new Date().toISOString(),
+        wrongQuestions: wrongQuestions,
       },
     })
   } catch (error) {
     console.error('Homework submit error:', error)
-    return NextResponse.json({
-      error: 'حصلت مشكلة في تسليم الواجب'
-    }, { status: 500 })
+    return NextResponse.json({ error: 'حصلت مشكلة في تسليم الواجب' }, { status: 500 })
   }
 }
