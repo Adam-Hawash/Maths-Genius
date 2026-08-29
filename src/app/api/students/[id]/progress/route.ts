@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/students/[id]/progress - Get student's video progress + exam results + homework results
+// GET /api/students/[id]/progress - Get student's video progress + exam results + homework results with wrong questions
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -19,7 +19,6 @@ export async function GET(
       orderBy: { lastWatchedAt: 'desc' },
     })
 
-    // Get video details separately
     const videoIds = [...new Set(videoProgress.map(vp => vp.videoId))]
     const videos = videoIds.length > 0
       ? await db.video.findMany({ where: { id: { in: videoIds } }, select: { id: true, title: true, grade: true } })
@@ -39,7 +38,6 @@ export async function GET(
       orderBy: { submittedAt: 'desc' },
     })
 
-    // Get exam details separately
     const examIds = [...new Set(examResults.map(er => er.examId))]
     const exams = examIds.length > 0
       ? await db.exam.findMany({ where: { id: { in: examIds } }, select: { id: true, title: true, grade: true, passScore: true } })
@@ -54,22 +52,68 @@ export async function GET(
       passed: er.score >= (examMap[er.examId]?.passScore || 50),
     }))
 
-    // Get homework results using RAW SQL
+    // Get homework results using RAW SQL — include answers column
     var homeworkResults: any[] = []
     try {
       var hwRows = await db.$queryRawUnsafe(
-        'SELECT h.id, h.title, hr.score, hr.maxScore, hr.submittedAt FROM HomeworkResult hr LEFT JOIN Homework h ON hr.homeworkId = h.id WHERE hr.studentId = ? ORDER BY hr.submittedAt DESC',
+        'SELECT hr.id, hr.homeworkId, hr.score, hr.maxScore, hr.submittedAt, hr.answers, h.title, h.questions FROM HomeworkResult hr LEFT JOIN Homework h ON hr.homeworkId = h.id WHERE hr.studentId = ? ORDER BY hr.submittedAt DESC',
         id
       )
-      homeworkResults = (hwRows || []).map(function(row: any) {
-        return {
+
+      for (var i = 0; i < (hwRows || []).length; i++) {
+        var row = hwRows[i]
+        var wrongQuestions: any[] = []
+
+        // Re-grade to find wrong questions
+        try {
+          var mcq = []
+          if (row.questions) {
+            var raw = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
+            if (Array.isArray(raw)) mcq = raw
+          }
+          var studentAnswers: any = {}
+          if (row.answers) {
+            studentAnswers = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
+          }
+
+          mcq.forEach(function(q, qi) {
+            var qText = q.question || q.q || ''
+            var opts = Array.isArray(q.options) ? q.options : []
+            var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+            if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
+
+            var ans = undefined
+            if (Array.isArray(studentAnswers)) {
+              ans = studentAnswers[qi]
+            } else if (studentAnswers !== null && typeof studentAnswers === 'object') {
+              ans = studentAnswers[qi] !== undefined ? studentAnswers[qi] : studentAnswers[String(qi)]
+            }
+
+            if (ans === undefined || ans === null || Number(ans) !== correctIdx) {
+              wrongQuestions.push({
+                question: qText,
+                studentAnswer: (typeof ans === 'number' && opts[ans])
+                  ? String.fromCharCode(65 + ans) + ') ' + opts[ans]
+                  : 'لم يتم الإجابة',
+                correctAnswer: opts[correctIdx]
+                  ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
+                  : '',
+              })
+            }
+          })
+        } catch(gradeErr) {
+          console.error('Re-grade error for hw', row.homeworkId, ':', gradeErr)
+        }
+
+        homeworkResults.push({
           id: row.id,
           homeworkTitle: row.title || 'واجب محذوف',
           score: row.score || 0,
           maxScore: row.maxScore || 100,
           submittedAt: row.submittedAt,
-        }
-      })
+          wrongQuestions: wrongQuestions,
+        })
+      }
     } catch (e) {
       console.error('Homework results fetch error (progress):', e)
       homeworkResults = []
