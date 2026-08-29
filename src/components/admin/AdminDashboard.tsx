@@ -1564,16 +1564,36 @@ function MyStudentsPanel() {
 
                 {/* Exam Results Detail */}
                 {detail.examResults && detail.examResults.length > 0 && (
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 lg:col-span-4">
                     <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><Trophy className="h-3.5 w-3.5 text-amber-500" />نتائج الامتحانات</h4>
-                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
                       {detail.examResults.map((er: any) => (
-                        <div key={er.id} className="flex items-center justify-between p-1.5 rounded border bg-card">
-                          <p className="text-[11px] font-medium truncate max-w-[200px]">{er.examTitle}</p>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold ${er.passed ? 'text-emerald-600' : 'text-red-500'}`}>{er.score}/{er.maxScore}</span>
-                            <Badge variant={er.passed ? 'default' : 'outline'} className={`text-[9px] h-5 ${er.passed ? '' : 'border-amber-500 text-amber-600'}`}>{er.passed ? 'ناجح' : 'عايز مراجعة'}</Badge>
+                        <div key={er.id} className="border rounded-lg p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold truncate max-w-[250px]">{er.examTitle}</p>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-xs font-bold ${er.passed ? 'text-emerald-600' : 'text-red-500'}`}>{er.score}/{er.maxScore}</span>
+                              <Badge variant={er.passed ? 'default' : 'outline'} className={`text-[9px] h-5 ${er.passed ? '' : 'border-amber-500 text-amber-600'}`}>{er.passed ? 'ناجح' : 'عايز مراجعة'}</Badge>
+                            </div>
                           </div>
+                          {er.wrongQuestions && er.wrongQuestions.length > 0 && (
+                            <div className="mt-1 space-y-1">
+                              <p className="text-[10px] font-semibold text-red-600">الأسئلة الخاطئة ({er.wrongQuestions.length}):</p>
+                              {er.wrongQuestions.map((wq: any, wi: number) => (
+                                <div key={wi} className="flex items-start gap-2 text-[10px] p-1.5 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40">
+                                  <span className="shrink-0 font-bold text-red-500">{wi + 1}.</span>
+                                  <div className="min-w-0">
+                                    <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wq.question}</p>
+                                    <p className="text-red-600 mt-0.5">إجابة الطالب: <span dir="ltr">{wq.studentAnswer}</span></p>
+                                    <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {(!er.wrongQuestions || er.wrongQuestions.length === 0) && (
+                            <p className="text-[10px] text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
+                          )}
                         </div>
                       ))}
                     </div>

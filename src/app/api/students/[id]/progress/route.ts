@@ -32,25 +32,88 @@ export async function GET(
       videoGrade: videoMap[vp.videoId]?.grade || '',
     }))
 
-    // Get exam results
-    const examResults = await db.examResult.findMany({
-      where: { studentId: id },
-      orderBy: { submittedAt: 'desc' },
-    })
+    // Get exam results with wrong questions using RAW SQL
+    var examResultsEnriched: any[] = []
+    try {
+      var examRows = await db.$queryRawUnsafe(
+        'SELECT er.id, er.examId, er.score, er.maxScore, er.submittedAt, er.answers, e.title, e.questions, e.passScore FROM ExamResult er LEFT JOIN Exam e ON er.examId = e.id WHERE er.studentId = ? ORDER BY er.submittedAt DESC',
+        id
+      )
 
-    const examIds = [...new Set(examResults.map(er => er.examId))]
-    const exams = examIds.length > 0
-      ? await db.exam.findMany({ where: { id: { in: examIds } }, select: { id: true, title: true, grade: true, passScore: true } })
-      : []
-    const examMap = Object.fromEntries(exams.map(e => [e.id, e]))
+      for (var i = 0; i < (examRows || []).length; i++) {
+        var row = examRows[i]
+        var wrongQuestions: any[] = []
 
-    const examResultsEnriched = examResults.map(er => ({
-      ...er,
-      examTitle: examMap[er.examId]?.title || 'امتحان محذوف',
-      examGrade: examMap[er.examId]?.grade || '',
-      passScore: examMap[er.examId]?.passScore || 50,
-      passed: er.score >= (examMap[er.examId]?.passScore || 50),
-    }))
+        // Re-grade to find wrong questions (only if answers saved)
+        try {
+          var mcq = []
+          if (row.questions) {
+            var raw = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
+            if (Array.isArray(raw)) mcq = raw
+          }
+          var studentAnswers: any = {}
+          if (row.answers) {
+            studentAnswers = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
+          }
+
+          if (mcq.length > 0 && (Array.isArray(studentAnswers) ? studentAnswers.length > 0 : Object.keys(studentAnswers).length > 0)) {
+            mcq.forEach(function(q, qi) {
+              var qText = q.question || q.q || ''
+              var opts = Array.isArray(q.options) ? q.options : []
+              var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+              if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
+
+              var ans = undefined
+              if (Array.isArray(studentAnswers)) {
+                ans = studentAnswers[qi]
+              } else if (studentAnswers !== null && typeof studentAnswers === 'object') {
+                ans = studentAnswers[qi] !== undefined ? studentAnswers[qi] : studentAnswers[String(qi)]
+              }
+
+              if (ans === undefined || ans === null || Number(ans) !== correctIdx) {
+                wrongQuestions.push({
+                  question: qText,
+                  studentAnswer: (typeof ans === 'number' && opts[ans])
+                    ? String.fromCharCode(65 + ans) + ') ' + opts[ans]
+                    : 'لم يتم الإجابة',
+                  correctAnswer: opts[correctIdx]
+                    ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
+                    : '',
+                })
+              }
+            })
+          }
+        } catch(gradeErr) {
+          console.error('Re-grade error for exam', row.examId, ':', gradeErr)
+        }
+
+        var passScore = row.passScore || 50
+        examResultsEnriched.push({
+          id: row.id,
+          examTitle: row.title || 'امتحان محذوف',
+          examGrade: '',
+          passScore: passScore,
+          passed: (row.score || 0) >= passScore,
+          score: row.score || 0,
+          maxScore: row.maxScore || 100,
+          submittedAt: row.submittedAt,
+          wrongQuestions: wrongQuestions,
+        })
+      }
+    } catch (e) {
+      console.error('Exam results fetch error (progress):', e)
+      // Fallback to Prisma
+      try {
+        const examResults = await db.examResult.findMany({ where: { studentId: id }, orderBy: { submittedAt: 'desc' } })
+        const examIds = [...new Set(examResults.map(er => er.examId))]
+        const exams = examIds.length > 0 ? await db.exam.findMany({ where: { id: { in: examIds } }, select: { id: true, title: true, grade: true, passScore: true } }) : []
+        const examMap = Object.fromEntries(exams.map(e => [e.id, e]))
+        examResultsEnriched = examResults.map(er => ({
+          ...er, examTitle: examMap[er.examId]?.title || 'امتحان محذوف', examGrade: examMap[er.examId]?.grade || '',
+          passScore: examMap[er.examId]?.passScore || 50, passed: er.score >= (examMap[er.examId]?.passScore || 50), wrongQuestions: [],
+        }))
+      } catch(e2) { examResultsEnriched = [] }
+    }
 
     // Get homework results using RAW SQL — include answers column
     var homeworkResults: any[] = []
@@ -125,10 +188,10 @@ export async function GET(
     const avgWatchPercent = videoProgress.length > 0
       ? Math.min(100, Math.round(videoProgress.reduce((sum, vp) => sum + Math.min(100, (vp.totalSeconds > 0 ? (vp.watchedSeconds / vp.totalSeconds) * 100 : 0)), 0) / videoProgress.length))
       : 0
-    const avgExamScore = examResults.length > 0
-      ? Math.round(examResults.reduce((sum, er) => sum + er.score, 0) / examResults.length)
+    const avgExamScore = examResultsEnriched.length > 0
+      ? Math.round(examResultsEnriched.reduce(function(s, er) { return s + er.score }, 0) / examResultsEnriched.length)
       : 0
-    const examsPassed = examResults.filter(function(er) { return er.score >= (examMap[er.examId]?.passScore || 50) }).length
+    const examsPassed = examResultsEnriched.filter(function(er) { return er.passed }).length
     const avgHwScore = homeworkResults.length > 0
       ? Math.round(homeworkResults.reduce(function(s, r) { return s + r.score }, 0) / homeworkResults.length)
       : 0
@@ -142,7 +205,7 @@ export async function GET(
         totalVideosWatched,
         completedVideos,
         avgWatchPercent,
-        totalExamsTaken: examResults.length,
+        totalExamsTaken: examResultsEnriched.length,
         examsPassed,
         avgExamScore,
         totalHomeworkDone: homeworkResults.length,
