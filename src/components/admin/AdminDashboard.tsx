@@ -1410,13 +1410,26 @@ function MyStudentsPanel() {
   useEffect(() => { loadData() }, [grade])
 
   const loadDetail = async (studentId: string) => {
-    setSelectedStudent(students.find(s => s.id === studentId) || null)
+    var student = students.find(function(s) { return s.id === studentId })
+    setSelectedStudent(student || null)
+    setDetail(null)
     setLoadingDetail(true)
     try {
       const res = await fetch(`/api/students/${studentId}/progress`)
-      const data = await res.json()
-      setDetail(data)
-    } catch { toast.error('خطأ في تحميل التفاصيل') }
+      if (!res.ok) {
+        console.error('Progress API error:', res.status, res.statusText)
+        toast.error('خطأ في تحميل التفاصيل (HTTP ' + res.status + ')')
+      } else {
+        var data = await res.json()
+        if (data.error) {
+          toast.error('خطأ: ' + data.error)
+        }
+        setDetail(data)
+      }
+    } catch (err) {
+      console.error('loadDetail error:', err)
+      toast.error('خطأ في تحميل التفاصيل')
+    }
     setLoadingDetail(false)
   }
 
