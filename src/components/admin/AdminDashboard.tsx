@@ -1477,6 +1477,7 @@ function MyStudentsPanel() {
                     <th className="text-center py-2 px-1 font-medium">المشاهدة</th>
                     <th className="text-center py-2 px-1 font-medium">الامتحانات</th>
                     <th className="text-center py-2 px-1 font-medium">الدرجة</th>
+                    <th className="text-center py-2 px-1 font-medium">الواجبات</th>
                     <th className="text-center py-2 px-1 font-medium">النشاط</th>
                     <th className="text-center py-2 px-1 font-medium">آخر دخول</th>
                     <th className="text-center py-2 px-1 font-medium">تفاصيل</th>
@@ -1498,6 +1499,10 @@ function MyStudentsPanel() {
                         </td>
                         <td className="text-center py-2 px-1">
                           <span className={`text-xs font-bold ${s.avgExamScore >= 50 ? 'text-emerald-600' : s.avgExamScore > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>{s.avgExamScore || '—'}</span>
+                        </td>
+                        <td className="text-center py-2 px-1">
+                          <div className="text-xs font-medium">{(s as any).homeworkDone || 0}/{(s as any).totalHomework || 0}</div>
+                          <p className={`text-[9px] ${(s as any).avgHwScore >= 50 ? 'text-emerald-600' : (s as any).homeworkDone > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>{(s as any).avgHwScore || 0}°</p>
                         </td>
                         <td className="text-center py-2 px-1">
                           <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full text-xs font-bold ${getActivityColor(s.activityScore)} ${getActivityBg(s.activityScore)}`}>{s.activityScore}</div>
@@ -1568,6 +1573,24 @@ function MyStudentsPanel() {
                           <div className="flex items-center gap-2">
                             <span className={`text-xs font-bold ${er.passed ? 'text-emerald-600' : 'text-red-500'}`}>{er.score}/{er.maxScore}</span>
                             <Badge variant={er.passed ? 'default' : 'outline'} className={`text-[9px] h-5 ${er.passed ? '' : 'border-amber-500 text-amber-600'}`}>{er.passed ? 'ناجح' : 'عايز مراجعة'}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Homework Results Detail */}
+                {detail.homeworkResults && detail.homeworkResults.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5 text-emerald-500" />نتائج الواجبات</h4>
+                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
+                      {detail.homeworkResults.map((hr: any) => (
+                        <div key={hr.id} className="flex items-center justify-between p-1.5 rounded border bg-card">
+                          <p className="text-[11px] font-medium truncate max-w-[200px]">{hr.homeworkTitle}</p>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-bold ${hr.score >= (hr.maxScore / 2) ? 'text-emerald-600' : 'text-red-500'}`}>{hr.score}/{hr.maxScore}</span>
+                            <span className="text-[9px] text-muted-foreground">{hr.submittedAt ? new Date(hr.submittedAt).toLocaleDateString('ar-EG') : ''}</span>
                           </div>
                         </div>
                       ))}
