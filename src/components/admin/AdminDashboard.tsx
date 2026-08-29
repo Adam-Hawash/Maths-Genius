@@ -1582,16 +1582,36 @@ function MyStudentsPanel() {
 
                 {/* Homework Results Detail */}
                 {detail.homeworkResults && detail.homeworkResults.length > 0 && (
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 lg:col-span-4">
                     <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5 text-emerald-500" />نتائج الواجبات</h4>
-                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
                       {detail.homeworkResults.map((hr: any) => (
-                        <div key={hr.id} className="flex items-center justify-between p-1.5 rounded border bg-card">
-                          <p className="text-[11px] font-medium truncate max-w-[200px]">{hr.homeworkTitle}</p>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold ${hr.score >= (hr.maxScore / 2) ? 'text-emerald-600' : 'text-red-500'}`}>{hr.score}/{hr.maxScore}</span>
-                            <span className="text-[9px] text-muted-foreground">{hr.submittedAt ? new Date(hr.submittedAt).toLocaleDateString('ar-EG') : ''}</span>
+                        <div key={hr.id} className="border rounded-lg p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold truncate max-w-[250px]">{hr.homeworkTitle}</p>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-xs font-bold ${hr.score >= (hr.maxScore / 2) ? 'text-emerald-600' : 'text-red-500'}`}>{hr.score}/{hr.maxScore}</span>
+                              <span className="text-[9px] text-muted-foreground">{hr.submittedAt ? new Date(hr.submittedAt).toLocaleDateString('ar-EG') : ''}</span>
+                            </div>
                           </div>
+                          {hr.wrongQuestions && hr.wrongQuestions.length > 0 && (
+                            <div className="mt-1 space-y-1">
+                              <p className="text-[10px] font-semibold text-red-600">الأسئلة الخاطئة ({hr.wrongQuestions.length}):</p>
+                              {hr.wrongQuestions.map((wq: any, wi: number) => (
+                                <div key={wi} className="flex items-start gap-2 text-[10px] p-1.5 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40">
+                                  <span className="shrink-0 font-bold text-red-500">{wi + 1}.</span>
+                                  <div className="min-w-0">
+                                    <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wq.question}</p>
+                                    <p className="text-red-600 mt-0.5">إجابة الطالب: <span dir="ltr">{wq.studentAnswer}</span></p>
+                                    <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {(!hr.wrongQuestions || hr.wrongQuestions.length === 0) && (
+                            <p className="text-[10px] text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
+                          )}
                         </div>
                       ))}
                     </div>
