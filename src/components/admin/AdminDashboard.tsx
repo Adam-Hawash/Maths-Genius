@@ -1604,9 +1604,7 @@ function MyStudentsPanel() {
                               ))}
                             </div>
                           )}
-                          {(!er.wrongQuestions || er.wrongQuestions.length === 0) && (
-                            <p className="text-[10px] text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
-                          )}
+                          {(!er.wrongQuestions || er.wrongQuestions.length === 0) && null}
                         </div>
                       ))}
                     </div>
@@ -1642,9 +1640,7 @@ function MyStudentsPanel() {
                               ))}
                             </div>
                           )}
-                          {(!hr.wrongQuestions || hr.wrongQuestions.length === 0) && (
-                            <p className="text-[10px] text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
-                          )}
+                          {(!hr.wrongQuestions || hr.wrongQuestions.length === 0) && null}
                         </div>
                       ))}
                     </div>
