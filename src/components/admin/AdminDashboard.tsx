@@ -408,7 +408,7 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                     </div>
                     <div className="shrink-0 text-left" style={{ minWidth: '60px' }}>
                       <div className={`text-xs font-bold ${e.passed ? 'text-emerald-600' : 'text-red-500'}`}>{e.score}/{e.maxScore}</div>
-                      <Badge className={`text-[9px] mt-1 ${e.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{e.passed ? 'ناجح' : 'راسب'}</Badge>
+                      <Badge className={`text-[9px] mt-1 ${e.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{e.passed ? 'ناجح' : 'عايز مراجعة'}</Badge>
                     </div>
                   </div>
                 ))}
@@ -1567,7 +1567,7 @@ function MyStudentsPanel() {
                           <p className="text-[11px] font-medium truncate max-w-[200px]">{er.examTitle}</p>
                           <div className="flex items-center gap-2">
                             <span className={`text-xs font-bold ${er.passed ? 'text-emerald-600' : 'text-red-500'}`}>{er.score}/{er.maxScore}</span>
-                            <Badge variant={er.passed ? 'default' : 'destructive'} className="text-[9px] h-5">{er.passed ? 'ناجح' : 'راسب'}</Badge>
+                            <Badge variant={er.passed ? 'default' : 'outline'} className={`text-[9px] h-5 ${er.passed ? '' : 'border-amber-500 text-amber-600'}`}>{er.passed ? 'ناجح' : 'عايز مراجعة'}</Badge>
                           </div>
                         </div>
                       ))}
