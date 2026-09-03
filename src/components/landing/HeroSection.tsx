@@ -62,7 +62,7 @@ export default function HeroSection() {
   const showPhoto = !!dbPhoto || fallbackPhotoExists
 
   return (
-    <section className="relative overflow-hidden bg-background dark:bg-[#0F0D0A]" dir="rtl">
+    <section className="relative overflow-hidden bg-[#F5EFE0] dark:bg-[#0F0D0A]" dir="rtl">
       {/* Subtle tiny dots + faint math/geometric symbols background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
         {/* Faint math symbols - very subtle background */}
@@ -104,25 +104,41 @@ export default function HeroSection() {
           <path d="M 5,15 L 15,15 L 15,45" stroke="currentColor" strokeWidth="1.5" fill="none" />
         </svg>
 
-        {/* Tiny subtle dots - regular muted colors, evenly distributed */}
-        <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '12%', right: '15%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-2 w-1 h-1" style={{ top: '22%', left: '12%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-3 w-1 h-1" style={{ top: '35%', right: '8%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-4 w-1 h-1" style={{ top: '48%', left: '20%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-5 w-1 h-1" style={{ top: '60%', right: '25%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-6 w-1 h-1" style={{ top: '75%', left: '8%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-7 w-1 h-1" style={{ top: '88%', right: '12%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-8 w-1 h-1" style={{ top: '18%', right: '35%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '55%', left: '45%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-3 w-1 h-1" style={{ top: '70%', left: '30%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-5 w-1 h-1" style={{ top: '30%', left: '50%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-7 w-1 h-1" style={{ top: '82%', left: '50%', background: '#9ca3af' }} />
-        {/* Extra dots - evenly distributed */}
-        <div className="hero-dot hero-dot-2 w-1 h-1" style={{ top: '5%', left: '40%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-4 w-1 h-1" style={{ top: '42%', right: '38%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-6 w-1 h-1" style={{ top: '95%', left: '25%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-8 w-1 h-1" style={{ top: '65%', right: '50%', background: '#9ca3af' }} />
-        <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '25%', right: '55%', background: '#9ca3af' }} />
+        {/* Tiny subtle dots - varied muted colors, evenly distributed (25 dots) */}
+        {/* Row 1 - top (5 dots) */}
+        <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '8%', right: '12%', background: '#94a3b8' }} />
+        <div className="hero-dot hero-dot-2 w-1 h-1" style={{ top: '12%', left: '25%', background: '#a8a29e' }} />
+        <div className="hero-dot hero-dot-3 w-1 h-1" style={{ top: '6%', left: '55%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-4 w-1 h-1" style={{ top: '15%', right: '40%', background: '#b8a890' }} />
+        <div className="hero-dot hero-dot-5 w-1 h-1" style={{ top: '10%', left: '8%', background: '#8b9aa8' }} />
+
+        {/* Row 2 - upper (5 dots) */}
+        <div className="hero-dot hero-dot-6 w-1 h-1" style={{ top: '22%', right: '8%', background: '#a0a0a8' }} />
+        <div className="hero-dot hero-dot-7 w-1 h-1" style={{ top: '28%', left: '18%', background: '#9c9088' }} />
+        <div className="hero-dot hero-dot-8 w-1 h-1" style={{ top: '25%', right: '35%', background: '#8898a8' }} />
+        <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '20%', left: '45%', background: '#a8a098' }} />
+        <div className="hero-dot hero-dot-2 w-1 h-1" style={{ top: '30%', left: '60%', background: '#98a8a0' }} />
+
+        {/* Row 3 - middle (5 dots) */}
+        <div className="hero-dot hero-dot-3 w-1 h-1" style={{ top: '40%', right: '15%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-4 w-1 h-1" style={{ top: '45%', left: '12%', background: '#b0a898' }} />
+        <div className="hero-dot hero-dot-5 w-1 h-1" style={{ top: '38%', right: '50%', background: '#8c98a0' }} />
+        <div className="hero-dot hero-dot-6 w-1 h-1" style={{ top: '42%', left: '40%', background: '#a89888' }} />
+        <div className="hero-dot hero-dot-7 w-1 h-1" style={{ top: '35%', right: '70%', background: '#9ca8b0' }} />
+
+        {/* Row 4 - lower middle (5 dots) */}
+        <div className="hero-dot hero-dot-8 w-1 h-1" style={{ top: '55%', right: '20%', background: '#a098a0' }} />
+        <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '58%', left: '30%', background: '#98a098' }} />
+        <div className="hero-dot hero-dot-2 w-1 h-1" style={{ top: '50%', left: '8%', background: '#b0a8a0' }} />
+        <div className="hero-dot hero-dot-3 w-1 h-1" style={{ top: '62%', right: '5%', background: '#8c98a8' }} />
+        <div className="hero-dot hero-dot-4 w-1 h-1" style={{ top: '48%', left: '55%', background: '#a8b0a8' }} />
+
+        {/* Row 5 - bottom (5 dots) */}
+        <div className="hero-dot hero-dot-5 w-1 h-1" style={{ top: '72%', right: '12%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-6 w-1 h-1" style={{ top: '78%', left: '15%', background: '#a89890' }} />
+        <div className="hero-dot hero-dot-7 w-1 h-1" style={{ top: '85%', right: '25%', background: '#9098a0' }} />
+        <div className="hero-dot hero-dot-8 w-1 h-1" style={{ top: '88%', left: '40%', background: '#a0a8a0' }} />
+        <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '92%', right: '8%', background: '#8c98a0' }} />
       </div>
 
       {/* Banner Image at Top */}
@@ -287,7 +303,7 @@ export default function HeroSection() {
           </div>
 
           {/* Instructor Photo - Square shape with elegant frame */}
-          <div className="flex justify-center lg:justify-end order-1 lg:order-2">
+          <div className="flex justify-center lg:justify-end order-1 lg:order-2 -mt-4 sm:-mt-8">
             <div className="relative group">
               {/* Gold ambient glow */}
               <div className="absolute -inset-3 bg-gradient-to-br from-[#C49A38]/30 dark:from-[#E5BE5A]/40 via-[#C49A38]/15 to-transparent blur-2xl transition-opacity duration-500 group-hover:opacity-90" />
@@ -299,7 +315,7 @@ export default function HeroSection() {
                 <circle cx="50" cy="50" r="42" fill="none" stroke="#C49A38" strokeWidth="2.5" strokeDasharray="3 7" />
               </svg>
               {/* Square photo container with gold frame */}
-              <div className="relative w-72 h-72 sm:w-80 sm:h-80 lg:w-[360px] lg:h-[360px] rounded-3xl overflow-hidden border-2 border-[#C49A38]/40 gold-glow bg-muted shadow-2xl">
+              <div className="relative w-56 h-56 sm:w-64 sm:h-64 lg:w-72 lg:h-72 rounded-3xl overflow-hidden border-2 border-[#C49A38]/40 gold-glow bg-muted shadow-2xl">
                 {showPhoto ? (
                   <img
                     src={heroPhoto}
@@ -326,9 +342,9 @@ export default function HeroSection() {
         </div>
       </div>
 
-      {/* Divider between hero and rest of site */}
-      <div className="relative h-px w-full bg-gradient-to-l from-transparent via-foreground/20 to-transparent" />
-      <div className="h-2 w-full bg-muted/40" />
+      {/* Divider between hero (beige) and rest of site (white) */}
+      <div className="relative h-px w-full bg-gradient-to-l from-transparent via-foreground/30 to-transparent" />
+      <div className="h-3 w-full bg-[#E8DFC8] dark:bg-foreground/10 border-y border-border/50" />
     </section>
   )
 }
