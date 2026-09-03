@@ -63,35 +63,17 @@ export default function HeroSection() {
 
   return (
     <section className="relative overflow-hidden bg-[#F9F7F4] dark:bg-[#0F0D0A]" dir="rtl">
-      {/* Animated colorful floating dots */}
+      {/* Animated tiny glowing dots - minimal & professional */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
-        {/* Small dots - purple */}
-        <div className="hero-dot hero-dot-1 w-3 h-3 bg-purple-500/70" style={{ top: '12%', right: '8%' }} />
-        {/* Red dot */}
-        <div className="hero-dot hero-dot-2 w-4 h-4 bg-red-500/65" style={{ top: '28%', left: '6%' }} />
-        {/* Green dot */}
-        <div className="hero-dot hero-dot-3 w-2.5 h-2.5 bg-emerald-500/75" style={{ top: '60%', right: '12%' }} />
-        {/* Pink dot */}
-        <div className="hero-dot hero-dot-4 w-5 h-5 bg-pink-500/60" style={{ top: '75%', left: '15%' }} />
-        {/* Blue dot */}
-        <div className="hero-dot hero-dot-5 w-3.5 h-3.5 bg-blue-500/70" style={{ top: '45%', right: '45%' }} />
-        {/* Orange dot */}
-        <div className="hero-dot hero-dot-6 w-3 h-3 bg-orange-500/70" style={{ top: '85%', right: '30%' }} />
-        {/* Cyan dot */}
-        <div className="hero-dot hero-dot-7 w-2.5 h-2.5 bg-cyan-500/70" style={{ top: '15%', left: '40%' }} />
-        {/* Indigo dot */}
-        <div className="hero-dot hero-dot-8 w-4 h-4 bg-indigo-500/65" style={{ top: '50%', left: '25%' }} />
-
-        {/* Larger pulsing dots with glow */}
-        <div className="hero-dot hero-dot-glow w-8 h-8 text-purple-400" style={{ top: '20%', right: '20%', background: '#a855f7' }} />
-        <div className="hero-dot hero-dot-glow w-10 h-10 text-red-400" style={{ top: '70%', left: '40%', background: '#ef4444', animationDelay: '1s' }} />
-        <div className="hero-dot hero-dot-glow w-7 h-7 text-emerald-400" style={{ top: '40%', left: '8%', background: '#10b981', animationDelay: '2s' }} />
-        <div className="hero-dot hero-dot-glow w-9 h-9 text-pink-400" style={{ top: '85%', right: '8%', background: '#ec4899', animationDelay: '1.5s' }} />
-
-        {/* Tiny sparkles - scattered */}
-        <div className="hero-dot hero-dot-1 w-1.5 h-1.5 bg-yellow-400/80" style={{ top: '8%', left: '20%' }} />
-        <div className="hero-dot hero-dot-3 w-1.5 h-1.5 bg-teal-400/80" style={{ top: '92%', left: '60%' }} />
-        <div className="hero-dot hero-dot-5 w-1.5 h-1.5 bg-rose-400/80" style={{ top: '35%', right: '5%' }} />
+        {/* Tiny sparkles - bright neon colors */}
+        <div className="hero-dot hero-dot-1 w-1.5 h-1.5" style={{ top: '15%', right: '12%', background: '#a855f7', boxShadow: '0 0 6px #a855f7, 0 0 12px #a855f7' }} />
+        <div className="hero-dot hero-dot-2 w-1.5 h-1.5" style={{ top: '25%', left: '8%', background: '#ec4899', boxShadow: '0 0 6px #ec4899, 0 0 12px #ec4899' }} />
+        <div className="hero-dot hero-dot-3 w-1.5 h-1.5" style={{ top: '55%', right: '18%', background: '#10b981', boxShadow: '0 0 6px #10b981, 0 0 12px #10b981' }} />
+        <div className="hero-dot hero-dot-4 w-1.5 h-1.5" style={{ top: '75%', left: '22%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b, 0 0 12px #f59e0b' }} />
+        <div className="hero-dot hero-dot-5 w-1.5 h-1.5" style={{ top: '40%', left: '40%', background: '#3b82f6', boxShadow: '0 0 6px #3b82f6, 0 0 12px #3b82f6' }} />
+        <div className="hero-dot hero-dot-6 w-1.5 h-1.5" style={{ top: '85%', right: '35%', background: '#ef4444', boxShadow: '0 0 6px #ef4444, 0 0 12px #ef4444' }} />
+        <div className="hero-dot hero-dot-7 w-1.5 h-1.5" style={{ top: '12%', left: '35%', background: '#06b6d4', boxShadow: '0 0 6px #06b6d4, 0 0 12px #06b6d4' }} />
+        <div className="hero-dot hero-dot-8 w-1.5 h-1.5" style={{ top: '65%', left: '5%', background: '#8b5cf6', boxShadow: '0 0 6px #8b5cf6, 0 0 12px #8b5cf6' }} />
       </div>
 
       {/* Banner Image at Top */}
@@ -161,7 +143,7 @@ export default function HeroSection() {
                 className="text-base px-8 py-6 min-h-[44px] bg-[#C49A38] hover:bg-[#D4A843] text-white font-semibold transition-colors duration-200"
                 onClick={() => setView('auth-register')}
               >
-                سجّل الآن | Register Now
+                اعمل حسابك
               </Button>
               <Button
                 variant="outline"
@@ -169,7 +151,7 @@ export default function HeroSection() {
                 className="text-base px-8 py-6 min-h-[44px] border-[#C49A38]/40 text-[#8B6914] dark:text-[#E5BE5A] hover:bg-[#C49A38]/10 hover:text-[#8B6914] dark:hover:text-[#E5BE5A] transition-colors duration-200"
                 onClick={() => setView('auth-login')}
               >
-                لديّ حساب | I Have an Account
+                عندك حساب؟ ادخل هنا
               </Button>
             </div>
 
@@ -181,7 +163,7 @@ export default function HeroSection() {
                 rel="noopener noreferrer"
                 className="text-sm font-semibold text-muted-foreground/60 hover:text-[#8B6914] dark:hover:text-[#E5BE5A] transition-colors underline underline-offset-4 decoration-muted-foreground/20 hover:decoration-[#C49A38]/50"
               >
-                Hero Developer
+                {cfg.hero_developer_label || 'Hero Developer'}
               </a>
               <div className="h-px w-16 bg-muted-foreground/10" />
               <a
@@ -190,7 +172,7 @@ export default function HeroSection() {
                 rel="noopener noreferrer"
                 className="text-xs text-muted-foreground/40 font-light tracking-wider hover:text-[#8B6914] dark:hover:text-[#E5BE5A] transition-colors"
               >
-                Made by Adam Hawash
+                {cfg.footer_made_by_label || 'Made by Adam Hawash'}
               </a>
             </div>
 
