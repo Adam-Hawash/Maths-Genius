@@ -46,7 +46,7 @@ export default async function RootLayout({
   var faviconUrl = initialConfig.favicon_url || "https://imgh.in/host/4pdrhw";
 
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning>
+    <html lang="ar" dir="rtl" className="dark" suppressHydrationWarning>
       <head>
         {/* Cairo via Google Fonts CDN (avoids Turbopack build error) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

@@ -190,29 +190,21 @@ export function Navbar() {
             )}
 
             {mounted && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
+                className="min-h-[44px] min-w-[44px]"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 aria-label="Toggle theme"
-                className="relative inline-flex h-9 w-16 items-center rounded-full bg-[#1e3a5f] dark:bg-[#1e3a5f] transition-colors p-1 cursor-pointer min-h-[44px] min-w-[64px] shadow-inner"
               >
-                {/* Moon icon - left side (always visible, fixed) */}
-                <Moon className="absolute left-2.5 h-3.5 w-3.5 text-white/70 z-0" />
-                {/* Sun icon - right side (always visible, fixed) */}
-                <Sun className="absolute right-2.5 h-3.5 w-3.5 text-white/70 z-0" />
-                {/* Sliding knob - moves left (dark) to right (light), no icon inside */}
-                <span
-                  className={`relative inline-flex h-7 w-7 transform items-center justify-center rounded-full bg-white shadow-md transition-transform duration-300 ease-in-out z-10 ${
-                    theme === 'dark' ? 'translate-x-0' : 'translate-x-7'
-                  }`}
-                >
-                  {/* Show moon when knob is on left (dark), sun when knob is on right (light) */}
-                  {theme === 'dark' ? (
-                    <Moon className="h-3.5 w-3.5 text-[#1e3a5f]" />
-                  ) : (
-                    <Sun className="h-3.5 w-3.5 text-[#1e3a5f]" />
-                  )}
-                </span>
-              </button>
+                {/* Show moon when light (to switch to dark) */}
+                {/* Show sun when dark (to switch to light) */}
+                {theme === 'dark' ? (
+                  <Sun className="h-5 w-5" />
+                ) : (
+                  <Moon className="h-5 w-5" />
+                )}
+              </Button>
             )}
 
             {/* Mobile Hamburger */}
