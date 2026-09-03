@@ -784,116 +784,217 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
   return (
     <div className="space-y-3">
       {homework.map((hw) => {
-        var mcq = (hw as any).questions ? JSON.parse((hw as any).questions) : []
-        var hasMCQ = Array.isArray(mcq) && mcq.length > 0
+        var allQuestions = (hw as any).questions ? JSON.parse((hw as any).questions) : []
+        var hasQuestions = Array.isArray(allQuestions) && allQuestions.length > 0
+
+        // Separate MCQ from writing questions
+        var mcqQuestions: any[] = []
+        var writingQuestions: any[] = []
+        if (hasQuestions) {
+          allQuestions.forEach(function(q: any) {
+            // Detect writing: type field, OR options are empty/N/A
+            var isWriting = q.type === 'writing' || q.type === 'essay'
+            // Also detect if all options are N/A or empty → treat as writing
+            if (!isWriting && Array.isArray(q.options)) {
+              var allNA = q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' })
+              if (allNA) isWriting = true
+            }
+            // Also detect if options array is empty
+            if (!isWriting && (!q.options || q.options.length === 0)) {
+              isWriting = true
+            }
+            if (isWriting) {
+              writingQuestions.push(q)
+            } else {
+              mcqQuestions.push(q)
+            }
+          })
+        }
+        var hasMCQ = mcqQuestions.length > 0
+        var hasWriting = writingQuestions.length > 0
         var isExpanded = expandedHw === hw.id
         var isSubmitted = completedHwIds.has(hw.id)
         var myAnswers = hwAnswers[hw.id] || {}
         var existingResult = hwResults[hw.id]
 
-        // Shuffle questions uniquely per student when expanding
-        var shuffleMap: number[] = []
-        if (hasMCQ && isExpanded && !isSubmitted) {
+        // Shuffle MCQ and writing separately (MCQ first, then writing)
+        // Build a combined shuffle map: [shuffled_mcq_indices..., shuffled_writing_indices...]
+        var mcqShuffle: number[] = []
+        var writingShuffle: number[] = []
+        if (hasQuestions && isExpanded && !isSubmitted) {
           var existing = hwShuffleMaps.current[hw.id]
-          if (existing && existing.length === mcq.length) {
-            shuffleMap = existing
-          } else {
-            shuffleMap = mcq.map(function(_, i) { return i })
-            for (var si = shuffleMap.length - 1; si > 0; si--) {
-              var sj = Math.floor(Math.random() * (si + 1))
-              var st = shuffleMap[si]; shuffleMap[si] = shuffleMap[sj]; shuffleMap[sj] = st
-            }
-            hwShuffleMaps.current[hw.id] = shuffleMap
+          if (existing && existing.length === allQuestions.length) {
+            // Use existing shuffle - need to re-split
+            existing.forEach(function(origIdx: number) {
+              if (origIdx < mcqQuestions.length || (allQuestions[origIdx] && (allQuestions[origIdx].type === 'writing' || allQuestions[origIdx].type === 'essay'))) {
+                // This is complex - let's just rebuild from scratch
+              }
+            })
           }
+          // Simpler approach: shuffle mcq indices and writing indices separately
+          mcqShuffle = mcqQuestions.map(function(_, i) { return i })
+          for (var si = mcqShuffle.length - 1; si > 0; si--) {
+            var sj = Math.floor(Math.random() * (si + 1))
+            var st = mcqShuffle[si]; mcqShuffle[si] = mcqShuffle[sj]; mcqShuffle[sj] = st
+          }
+          writingShuffle = writingQuestions.map(function(_, i) { return i })
+          for (var wi = writingShuffle.length - 1; wi > 0; wi--) {
+            var wj = Math.floor(Math.random() * (wi + 1))
+            var wt = writingShuffle[wi]; writingShuffle[wi] = writingShuffle[wj]; writingShuffle[wj] = wt
+          }
+          // Store combined map for submit
+          var combinedMap: number[] = []
+          // Original indices: mcq are 0..mcqQuestions.length-1 in allQuestions (but need to track actual positions)
+          // Actually, we need to track original positions in allQuestions
+          var mcqOriginalIndices: number[] = []
+          var writingOriginalIndices: number[] = []
+          allQuestions.forEach(function(q: any, i: number) {
+            var isWriting = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' }))
+            if (isWriting) writingOriginalIndices.push(i)
+            else mcqOriginalIndices.push(i)
+          })
+          mcqShuffle.forEach(function(shuffleIdx: number) {
+            combinedMap.push(mcqOriginalIndices[shuffleIdx])
+          })
+          writingShuffle.forEach(function(shuffleIdx: number) {
+            combinedMap.push(writingOriginalIndices[shuffleIdx])
+          })
+          hwShuffleMaps.current[hw.id] = combinedMap
         }
-        var displayQuestions = shuffleMap.length > 0 ? shuffleMap.map(function(oi) { return mcq[oi] }) : mcq
+
+        // Build display questions: MCQ first (shuffled), then writing (shuffled)
+        var displayMcq = mcqShuffle.length > 0 ? mcqShuffle.map(function(oi: number) { return mcqQuestions[oi] }) : mcqQuestions
+        var displayWriting = writingShuffle.length > 0 ? writingShuffle.map(function(oi: number) { return writingQuestions[oi] }) : writingQuestions
+        var displayQuestions = [...displayMcq, ...displayWriting]
+        // shuffleMap for submit: maps display index → original index
+        var shuffleMap = hwShuffleMaps.current[hw.id] || allQuestions.map(function(_: any, i: number) { return i })
 
         return (
-          <Card key={hw.id} className={isSubmitted ? 'border-emerald-500/30' : hasMCQ ? 'cursor-pointer' : ''}>
+          <Card key={hw.id} className={isSubmitted ? 'border-emerald-500/30' : hasQuestions ? 'cursor-pointer' : ''}>
             <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-3" onClick={hasMCQ ? function() {
+              <div className="flex items-start justify-between gap-3" onClick={hasQuestions ? function() {
                 if (isSubmitted) { setBlockedHwId(hw.id); return }
                 setExpandedHw(isExpanded ? null : hw.id)
               } : undefined}>
                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (isSubmitted ? 'bg-emerald-500/10' : hasMCQ ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
-                    <ClipboardList className={"h-4 w-4 " + (isSubmitted ? 'text-emerald-500' : hasMCQ ? 'text-emerald-500' : 'text-blue-500')} />
+                  <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (isSubmitted ? 'bg-emerald-500/10' : hasQuestions ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
+                    <ClipboardList className={"h-4 w-4 " + (isSubmitted ? 'text-emerald-500' : hasQuestions ? 'text-emerald-500' : 'text-blue-500')} />
                   </div>
                   <div className="min-w-0 space-y-1">
                     <h3 className="font-semibold text-sm">{hw.title}</h3>
                     {hw.content && <p className="text-xs text-muted-foreground line-clamp-2">{hw.content}</p>}
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-[10px] text-muted-foreground">{new Date(hw.createdAt).toLocaleDateString('ar-EG')}</p>
-                      {hasMCQ && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">{mcq.length} سؤال</Badge>}
+                      {hasMCQ && <Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-600">{mcqQuestions.length} اختيارات</Badge>}
+                      {hasWriting && <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">{writingQuestions.length} مقالي</Badge>}
+                      {!hasMCQ && !hasWriting && hasQuestions && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">{allQuestions.length} سؤال</Badge>}
                       {isSubmitted && existingResult && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {existingResult.score}/{existingResult.maxScore}</Badge>}
                       {isSubmitted && !existingResult && <Badge className="text-[10px] bg-emerald-500 text-white">تم التسليم</Badge>}
                     </div>
                   </div>
                 </div>
-                {hw.filePath && !hasMCQ && <FileAttachment filePath={hw.filePath} fileType={hw.fileType} />}
-                {hasMCQ && <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform shrink-0 mt-1 " + (isExpanded ? 'rotate-90' : '')} />}
+                {hw.filePath && !hasQuestions && <FileAttachment filePath={hw.filePath} fileType={hw.fileType} />}
+                {hasQuestions && <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform shrink-0 mt-1 " + (isExpanded ? 'rotate-90' : '')} />}
               </div>
 
               {/* ACTIVE HOMEWORK - not yet submitted */}
-              {isExpanded && hasMCQ && !isSubmitted && (
-                <div className="mt-4 pt-4 border-t space-y-4" dir="ltr">
-                  {displayQuestions.map(function(q: any, di: number) {
-                    var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
-                    var isWriting = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0)
-                    return (
-                      <div key={di} className="space-y-2 rounded-lg p-2">
-                        <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
-                        {isWriting ? (
-                          <div dir="rtl">
-                            <MathKeyboard
-                              value={hwAnswers[hw.id]?.[di] || ''}
-                              onChange={function(val: string) {
-                                setHwAnswers(function(prev) {
-                                  var a = { ...prev }
-                                  a[hw.id] = { ...(a[hw.id] || {}), [di]: val }
-                                  return a
-                                })
-                              }}
-                              placeholder="اكتب إجابتك هنا أو ارفع صورة للحل..."
-                              rows={4}
-                            />
+              {isExpanded && hasQuestions && !isSubmitted && (
+                <div className="mt-4 pt-4 border-t space-y-4">
+                  {/* MCQ Section */}
+                  {hasMCQ && (
+                    <div className="space-y-4">
+                      {hasWriting && <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">الأسئلة الاختيارية:</p>}
+                      {displayMcq.map(function(q: any, di: number) {
+                        var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+                        return (
+                          <div key={'mcq-' + di} className="space-y-2 rounded-lg p-2" dir="ltr">
+                            <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
+                            <div className="space-y-1.5">
+                              {(q.options || []).map(function(opt: string, oi: number) {
+                                var isSelected = myAnswers[di] === oi
+                                return (
+                                  <button
+                                    key={oi}
+                                    onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [di]: oi }; return a }) }}
+                                    className={"w-full p-3 rounded-lg border text-sm transition-colors " + (
+                                      isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
+                                      'border-border hover:bg-muted/50'
+                                    )}
+                                    style={{ textAlign: 'left' }}
+                                  >
+                                    <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
+                                  </button>
+                                )
+                              })}
+                            </div>
                           </div>
-                        ) : (
-                          <div className="space-y-1.5">
-                            {q.options.map(function(opt: string, oi: number) {
-                              var isSelected = myAnswers[di] === oi
-                              return (
-                                <button
-                                  key={oi}
-                                  onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [di]: oi }; return a }) }}
-                                  className={"w-full p-3 rounded-lg border text-sm transition-colors " + (
-                                    isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
-                                    'border-border hover:bg-muted/50'
-                                  )}
-                                  style={{ textAlign: 'left' }}
-                                >
-                                  <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
-                                </button>
-                              )
-                            })}
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Writing Section */}
+                  {hasWriting && (
+                    <div className="space-y-4">
+                      {hasMCQ && <div className="border-t pt-3"><p className="text-xs font-semibold text-amber-600 dark:text-amber-400">الأسئلة المقالية:</p></div>}
+                      {displayWriting.map(function(q: any, wi: number) {
+                        var displayIdx = displayMcq.length + wi
+                        var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 5
+                        return (
+                          <div key={'writing-' + wi} className="space-y-2 rounded-lg p-2 border border-amber-500/20 bg-amber-50 dark:bg-amber-900/10">
+                            <p className="font-medium text-sm" style={{ textAlign: 'right' }}>
+                              {hasMCQ ? displayMcq.length + wi + 1 : wi + 1}. {q.question || q.q}
+                              <span className="text-muted-foreground text-xs mr-2">({pts} نقطة)</span>
+                              <Badge variant="outline" className="text-[9px] mr-2 border-amber-500/40 text-amber-600">مقالي</Badge>
+                            </p>
+                            <div dir="rtl">
+                              <MathKeyboard
+                                value={hwAnswers[hw.id]?.[displayIdx] || ''}
+                                onChange={function(val: string) {
+                                  setHwAnswers(function(prev) {
+                                    var a = { ...prev }
+                                    a[hw.id] = { ...(a[hw.id] || {}), [displayIdx]: val }
+                                    return a
+                                  })
+                                }}
+                                placeholder="اكتب إجابتك هنا أو ارفع صورة للحل..."
+                                rows={4}
+                                onImageUpload={function(filePath: string) {
+                                  if (filePath) {
+                                    setHwAnswers(function(prev) {
+                                      var a = { ...prev }
+                                      var existing = a[hw.id]?.[displayIdx] || ''
+                                      if (!existing.includes('[📷 صورة مرفقة]')) {
+                                        a[hw.id] = { ...(a[hw.id] || {}), [displayIdx]: existing + (existing ? '\n' : '') + '[📷 صورة مرفقة: ' + filePath + ']' }
+                                      }
+                                      return a
+                                    })
+                                  }
+                                }}
+                              />
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                  <Button size="sm" disabled={Object.keys(myAnswers).length === 0 || hwSubmitting === hw.id} onClick={async function() {
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  <Button size="sm" disabled={Object.keys(myAnswers).length === 0 && Object.keys(hwAnswers[hw.id] || {}).length === 0 || hwSubmitting === hw.id} onClick={async function() {
                     setHwSubmitting(hw.id)
                     try {
+                      // Map display answers back to original indices
                       var mappedAnswers: Record<number, any> = {}
-                      if (shuffleMap.length > 0) {
-                        Object.keys(myAnswers).forEach(function(di) { mappedAnswers[shuffleMap[parseInt(di)]] = myAnswers[di] })
-                      } else {
-                        mappedAnswers = { ...myAnswers }
-                      }
-                      // Also include writing answers from hwAnswers
+                      // MCQ answers (myAnswers keys are display indices)
+                      Object.keys(myAnswers).forEach(function(di) {
+                        var displayIdx = parseInt(di)
+                        var origIdx = shuffleMap[displayIdx] !== undefined ? shuffleMap[displayIdx] : displayIdx
+                        mappedAnswers[origIdx] = myAnswers[di]
+                      })
+                      // Writing answers (hwAnswers keys are display indices)
                       if (hwAnswers[hw.id]) {
                         Object.keys(hwAnswers[hw.id]).forEach(function(di) {
-                          var origIdx = shuffleMap.length > 0 ? shuffleMap[parseInt(di)] : parseInt(di)
+                          var displayIdx = parseInt(di)
+                          var origIdx = shuffleMap[displayIdx] !== undefined ? shuffleMap[displayIdx] : displayIdx
                           mappedAnswers[origIdx] = hwAnswers[hw.id][di]
                         })
                       }
