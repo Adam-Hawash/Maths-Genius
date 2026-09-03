@@ -62,7 +62,7 @@ export default function HeroSection() {
   const showPhoto = !!dbPhoto || fallbackPhotoExists
 
   return (
-    <section className="relative overflow-hidden bg-[#0F0D0A] dark:bg-[#0F0D0A]" dir="rtl">
+    <section className="relative overflow-hidden bg-background dark:bg-[#0F0D0A]" dir="rtl">
       {/* Subtle tiny dots + faint math/geometric symbols background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
         {/* Faint math symbols - very subtle background */}
