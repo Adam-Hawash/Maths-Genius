@@ -130,7 +130,7 @@ export function LoginView() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-primary/10 mb-4"><GraduationCap className="h-8 w-8 text-primary" /></div>
           <h1 className="text-2xl font-bold text-foreground mb-2">تسجيل الدخول</h1>
-          <p className="text-sm text-muted-foreground">ادخل إلى حسابك للمتابعة</p>
+          <p className="text-sm text-muted-foreground">ادخل لحسابك وكمل تعلم</p>
         </div>
         <div className="relative rounded-2xl p-[2px] bg-gradient-to-br from-gold-400 via-gold-600 to-gold-400">
           <Card className="rounded-2xl border-0 shadow-lg">
@@ -138,8 +138,8 @@ export function LoginView() {
               <div className="space-y-4">
                 <PhoneField value={studentPhone} onChange={setStudentPhone} placeholder="رقم الهاتف" id="login-phone" />
                 <PasswordField value={studentPassword} onChange={setStudentPassword} placeholder="كلمة المرور" id="login-password" />
-                <Button className="w-full min-h-[44px] font-semibold" onClick={handleStudentLogin} disabled={studentLoading}>{studentLoading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />جاري تسجيل الدخول...</>) : 'تسجيل الدخول'}</Button>
-                <p className="text-center text-sm text-muted-foreground">ليس لديك حساب؟ <button onClick={function () { setView('auth-register') }} className="text-primary font-medium hover:underline cursor-pointer">أنشئ حساباً جديداً</button></p>
+                <Button className="w-full min-h-[44px] font-semibold" onClick={handleStudentLogin} disabled={studentLoading}>{studentLoading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />استنى شوية...</>) : 'ادخل لحسابك'}</Button>
+                <p className="text-center text-sm text-muted-foreground">عندك حساب؟ <button onClick={function () { setView('auth-register') }} className="text-primary font-medium hover:underline cursor-pointer">اعمل حساب جديد</button></p>
               </div>
             </CardContent>
           </Card>
@@ -205,8 +205,8 @@ export function RegisterView() {
       <motion.div className="w-full max-w-lg" initial="hidden" animate="visible" variants={fadeInUp} transition={{ duration: 0.5, ease: 'easeOut' }}>
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10 mb-3"><Users className="h-7 w-7 text-primary" /></div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">إنشاء حساب جديد</h1>
-          <p className="text-sm text-muted-foreground">سجل بياناتك وابدأ رحلة التعلم</p>
+          <h1 className="text-2xl font-bold text-foreground mb-1">اعمل حساب جديد</h1>
+          <p className="text-sm text-muted-foreground">سجل بياناتك وابدأ رحلتك معنا</p>
         </div>
         <div className="relative rounded-2xl p-[2px] bg-gradient-to-br from-gold-400 via-gold-600 to-gold-400">
           <Card className="rounded-2xl border-0 shadow-lg">
@@ -245,8 +245,8 @@ export function RegisterView() {
                   </div>
                 </div>
                 <PhoneField value={parentPhone} onChange={setParentPhone} placeholder="رقم هاتف ولي الأمر" id="reg-parent-phone" error={errors.parentPhone} />
-                <Button className="w-full min-h-[44px] font-semibold" onClick={handleRegister} disabled={loading}>{loading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />جاري التسجيل...</>) : 'إنشاء الحساب'}</Button>
-                <p className="text-center text-sm text-muted-foreground">لديك حساب بالفعل؟ <button onClick={function () { setView('auth-login') }} className="text-primary font-medium hover:underline cursor-pointer">سجل دخولك</button></p>
+                <Button className="w-full min-h-[44px] font-semibold" onClick={handleRegister} disabled={loading}>{loading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />جاري التسجيل...</>) : 'اعمل الحساب'}</Button>
+                <p className="text-center text-sm text-muted-foreground">عندك حساب؟ <button onClick={function () { setView('auth-login') }} className="text-primary font-medium hover:underline cursor-pointer">سجل دخولك</button></p>
               </div>
             </CardContent>
           </Card>
