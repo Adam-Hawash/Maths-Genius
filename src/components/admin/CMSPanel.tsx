@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Settings, Save, Upload, Loader2, Image as ImageIcon, Trash2, Link2, Type, Layout, GraduationCap, Compass, Lightbulb, BookOpen, Smartphone, Globe } from 'lucide-react'
+import { Settings, Save, Upload, Loader2, Image as ImageIcon, Trash2, Link2, Type, Layout, GraduationCap, Compass, Lightbulb, BookOpen, Smartphone, Globe, CalendarClock } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import type { SiteConfig } from '@/stores/app-store'
@@ -85,6 +85,20 @@ var TEXT_SECTIONS: SectionDef[] = [
     fields: [
       { key: 'grades_title', label: 'عنوان القسم', type: 'text' },
       { key: 'grades_subtitle', label: 'وصف القسم', type: 'textarea' },
+    ],
+  },
+  {
+    id: 'schedule',
+    title: 'مواعيد السنتر',
+    titleEn: 'Schedule Page',
+    icon: CalendarClock,
+    fields: [
+      { key: 'schedule_title', label: 'عنوان الصفحة', type: 'text' },
+      { key: 'schedule_badge', label: 'شارة الصفحة', type: 'text' },
+      { key: 'schedule_subtitle', label: 'وصف الصفحة', type: 'textarea' },
+      { key: 'schedule_brand', label: 'اسم البراند تحت العنوان', type: 'text' },
+      { key: 'schedule_footer_note', label: 'ملاحظة الفوتر', type: 'textarea' },
+      { key: 'schedule_data', label: 'بيانات المواعيد (JSON) - اتركه فارغ لاستخدام المواعيد الافتراضية', type: 'textarea' },
     ],
   },
   {

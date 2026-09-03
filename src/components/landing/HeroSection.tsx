@@ -63,7 +63,7 @@ export default function HeroSection() {
 
   return (
     <section className="relative overflow-hidden bg-background dark:bg-[#0F0D0A]" dir="rtl">
-      {/* Subtle tiny dots + faint math symbols background */}
+      {/* Subtle tiny dots + faint math/geometric symbols background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
         {/* Faint math symbols - very subtle background */}
         <div className="absolute text-[120px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '5%', right: '5%' }}>√</div>
@@ -77,7 +77,34 @@ export default function HeroSection() {
         <div className="absolute text-[50px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '10%', left: '30%' }}>θ</div>
         <div className="absolute text-[75px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '80%', right: '30%' }}>÷</div>
 
-        {/* Tiny subtle dots - regular muted colors */}
+        {/* Geometric shapes - very subtle background */}
+        {/* Triangle */}
+        <svg className="absolute text-foreground/[0.05]" style={{ top: '8%', left: '20%', width: '50px', height: '50px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="25,5 45,45 5,45" />
+        </svg>
+        {/* Circle */}
+        <svg className="absolute text-foreground/[0.05]" style={{ top: '55%', right: '20%', width: '55px', height: '55px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="25" cy="25" r="20" />
+        </svg>
+        {/* Square */}
+        <svg className="absolute text-foreground/[0.05]" style={{ top: '78%', left: '40%', width: '45px', height: '45px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="8" y="8" width="34" height="34" />
+        </svg>
+        {/* Pentagon */}
+        <svg className="absolute text-foreground/[0.05]" style={{ top: '32%', right: '45%', width: '50px', height: '50px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="25,5 45,20 38,45 12,45 5,20" />
+        </svg>
+        {/* Hexagon */}
+        <svg className="absolute text-foreground/[0.05]" style={{ top: '92%', right: '5%', width: '55px', height: '55px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="25,5 42,15 42,35 25,45 8,35 8,15" />
+        </svg>
+        {/* Right triangle */}
+        <svg className="absolute text-foreground/[0.05]" style={{ top: '45%', left: '48%', width: '50px', height: '50px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="5,45 45,45 5,5" />
+          <path d="M 5,15 L 15,15 L 15,45" stroke="currentColor" strokeWidth="1.5" fill="none" />
+        </svg>
+
+        {/* Tiny subtle dots - regular muted colors, evenly distributed */}
         <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '12%', right: '15%', background: '#9ca3af' }} />
         <div className="hero-dot hero-dot-2 w-1 h-1" style={{ top: '22%', left: '12%', background: '#9ca3af' }} />
         <div className="hero-dot hero-dot-3 w-1 h-1" style={{ top: '35%', right: '8%', background: '#9ca3af' }} />
@@ -90,6 +117,12 @@ export default function HeroSection() {
         <div className="hero-dot hero-dot-3 w-1 h-1" style={{ top: '70%', left: '30%', background: '#9ca3af' }} />
         <div className="hero-dot hero-dot-5 w-1 h-1" style={{ top: '30%', left: '50%', background: '#9ca3af' }} />
         <div className="hero-dot hero-dot-7 w-1 h-1" style={{ top: '82%', left: '50%', background: '#9ca3af' }} />
+        {/* Extra dots - evenly distributed */}
+        <div className="hero-dot hero-dot-2 w-1 h-1" style={{ top: '5%', left: '40%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-4 w-1 h-1" style={{ top: '42%', right: '38%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-6 w-1 h-1" style={{ top: '95%', left: '25%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-8 w-1 h-1" style={{ top: '65%', right: '50%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '25%', right: '55%', background: '#9ca3af' }} />
       </div>
 
       {/* Banner Image at Top */}
@@ -292,6 +325,10 @@ export default function HeroSection() {
           </div>
         </div>
       </div>
+
+      {/* Divider between hero and rest of site */}
+      <div className="relative h-px w-full bg-gradient-to-l from-transparent via-foreground/20 to-transparent" />
+      <div className="h-2 w-full bg-muted/40" />
     </section>
   )
 }
