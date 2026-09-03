@@ -157,7 +157,7 @@ export function Navbar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="min-h-[44px]"
+                  className="min-h-[44px] bg-card border-border hover:bg-muted text-foreground rounded-xl transition-all duration-200"
                   onClick={handleLoginClick}
                 >
                   <LogIn className="h-4 w-4 ml-1" />
@@ -165,7 +165,7 @@ export function Navbar() {
                 </Button>
                 <Button
                   size="sm"
-                  className="min-h-[44px]"
+                  className="min-h-[44px] bg-[#0F3D3E] hover:bg-[#0a2e2f] dark:bg-[#1e3a5f] dark:hover:bg-[#16294a] text-white rounded-xl transition-all duration-200 shadow-sm"
                   onClick={handleRegisterClick}
                 >
                   <UserPlus className="h-4 w-4 ml-1" />
@@ -190,19 +190,28 @@ export function Navbar() {
             )}
 
             {mounted && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="min-h-[44px] min-w-[44px]"
+              <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 aria-label="Toggle theme"
+                className="relative inline-flex h-9 w-16 items-center rounded-full bg-[#0F3D3E] dark:bg-[#1e3a5f] transition-colors p-1 cursor-pointer min-h-[44px] min-w-[64px] shadow-inner"
               >
-                {theme === 'dark' ? (
-                  <Sun className="h-5 w-5" />
-                ) : (
-                  <Moon className="h-5 w-5" />
-                )}
-              </Button>
+                {/* Moon icon - left (always visible) */}
+                <Moon className="absolute left-2.5 h-3.5 w-3.5 text-white/70 z-0 pointer-events-none" />
+                {/* Sun icon - right (always visible) */}
+                <Sun className="absolute right-2.5 h-3.5 w-3.5 text-white/70 z-0 pointer-events-none" />
+                {/* Sliding knob - moves left (dark) to right (light) */}
+                <span
+                  className={`relative inline-flex h-7 w-7 transform items-center justify-center rounded-full bg-white shadow-md transition-transform duration-300 ease-in-out z-10 ${
+                    theme === 'dark' ? 'translate-x-0' : 'translate-x-7'
+                  }`}
+                >
+                  {theme === 'dark' ? (
+                    <Moon className="h-3.5 w-3.5 text-[#1e3a5f]" />
+                  ) : (
+                    <Sun className="h-3.5 w-3.5 text-[#C49A38]" />
+                  )}
+                </span>
+              </button>
             )}
 
             {/* Mobile Hamburger */}
@@ -272,7 +281,7 @@ export function Navbar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full min-h-[44px]"
+                  className="w-full min-h-[44px] bg-card border-border hover:bg-muted text-foreground rounded-xl transition-all duration-200"
                   onClick={handleLoginClick}
                 >
                   <LogIn className="h-4 w-4 ml-1" />
@@ -280,7 +289,7 @@ export function Navbar() {
                 </Button>
                 <Button
                   size="sm"
-                  className="w-full min-h-[44px]"
+                  className="w-full min-h-[44px] bg-[#0F3D3E] hover:bg-[#0a2e2f] dark:bg-[#1e3a5f] dark:hover:bg-[#16294a] text-white rounded-xl transition-all duration-200 shadow-sm"
                   onClick={handleRegisterClick}
                 >
                   <UserPlus className="h-4 w-4 ml-1" />
