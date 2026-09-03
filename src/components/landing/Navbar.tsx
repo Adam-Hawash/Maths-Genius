@@ -193,23 +193,24 @@ export function Navbar() {
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 aria-label="Toggle theme"
-                className="relative inline-flex h-9 w-16 items-center rounded-full bg-foreground/10 dark:bg-foreground/20 transition-colors p-1 cursor-pointer min-h-[44px] min-w-[64px]"
+                className="relative inline-flex h-9 w-16 items-center rounded-full bg-[#1e3a5f] dark:bg-[#1e3a5f] transition-colors p-1 cursor-pointer min-h-[44px] min-w-[64px] shadow-inner"
               >
-                {/* Sliding knob with both icons */}
+                {/* Sun icon - left side (visible in light mode) */}
+                <Sun className={`absolute left-2 h-3.5 w-3.5 text-white/40 transition-opacity ${theme === 'dark' ? 'opacity-30' : 'opacity-0'}`} />
+                {/* Moon icon - right side (visible in dark mode) */}
+                <Moon className={`absolute right-2 h-3.5 w-3.5 text-white/40 transition-opacity ${theme === 'dark' ? 'opacity-0' : 'opacity-30'}`} />
+                {/* Sliding knob */}
                 <span
-                  className={`inline-flex h-7 w-7 transform items-center justify-center rounded-full bg-white dark:bg-[#1a1a1f] shadow-md transition-transform duration-300 ${
-                    theme === 'dark' ? 'translate-x-0' : 'translate-x-7'
+                  className={`relative inline-flex h-7 w-7 transform items-center justify-center rounded-full bg-white shadow-md transition-transform duration-300 ${
+                    theme === 'dark' ? 'translate-x-7' : 'translate-x-0'
                   }`}
                 >
                   {theme === 'dark' ? (
-                    <Moon className="h-4 w-4 text-[#E5BE5A]" />
+                    <Moon className="h-3.5 w-3.5 text-[#1e3a5f]" />
                   ) : (
-                    <Sun className="h-4 w-4 text-amber-500" />
+                    <Sun className="h-3.5 w-3.5 text-[#1e3a5f]" />
                   )}
                 </span>
-                {/* Background icons */}
-                <Sun className={`absolute right-2 h-3.5 w-3.5 transition-opacity ${theme === 'dark' ? 'opacity-30' : 'opacity-0'}`} />
-                <Moon className={`absolute left-2 h-3.5 w-3.5 transition-opacity ${theme === 'dark' ? 'opacity-0' : 'opacity-30'}`} />
               </button>
             )}
 
