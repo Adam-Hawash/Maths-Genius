@@ -22,6 +22,14 @@ var DEFAULTS = {
   hero_developer_label: 'Hero Developer',
   footer_made_by_label: 'Made by Adam Hawash',
 
+  // === Schedule Page ===
+  schedule_title: 'مواعيد السنتر',
+  schedule_subtitle: 'جدول مواعيد الحصص الأسبوعية لكل الصفوف الدراسية — اختر اليوم المناسب لك وتابع موعد حصتك',
+  schedule_badge: 'جدول الحصص الأسبوعي',
+  schedule_footer_note: 'جميع المواعيد بتوقيت القاهرة. لو عندك أي استفسار عن موعد حصتك تواصل معنا عبر واتساب.',
+  schedule_brand: 'Math Genius — Mr/ Wael Khodier',
+  schedule_data: '',
+
   // === Instructor ===
   instructor_name: 'Mr Wael Khodier',
   instructor_title: 'Mathematics Specialist | معلم الرياضيات المتخصص',

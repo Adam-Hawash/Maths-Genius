@@ -190,19 +190,27 @@ export function Navbar() {
             )}
 
             {mounted && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="min-h-[44px] min-w-[44px]"
+              <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 aria-label="Toggle theme"
+                className="relative inline-flex h-9 w-16 items-center rounded-full bg-foreground/10 dark:bg-foreground/20 transition-colors p-1 cursor-pointer min-h-[44px] min-w-[64px]"
               >
-                {theme === 'dark' ? (
-                  <Sun className="h-4 w-4" />
-                ) : (
-                  <Moon className="h-4 w-4" />
-                )}
-              </Button>
+                {/* Sliding knob with both icons */}
+                <span
+                  className={`inline-flex h-7 w-7 transform items-center justify-center rounded-full bg-white dark:bg-[#1a1a1f] shadow-md transition-transform duration-300 ${
+                    theme === 'dark' ? 'translate-x-0' : 'translate-x-7'
+                  }`}
+                >
+                  {theme === 'dark' ? (
+                    <Moon className="h-4 w-4 text-[#E5BE5A]" />
+                  ) : (
+                    <Sun className="h-4 w-4 text-amber-500" />
+                  )}
+                </span>
+                {/* Background icons */}
+                <Sun className={`absolute right-2 h-3.5 w-3.5 transition-opacity ${theme === 'dark' ? 'opacity-30' : 'opacity-0'}`} />
+                <Moon className={`absolute left-2 h-3.5 w-3.5 transition-opacity ${theme === 'dark' ? 'opacity-0' : 'opacity-30'}`} />
+              </button>
             )}
 
             {/* Mobile Hamburger */}
