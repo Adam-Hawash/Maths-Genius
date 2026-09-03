@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Calculator, X, Delete, CornerDownLeft } from 'lucide-react'
+import { Calculator, X, Delete, CornerDownLeft, Image as ImageIcon, Loader2 } from 'lucide-react'
+import { chunkedUpload } from '@/lib/chunked-upload'
 
 interface MathKeyboardProps {
   value: string
   onChange: (val: string) => void
   placeholder?: string
   rows?: number
+  onImageUpload?: (filePath: string) => void
 }
 
 interface SymbolButton {
@@ -109,10 +111,13 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
   },
 ]
 
-export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجابتك هنا...', rows = 4 }: MathKeyboardProps) {
+export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجابتك هنا...', rows = 4, onImageUpload }: MathKeyboardProps) {
   const [showKeyboard, setShowKeyboard] = useState(false)
   const [activeGroup, setActiveGroup] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadedImage, setUploadedImage] = useState<string>('')
   const [cursorPos, setCursorPos] = useState(0)
 
   const insertSymbol = (symbol: string) => {
@@ -125,7 +130,6 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
     const newValue = value.substring(0, start) + symbol + value.substring(end)
     onChange(newValue)
     setCursorPos(start + symbol.length)
-    // refocus and set cursor
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus()
@@ -142,7 +146,6 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
     const start = textareaRef.current.selectionStart
     const end = textareaRef.current.selectionEnd
     if (start === end && start > 0) {
-      // delete single char before cursor
       const newValue = value.substring(0, start - 1) + value.substring(end)
       onChange(newValue)
       setCursorPos(start - 1)
@@ -153,7 +156,6 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
         }
       }, 0)
     } else if (start !== end) {
-      // delete selection
       const newValue = value.substring(0, start) + value.substring(end)
       onChange(newValue)
       setCursorPos(start)
@@ -170,6 +172,40 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
     insertSymbol('\n')
   }
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate it's an image
+    if (!file.type.startsWith('image/')) {
+      alert('برجاء اختيار صورة فقط')
+      return
+    }
+
+    // Check size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('حجم الصورة كبير جداً (الحد الأقصى 10MB)')
+      return
+    }
+
+    setUploading(true)
+    try {
+      const data = await chunkedUpload(file, 'homework-answers', undefined, undefined)
+      setUploadedImage(data.filePath)
+      if (onImageUpload) {
+        onImageUpload(data.filePath)
+      }
+      // Also append a marker in the text so the teacher can see an image was attached
+      const marker = '\n[📷 صورة مرفقة]\n'
+      onChange(value + marker)
+    } catch (err: any) {
+      alert('فشل رفع الصورة: ' + (err.message || 'حاول مرة أخرى'))
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   return (
     <div className="w-full">
       <div className="relative">
@@ -182,20 +218,60 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
           className="w-full min-h-[120px] p-3 text-sm rounded-lg border border-border bg-background text-foreground resize-y font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
           dir="auto"
         />
-        <button
-          type="button"
-          onClick={() => setShowKeyboard(!showKeyboard)}
-          className={`absolute top-2 left-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-            showKeyboard
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground hover:bg-muted/80'
-          }`}
-          title="آلة حاسبة للرموز الرياضية"
-        >
-          <Calculator className="h-3.5 w-3.5" />
-          <span>الرموز</span>
-        </button>
+        <div className="absolute top-2 left-2 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
+            title="رفع صورة الحل"
+          >
+            {uploading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ImageIcon className="h-3.5 w-3.5" />
+            )}
+            <span>{uploading ? 'جاري الرفع...' : 'صورة'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowKeyboard(!showKeyboard)}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+              showKeyboard
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+            title="آلة حاسبة للرموز الرياضية"
+          >
+            <Calculator className="h-3.5 w-3.5" />
+            <span>الرموز</span>
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImageUpload}
+        />
       </div>
+
+      {uploadedImage && (
+        <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/40">
+          <ImageIcon className="h-4 w-4 text-emerald-600" />
+          <span className="text-xs text-emerald-700 dark:text-emerald-300">تم رفع الصورة بنجاح - هتظهر للأستاذ في التصحيح</span>
+          <button
+            type="button"
+            onClick={() => {
+              setUploadedImage('')
+              if (onImageUpload) onImageUpload('')
+            }}
+            className="mr-auto text-xs text-red-500 hover:underline"
+          >
+            حذف
+          </button>
+        </div>
+      )}
 
       {showKeyboard && (
         <div className="mt-2 border border-border rounded-lg bg-card shadow-lg overflow-hidden">
@@ -268,3 +344,4 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
     </div>
   )
 }
+
