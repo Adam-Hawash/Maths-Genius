@@ -120,6 +120,8 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
   const [uploadedImage, setUploadedImage] = useState<string>('')
   const [cursorPos, setCursorPos] = useState(0)
 
+  // Smart insert: detect math context for "natural" writing feel
+  // e.g. √ then 3 → ∛ (cube root), ^ then 2 → ² (squared), ^ then 3 → ³
   const insertSymbol = (symbol: string) => {
     if (!textareaRef.current) {
       onChange(value + symbol)
@@ -127,13 +129,118 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
     }
     const start = textareaRef.current.selectionStart
     const end = textareaRef.current.selectionEnd
-    const newValue = value.substring(0, start) + symbol + value.substring(end)
+
+    // Look at the last character before cursor for smart insertion
+    const charBefore = start > 0 ? value[start - 1] : ''
+    let actualSymbol = symbol
+
+    // SMART: cube root, fourth root, etc.
+    // If user typed √ then presses 3 → convert to ∛ (cube root)
+    // If user typed √ then presses 4 → convert to ∜ (fourth root)
+    if (charBefore === '√') {
+      if (symbol === '3') {
+        // Replace √ with ∛
+        const newValue = value.substring(0, start - 1) + '∛' + value.substring(end)
+        onChange(newValue)
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus()
+            textareaRef.current.setSelectionRange(start, start)
+          }
+        }, 0)
+        return
+      } else if (symbol === '4') {
+        const newValue = value.substring(0, start - 1) + '∜' + value.substring(end)
+        onChange(newValue)
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus()
+            textareaRef.current.setSelectionRange(start, start)
+          }
+        }, 0)
+        return
+      } else if (symbol === '2') {
+        // √2 stays as √2 (square root of 2)
+        const newValue = value.substring(0, start) + symbol + value.substring(end)
+        onChange(newValue)
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus()
+            textareaRef.current.setSelectionRange(start + 1, start + 1)
+          }
+        }, 0)
+        return
+      }
+    }
+
+    // SMART: powers — ^ then number → superscript
+    // ^2 → ², ^3 → ³, ^4 → ⁴ (and similar for higher powers using Unicode where available)
+    if (charBefore === '^') {
+      const superMap: Record<string, string> = {
+        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+      }
+      if (superMap[symbol]) {
+        // Replace ^ + digit with superscript digit
+        const newValue = value.substring(0, start - 1) + superMap[symbol] + value.substring(end)
+        onChange(newValue)
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus()
+            textareaRef.current.setSelectionRange(start, start)
+          }
+        }, 0)
+        return
+      }
+      // x^n where x is letter (like x^2) - convert x^2 → x²
+      if (/[0-9a-z]/i.test(charBefore) === false) {
+        // ^ alone (no preceding letter), insert as superscript directly
+        const superMap2: Record<string, string> = {
+          '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+          '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+        }
+        if (superMap2[symbol]) {
+          const newValue = value.substring(0, start - 1) + superMap2[symbol] + value.substring(end)
+          onChange(newValue)
+          setTimeout(() => {
+            if (textareaRef.current) {
+              textareaRef.current.focus()
+              textareaRef.current.setSelectionRange(start, start)
+            }
+          }, 0)
+          return
+        }
+      }
+    }
+
+    // SMART: × or ÷ between numbers — automatically space them
+    if (symbol === '×' || symbol === '÷' || symbol === '+' || symbol === '-') {
+      // Check if surrounded by numbers — auto-insert spaces around operator for readability
+      const charAfter = end < value.length ? value[end] : ''
+      const hasNumBefore = /[0-9²³⁴⁵⁶⁷⁸⁹⁰¹]/.test(charBefore)
+      const hasNumAfter = /[0-9a-zA-Z(√∑∫π]/.test(charAfter)
+      if (hasNumBefore && hasNumAfter) {
+        // Already well-formed, just insert the operator
+        actualSymbol = ' ' + symbol + ' '
+      }
+    }
+
+    // SMART: opening parenthesis after function name (sin, cos, tan, log, ln)
+    // e.g. typing sin then ( → sin(
+    if (symbol === '(' && start >= 3) {
+      const prevThree = value.substring(start - 3, start).toLowerCase()
+      if (['sin', 'cos', 'tan', 'log', 'lcm', 'gcd'].includes(prevThree)) {
+        actualSymbol = '('
+      }
+    }
+
+    const newValue = value.substring(0, start) + actualSymbol + value.substring(end)
     onChange(newValue)
-    setCursorPos(start + symbol.length)
+    setCursorPos(start + actualSymbol.length)
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus()
-        textareaRef.current.setSelectionRange(start + symbol.length, start + symbol.length)
+        textareaRef.current.setSelectionRange(start + actualSymbol.length, start + actualSymbol.length)
       }
     }, 0)
   }

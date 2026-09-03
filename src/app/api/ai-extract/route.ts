@@ -2,23 +2,44 @@
 // FILE: src/app/api/ai-extract/route.ts
 // ROUTE: POST /api/ai-extract
 // PURPOSE: Extract questions from uploaded file (PDF/image) or URL
+//          Supports 3 modes:
+//            1) Single file (questions + answers mixed)
+//            2) Separate question file + answer file
+//            3) Single file URL
 //          Returns questions ONLY (does NOT save to database)
 
 import { NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
-export const maxDuration = 120
+export const maxDuration = 180
+
+function toBase64(file: File): Promise<string> {
+  return file.arrayBuffer().then(function(buf) {
+    return Buffer.from(new Uint8Array(buf)).toString('base64')
+  })
+}
+
+function getMimeType(file: File): string {
+  var fname = (file.name || '').toLowerCase()
+  if (fname.endsWith('.pdf')) return 'application/pdf'
+  if (fname.endsWith('.png')) return 'image/png'
+  if (fname.endsWith('.webp')) return 'image/webp'
+  return file.type || 'image/jpeg'
+}
 
 export async function POST(request) {
   try {
     var formData = await request.formData()
-    var file = formData.get('file')
-    var fileUrl = formData.get('fileUrl') || ''
+    var questionFile = formData.get('file') || formData.get('questionFile')
+    var answerFile = formData.get('answerFile')
+    var fileUrl = formData.get('fileUrl') || formData.get('questionUrl') || ''
+    var answerUrl = formData.get('answerUrl') || ''
     var type = formData.get('type') || 'exam'
     var grade = formData.get('grade') || ''
 
-    if ((!file || file.size === 0) && !fileUrl.trim()) {
-      return NextResponse.json({ error: 'Upload a file or enter a URL' }, { status: 400 })
+    // Validate: at least question file or question URL must be present
+    if ((!questionFile || questionFile.size === 0) && !fileUrl.trim()) {
+      return NextResponse.json({ error: 'Upload a question file or enter a URL' }, { status: 400 })
     }
 
     var apiKey = process.env.GEMINI_API_KEY || ''
@@ -26,41 +47,58 @@ export async function POST(request) {
       return NextResponse.json({ error: 'GEMINI_API_KEY not found' }, { status: 500 })
     }
 
-    var base64Data = ''
-    var mimeType = ''
+    // ============= Build inline parts (1 or 2 files) =============
+    var parts = []
+    var hasQuestionFile = questionFile && questionFile.size > 0
+    var hasAnswerFile = answerFile && answerFile.size > 0
 
-    if (file && file.size > 0) {
-      var bytes = new Uint8Array(await file.arrayBuffer())
-      base64Data = Buffer.from(bytes).toString('base64')
-      var fname = (file.name || '').toLowerCase()
-      if (fname.endsWith('.pdf')) { mimeType = 'application/pdf' }
-      else if (fname.endsWith('.png')) { mimeType = 'image/png' }
-      else if (fname.endsWith('.webp')) { mimeType = 'image/webp' }
-      else { mimeType = file.type || 'image/jpeg' }
+    if (hasQuestionFile) {
+      var qBase64 = await toBase64(questionFile)
+      parts.push({ inlineData: { mimeType: getMimeType(questionFile), data: qBase64 } })
     } else if (fileUrl.trim()) {
       try {
         var fetchRes = await fetch(fileUrl.trim())
         if (!fetchRes.ok) throw new Error('Download failed: ' + fetchRes.status)
         var arrayBuf = await fetchRes.arrayBuffer()
-        base64Data = Buffer.from(new Uint8Array(arrayBuf)).toString('base64')
+        var qBase64Url = Buffer.from(new Uint8Array(arrayBuf)).toString('base64')
         var ct = fetchRes.headers.get('content-type') || ''
-        if (ct.includes('pdf')) { mimeType = 'application/pdf' }
-        else if (ct.includes('png')) { mimeType = 'image/png' }
-        else if (ct.includes('webp')) { mimeType = 'image/webp' }
-        else if (ct.includes('image')) { mimeType = ct }
-        else { mimeType = 'image/jpeg' }
+        var qMime = ct.includes('pdf') ? 'application/pdf' : ct.includes('png') ? 'image/png' : ct.includes('webp') ? 'image/webp' : ct.includes('image') ? ct : 'image/jpeg'
+        parts.push({ inlineData: { mimeType: qMime, data: qBase64Url } })
       } catch (err) {
-        return NextResponse.json({ error: 'Failed to download file' }, { status: 400 })
+        return NextResponse.json({ error: 'Failed to download question file' }, { status: 400 })
       }
     }
 
-    if (!base64Data) {
-      return NextResponse.json({ error: 'No file data' }, { status: 400 })
+    if (hasAnswerFile) {
+      var aBase64 = await toBase64(answerFile)
+      parts.push({ inlineData: { mimeType: getMimeType(answerFile), data: aBase64 } })
+    } else if (answerUrl.trim()) {
+      try {
+        var aFetchRes = await fetch(answerUrl.trim())
+        if (!aFetchRes.ok) throw new Error('Download answer failed: ' + aFetchRes.status)
+        var aBuf = await aFetchRes.arrayBuffer()
+        var aBase64Url = Buffer.from(new Uint8Array(aBuf)).toString('base64')
+        var aCt = aFetchRes.headers.get('content-type') || ''
+        var aMime = aCt.includes('pdf') ? 'application/pdf' : aCt.includes('png') ? 'image/png' : aCt.includes('webp') ? 'image/webp' : aCt.includes('image') ? aCt : 'image/jpeg'
+        parts.push({ inlineData: { mimeType: aMime, data: aBase64Url } })
+      } catch (err) {
+        // ignore answer file download errors, continue with just questions
+      }
     }
 
+    // ============= Build prompt =============
+    var twoFilesMode = parts.length === 2
     var lines = []
-    lines.push('You are an expert math teacher. I will give you a document/image containing math questions.')
-    lines.push('IMPORTANT: Extract ONLY the questions that actually exist in this document. Do NOT invent, create, or add any questions that are not in the document.')
+    lines.push('You are an expert math teacher. I will give you ' + (twoFilesMode ? 'TWO documents' : 'ONE document') + ' containing math questions.')
+    if (twoFilesMode) {
+      lines.push('FIRST document = QUESTIONS only (no answers).')
+      lines.push('SECOND document = ANSWERS / answer key (contains the solutions for those questions).')
+      lines.push('Extract questions from the FIRST document, then MATCH them with their correct answers from the SECOND document.')
+    } else {
+      lines.push('Extract questions AND their answers from this single document.')
+    }
+    lines.push('')
+    lines.push('IMPORTANT: Extract ONLY the questions that actually exist in the document. Do NOT invent, create, or add any questions that are not in the document.')
     lines.push('If the document has 5 questions, extract exactly those 5. If it has 20, extract all 20.')
     lines.push('')
     lines.push('There are TWO types of questions you should extract:')
@@ -72,14 +110,14 @@ export async function POST(request) {
     lines.push('- Copy the EXACT options from the document (translate to English if needed)')
     lines.push('- If the document has fewer than 4 options, add plausible wrong options')
     lines.push('- If the document has no options, create 4 options with the correct answer included')
-    lines.push('- Set correct answer index (0=A, 1=B, 2=C, 3=D)')
-    lines.push('- Provide a modelAnswer with the step-by-step solution')
+    lines.push('- Set correct answer index (0=A, 1=B, 2=C, 3=D) — use the answer from the answer key if available')
+    lines.push('- Provide a modelAnswer with the step-by-step solution (from the answer key if available, else derive it)')
     lines.push('')
     lines.push('For "writing" questions:')
     lines.push('- Copy the EXACT question text from the document')
     lines.push('- Set options to empty array []')
     lines.push('- Set correct to -1')
-    lines.push('- Provide a modelAnswer with the COMPLETE step-by-step solution (this is the reference answer for grading)')
+    lines.push('- Provide a modelAnswer with the COMPLETE step-by-step solution (this is the reference answer for grading) — use the answer from the answer key if available')
     lines.push('- Set acceptedAnswers to an array of acceptable final answers (e.g. ["5", "x=5", "x = 5"])')
     lines.push('')
     lines.push('Rules:')
@@ -88,6 +126,7 @@ export async function POST(request) {
     lines.push('- Do NOT add questions from outside the document')
     lines.push('- Do NOT skip any question from the document')
     lines.push('- Preserve the order of questions as they appear in the document')
+    lines.push('- Match each question with its correct answer/solution')
     lines.push('- Grade: ' + grade + ' | Type: ' + type)
     lines.push('')
     lines.push('JSON only (note: questions array contains BOTH mcq and writing questions mixed together):')
@@ -102,10 +141,10 @@ export async function POST(request) {
     lines.push('}')
     var prompt = lines.join('\n')
 
-    var parts = [{ text: prompt }]
-    parts.push({ inlineData: { mimeType: mimeType, data: base64Data } })
+    parts.unshift({ text: prompt })
 
-    var models = ['gemini-3.6-flash', 'gemini-2.5-flash']
+    // ============= Call Gemini (try multiple models) =============
+    var models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
     var geminiRes = null
     var lastError = ''
 
@@ -117,13 +156,13 @@ export async function POST(request) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: parts }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+            generationConfig: { temperature: 0.1, maxOutputTokens: 16384 }
           })
         })
         if (geminiRes.ok) { break }
         var errBody = ''
         try { errBody = await geminiRes.text() } catch (e) {}
-        lastError = models[mi] + ': ' + geminiRes.status
+        lastError = models[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 200)
         console.error('Model failed:', lastError)
       } catch (e) {
         lastError = models[mi] + ': ' + (e.message || '')
@@ -145,7 +184,7 @@ export async function POST(request) {
 
     var jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return NextResponse.json({ error: 'Could not parse AI response' }, { status: 500 })
+      return NextResponse.json({ error: 'Could not parse AI response', raw: text.substring(0, 500) }, { status: 500 })
     }
 
     var extracted = JSON.parse(jsonMatch[0])
@@ -167,7 +206,6 @@ export async function POST(request) {
           acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []
         }
       }
-      // MCQ
       return {
         type: 'mcq',
         question: q.question || '',
@@ -178,10 +216,9 @@ export async function POST(request) {
       }
     })
 
-    // Stats about extraction
     var mcqCount = extracted.questions.filter(function(q) { return q.type === 'mcq' }).length
     var writingCount = extracted.questions.filter(function(q) { return q.type === 'writing' }).length
-    extracted.stats = { mcq: mcqCount, writing: writingCount, total: extracted.questions.length }
+    extracted.stats = { mcq: mcqCount, writing: writingCount, total: extracted.questions.length, twoFilesMode: twoFilesMode }
 
     return NextResponse.json({ success: true, extracted: extracted })
   } catch (error) {

@@ -190,6 +190,36 @@ export async function POST(request) {
       }
     }
 
+    // Try AI grading for writing questions (best-effort, non-blocking on failure)
+    var writingScore = 0
+    var gradedWriting: any[] = []
+    var aiGraded = false
+    if (writingAnswers.length > 0) {
+      try {
+        var gradeRes = await fetch('http://localhost:3000/api/homework/grade-writing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: studentId,
+            homeworkId: homeworkId,
+            writingAnswers: writingAnswers,
+          }),
+        })
+        if (gradeRes.ok) {
+          var gradeData = await gradeRes.json()
+          if (gradeData.success) {
+            writingScore = gradeData.totalAwarded || 0
+            gradedWriting = gradeData.graded || []
+            aiGraded = true
+            score += writingScore
+          }
+        }
+      } catch (gradeErr) {
+        console.error('AI grading error:', gradeErr)
+        // Continue without AI grading
+      }
+    }
+
     // Return result WITH score and wrong questions (for both student and teacher)
     return NextResponse.json({
       success: true,
@@ -200,8 +230,10 @@ export async function POST(request) {
         maxScore: maxScore,
         submittedAt: new Date().toISOString(),
         wrongQuestions: wrongQuestions,
-        writingAnswers: writingAnswers,
+        writingAnswers: aiGraded ? gradedWriting : writingAnswers,
         hasWritingQuestions: writingAnswers.length > 0,
+        writingGraded: aiGraded,
+        writingScore: writingScore,
       },
     })
   } catch (error) {
