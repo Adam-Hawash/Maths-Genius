@@ -195,13 +195,13 @@ export function Navbar() {
                 aria-label="Toggle theme"
                 className="relative inline-flex h-9 w-16 items-center rounded-full bg-[#1e3a5f] dark:bg-[#1e3a5f] transition-colors p-1 cursor-pointer min-h-[44px] min-w-[64px] shadow-inner"
               >
-                {/* Sun icon - left side (visible in light mode) */}
-                <Sun className={`absolute left-2 h-3.5 w-3.5 text-white/40 transition-opacity ${theme === 'dark' ? 'opacity-30' : 'opacity-0'}`} />
-                {/* Moon icon - right side (visible in dark mode) */}
-                <Moon className={`absolute right-2 h-3.5 w-3.5 text-white/40 transition-opacity ${theme === 'dark' ? 'opacity-0' : 'opacity-30'}`} />
-                {/* Sliding knob */}
+                {/* Sun icon - left (always visible) */}
+                <Sun className={`absolute left-2 h-3.5 w-3.5 transition-all ${theme === 'dark' ? 'text-white/30' : 'text-white/40'}`} />
+                {/* Moon icon - right (always visible) */}
+                <Moon className={`absolute right-2 h-3.5 w-3.5 transition-all ${theme === 'dark' ? 'text-white/40' : 'text-white/30'}`} />
+                {/* Sliding knob - moves from left (light) to right (dark) */}
                 <span
-                  className={`relative inline-flex h-7 w-7 transform items-center justify-center rounded-full bg-white shadow-md transition-transform duration-300 ${
+                  className={`relative inline-flex h-7 w-7 transform items-center justify-center rounded-full bg-white shadow-md transition-transform duration-300 ease-in-out z-10 ${
                     theme === 'dark' ? 'translate-x-7' : 'translate-x-0'
                   }`}
                 >
