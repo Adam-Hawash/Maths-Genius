@@ -5,11 +5,10 @@ import { useAppStore, GRADES } from '@/stores/app-store'
 import { toast } from 'sonner'
 
 var gradeIcons: Record<string, string> = {
-  'الصف السادس الابتدائي': '6',
-  'الصف الأول الاعدادي': '1',
-  'الصف الثاني الاعدادي': '2',
-  'الصف الثالث الاعدادي': '3',
-  'أولى بكالوريا': 'B',
+  'أولى إعدادي': '1ع',
+  'تانية إعدادي': '2ع',
+  'تالتة إعدادي': '3ع',
+  'أولى بكالوريا': '1ب',
 }
 
 var grades = GRADES.map(function(g) { return { id: g, name: g, icon: gradeIcons[g] || g[0] } })
