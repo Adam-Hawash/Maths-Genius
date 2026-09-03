@@ -1,0 +1,270 @@
+'use client'
+
+import { useState, useRef, useEffect } from 'react'
+import { Calculator, X, Delete, CornerDownLeft } from 'lucide-react'
+
+interface MathKeyboardProps {
+  value: string
+  onChange: (val: string) => void
+  placeholder?: string
+  rows?: number
+}
+
+interface SymbolButton {
+  label: string
+  insert: string
+  hint?: string
+}
+
+interface SymbolGroup {
+  title: string
+  symbols: SymbolButton[]
+}
+
+const SYMBOL_GROUPS: SymbolGroup[] = [
+  {
+    title: 'أساسيات',
+    symbols: [
+      { label: '+', insert: '+', hint: 'جمع' },
+      { label: '−', insert: '-', hint: 'طرح' },
+      { label: '×', insert: '×', hint: 'ضرب' },
+      { label: '÷', insert: '÷', hint: 'قسمة' },
+      { label: '=', insert: '=', hint: 'يساوي' },
+      { label: '≠', insert: '≠', hint: 'لا يساوي' },
+      { label: '<', insert: '<', hint: 'أصغر من' },
+      { label: '>', insert: '>', hint: 'أكبر من' },
+      { label: '≤', insert: '≤', hint: 'أصغر أو يساوي' },
+      { label: '≥', insert: '≥', hint: 'أكبر أو يساوي' },
+      { label: '±', insert: '±', hint: 'زائد أو ناقص' },
+      { label: '( )', insert: '(', hint: 'أقواس' },
+    ],
+  },
+  {
+    title: 'الأُسس والجذور',
+    symbols: [
+      { label: 'x²', insert: '²', hint: 'تربيع' },
+      { label: 'x³', insert: '³', hint: 'تكعيب' },
+      { label: 'xⁿ', insert: '^', hint: 'أس' },
+      { label: '√', insert: '√', hint: 'جذر تربيعي' },
+      { label: '∛', insert: '∛', hint: 'جذر تكعيبي' },
+      { label: '∜', insert: '∜', hint: 'جذر رابع' },
+      { label: '½', insert: '½', hint: 'نصف' },
+      { label: '⅓', insert: '⅓', hint: 'ثلث' },
+      { label: '¼', insert: '¼', hint: 'ربع' },
+      { label: '¾', insert: '¾', hint: 'ثلاثة أرباع' },
+      { label: '∞', insert: '∞', hint: 'ما لا نهاية' },
+      { label: 'π', insert: 'π', hint: 'باي' },
+    ],
+  },
+  {
+    title: 'رموز متقدمة',
+    symbols: [
+      { label: '∑', insert: '∑', hint: 'سيجما' },
+      { label: '∫', insert: '∫', hint: 'تكامل' },
+      { label: 'Δ', insert: 'Δ', hint: 'دلتا' },
+      { label: 'θ', insert: 'θ', hint: 'ثيتا' },
+      { label: 'α', insert: 'α', hint: 'ألفا' },
+      { label: 'β', insert: 'β', hint: 'بيتا' },
+      { label: 'γ', insert: 'γ', hint: 'جاما' },
+      { label: 'λ', insert: 'λ', hint: 'لامدا' },
+      { label: 'μ', insert: 'μ', hint: 'ميو' },
+      { label: 'σ', insert: 'σ', hint: 'سيجما' },
+      { label: 'φ', insert: 'φ', hint: 'فاي' },
+      { label: 'ω', insert: 'ω', hint: 'أوميجا' },
+    ],
+  },
+  {
+    title: 'أن角ات ونسب',
+    symbols: [
+      { label: '°', insert: '°', hint: 'درجة' },
+      { label: '∠', insert: '∠', hint: 'زاوية' },
+      { label: '⊥', insert: '⊥', hint: 'تعامد' },
+      { label: '∥', insert: '∥', hint: 'توازي' },
+      { label: 'sin', insert: 'sin', hint: 'جيب' },
+      { label: 'cos', insert: 'cos', hint: 'جتا' },
+      { label: 'tan', insert: 'tan', hint: 'ظل' },
+      { label: 'log', insert: 'log', hint: 'لوغاريتم' },
+      { label: 'ln', insert: 'ln', hint: 'لوغاريتم طبيعي' },
+      { label: '|x|', insert: '|', hint: 'قيمة مطلقة' },
+      { label: 'gcd', insert: 'gcd', hint: 'ق.م.م' },
+      { label: 'lcm', insert: 'lcm', hint: 'م.م.م' },
+    ],
+  },
+  {
+    title: 'أرقام',
+    symbols: [
+      { label: '0', insert: '0' },
+      { label: '1', insert: '1' },
+      { label: '2', insert: '2' },
+      { label: '3', insert: '3' },
+      { label: '4', insert: '4' },
+      { label: '5', insert: '5' },
+      { label: '6', insert: '6' },
+      { label: '7', insert: '7' },
+      { label: '8', insert: '8' },
+      { label: '9', insert: '9' },
+      { label: '.', insert: '.' },
+      { label: ',', insert: ',' },
+    ],
+  },
+]
+
+export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجابتك هنا...', rows = 4 }: MathKeyboardProps) {
+  const [showKeyboard, setShowKeyboard] = useState(false)
+  const [activeGroup, setActiveGroup] = useState(0)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [cursorPos, setCursorPos] = useState(0)
+
+  const insertSymbol = (symbol: string) => {
+    if (!textareaRef.current) {
+      onChange(value + symbol)
+      return
+    }
+    const start = textareaRef.current.selectionStart
+    const end = textareaRef.current.selectionEnd
+    const newValue = value.substring(0, start) + symbol + value.substring(end)
+    onChange(newValue)
+    setCursorPos(start + symbol.length)
+    // refocus and set cursor
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+        textareaRef.current.setSelectionRange(start + symbol.length, start + symbol.length)
+      }
+    }, 0)
+  }
+
+  const handleBackspace = () => {
+    if (!textareaRef.current) {
+      onChange(value.slice(0, -1))
+      return
+    }
+    const start = textareaRef.current.selectionStart
+    const end = textareaRef.current.selectionEnd
+    if (start === end && start > 0) {
+      // delete single char before cursor
+      const newValue = value.substring(0, start - 1) + value.substring(end)
+      onChange(newValue)
+      setCursorPos(start - 1)
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus()
+          textareaRef.current.setSelectionRange(start - 1, start - 1)
+        }
+      }, 0)
+    } else if (start !== end) {
+      // delete selection
+      const newValue = value.substring(0, start) + value.substring(end)
+      onChange(newValue)
+      setCursorPos(start)
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus()
+          textareaRef.current.setSelectionRange(start, start)
+        }
+      }, 0)
+    }
+  }
+
+  const handleEnter = () => {
+    insertSymbol('\n')
+  }
+
+  return (
+    <div className="w-full">
+      <div className="relative">
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          rows={rows}
+          className="w-full min-h-[120px] p-3 text-sm rounded-lg border border-border bg-background text-foreground resize-y font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+          dir="auto"
+        />
+        <button
+          type="button"
+          onClick={() => setShowKeyboard(!showKeyboard)}
+          className={`absolute top-2 left-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+            showKeyboard
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+          }`}
+          title="آلة حاسبة للرموز الرياضية"
+        >
+          <Calculator className="h-3.5 w-3.5" />
+          <span>الرموز</span>
+        </button>
+      </div>
+
+      {showKeyboard && (
+        <div className="mt-2 border border-border rounded-lg bg-card shadow-lg overflow-hidden">
+          {/* Group tabs */}
+          <div className="flex overflow-x-auto border-b border-border bg-muted/30 custom-scrollbar">
+            {SYMBOL_GROUPS.map((group, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setActiveGroup(idx)}
+                className={`px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
+                  activeGroup === idx
+                    ? 'bg-card text-primary border-b-2 border-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {group.title}
+              </button>
+            ))}
+          </div>
+
+          {/* Symbols grid */}
+          <div className="p-2">
+            <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
+              {SYMBOL_GROUPS[activeGroup].symbols.map((sym, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => insertSymbol(sym.insert)}
+                  title={sym.hint || sym.label}
+                  className="aspect-square flex items-center justify-center text-lg font-semibold bg-muted/50 hover:bg-primary hover:text-primary-foreground rounded-md transition-colors border border-border/50 select-none"
+                >
+                  {sym.label}
+                </button>
+              ))}
+
+              {/* Backspace button */}
+              <button
+                type="button"
+                onClick={handleBackspace}
+                title="حذف"
+                className="aspect-square flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-600 rounded-md transition-colors border border-red-500/20 select-none"
+              >
+                <Delete className="h-4 w-4" />
+              </button>
+
+              {/* Enter button */}
+              <button
+                type="button"
+                onClick={handleEnter}
+                title="سطر جديد"
+                className="aspect-square flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 rounded-md transition-colors border border-emerald-500/20 select-none"
+              >
+                <CornerDownLeft className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setShowKeyboard(false)}
+              className="mt-2 w-full py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors flex items-center justify-center gap-1.5"
+            >
+              <X className="h-3.5 w-3.5" />
+              إغلاق لوحة الرموز
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

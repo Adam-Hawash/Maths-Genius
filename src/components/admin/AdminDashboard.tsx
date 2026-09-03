@@ -1640,7 +1640,22 @@ function MyStudentsPanel() {
                               ))}
                             </div>
                           )}
-                          {(!hr.wrongQuestions || hr.wrongQuestions.length === 0) && null}
+                          {hr.writingAnswers && hr.writingAnswers.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                <FileText className="h-3 w-3" />
+                                إجابات مقالية ({hr.writingAnswers.length}) - تحتاج تصحيح يدوي:
+                              </p>
+                              {hr.writingAnswers.map((wa: any, wi: number) => (
+                                <div key={wi} className="text-[10px] p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40">
+                                  <p className="font-semibold text-amber-700 dark:text-amber-300">سؤال {wi + 1}: <span className="font-normal" dir="ltr" style={{ textAlign: 'left' }}>{wa.question}</span></p>
+                                  <p className="mt-1 text-foreground whitespace-pre-wrap break-words" dir="auto">{wa.answer || '(فارغ)'}</p>
+                                  <p className="text-[9px] text-muted-foreground mt-1">الدرجة: {wa.points} نقطة - بانتظار التصحيح</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {(!hr.wrongQuestions || hr.wrongQuestions.length === 0) && (!hr.writingAnswers || hr.writingAnswers.length === 0) && null}
                         </div>
                       ))}
                     </div>

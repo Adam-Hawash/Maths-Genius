@@ -77,19 +77,28 @@ export async function POST(request) {
 
     // Parse questions
     var mcq = []
+    var writingQuestions = []
     if (homework.questions) {
       try {
         var raw = typeof homework.questions === 'string' ? JSON.parse(homework.questions) : homework.questions
-        if (Array.isArray(raw)) { mcq = raw }
+        if (Array.isArray(raw)) {
+          raw.forEach(function(q) {
+            if (q.type === 'writing' || q.type === 'essay') {
+              writingQuestions.push(q)
+            } else {
+              mcq.push(q)
+            }
+          })
+        }
       } catch (e) {
         console.error('Parse homework questions error:', e)
       }
     }
-    if (mcq.length === 0) {
+    if (mcq.length === 0 && writingQuestions.length === 0) {
       return NextResponse.json({ error: 'لا توجد أسئلة في الواجب' }, { status: 400 })
     }
 
-    // Auto-grade with points support
+    // Auto-grade MCQ with points support
     var score = 0
     var maxScore = 0
     var wrongQuestions = []
@@ -125,6 +134,33 @@ export async function POST(request) {
     })
 
     if (maxScore === 0) { maxScore = mcq.length }
+
+    // Add writing questions to maxScore (auto 0 - admin will grade later)
+    var writingAnswers: any[] = []
+    writingQuestions.forEach(function(q, i) {
+      var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+      maxScore += pts
+
+      var qText = q.question || q.q || ''
+      var studentText = ''
+      var mcqLen = mcq.length
+      var writingIdx = i
+      // Try to get writing answer (offset by mcq length since answers is a flat array indexed by question order)
+      try {
+        if (Array.isArray(answers)) {
+          studentText = answers[mcqLen + writingIdx] || ''
+        } else if (answers && typeof answers === 'object') {
+          studentText = answers[mcqLen + writingIdx] || answers[String(mcqLen + writingIdx)] || ''
+        }
+      } catch (e) {}
+
+      writingAnswers.push({
+        question: qText,
+        answer: typeof studentText === 'string' ? studentText : String(studentText || ''),
+        points: pts,
+        needsGrading: true,
+      })
+    })
 
     // Save result with score
     var resultId = 'hwr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
@@ -162,6 +198,8 @@ export async function POST(request) {
         maxScore: maxScore,
         submittedAt: new Date().toISOString(),
         wrongQuestions: wrongQuestions,
+        writingAnswers: writingAnswers,
+        hasWritingQuestions: writingAnswers.length > 0,
       },
     })
   } catch (error) {
