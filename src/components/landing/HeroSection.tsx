@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/stores/app-store'
 import { useEffect, useState } from 'react'
-import { Award, GraduationCap, Users, BookOpen, Clock } from 'lucide-react'
+import { Award, GraduationCap, Users, BookOpen, Clock, CalendarClock } from 'lucide-react'
 
 export default function HeroSection() {
   const {
@@ -63,40 +63,33 @@ export default function HeroSection() {
 
   return (
     <section className="relative overflow-hidden bg-background dark:bg-[#0F0D0A]" dir="rtl">
-      {/* Animated tiny glowing dots - minimal & professional */}
+      {/* Subtle tiny dots + faint math symbols background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
-        {/* Row 1 - top area */}
-        <div className="hero-dot hero-dot-1 w-1.5 h-1.5" style={{ top: '8%', right: '8%', background: '#a855f7', boxShadow: '0 0 6px #a855f7, 0 0 12px #a855f7' }} />
-        <div className="hero-dot hero-dot-2 w-1.5 h-1.5" style={{ top: '14%', left: '15%', background: '#ec4899', boxShadow: '0 0 6px #ec4899, 0 0 12px #ec4899' }} />
-        <div className="hero-dot hero-dot-3 w-1.5 h-1.5" style={{ top: '20%', right: '25%', background: '#10b981', boxShadow: '0 0 6px #10b981, 0 0 12px #10b981' }} />
-        <div className="hero-dot hero-dot-4 w-1.5 h-1.5" style={{ top: '6%', left: '45%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b, 0 0 12px #f59e0b' }} />
-        <div className="hero-dot hero-dot-5 w-1.5 h-1.5" style={{ top: '18%', left: '60%', background: '#3b82f6', boxShadow: '0 0 6px #3b82f6, 0 0 12px #3b82f6' }} />
-        <div className="hero-dot hero-dot-6 w-1.5 h-1.5" style={{ top: '12%', right: '40%', background: '#ef4444', boxShadow: '0 0 6px #ef4444, 0 0 12px #ef4444' }} />
+        {/* Faint math symbols - very subtle background */}
+        <div className="absolute text-[120px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '5%', right: '5%' }}>√</div>
+        <div className="absolute text-[90px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '15%', left: '8%' }}>π</div>
+        <div className="absolute text-[100px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '50%', left: '5%' }}>∑</div>
+        <div className="absolute text-[80px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '65%', right: '10%' }}>∫</div>
+        <div className="absolute text-[70px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '85%', left: '15%' }}>∞</div>
+        <div className="absolute text-[60px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '25%', right: '40%' }}>a²</div>
+        <div className="absolute text-[55px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '70%', left: '40%' }}>b²</div>
+        <div className="absolute text-[65px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '40%', right: '8%' }}>Δ</div>
+        <div className="absolute text-[50px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '10%', left: '30%' }}>θ</div>
+        <div className="absolute text-[75px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '80%', right: '30%' }}>÷</div>
 
-        {/* Row 2 - upper middle */}
-        <div className="hero-dot hero-dot-7 w-1.5 h-1.5" style={{ top: '30%', left: '8%', background: '#06b6d4', boxShadow: '0 0 6px #06b6d4, 0 0 12px #06b6d4' }} />
-        <div className="hero-dot hero-dot-8 w-1.5 h-1.5" style={{ top: '35%', right: '12%', background: '#8b5cf6', boxShadow: '0 0 6px #8b5cf6, 0 0 12px #8b5cf6' }} />
-        <div className="hero-dot hero-dot-1 w-1.5 h-1.5" style={{ top: '42%', left: '30%', background: '#ec4899', boxShadow: '0 0 6px #ec4899, 0 0 12px #ec4899' }} />
-        <div className="hero-dot hero-dot-3 w-1.5 h-1.5" style={{ top: '38%', right: '35%', background: '#10b981', boxShadow: '0 0 6px #10b981, 0 0 12px #10b981' }} />
-
-        {/* Row 3 - middle */}
-        <div className="hero-dot hero-dot-2 w-1.5 h-1.5" style={{ top: '50%', left: '5%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b, 0 0 12px #f59e0b' }} />
-        <div className="hero-dot hero-dot-4 w-1.5 h-1.5" style={{ top: '55%', right: '20%', background: '#3b82f6', boxShadow: '0 0 6px #3b82f6, 0 0 12px #3b82f6' }} />
-        <div className="hero-dot hero-dot-5 w-1.5 h-1.5" style={{ top: '48%', left: '50%', background: '#ef4444', boxShadow: '0 0 6px #ef4444, 0 0 12px #ef4444' }} />
-        <div className="hero-dot hero-dot-6 w-1.5 h-1.5" style={{ top: '60%', left: '25%', background: '#06b6d4', boxShadow: '0 0 6px #06b6d4, 0 0 12px #06b6d4' }} />
-
-        {/* Row 4 - lower middle */}
-        <div className="hero-dot hero-dot-7 w-1.5 h-1.5" style={{ top: '68%', right: '8%', background: '#8b5cf6', boxShadow: '0 0 6px #8b5cf6, 0 0 12px #8b5cf6' }} />
-        <div className="hero-dot hero-dot-8 w-1.5 h-1.5" style={{ top: '72%', left: '12%', background: '#a855f7', boxShadow: '0 0 6px #a855f7, 0 0 12px #a855f7' }} />
-        <div className="hero-dot hero-dot-1 w-1.5 h-1.5" style={{ top: '75%', right: '30%', background: '#ec4899', boxShadow: '0 0 6px #ec4899, 0 0 12px #ec4899' }} />
-        <div className="hero-dot hero-dot-3 w-1.5 h-1.5" style={{ top: '78%', left: '45%', background: '#10b981', boxShadow: '0 0 6px #10b981, 0 0 12px #10b981' }} />
-
-        {/* Row 5 - bottom */}
-        <div className="hero-dot hero-dot-2 w-1.5 h-1.5" style={{ top: '85%', left: '5%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b, 0 0 12px #f59e0b' }} />
-        <div className="hero-dot hero-dot-4 w-1.5 h-1.5" style={{ top: '90%', right: '15%', background: '#3b82f6', boxShadow: '0 0 6px #3b82f6, 0 0 12px #3b82f6' }} />
-        <div className="hero-dot hero-dot-5 w-1.5 h-1.5" style={{ top: '88%', left: '35%', background: '#ef4444', boxShadow: '0 0 6px #ef4444, 0 0 12px #ef4444' }} />
-        <div className="hero-dot hero-dot-6 w-1.5 h-1.5" style={{ top: '92%', right: '45%', background: '#06b6d4', boxShadow: '0 0 6px #06b6d4, 0 0 12px #06b6d4' }} />
-        <div className="hero-dot hero-dot-7 w-1.5 h-1.5" style={{ top: '82%', left: '65%', background: '#8b5cf6', boxShadow: '0 0 6px #8b5cf6, 0 0 12px #8b5cf6' }} />
+        {/* Tiny subtle dots - regular muted colors */}
+        <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '12%', right: '15%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-2 w-1 h-1" style={{ top: '22%', left: '12%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-3 w-1 h-1" style={{ top: '35%', right: '8%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-4 w-1 h-1" style={{ top: '48%', left: '20%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-5 w-1 h-1" style={{ top: '60%', right: '25%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-6 w-1 h-1" style={{ top: '75%', left: '8%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-7 w-1 h-1" style={{ top: '88%', right: '12%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-8 w-1 h-1" style={{ top: '18%', right: '35%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-1 w-1 h-1" style={{ top: '55%', left: '45%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-3 w-1 h-1" style={{ top: '70%', left: '30%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-5 w-1 h-1" style={{ top: '30%', left: '50%', background: '#9ca3af' }} />
+        <div className="hero-dot hero-dot-7 w-1 h-1" style={{ top: '82%', left: '50%', background: '#9ca3af' }} />
       </div>
 
       {/* Banner Image at Top */}
@@ -175,6 +168,19 @@ export default function HeroSection() {
                 onClick={() => setView('auth-login')}
               >
                 عندك حساب؟ ادخل هنا
+              </Button>
+            </div>
+
+            {/* Schedule Button - مواعيد السنتر */}
+            <div className="pt-2 flex justify-center lg:justify-start">
+              <Button
+                variant="outline"
+                size="lg"
+                className="text-sm px-6 py-4 min-h-[44px] border-foreground/15 bg-foreground/5 hover:bg-foreground/10 text-foreground font-medium rounded-xl transition-colors duration-200 gap-2"
+                onClick={() => window.open('/schedule', '_blank')}
+              >
+                <CalendarClock className="h-4 w-4" />
+                مواعيد السنتر
               </Button>
             </div>
 
@@ -279,7 +285,7 @@ export default function HeroSection() {
               {/* Badge overlay */}
               <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-background border border-[#C49A38]/40 rounded-full px-5 py-2 shadow-lg">
                 <p className="text-[#8B6914] dark:text-[#E5BE5A] font-bold text-sm tracking-wider whitespace-nowrap">
-                  {(cfg.hero_title_line1 || 'Maths Genius').toUpperCase()}
+                  {cfg.instructor_name || 'مستر وائل خضير'}
                 </p>
               </div>
             </div>
