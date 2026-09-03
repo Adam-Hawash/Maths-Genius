@@ -62,18 +62,41 @@ export default function HeroSection() {
   const showPhoto = !!dbPhoto || fallbackPhotoExists
 
   return (
-    <section className="relative overflow-hidden bg-[#F9F7F4] dark:bg-[#0F0D0A]" dir="rtl">
+    <section className="relative overflow-hidden bg-background dark:bg-[#0F0D0A]" dir="rtl">
       {/* Animated tiny glowing dots - minimal & professional */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
-        {/* Tiny sparkles - bright neon colors */}
-        <div className="hero-dot hero-dot-1 w-1.5 h-1.5" style={{ top: '15%', right: '12%', background: '#a855f7', boxShadow: '0 0 6px #a855f7, 0 0 12px #a855f7' }} />
-        <div className="hero-dot hero-dot-2 w-1.5 h-1.5" style={{ top: '25%', left: '8%', background: '#ec4899', boxShadow: '0 0 6px #ec4899, 0 0 12px #ec4899' }} />
-        <div className="hero-dot hero-dot-3 w-1.5 h-1.5" style={{ top: '55%', right: '18%', background: '#10b981', boxShadow: '0 0 6px #10b981, 0 0 12px #10b981' }} />
-        <div className="hero-dot hero-dot-4 w-1.5 h-1.5" style={{ top: '75%', left: '22%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b, 0 0 12px #f59e0b' }} />
-        <div className="hero-dot hero-dot-5 w-1.5 h-1.5" style={{ top: '40%', left: '40%', background: '#3b82f6', boxShadow: '0 0 6px #3b82f6, 0 0 12px #3b82f6' }} />
-        <div className="hero-dot hero-dot-6 w-1.5 h-1.5" style={{ top: '85%', right: '35%', background: '#ef4444', boxShadow: '0 0 6px #ef4444, 0 0 12px #ef4444' }} />
-        <div className="hero-dot hero-dot-7 w-1.5 h-1.5" style={{ top: '12%', left: '35%', background: '#06b6d4', boxShadow: '0 0 6px #06b6d4, 0 0 12px #06b6d4' }} />
-        <div className="hero-dot hero-dot-8 w-1.5 h-1.5" style={{ top: '65%', left: '5%', background: '#8b5cf6', boxShadow: '0 0 6px #8b5cf6, 0 0 12px #8b5cf6' }} />
+        {/* Row 1 - top area */}
+        <div className="hero-dot hero-dot-1 w-1.5 h-1.5" style={{ top: '8%', right: '8%', background: '#a855f7', boxShadow: '0 0 6px #a855f7, 0 0 12px #a855f7' }} />
+        <div className="hero-dot hero-dot-2 w-1.5 h-1.5" style={{ top: '14%', left: '15%', background: '#ec4899', boxShadow: '0 0 6px #ec4899, 0 0 12px #ec4899' }} />
+        <div className="hero-dot hero-dot-3 w-1.5 h-1.5" style={{ top: '20%', right: '25%', background: '#10b981', boxShadow: '0 0 6px #10b981, 0 0 12px #10b981' }} />
+        <div className="hero-dot hero-dot-4 w-1.5 h-1.5" style={{ top: '6%', left: '45%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b, 0 0 12px #f59e0b' }} />
+        <div className="hero-dot hero-dot-5 w-1.5 h-1.5" style={{ top: '18%', left: '60%', background: '#3b82f6', boxShadow: '0 0 6px #3b82f6, 0 0 12px #3b82f6' }} />
+        <div className="hero-dot hero-dot-6 w-1.5 h-1.5" style={{ top: '12%', right: '40%', background: '#ef4444', boxShadow: '0 0 6px #ef4444, 0 0 12px #ef4444' }} />
+
+        {/* Row 2 - upper middle */}
+        <div className="hero-dot hero-dot-7 w-1.5 h-1.5" style={{ top: '30%', left: '8%', background: '#06b6d4', boxShadow: '0 0 6px #06b6d4, 0 0 12px #06b6d4' }} />
+        <div className="hero-dot hero-dot-8 w-1.5 h-1.5" style={{ top: '35%', right: '12%', background: '#8b5cf6', boxShadow: '0 0 6px #8b5cf6, 0 0 12px #8b5cf6' }} />
+        <div className="hero-dot hero-dot-1 w-1.5 h-1.5" style={{ top: '42%', left: '30%', background: '#ec4899', boxShadow: '0 0 6px #ec4899, 0 0 12px #ec4899' }} />
+        <div className="hero-dot hero-dot-3 w-1.5 h-1.5" style={{ top: '38%', right: '35%', background: '#10b981', boxShadow: '0 0 6px #10b981, 0 0 12px #10b981' }} />
+
+        {/* Row 3 - middle */}
+        <div className="hero-dot hero-dot-2 w-1.5 h-1.5" style={{ top: '50%', left: '5%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b, 0 0 12px #f59e0b' }} />
+        <div className="hero-dot hero-dot-4 w-1.5 h-1.5" style={{ top: '55%', right: '20%', background: '#3b82f6', boxShadow: '0 0 6px #3b82f6, 0 0 12px #3b82f6' }} />
+        <div className="hero-dot hero-dot-5 w-1.5 h-1.5" style={{ top: '48%', left: '50%', background: '#ef4444', boxShadow: '0 0 6px #ef4444, 0 0 12px #ef4444' }} />
+        <div className="hero-dot hero-dot-6 w-1.5 h-1.5" style={{ top: '60%', left: '25%', background: '#06b6d4', boxShadow: '0 0 6px #06b6d4, 0 0 12px #06b6d4' }} />
+
+        {/* Row 4 - lower middle */}
+        <div className="hero-dot hero-dot-7 w-1.5 h-1.5" style={{ top: '68%', right: '8%', background: '#8b5cf6', boxShadow: '0 0 6px #8b5cf6, 0 0 12px #8b5cf6' }} />
+        <div className="hero-dot hero-dot-8 w-1.5 h-1.5" style={{ top: '72%', left: '12%', background: '#a855f7', boxShadow: '0 0 6px #a855f7, 0 0 12px #a855f7' }} />
+        <div className="hero-dot hero-dot-1 w-1.5 h-1.5" style={{ top: '75%', right: '30%', background: '#ec4899', boxShadow: '0 0 6px #ec4899, 0 0 12px #ec4899' }} />
+        <div className="hero-dot hero-dot-3 w-1.5 h-1.5" style={{ top: '78%', left: '45%', background: '#10b981', boxShadow: '0 0 6px #10b981, 0 0 12px #10b981' }} />
+
+        {/* Row 5 - bottom */}
+        <div className="hero-dot hero-dot-2 w-1.5 h-1.5" style={{ top: '85%', left: '5%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b, 0 0 12px #f59e0b' }} />
+        <div className="hero-dot hero-dot-4 w-1.5 h-1.5" style={{ top: '90%', right: '15%', background: '#3b82f6', boxShadow: '0 0 6px #3b82f6, 0 0 12px #3b82f6' }} />
+        <div className="hero-dot hero-dot-5 w-1.5 h-1.5" style={{ top: '88%', left: '35%', background: '#ef4444', boxShadow: '0 0 6px #ef4444, 0 0 12px #ef4444' }} />
+        <div className="hero-dot hero-dot-6 w-1.5 h-1.5" style={{ top: '92%', right: '45%', background: '#06b6d4', boxShadow: '0 0 6px #06b6d4, 0 0 12px #06b6d4' }} />
+        <div className="hero-dot hero-dot-7 w-1.5 h-1.5" style={{ top: '82%', left: '65%', background: '#8b5cf6', boxShadow: '0 0 6px #8b5cf6, 0 0 12px #8b5cf6' }} />
       </div>
 
       {/* Banner Image at Top */}
@@ -104,7 +127,7 @@ export default function HeroSection() {
 
       {/* Subtle gradient when no banner */}
       {!showBg && (
-        <div className="absolute inset-0 bg-gradient-to-br from-[#F9F7F4] dark:from-[#0F0D0A] via-white dark:via-[#1A1714] to-[#F9F7F4] dark:to-[#0F0D0A] -z-10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-background dark:from-[#0F0D0A] via-card dark:via-[#1A1714] to-background dark:to-[#0F0D0A] -z-10" />
       )}
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 py-12 sm:py-20 lg:py-24">
