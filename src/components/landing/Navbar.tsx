@@ -195,16 +195,17 @@ export function Navbar() {
                 aria-label="Toggle theme"
                 className="relative inline-flex h-9 w-16 items-center rounded-full bg-[#1e3a5f] dark:bg-[#1e3a5f] transition-colors p-1 cursor-pointer min-h-[44px] min-w-[64px] shadow-inner"
               >
-                {/* Sun icon - left (always visible) */}
-                <Sun className={`absolute left-2 h-3.5 w-3.5 transition-all ${theme === 'dark' ? 'text-white/30' : 'text-white/40'}`} />
-                {/* Moon icon - right (always visible) */}
-                <Moon className={`absolute right-2 h-3.5 w-3.5 transition-all ${theme === 'dark' ? 'text-white/40' : 'text-white/30'}`} />
-                {/* Sliding knob - moves from left (light) to right (dark) */}
+                {/* Moon icon - left side (always visible, fixed) */}
+                <Moon className="absolute left-2.5 h-3.5 w-3.5 text-white/70 z-0" />
+                {/* Sun icon - right side (always visible, fixed) */}
+                <Sun className="absolute right-2.5 h-3.5 w-3.5 text-white/70 z-0" />
+                {/* Sliding knob - moves left (dark) to right (light), no icon inside */}
                 <span
                   className={`relative inline-flex h-7 w-7 transform items-center justify-center rounded-full bg-white shadow-md transition-transform duration-300 ease-in-out z-10 ${
-                    theme === 'dark' ? 'translate-x-7' : 'translate-x-0'
+                    theme === 'dark' ? 'translate-x-0' : 'translate-x-7'
                   }`}
                 >
+                  {/* Show moon when knob is on left (dark), sun when knob is on right (light) */}
                   {theme === 'dark' ? (
                     <Moon className="h-3.5 w-3.5 text-[#1e3a5f]" />
                   ) : (
