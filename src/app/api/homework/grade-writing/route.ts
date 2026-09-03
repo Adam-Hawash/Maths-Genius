@@ -170,7 +170,7 @@ export async function POST(request) {
     var parts = [{ text: prompt }]
 
     // Try multiple models
-    var models = ['gemini-2.5-flash', 'gemini-1.5-flash']
+    var models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
     var geminiRes = null
     var lastError = ''
 
