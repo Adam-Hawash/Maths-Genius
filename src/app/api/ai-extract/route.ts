@@ -1,12 +1,12 @@
 // @ts-nocheck
 // FILE: src/app/api/ai-extract/route.ts
 // ROUTE: POST /api/ai-extract
-// PURPOSE: Extract questions from uploaded file (PDF/image) or URL
+// PURPOSE: Extract questions and answers from uploaded files
 //          Supports 3 modes:
-//            1) Single file (questions + answers mixed)
-//            2) Separate question file + answer file
-//            3) Single file URL
-//          Returns questions ONLY (does NOT save to database)
+//            1) Single file (questions + answers mixed) - one AI call
+//            2) Separate question file + answer file - TWO AI calls, then merge locally
+//            3) Single file URL or two URLs
+//          Returns merged questions/answers JSON
 
 import { NextResponse } from 'next/server'
 
@@ -27,6 +27,98 @@ function getMimeType(file: File): string {
   return file.type || 'image/jpeg'
 }
 
+async function callGemini(apiKey: string, parts: any[]): Promise<any> {
+  var models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+  var lastError = ''
+  for (var mi = 0; mi < models.length; mi++) {
+    try {
+      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[mi] + ':generateContent?key=' + apiKey
+      var geminiRes = await fetch(modelUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: parts }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 16384 }
+        })
+      })
+      if (geminiRes.ok) {
+        var data = await geminiRes.json()
+        var text = ''
+        try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
+        return { ok: true, text: text }
+      }
+      var errBody = ''
+      try { errBody = await geminiRes.text() } catch (e) {}
+      lastError = models[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 200)
+    } catch (e) {
+      lastError = models[mi] + ': ' + (e.message || '')
+    }
+  }
+  return { ok: false, error: lastError }
+}
+
+function parseAIJson(text: string): any | null {
+  if (!text || !text.trim()) return null
+  var jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) return null
+  try {
+    return JSON.parse(jsonMatch[0])
+  } catch (e) {
+    return null
+  }
+}
+
+// Merge questions from questions-doc with answers from answers-doc
+// Match by index (Q1 → A1) or by question text fuzzy match
+function mergeQuestionsAndAnswers(questions: any[], answers: any[]): any[] {
+  if (!Array.isArray(questions)) questions = []
+  if (!Array.isArray(answers)) answers = []
+
+  return questions.map(function(q, i) {
+    // Try to find matching answer by index first
+    var ans = answers[i]
+    // If no answer at that index, try fuzzy match by question text
+    if (!ans && q.question) {
+      var qNorm = q.question.trim().toLowerCase().replace(/\s+/g, ' ').substring(0, 80)
+      for (var j = 0; j < answers.length; j++) {
+        var aQ = (answers[j].question || answers[j].q || '').trim().toLowerCase().replace(/\s+/g, ' ').substring(0, 80)
+        if (aQ && (aQ === qNorm || aQ.includes(qNorm) || qNorm.includes(aQ))) {
+          ans = answers[j]
+          break
+        }
+      }
+    }
+
+    var qType = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) ? 'writing' : 'mcq'
+    var modelAnswer = (ans && (ans.modelAnswer || ans.answer || ans.solution)) || q.modelAnswer || ''
+    var acceptedAnswers = (ans && Array.isArray(ans.acceptedAnswers) ? ans.acceptedAnswers : (Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []))
+
+    if (qType === 'writing') {
+      return {
+        type: 'writing',
+        question: q.question || '',
+        options: [],
+        correct: -1,
+        points: q.points || 5,
+        modelAnswer: modelAnswer,
+        acceptedAnswers: acceptedAnswers,
+      }
+    }
+    // MCQ
+    var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+    // If answer doc has correct index, prefer it
+    if (ans && typeof ans.correct === 'number') correctIdx = ans.correct
+    return {
+      type: 'mcq',
+      question: q.question || '',
+      options: (q.options || ['N/A', 'N/A', 'N/A', 'N/A']).slice(0, 4),
+      correct: correctIdx,
+      points: q.points || 1,
+      modelAnswer: modelAnswer,
+    }
+  })
+}
+
 export async function POST(request) {
   try {
     var formData = await request.formData()
@@ -37,7 +129,6 @@ export async function POST(request) {
     var type = formData.get('type') || 'exam'
     var grade = formData.get('grade') || ''
 
-    // Validate: at least question file or question URL must be present
     if ((!questionFile || questionFile.size === 0) && !fileUrl.trim()) {
       return NextResponse.json({ error: 'Upload a question file or enter a URL' }, { status: 400 })
     }
@@ -47,14 +138,12 @@ export async function POST(request) {
       return NextResponse.json({ error: 'GEMINI_API_KEY not found' }, { status: 500 })
     }
 
-    // ============= Build inline parts (1 or 2 files) =============
-    var parts = []
+    // ============= Load question file (or URL) =============
+    var qPart: any = null
     var hasQuestionFile = questionFile && questionFile.size > 0
-    var hasAnswerFile = answerFile && answerFile.size > 0
-
     if (hasQuestionFile) {
       var qBase64 = await toBase64(questionFile)
-      parts.push({ inlineData: { mimeType: getMimeType(questionFile), data: qBase64 } })
+      qPart = { inlineData: { mimeType: getMimeType(questionFile), data: qBase64 } }
     } else if (fileUrl.trim()) {
       try {
         var fetchRes = await fetch(fileUrl.trim())
@@ -63,15 +152,18 @@ export async function POST(request) {
         var qBase64Url = Buffer.from(new Uint8Array(arrayBuf)).toString('base64')
         var ct = fetchRes.headers.get('content-type') || ''
         var qMime = ct.includes('pdf') ? 'application/pdf' : ct.includes('png') ? 'image/png' : ct.includes('webp') ? 'image/webp' : ct.includes('image') ? ct : 'image/jpeg'
-        parts.push({ inlineData: { mimeType: qMime, data: qBase64Url } })
+        qPart = { inlineData: { mimeType: qMime, data: qBase64Url } }
       } catch (err) {
         return NextResponse.json({ error: 'Failed to download question file' }, { status: 400 })
       }
     }
 
+    // ============= Load answer file (or URL) if present =============
+    var aPart: any = null
+    var hasAnswerFile = answerFile && answerFile.size > 0
     if (hasAnswerFile) {
       var aBase64 = await toBase64(answerFile)
-      parts.push({ inlineData: { mimeType: getMimeType(answerFile), data: aBase64 } })
+      aPart = { inlineData: { mimeType: getMimeType(answerFile), data: aBase64 } }
     } else if (answerUrl.trim()) {
       try {
         var aFetchRes = await fetch(answerUrl.trim())
@@ -80,149 +172,224 @@ export async function POST(request) {
         var aBase64Url = Buffer.from(new Uint8Array(aBuf)).toString('base64')
         var aCt = aFetchRes.headers.get('content-type') || ''
         var aMime = aCt.includes('pdf') ? 'application/pdf' : aCt.includes('png') ? 'image/png' : aCt.includes('webp') ? 'image/webp' : aCt.includes('image') ? aCt : 'image/jpeg'
-        parts.push({ inlineData: { mimeType: aMime, data: aBase64Url } })
+        aPart = { inlineData: { mimeType: aMime, data: aBase64Url } }
       } catch (err) {
         // ignore answer file download errors, continue with just questions
       }
     }
 
-    // ============= Build prompt =============
-    var twoFilesMode = parts.length === 2
-    var lines = []
-    lines.push('You are an expert math teacher. I will give you ' + (twoFilesMode ? 'TWO documents' : 'ONE document') + ' containing math questions.')
-    if (twoFilesMode) {
-      lines.push('FIRST document = QUESTIONS only (no answers).')
-      lines.push('SECOND document = ANSWERS / answer key (contains the solutions for those questions).')
-      lines.push('Extract questions from the FIRST document, then MATCH them with their correct answers from the SECOND document.')
-    } else {
-      lines.push('Extract questions AND their answers from this single document.')
-    }
-    lines.push('')
-    lines.push('IMPORTANT: Extract ONLY the questions that actually exist in the document. Do NOT invent, create, or add any questions that are not in the document.')
-    lines.push('If the document has 5 questions, extract exactly those 5. If it has 20, extract all 20.')
-    lines.push('')
-    lines.push('There are TWO types of questions you should extract:')
-    lines.push('1. "mcq" - Multiple Choice Questions: questions with options (A, B, C, D). If the question has options/choices, classify it as "mcq".')
-    lines.push('2. "writing" - Essay/Written Questions: questions that require the student to write a full solution (no multiple choices). If the question asks to "solve", "prove", "find", "calculate", "simplify", "factor", "expand", or requires showing work, classify it as "writing".')
-    lines.push('')
-    lines.push('For "mcq" questions:')
-    lines.push('- Copy the EXACT question text from the document (translate to English if needed)')
-    lines.push('- Copy the EXACT options from the document (translate to English if needed)')
-    lines.push('- If the document has fewer than 4 options, add plausible wrong options')
-    lines.push('- If the document has no options, create 4 options with the correct answer included')
-    lines.push('- Set correct answer index (0=A, 1=B, 2=C, 3=D) — use the answer from the answer key if available')
-    lines.push('- Provide a modelAnswer with the step-by-step solution (from the answer key if available, else derive it)')
-    lines.push('')
-    lines.push('For "writing" questions:')
-    lines.push('- Copy the EXACT question text from the document')
-    lines.push('- Set options to empty array []')
-    lines.push('- Set correct to -1')
-    lines.push('- Provide a modelAnswer with the COMPLETE step-by-step solution (this is the reference answer for grading) — use the answer from the answer key if available')
-    lines.push('- Set acceptedAnswers to an array of acceptable final answers (e.g. ["5", "x=5", "x = 5"])')
-    lines.push('')
-    lines.push('Rules:')
-    lines.push('- ALL output text in English')
-    lines.push('- Write math using proper math symbols. Use Unicode superscripts for powers: x\u00b2 for squared, x\u00b3 for cubed, x\u2074 for to the power of 4. Use \u221a for square root, \u221b for cubic root. Use \u00d7 for multiplication. Use \u00f7 for division. Do NOT write "squared", "cubed", "to the power of" as words. Do NOT use ^ or * symbols.')
-    lines.push('- Do NOT add questions from outside the document')
-    lines.push('- Do NOT skip any question from the document')
-    lines.push('- Preserve the order of questions as they appear in the document')
-    lines.push('- Match each question with its correct answer/solution')
-    lines.push('- Grade: ' + grade + ' | Type: ' + type)
-    lines.push('')
-    lines.push('JSON only (note: questions array contains BOTH mcq and writing questions mixed together):')
-    lines.push('{')
-    lines.push('  "title": "...",')
-    lines.push('  "content": "...",')
-    lines.push('  "questions": [')
-    lines.push('    {"type":"mcq","question":"...","options":["A","B","C","D"],"correct":0,"points":1,"modelAnswer":"step by step solution"},')
-    lines.push('    {"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"full step by step solution","acceptedAnswers":["5","x=5"]}')
-    lines.push('  ],')
-    lines.push('  "answerKey": "..."')
-    lines.push('}')
-    var prompt = lines.join('\n')
+    var twoFilesMode = !!qPart && !!aPart
 
-    parts.unshift({ text: prompt })
-
-    // ============= Call Gemini (try multiple models) =============
-    var models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
-    var geminiRes = null
-    var lastError = ''
-
-    for (var mi = 0; mi < models.length; mi++) {
-      try {
-        var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[mi] + ':generateContent?key=' + apiKey
-        geminiRes = await fetch(modelUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: parts }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 16384 }
-          })
-        })
-        if (geminiRes.ok) { break }
-        var errBody = ''
-        try { errBody = await geminiRes.text() } catch (e) {}
-        lastError = models[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 200)
-        console.error('Model failed:', lastError)
-      } catch (e) {
-        lastError = models[mi] + ': ' + (e.message || '')
-        geminiRes = null
+    // ============= Mode 1: SINGLE FILE (questions + answers together) =============
+    if (!twoFilesMode) {
+      var singlePrompt = buildSingleFilePrompt(grade, type)
+      var singleParts = [{ text: singlePrompt }, qPart]
+      var singleRes = await callGemini(apiKey, singleParts)
+      if (!singleRes.ok) {
+        return NextResponse.json({ error: 'AI error: ' + singleRes.error }, { status: 500 })
       }
+      var extracted = parseAIJson(singleRes.text)
+      if (!extracted) {
+        return NextResponse.json({ error: 'Could not parse AI response', raw: (singleRes.text || '').substring(0, 500) }, { status: 500 })
+      }
+      return finalizeExtracted(extracted, type, grade, false)
     }
 
-    if (!geminiRes || !geminiRes.ok) {
-      return NextResponse.json({ error: 'AI error: ' + lastError }, { status: 500 })
+    // ============= Mode 2: TWO FILES (separate questions + answers) =============
+    // Step A: Extract questions only from the questions file
+    var questionsPrompt = buildQuestionsOnlyPrompt(grade, type)
+    var questionsParts = [{ text: questionsPrompt }, qPart]
+    var questionsRes = await callGemini(apiKey, questionsParts)
+    if (!questionsRes.ok) {
+      return NextResponse.json({ error: 'AI error extracting questions: ' + questionsRes.error }, { status: 500 })
+    }
+    var questionsData = parseAIJson(questionsRes.text)
+    if (!questionsData || !Array.isArray(questionsData.questions) || questionsData.questions.length === 0) {
+      return NextResponse.json({ error: 'Could not extract questions from questions file', raw: (questionsRes.text || '').substring(0, 500) }, { status: 500 })
     }
 
-    var geminiData = await geminiRes.json()
-    var text = ''
-    try { text = geminiData.candidates[0].content.parts[0].text || '' } catch (e) {}
-
-    if (!text.trim()) {
-      return NextResponse.json({ error: 'No response from AI' }, { status: 500 })
-    }
-
-    var jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      return NextResponse.json({ error: 'Could not parse AI response', raw: text.substring(0, 500) }, { status: 500 })
-    }
-
-    var extracted = JSON.parse(jsonMatch[0])
-    if (!extracted.title) { extracted.title = type + ' - ' + grade }
-    if (!extracted.content) { extracted.content = '' }
-    if (!Array.isArray(extracted.questions)) { extracted.questions = [] }
-    if (!extracted.answerKey) { extracted.answerKey = '' }
-
-    extracted.questions = extracted.questions.map(function(q) {
-      var qType = q.type === 'writing' || q.type === 'essay' ? 'writing' : 'mcq'
-      if (qType === 'writing') {
-        return {
-          type: 'writing',
-          question: q.question || '',
-          options: [],
-          correct: -1,
-          points: q.points || 5,
-          modelAnswer: q.modelAnswer || q.answer || '',
-          acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []
+    // Step B: Extract answers only from the answers file
+    var answersPrompt = buildAnswersOnlyPrompt(grade, type, questionsData.questions)
+    var answersParts = [{ text: answersPrompt }, aPart]
+    var answersRes = await callGemini(apiKey, answersParts)
+    var answersData: any = { answers: [] }
+    if (answersRes.ok) {
+      answersData = parseAIJson(answersRes.text) || { answers: [] }
+      if (!Array.isArray(answersData.answers)) {
+        // Maybe the AI returned them as "questions" array - try that
+        if (Array.isArray(answersData.questions)) {
+          answersData.answers = answersData.questions
+        } else {
+          answersData.answers = []
         }
       }
-      return {
-        type: 'mcq',
-        question: q.question || '',
-        options: (q.options || ['N/A', 'N/A', 'N/A', 'N/A']).slice(0, 4),
-        correct: typeof q.correct === 'number' ? q.correct : 0,
-        points: q.points || 1,
-        modelAnswer: q.modelAnswer || ''
-      }
-    })
+    }
 
-    var mcqCount = extracted.questions.filter(function(q) { return q.type === 'mcq' }).length
-    var writingCount = extracted.questions.filter(function(q) { return q.type === 'writing' }).length
-    extracted.stats = { mcq: mcqCount, writing: writingCount, total: extracted.questions.length, twoFilesMode: twoFilesMode }
+    // Step C: Merge questions + answers locally
+    var mergedQuestions = mergeQuestionsAndAnswers(questionsData.questions, answersData.answers || [])
 
-    return NextResponse.json({ success: true, extracted: extracted })
+    var extracted2 = {
+      title: questionsData.title || (type + ' - ' + grade),
+      content: questionsData.content || '',
+      questions: mergedQuestions,
+      answerKey: typeof answersData === 'object' ? (answersData.answerKey || '') : '',
+    }
+    return finalizeExtracted(extracted2, type, grade, true)
   } catch (error) {
     console.error('AI extract error:', error)
     return NextResponse.json({ error: 'Error: ' + (error.message || 'Unknown') }, { status: 500 })
   }
+}
+
+// ============= Prompt builders =============
+
+function buildSingleFilePrompt(grade: string, type: string): string {
+  var lines = []
+  lines.push('You are an expert math teacher. I will give you ONE document containing math questions AND their answers.')
+  lines.push('Extract questions AND their answers from this single document.')
+  lines.push('')
+  lines.push('IMPORTANT: Extract ONLY the questions that actually exist in the document. Do NOT invent, create, or add any questions that are not in the document.')
+  lines.push('If the document has 5 questions, extract exactly those 5. If it has 20, extract all 20.')
+  lines.push('')
+  lines.push('There are TWO types of questions you should extract:')
+  lines.push('1. "mcq" - Multiple Choice Questions: questions with options (A, B, C, D). If the question has options/choices, classify it as "mcq".')
+  lines.push('2. "writing" - Essay/Written Questions: questions that require the student to write a full solution (no multiple choices). If the question asks to "solve", "prove", "find", "calculate", "simplify", "factor", "expand", or requires showing work, classify it as "writing".')
+  lines.push('')
+  lines.push('For "mcq" questions:')
+  lines.push('- Copy the EXACT question text from the document (translate to English if needed)')
+  lines.push('- Copy the EXACT options from the document (translate to English if needed)')
+  lines.push('- If the document has fewer than 4 options, add plausible wrong options')
+  lines.push('- If the document has no options, create 4 options with the correct answer included')
+  lines.push('- Set correct answer index (0=A, 1=B, 2=C, 3=D)')
+  lines.push('- Provide a modelAnswer with the step-by-step solution')
+  lines.push('')
+  lines.push('For "writing" questions:')
+  lines.push('- Copy the EXACT question text from the document')
+  lines.push('- Set options to empty array []')
+  lines.push('- Set correct to -1')
+  lines.push('- Provide a modelAnswer with the COMPLETE step-by-step solution (this is the reference answer for grading)')
+  lines.push('- Set acceptedAnswers to an array of acceptable final answers (e.g. ["5", "x=5", "x = 5"])')
+  lines.push('')
+  lines.push('Rules:')
+  lines.push('- ALL output text in English')
+  lines.push('- Write math using proper math symbols. Use Unicode superscripts for powers: x\u00b2 for squared, x\u00b3 for cubed, x\u2074 for to the power of 4. Use \u221a for square root, \u221b for cubic root. Use \u00d7 for multiplication. Use \u00f7 for division. Do NOT write "squared", "cubed", "to the power of" as words. Do NOT use ^ or * symbols.')
+  lines.push('- Do NOT add questions from outside the document')
+  lines.push('- Do NOT skip any question from the document')
+  lines.push('- Preserve the order of questions as they appear in the document')
+  lines.push('- Match each question with its correct answer/solution')
+  lines.push('- Grade: ' + grade + ' | Type: ' + type)
+  lines.push('')
+  lines.push('JSON only:')
+  lines.push('{"title":"...","content":"...","questions":[{"type":"mcq","question":"...","options":["A","B","C","D"],"correct":0,"points":1,"modelAnswer":"step by step solution"},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"full step by step solution","acceptedAnswers":["5","x=5"]}],"answerKey":""}')
+  return lines.join('\n')
+}
+
+function buildQuestionsOnlyPrompt(grade: string, type: string): string {
+  var lines = []
+  lines.push('You are an expert math teacher. I will give you ONE document containing math QUESTIONS ONLY (no answers).')
+  lines.push('Extract ONLY the questions from this document. Do NOT extract or invent any answers.')
+  lines.push('')
+  lines.push('IMPORTANT: Extract ONLY the questions that actually exist in the document. Do NOT invent, create, or add any questions that are not in the document.')
+  lines.push('If the document has 5 questions, extract exactly those 5. If it has 20, extract all 20.')
+  lines.push('')
+  lines.push('There are TWO types of questions you should extract:')
+  lines.push('1. "mcq" - Multiple Choice Questions: questions with options (A, B, C, D). If the question has options/choices, classify it as "mcq".')
+  lines.push('2. "writing" - Essay/Written Questions: questions that require the student to write a full solution (no multiple choices). If the question asks to "solve", "prove", "find", "calculate", "simplify", "factor", "expand", or requires showing work, classify it as "writing".')
+  lines.push('')
+  lines.push('For "mcq" questions:')
+  lines.push('- Copy the EXACT question text from the document (translate to English if needed)')
+  lines.push('- Copy the EXACT options from the document (translate to English if needed)')
+  lines.push('- If the document has fewer than 4 options, add plausible wrong options')
+  lines.push('- If the document has no options, create 4 options (correct index will be filled later from answer key, just set 0 for now)')
+  lines.push('- Set correct to 0 (will be corrected later from answer key)')
+  lines.push('- Set modelAnswer to empty string "" (will be filled from answer key)')
+  lines.push('')
+  lines.push('For "writing" questions:')
+  lines.push('- Copy the EXACT question text from the document')
+  lines.push('- Set options to empty array []')
+  lines.push('- Set correct to -1')
+  lines.push('- Set modelAnswer to empty string "" (will be filled from answer key)')
+  lines.push('- Set acceptedAnswers to empty array [] (will be filled from answer key)')
+  lines.push('')
+  lines.push('Rules:')
+  lines.push('- ALL output text in English')
+  lines.push('- Write math using proper math symbols. Use Unicode superscripts for powers: x\u00b2 for squared, x\u00b3 for cubed, x\u2074 for to the power of 4. Use \u221a for square root, \u221b for cubic root. Use \u00d7 for multiplication. Use \u00f7 for division. Do NOT use ^ or * symbols.')
+  lines.push('- Do NOT add questions from outside the document')
+  lines.push('- Do NOT skip any question from the document')
+  lines.push('- Preserve the order of questions as they appear in the document')
+  lines.push('- Grade: ' + grade + ' | Type: ' + type)
+  lines.push('')
+  lines.push('JSON only:')
+  lines.push('{"title":"...","content":"...","questions":[{"type":"mcq","question":"...","options":["A","B","C","D"],"correct":0,"points":1,"modelAnswer":""},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"","acceptedAnswers":[]}]}')
+  return lines.join('\n')
+}
+
+function buildAnswersOnlyPrompt(grade: string, type: string, questions: any[]): string {
+  var lines = []
+  lines.push('You are an expert math teacher. I will give you ONE document containing ANSWERS / answer key for math questions.')
+  lines.push('Extract the answer for EACH question. The answers should match the questions I list below.')
+  lines.push('')
+  lines.push('Here are the questions extracted from a separate questions document (in order):')
+  questions.forEach(function(q, i) {
+    var qType = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) ? 'writing' : 'mcq'
+    if (qType === 'mcq') {
+      lines.push((i + 1) + '. [MCQ] ' + (q.question || ''))
+      if (Array.isArray(q.options) && q.options.length > 0) {
+        lines.push('   Options: ' + q.options.map(function(o, oi) { return String.fromCharCode(65 + oi) + ') ' + o }).join(' | '))
+      }
+    } else {
+      lines.push((i + 1) + '. [WRITING] ' + (q.question || ''))
+    }
+  })
+  lines.push('')
+  lines.push('For EACH question above, find its answer in the answer-key document and return:')
+  lines.push('- For MCQ: the correct option index (0=A, 1=B, 2=C, 3=D) and a step-by-step modelAnswer')
+  lines.push('- For WRITING: a complete step-by-step modelAnswer AND an array of acceptedAnswers (acceptable final answers)')
+  lines.push('')
+  lines.push('If an answer is not found in the document, return empty values for that question.')
+  lines.push('')
+  lines.push('Rules:')
+  lines.push('- ALL output text in English')
+  lines.push('- Write math using proper math symbols (√ ² ³ × ÷ π). Do NOT use ^ or * symbols.')
+  lines.push('- The "answers" array MUST have the same length and order as the questions above')
+  lines.push('- Each answer object MUST have an "index" field matching the question number (0-based)')
+  lines.push('')
+  lines.push('JSON only:')
+  lines.push('{"answers":[{"index":0,"correct":0,"modelAnswer":"step by step"},{"index":1,"modelAnswer":"full solution","acceptedAnswers":["5","x=5"]}]}')
+  return lines.join('\n')
+}
+
+function finalizeExtracted(extracted: any, type: string, grade: string, twoFilesMode: boolean): any {
+  if (!extracted.title) { extracted.title = type + ' - ' + grade }
+  if (!extracted.content) { extracted.content = '' }
+  if (!Array.isArray(extracted.questions)) { extracted.questions = [] }
+  if (!extracted.answerKey) { extracted.answerKey = '' }
+
+  extracted.questions = extracted.questions.map(function(q) {
+    var qType = q.type === 'writing' || q.type === 'essay' ? 'writing' : 'mcq'
+    if (qType === 'writing') {
+      return {
+        type: 'writing',
+        question: q.question || '',
+        options: [],
+        correct: -1,
+        points: q.points || 5,
+        modelAnswer: q.modelAnswer || q.answer || '',
+        acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []
+      }
+    }
+    return {
+      type: 'mcq',
+      question: q.question || '',
+      options: (q.options || ['N/A', 'N/A', 'N/A', 'N/A']).slice(0, 4),
+      correct: typeof q.correct === 'number' ? q.correct : 0,
+      points: q.points || 1,
+      modelAnswer: q.modelAnswer || ''
+    }
+  })
+
+  var mcqCount = extracted.questions.filter(function(q) { return q.type === 'mcq' }).length
+  var writingCount = extracted.questions.filter(function(q) { return q.type === 'writing' }).length
+  extracted.stats = { mcq: mcqCount, writing: writingCount, total: extracted.questions.length, twoFilesMode: twoFilesMode }
+  return NextResponse.json({ success: true, extracted: extracted })
 }
