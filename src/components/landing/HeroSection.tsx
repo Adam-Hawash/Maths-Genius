@@ -63,6 +63,37 @@ export default function HeroSection() {
 
   return (
     <section className="relative overflow-hidden bg-[#F9F7F4] dark:bg-[#0F0D0A]" dir="rtl">
+      {/* Animated colorful floating dots */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
+        {/* Small dots - purple */}
+        <div className="hero-dot hero-dot-1 w-3 h-3 bg-purple-500/70" style={{ top: '12%', right: '8%' }} />
+        {/* Red dot */}
+        <div className="hero-dot hero-dot-2 w-4 h-4 bg-red-500/65" style={{ top: '28%', left: '6%' }} />
+        {/* Green dot */}
+        <div className="hero-dot hero-dot-3 w-2.5 h-2.5 bg-emerald-500/75" style={{ top: '60%', right: '12%' }} />
+        {/* Pink dot */}
+        <div className="hero-dot hero-dot-4 w-5 h-5 bg-pink-500/60" style={{ top: '75%', left: '15%' }} />
+        {/* Blue dot */}
+        <div className="hero-dot hero-dot-5 w-3.5 h-3.5 bg-blue-500/70" style={{ top: '45%', right: '45%' }} />
+        {/* Orange dot */}
+        <div className="hero-dot hero-dot-6 w-3 h-3 bg-orange-500/70" style={{ top: '85%', right: '30%' }} />
+        {/* Cyan dot */}
+        <div className="hero-dot hero-dot-7 w-2.5 h-2.5 bg-cyan-500/70" style={{ top: '15%', left: '40%' }} />
+        {/* Indigo dot */}
+        <div className="hero-dot hero-dot-8 w-4 h-4 bg-indigo-500/65" style={{ top: '50%', left: '25%' }} />
+
+        {/* Larger pulsing dots with glow */}
+        <div className="hero-dot hero-dot-glow w-8 h-8 text-purple-400" style={{ top: '20%', right: '20%', background: '#a855f7' }} />
+        <div className="hero-dot hero-dot-glow w-10 h-10 text-red-400" style={{ top: '70%', left: '40%', background: '#ef4444', animationDelay: '1s' }} />
+        <div className="hero-dot hero-dot-glow w-7 h-7 text-emerald-400" style={{ top: '40%', left: '8%', background: '#10b981', animationDelay: '2s' }} />
+        <div className="hero-dot hero-dot-glow w-9 h-9 text-pink-400" style={{ top: '85%', right: '8%', background: '#ec4899', animationDelay: '1.5s' }} />
+
+        {/* Tiny sparkles - scattered */}
+        <div className="hero-dot hero-dot-1 w-1.5 h-1.5 bg-yellow-400/80" style={{ top: '8%', left: '20%' }} />
+        <div className="hero-dot hero-dot-3 w-1.5 h-1.5 bg-teal-400/80" style={{ top: '92%', left: '60%' }} />
+        <div className="hero-dot hero-dot-5 w-1.5 h-1.5 bg-rose-400/80" style={{ top: '35%', right: '5%' }} />
+      </div>
+
       {/* Banner Image at Top */}
       {showBg && (
         <div className="relative w-full">

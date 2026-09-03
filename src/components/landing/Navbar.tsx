@@ -161,7 +161,7 @@ export function Navbar() {
                   onClick={handleLoginClick}
                 >
                   <LogIn className="h-4 w-4 ml-1" />
-                  تسجيل الدخول
+                  سجل دخولك
                 </Button>
                 <Button
                   size="sm"
@@ -169,7 +169,7 @@ export function Navbar() {
                   onClick={handleRegisterClick}
                 >
                   <UserPlus className="h-4 w-4 ml-1" />
-                  حساب جديد
+                  اعمل حساب
                 </Button>
               </>
             )}
@@ -276,7 +276,7 @@ export function Navbar() {
                   onClick={handleLoginClick}
                 >
                   <LogIn className="h-4 w-4 ml-1" />
-                  تسجيل الدخول
+                  سجل دخولك
                 </Button>
                 <Button
                   size="sm"
@@ -284,7 +284,7 @@ export function Navbar() {
                   onClick={handleRegisterClick}
                 >
                   <UserPlus className="h-4 w-4 ml-1" />
-                  حساب جديد
+                  اعمل حساب
                 </Button>
               </>
             )}
