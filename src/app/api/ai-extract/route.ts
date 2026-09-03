@@ -62,22 +62,44 @@ export async function POST(request) {
     lines.push('You are an expert math teacher. I will give you a document/image containing math questions.')
     lines.push('IMPORTANT: Extract ONLY the questions that actually exist in this document. Do NOT invent, create, or add any questions that are not in the document.')
     lines.push('If the document has 5 questions, extract exactly those 5. If it has 20, extract all 20.')
-    lines.push('For each question:')
+    lines.push('')
+    lines.push('There are TWO types of questions you should extract:')
+    lines.push('1. "mcq" - Multiple Choice Questions: questions with options (A, B, C, D). If the question has options/choices, classify it as "mcq".')
+    lines.push('2. "writing" - Essay/Written Questions: questions that require the student to write a full solution (no multiple choices). If the question asks to "solve", "prove", "find", "calculate", "simplify", "factor", "expand", or requires showing work, classify it as "writing".')
+    lines.push('')
+    lines.push('For "mcq" questions:')
     lines.push('- Copy the EXACT question text from the document (translate to English if needed)')
     lines.push('- Copy the EXACT options from the document (translate to English if needed)')
     lines.push('- If the document has fewer than 4 options, add plausible wrong options')
     lines.push('- If the document has no options, create 4 options with the correct answer included')
-    lines.push('- Correct answer index (0=A, 1=B, 2=C, 3=D)')
+    lines.push('- Set correct answer index (0=A, 1=B, 2=C, 3=D)')
+    lines.push('- Provide a modelAnswer with the step-by-step solution')
+    lines.push('')
+    lines.push('For "writing" questions:')
+    lines.push('- Copy the EXACT question text from the document')
+    lines.push('- Set options to empty array []')
+    lines.push('- Set correct to -1')
+    lines.push('- Provide a modelAnswer with the COMPLETE step-by-step solution (this is the reference answer for grading)')
+    lines.push('- Set acceptedAnswers to an array of acceptable final answers (e.g. ["5", "x=5", "x = 5"])')
     lines.push('')
     lines.push('Rules:')
     lines.push('- ALL output text in English')
     lines.push('- Write math using proper math symbols. Use Unicode superscripts for powers: x\u00b2 for squared, x\u00b3 for cubed, x\u2074 for to the power of 4. Use \u221a for square root, \u221b for cubic root. Use \u00d7 for multiplication. Use \u00f7 for division. Do NOT write "squared", "cubed", "to the power of" as words. Do NOT use ^ or * symbols.')
     lines.push('- Do NOT add questions from outside the document')
     lines.push('- Do NOT skip any question from the document')
+    lines.push('- Preserve the order of questions as they appear in the document')
     lines.push('- Grade: ' + grade + ' | Type: ' + type)
     lines.push('')
-    lines.push('JSON only:')
-    lines.push('{"title":"...","content":"...","questions":[{"question":"...","options":["A","B","C","D"],"correct":0,"points":1}],"answerKey":""}')
+    lines.push('JSON only (note: questions array contains BOTH mcq and writing questions mixed together):')
+    lines.push('{')
+    lines.push('  "title": "...",')
+    lines.push('  "content": "...",')
+    lines.push('  "questions": [')
+    lines.push('    {"type":"mcq","question":"...","options":["A","B","C","D"],"correct":0,"points":1,"modelAnswer":"step by step solution"},')
+    lines.push('    {"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"full step by step solution","acceptedAnswers":["5","x=5"]}')
+    lines.push('  ],')
+    lines.push('  "answerKey": "..."')
+    lines.push('}')
     var prompt = lines.join('\n')
 
     var parts = [{ text: prompt }]
@@ -133,13 +155,33 @@ export async function POST(request) {
     if (!extracted.answerKey) { extracted.answerKey = '' }
 
     extracted.questions = extracted.questions.map(function(q) {
+      var qType = q.type === 'writing' || q.type === 'essay' ? 'writing' : 'mcq'
+      if (qType === 'writing') {
+        return {
+          type: 'writing',
+          question: q.question || '',
+          options: [],
+          correct: -1,
+          points: q.points || 5,
+          modelAnswer: q.modelAnswer || q.answer || '',
+          acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []
+        }
+      }
+      // MCQ
       return {
+        type: 'mcq',
         question: q.question || '',
         options: (q.options || ['N/A', 'N/A', 'N/A', 'N/A']).slice(0, 4),
         correct: typeof q.correct === 'number' ? q.correct : 0,
-        points: q.points || 1
+        points: q.points || 1,
+        modelAnswer: q.modelAnswer || ''
       }
     })
+
+    // Stats about extraction
+    var mcqCount = extracted.questions.filter(function(q) { return q.type === 'mcq' }).length
+    var writingCount = extracted.questions.filter(function(q) { return q.type === 'writing' }).length
+    extracted.stats = { mcq: mcqCount, writing: writingCount, total: extracted.questions.length }
 
     return NextResponse.json({ success: true, extracted: extracted })
   } catch (error) {

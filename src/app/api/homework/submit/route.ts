@@ -158,6 +158,8 @@ export async function POST(request) {
         question: qText,
         answer: typeof studentText === 'string' ? studentText : String(studentText || ''),
         points: pts,
+        modelAnswer: q.modelAnswer || q.answer || '',
+        acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : [],
         needsGrading: true,
       })
     })
