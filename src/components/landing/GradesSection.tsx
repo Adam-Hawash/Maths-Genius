@@ -1,17 +1,26 @@
 'use client'
 
 import { Card, CardContent } from '@/components/ui/card'
-import { useAppStore, GRADES } from '@/stores/app-store'
+import { useAppStore, GRADES, GRADES_EN } from '@/stores/app-store'
 import { toast } from 'sonner'
 
 var gradeIcons: Record<string, string> = {
-  'أولى إعدادي': '1ع',
-  'تانية إعدادي': '2ع',
-  'تالتة إعدادي': '3ع',
-  'أولى بكالوريا': '1ب',
+  'الصف السادس الابتدائي': 'G6',
+  'أولى إعدادي': '1',
+  'تانية إعدادي': '2',
+  'تالتة إعدادي': '3',
+  'أولى بكالوريا': '1B',
 }
 
-var grades = GRADES.map(function(g) { return { id: g, name: g, icon: gradeIcons[g] || g[0] } })
+var gradeEnNames: Record<string, string> = {
+  'الصف السادس الابتدائي': 'Grade 6',
+  'أولى إعدادي': 'Prep 1',
+  'تانية إعدادي': 'Prep 2',
+  'تالتة إعدادي': 'Prep 3',
+  'أولى بكالوريا': '1 Bac',
+}
+
+var grades = GRADES.map(function(g) { return { id: g, name: g, icon: gradeIcons[g] || g[0], enName: gradeEnNames[g] || '' } })
 
 export function GradesSection() {
   var { siteConfig } = useAppStore()
@@ -41,14 +50,17 @@ export function GradesSection() {
               >
                 <CardContent className="p-4 sm:p-6 text-center space-y-3">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
-                    <span className="text-xl font-bold text-primary">
+                    <span className="text-lg font-bold text-primary">
                       {grade.icon}
                     </span>
                   </div>
-                  <div>
+                  <div className="space-y-0.5">
                     <h3 className="font-semibold text-sm leading-tight">
                       {grade.name}
                     </h3>
+                    <p className="text-[11px] text-muted-foreground font-medium tracking-wide" dir="ltr">
+                      {grade.enName}
+                    </p>
                   </div>
                 </CardContent>
               </Card>

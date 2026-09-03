@@ -115,6 +115,7 @@ export interface StudentActivity {
 }
 
 export const GRADES = [
+  'الصف السادس الابتدائي',
   'أولى إعدادي',
   'تانية إعدادي',
   'تالتة إعدادي',
@@ -122,17 +123,19 @@ export const GRADES = [
 ] as const
 
 export const GRADE_SHORT_NAMES: Record<string, string> = {
-  'أولى إعدادي': '1ع',
-  'تانية إعدادي': '2ع',
-  'تالتة إعدادي': '3ع',
-  'أولى بكالوريا': '1ب',
+  'الصف السادس الابتدائي': 'G6',
+  'أولى إعدادي': '1',
+  'تانية إعدادي': '2',
+  'تالتة إعدادي': '3',
+  'أولى بكالوريا': '1B',
 }
 
 export const GRADES_EN = [
-  { ar: 'أولى إعدادي', en: '1ع' },
-  { ar: 'تانية إعدادي', en: '2ع' },
-  { ar: 'تالتة إعدادي', en: '3ع' },
-  { ar: 'أولى بكالوريا', en: '1ب' },
+  { ar: 'الصف السادس الابتدائي', en: 'Grade 6', icon: 'G6' },
+  { ar: 'أولى إعدادي', en: 'Prep 1', icon: '1' },
+  { ar: 'تانية إعدادي', en: 'Prep 2', icon: '2' },
+  { ar: 'تالتة إعدادي', en: 'Prep 3', icon: '3' },
+  { ar: 'أولى بكالوريا', en: '1 Bac', icon: '1B' },
 ] as const
 
 export interface Stats {
