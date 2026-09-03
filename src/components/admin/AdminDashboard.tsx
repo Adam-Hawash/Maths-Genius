@@ -2047,11 +2047,14 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   const [title, setTitle] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [fileUrl, setFileUrl] = useState('')
+  const [answerFile, setAnswerFile] = useState<File | null>(null)
+  const [answerUrl, setAnswerUrl] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [extractedQuestions, setExtractedQuestions] = useState<Array<{ question: string; options: string[]; correct: number }>>([])
+  const [extractedQuestions, setExtractedQuestions] = useState<Array<any>>([])
   const [statusMsg, setStatusMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const answerFileRef = useRef<HTMLInputElement>(null)
   // YouTube state
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [numQuestions, setNumQuestions] = useState(10)
@@ -2059,7 +2062,8 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
 
   var resetAll = function() {
     setStep(1); setExtractType('exam'); setGrade(''); setTitle('')
-    setFile(null); setFileUrl(''); setExtractedQuestions([]); setStatusMsg('')
+    setFile(null); setFileUrl(''); setAnswerFile(null); setAnswerUrl('')
+    setExtractedQuestions([]); setStatusMsg('')
     setYoutubeUrl(''); setNumQuestions(10); setInputMode('file')
   }
 
@@ -2071,7 +2075,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   var handleExtract = async function() {
     if (!canExtract || extracting) return
     setExtracting(true)
-    setStatusMsg('جاري استخراج الاسئلة بالذكاء الاصطناعي... قد يستغرق ذلك دقيقة')
+    setStatusMsg('جاري استخراج الأسئلة بالذكاء الاصطناعي... قد يستغرق ذلك دقيقة')
     try {
       if (inputMode === 'youtube') {
         // YouTube extraction
@@ -2087,45 +2091,50 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
         var data = await res.json()
         if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
           if (data.extracted.title && !title) { setTitle(data.extracted.title) }
-          var extracted = data.extracted.questions.map(function(q: any) {
-            return { question: q.question || '', options: (q.options || ['N/A','N/A','N/A','N/A']).slice(0, 4), correct: q.correct || 0 }
-          })
-          setExtractedQuestions(extracted)
+          setExtractedQuestions(data.extracted.questions)
           setStatusMsg('')
           setStep(3)
-          toast.success('تم استخراج ' + extracted.length + ' سؤال من يوتيوب بنجاح!')
+          toast.success('تم استخراج ' + data.extracted.questions.length + ' سؤال من يوتيوب بنجاح!')
         } else {
-          toast.error(data.error || 'لم يتم استخراج اسئلة من الفيديو')
+          toast.error(data.error || 'لم يتم استخراج أسئلة من الفيديو')
           setStatusMsg('')
         }
       } else {
-        // File/image extraction
+        // File/image extraction (supports 1 or 2 files: questions + optional answer key)
         var fd = new FormData()
         if (file) { fd.append('file', file) }
         else if (fileUrl.trim()) { fd.append('fileUrl', fileUrl.trim()) }
+        // Answer file (optional - if provided, AI will match questions with answers)
+        if (answerFile) { fd.append('answerFile', answerFile) }
+        else if (answerUrl.trim()) { fd.append('answerUrl', answerUrl.trim()) }
         fd.append('type', extractType)
         fd.append('grade', grade)
         var ctrl2 = new AbortController()
-        var tmr2 = setTimeout(function() { ctrl2.abort() }, 90000)
+        var tmr2 = setTimeout(function() { ctrl2.abort() }, 180000)
         var res2 = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl2.signal })
         clearTimeout(tmr2)
         var data2 = await res2.json()
         if (res2.ok && data2.extracted && data2.extracted.questions && data2.extracted.questions.length > 0) {
-          var extracted2 = data2.extracted.questions.map(function(q: any) {
-            return { question: q.question || '', options: (q.options || ['لا يوجد','لا يوجد','لا يوجد','لا يوجد']).slice(0, 4), correct: q.correct || 0 }
-          })
-          setExtractedQuestions(extracted2)
+          setExtractedQuestions(data2.extracted.questions)
           setStatusMsg('')
           setStep(3)
-          toast.success('تم استخراج ' + extracted2.length + ' سؤال بنجاح!')
+          var stats = data2.extracted.stats || {}
+          var msg = 'تم استخراج ' + data2.extracted.questions.length + ' سؤال بنجاح!'
+          if (stats.mcq || stats.writing) {
+            msg += ' (' + (stats.mcq || 0) + ' اختيارات، ' + (stats.writing || 0) + ' مقالية)'
+          }
+          if (stats.twoFilesMode) {
+            msg += ' — تم دمج الأسئلة مع ملف الإجابات'
+          }
+          toast.success(msg)
         } else {
-          toast.error(data2.error || 'لم يتم استخراج اسئلة')
+          toast.error(data2.error || 'لم يتم استخراج أسئلة')
           setStatusMsg('')
         }
       }
     } catch (err: any) {
-      if (err && err.name === 'AbortError') { toast.error('انتهت مهلة الاستخراج - حاول مرة اخرى') }
-      else { toast.error('خطا: ' + (err.message || '')) }
+      if (err && err.name === 'AbortError') { toast.error('انتهت مهلة الاستخراج - حاول مرة أخرى') }
+      else { toast.error('خطأ: ' + (err.message || '')) }
       setStatusMsg('')
     }
     setExtracting(false)
@@ -2136,9 +2145,12 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       if (i !== qi) return q
       if (field === 'question') return Object.assign({}, q, { question: value })
       if (field === 'correct') return Object.assign({}, q, { correct: value })
+      if (field === 'points') return Object.assign({}, q, { points: value })
+      if (field === 'modelAnswer') return Object.assign({}, q, { modelAnswer: value })
+      if (field === 'acceptedAnswers') return Object.assign({}, q, { acceptedAnswers: value })
       if (field.startsWith('option_')) {
         var oi = parseInt(field.split('_')[1])
-        var newOpts = [...q.options]; newOpts[oi] = value
+        var newOpts = [...(q.options || [])]; newOpts[oi] = value
         return Object.assign({}, q, { options: newOpts })
       }
       return q
@@ -2147,7 +2159,8 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   }
 
   var deleteQuestion = function(qi: number) { setExtractedQuestions(extractedQuestions.filter(function(_, i) { return i !== qi })) }
-  var addQuestion = function() { setExtractedQuestions([...extractedQuestions, { question: '', options: ['لا يوجد','لا يوجد','لا يوجد','لا يوجد'], correct: 0 }]) }
+  var addQuestion = function() { setExtractedQuestions([...extractedQuestions, { type: 'mcq', question: '', options: ['لا يوجد','لا يوجد','لا يوجد','لا يوجد'], correct: 0, points: 1 }]) }
+  var addWritingQuestion = function() { setExtractedQuestions([...extractedQuestions, { type: 'writing', question: '', options: [], correct: -1, points: 5, modelAnswer: '', acceptedAnswers: [] }]) }
 
   var handleSave = async function() {
     if (extractedQuestions.length === 0) { toast.error('لا يوجد اسئلة للحفظ'); return }
@@ -2228,21 +2241,48 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
         </div>
 
         {inputMode === 'file' ? (
-          <div className="p-4 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 space-y-3">
-            <div className="text-center">
-              <Upload className="h-8 w-8 text-primary mx-auto mb-2" />
-              <p className="text-sm font-medium">ارفع ملف الاسئلة او صورة</p>
-              <p className="text-[10px] text-muted-foreground">PDF, صورة, او اي ملف يحتوي على اسئلة</p>
+          <div className="space-y-4">
+            {/* Questions file */}
+            <div className="p-4 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 space-y-3">
+              <div className="text-center">
+                <Upload className="h-8 w-8 text-primary mx-auto mb-2" />
+                <p className="text-sm font-medium">ارفع ملف الأسئلة أو صورة</p>
+                <p className="text-[10px] text-muted-foreground">PDF, صورة, أو أي ملف يحتوي على الأسئلة</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,image/*" className="hidden" onChange={function(e) { setFile(e.target.files?.[0] || null); setFileUrl('') }} />
+                <Button type="button" variant="outline" onClick={function() { fileRef.current?.click() }} className="flex-1"><Upload className="h-4 w-4 ml-2" />{file ? file.name : 'اختر ملف الأسئلة من الجهاز'}</Button>
+              </div>
+              {file && <p className="text-xs text-muted-foreground text-center">{(file.size / 1024 / 1024).toFixed(1)} MB</p>}
+              <div className="flex items-center gap-3"><div className="flex-grow h-px bg-border" /><span className="text-[11px] text-muted-foreground">أو</span><div className="flex-grow h-px bg-border" /></div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">أو لصق رابط ملف الأسئلة</Label>
+                <Input placeholder="https://example.com/exam.pdf" value={fileUrl} onChange={function(e) { setFileUrl(e.target.value); if (e.target.value.trim()) { setFile(null) } }} dir="ltr" />
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,image/*" className="hidden" onChange={function(e) { setFile(e.target.files?.[0] || null); setFileUrl('') }} />
-              <Button type="button" variant="outline" onClick={function() { fileRef.current?.click() }} className="flex-1"><Upload className="h-4 w-4 ml-2" />{file ? file.name : 'اختر ملف من الجهاز'}</Button>
-            </div>
-            {file && <p className="text-xs text-muted-foreground text-center">{(file.size / 1024 / 1024).toFixed(1)} MB</p>}
-            <div className="flex items-center gap-3"><div className="flex-grow h-px bg-border" /><span className="text-[11px] text-muted-foreground">او</span><div className="flex-grow h-px bg-border" /></div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">او لصق رابط الملف</Label>
-              <Input placeholder="https://example.com/exam.pdf" value={fileUrl} onChange={function(e) { setFileUrl(e.target.value); if (e.target.value.trim()) { setFile(null) } }} dir="ltr" />
+
+            {/* Answer key file (optional) */}
+            <div className="p-4 rounded-xl border-2 border-dashed border-amber-400/30 bg-amber-50 dark:bg-amber-950/20 space-y-3">
+              <div className="text-center">
+                <FileDown className="h-7 w-7 text-amber-500 mx-auto mb-2" />
+                <p className="text-sm font-medium">ملف الإجابات (اختياري)</p>
+                <p className="text-[10px] text-muted-foreground">لو رفعت ملف إجابات منفصل، الـ AI هيطابق كل سؤال بإجابته</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input ref={answerFileRef} type="file" accept=".pdf,.doc,.docx,image/*" className="hidden" onChange={function(e) { setAnswerFile(e.target.files?.[0] || null); setAnswerUrl('') }} />
+                <Button type="button" variant="outline" onClick={function() { answerFileRef.current?.click() }} className="flex-1 border-amber-400/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/20"><FileDown className="h-4 w-4 ml-2" />{answerFile ? answerFile.name : 'اختر ملف الإجابات'}</Button>
+              </div>
+              {answerFile && <p className="text-xs text-muted-foreground text-center">{(answerFile.size / 1024 / 1024).toFixed(1)} MB</p>}
+              <div className="flex items-center gap-3"><div className="flex-grow h-px bg-amber-200" /><span className="text-[11px] text-muted-foreground">أو</span><div className="flex-grow h-px bg-amber-200" /></div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">أو لصق رابط ملف الإجابات</Label>
+                <Input placeholder="https://example.com/answers.pdf" value={answerUrl} onChange={function(e) { setAnswerUrl(e.target.value); if (e.target.value.trim()) { setAnswerFile(null) } }} dir="ltr" />
+              </div>
+              {answerFile && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 p-2 rounded-md">
+                  ✓ سيتم استخراج الأسئلة من ملف، والإجابات من الملف ده، ودمجهم مع بعض
+                </p>
+              )}
             </div>
           </div>
         ) : (
@@ -2296,32 +2336,68 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
           </div>
           <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-0">{extractedQuestions.length} سؤال</Badge>
         </div>
-        <p className="text-xs text-muted-foreground">راجع الاسئلة المستخرجة وعدلها قبل الحفظ. اختر الاجابة الصحيحة بجانب كل اختيار.</p>
+        <p className="text-xs text-muted-foreground">راجع الأسئلة المستخرجة وعدلها قبل الحفظ. اختر الإجابة الصحيحة بجانب كل اختيار للـ MCQ، أو راجع الإجابة النموذجية للأسئلة المقالية.</p>
         {statusMsg && <div className="flex items-center gap-2 p-3 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400"><Loader2 className="h-4 w-4 animate-spin" /><p className="text-sm">{statusMsg}</p></div>}
         <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
           {extractedQuestions.map(function(q, qi) {
+            var qType = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) ? 'writing' : 'mcq'
             return (
               <div key={qi} className="p-3 rounded-lg border bg-card space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-primary">سؤال {qi + 1}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-primary">سؤال {qi + 1}</span>
+                    <Badge variant="outline" className={"text-[9px] " + (qType === 'mcq' ? 'border-blue-500/40 text-blue-600' : 'border-amber-500/40 text-amber-600')}>{qType === 'mcq' ? 'اختيارات' : 'مقالي'}</Badge>
+                    <span className="text-[10px] text-muted-foreground">{q.points || 1} نقطة</span>
+                  </div>
                   <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={function() { deleteQuestion(qi) }}><Trash2 className="h-3 w-3" /></Button>
                 </div>
-                <Input value={q.question} onChange={function(e) { updateQuestion(qi, 'question', e.target.value) }} placeholder="نص السؤال..." className="text-sm" />
-                <div className="grid grid-cols-2 gap-2">
-                  {q.options.map(function(opt, oi) {
-                    return (
-                      <div key={oi} className="flex items-center gap-1.5">
-                        <button type="button" className={"w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors " + (q.correct === oi ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30 hover:border-primary/50')} onClick={function() { updateQuestion(qi, 'correct', oi) }}>{String.fromCharCode(65 + oi)}</button>
-                        <Input value={opt} onChange={function(e) { updateQuestion(qi, 'option_' + oi, e.target.value) }} placeholder={"اختيار " + (oi + 1)} className="h-8 text-xs" />
+                <Input value={q.question || ''} onChange={function(e) { updateQuestion(qi, 'question', e.target.value) }} placeholder="نص السؤال..." className="text-sm" />
+
+                {qType === 'mcq' ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(q.options || []).map(function(opt, oi) {
+                        return (
+                          <div key={oi} className="flex items-center gap-1.5">
+                            <button type="button" className={"w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors " + (q.correct === oi ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30 hover:border-primary/50')} onClick={function() { updateQuestion(qi, 'correct', oi) }}>{String.fromCharCode(65 + oi)}</button>
+                            <Input value={opt} onChange={function(e) { updateQuestion(qi, 'option_' + oi, e.target.value) }} placeholder={"اختيار " + (oi + 1)} className="h-8 text-xs" />
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {q.modelAnswer && (
+                      <div className="mt-1 p-2 rounded-md bg-muted/40 border border-border/30">
+                        <p className="text-[10px] font-semibold text-muted-foreground mb-0.5">الإجابة النموذجية:</p>
+                        <p className="text-xs text-foreground whitespace-pre-wrap" dir="auto">{q.modelAnswer}</p>
                       </div>
-                    )
-                  })}
-                </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">النقاط</Label>
+                        <Input type="number" min={1} value={q.points || 5} onChange={function(e) { updateQuestion(qi, 'points', parseInt(e.target.value) || 5) }} className="h-8 text-xs" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">الإجابات المقبولة (مفصولة بفاصلة)</Label>
+                        <Input value={(q.acceptedAnswers || []).join('، ')} onChange={function(e) { updateQuestion(qi, 'acceptedAnswers', e.target.value.split('،').map(function(s: string) { return s.trim() }).filter(Boolean)) }} placeholder="مثال: 5, x=5, x = 5" className="h-8 text-xs" dir="ltr" />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">الإجابة النموذجية (خطوة بخطوة)</Label>
+                      <Textarea value={q.modelAnswer || ''} onChange={function(e) { updateQuestion(qi, 'modelAnswer', e.target.value) }} placeholder="اكتب الحل الكامل خطوة بخطوة..." rows={3} className="text-xs" />
+                    </div>
+                  </>
+                )}
               </div>
             )
           })}
         </div>
-        <div className="flex gap-2"><Button variant="outline" size="sm" onClick={addQuestion}><Plus className="h-4 w-4 ml-1" />اضافة سؤال يدوي</Button></div>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={addQuestion}><Plus className="h-4 w-4 ml-1" />إضافة سؤال اختيارات</Button>
+          <Button variant="outline" size="sm" onClick={addWritingQuestion} className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10"><Plus className="h-4 w-4 ml-1" />إضافة سؤال مقالي</Button>
+        </div>
         <div className="flex gap-2 pt-2">
           <Button className="flex-1" onClick={handleSave} disabled={saving || extractedQuestions.length === 0}>
             {saving ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Save className="h-4 w-4 ml-1" />}
