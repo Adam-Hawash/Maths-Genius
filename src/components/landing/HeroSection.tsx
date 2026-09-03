@@ -211,27 +211,38 @@ export default function HeroSection() {
             </div>
           </div>
 
-          {/* Instructor Photo */}
+          {/* Instructor Photo - Square shape with elegant frame */}
           <div className="flex justify-center lg:justify-end order-1 lg:order-2">
             <div className="relative group">
-              {/* Gold glow ring */}
-              <div className="absolute -inset-4 rounded-full bg-gradient-to-br from-[#C49A38]/20 dark:from-[#E5BE5A]/30 via-[#C49A38]/10 to-transparent blur-2xl transition-opacity duration-500 group-hover:opacity-80" />
-              <div className="relative w-56 h-56 sm:w-72 sm:h-72 lg:w-80 lg:h-80 rounded-full overflow-hidden border-2 border-[#C49A38]/30 gold-glow bg-muted">
+              {/* Gold ambient glow */}
+              <div className="absolute -inset-3 bg-gradient-to-br from-[#C49A38]/30 dark:from-[#E5BE5A]/40 via-[#C49A38]/15 to-transparent blur-2xl transition-opacity duration-500 group-hover:opacity-90" />
+              {/* Decorative dotted frame */}
+              <svg className="absolute -top-6 -left-6 w-20 h-20 opacity-50 pointer-events-none" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="#C49A38" strokeWidth="2.5" strokeDasharray="3 7" />
+              </svg>
+              <svg className="absolute -bottom-6 -right-6 w-16 h-16 opacity-40 pointer-events-none" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="#C49A38" strokeWidth="2.5" strokeDasharray="3 7" />
+              </svg>
+              {/* Square photo container with gold frame */}
+              <div className="relative w-72 h-72 sm:w-80 sm:h-80 lg:w-[360px] lg:h-[360px] rounded-3xl overflow-hidden border-2 border-[#C49A38]/40 gold-glow bg-muted shadow-2xl">
                 {showPhoto ? (
                   <img
                     src={heroPhoto}
                     alt={cfg.instructor_name || 'Mr Wael Khodier'}
                     className="w-full h-full object-cover"
+                    style={{ objectPosition: '50% 25%' }}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[#C49A38]/30">
                     <GraduationCap className="h-24 w-24" />
                   </div>
                 )}
+                {/* Subtle gradient overlay for depth */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
               </div>
               {/* Badge overlay */}
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-background border border-[#C49A38]/30 rounded-full px-4 py-1.5">
-                <p className="text-[#8B6914] dark:text-[#E5BE5A] font-bold text-sm tracking-wider">
+              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-background border border-[#C49A38]/40 rounded-full px-5 py-2 shadow-lg">
+                <p className="text-[#8B6914] dark:text-[#E5BE5A] font-bold text-sm tracking-wider whitespace-nowrap">
                   {(cfg.hero_title_line1 || 'Maths Genius').toUpperCase()}
                 </p>
               </div>

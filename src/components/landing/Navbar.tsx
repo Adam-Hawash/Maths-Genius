@@ -25,7 +25,6 @@ import {
   LayoutDashboard,
   Shield,
   Youtube,
-  Settings,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -172,17 +171,6 @@ export function Navbar() {
                   <UserPlus className="h-4 w-4 ml-1" />
                   حساب جديد
                 </Button>
-                {/* Discreet Admin Entry - hidden for auth pages */}
-                {!isAuthPage && (
-                  <button
-                    onClick={() => setShowAdminLogin(true)}
-                    className="text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors cursor-pointer px-1 flex items-center gap-1"
-                    aria-label="الإعدادات"
-                  >
-                    <Settings className="h-3 w-3" />
-                    <span>إعدادات</span>
-                  </button>
-                )}
               </>
             )}
           </nav>
@@ -298,18 +286,6 @@ export function Navbar() {
                   <UserPlus className="h-4 w-4 ml-1" />
                   حساب جديد
                 </Button>
-                {!isAuthPage && (
-                  <button
-                    onClick={() => {
-                      setShowAdminLogin(true)
-                      setMobileMenu(false)
-                    }}
-                    className="w-full text-center text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 py-2 transition-colors cursor-pointer flex items-center justify-center gap-1"
-                  >
-                    <Settings className="h-3 w-3" />
-                    <span>إعدادات</span>
-                  </button>
-                )}
               </>
             )}
           </div>
