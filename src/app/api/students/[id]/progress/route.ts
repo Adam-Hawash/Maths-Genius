@@ -157,13 +157,23 @@ export async function GET(
       for (var i = 0; i < (hwRows || []).length; i++) {
         var row = hwRows[i]
         var wrongQuestions: any[] = []
+        var writingAnswers: any[] = []
 
-        // Re-grade to find wrong questions
+        // Re-grade to find wrong questions + collect writing answers
         try {
           var mcq = []
+          var writingQs = []
           if (row.questions) {
             var raw = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
-            if (Array.isArray(raw)) mcq = raw
+            if (Array.isArray(raw)) {
+              raw.forEach(function(q) {
+                if (q.type === 'writing' || q.type === 'essay') {
+                  writingQs.push(q)
+                } else {
+                  mcq.push(q)
+                }
+              })
+            }
           }
           var studentAnswers: any = {}
           if (row.answers) {
@@ -195,6 +205,27 @@ export async function GET(
               })
             }
           })
+
+          // Collect writing answers (offset by mcq length)
+          writingQs.forEach(function(q, wi) {
+            var qText = q.question || q.q || ''
+            var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+            var studentText = ''
+            var offset = mcq.length
+            try {
+              if (Array.isArray(studentAnswers)) {
+                studentText = studentAnswers[offset + wi] || ''
+              } else if (studentAnswers && typeof studentAnswers === 'object') {
+                studentText = studentAnswers[offset + wi] || studentAnswers[String(offset + wi)] || ''
+              }
+            } catch (e) {}
+            writingAnswers.push({
+              question: qText,
+              answer: typeof studentText === 'string' ? studentText : String(studentText || ''),
+              points: pts,
+              needsGrading: true,
+            })
+          })
         } catch(gradeErr) {
           console.error('Re-grade error for hw', row.homeworkId, ':', gradeErr)
         }
@@ -206,6 +237,8 @@ export async function GET(
           maxScore: row.maxScore || 100,
           submittedAt: row.submittedAt,
           wrongQuestions: wrongQuestions,
+          writingAnswers: writingAnswers,
+          hasWritingAnswers: writingAnswers.length > 0,
         })
       }
     } catch (e) {
