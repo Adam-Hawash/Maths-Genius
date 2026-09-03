@@ -48,10 +48,10 @@
   --color-gold-900: #2A1F00;
 }
 
-/* ========== LIGHT MODE - Soft Beige (near white) ========== */
+/* ========== LIGHT MODE - White site + soft beige hero ========== */
 :root {
   --radius: 0.625rem;
-  --background: #FBF9F4;
+  --background: #FFFFFF;
   --foreground: #3A2E1A;
   --card: #FFFFFF;
   --card-foreground: #3A2E1A;
@@ -74,7 +74,7 @@
   --chart-3: #7C3AED;
   --chart-4: #2563EB;
   --chart-5: #DC2626;
-  --sidebar: #F5EFE0;
+  --sidebar: #FFFFFF;
   --sidebar-foreground: #3A2E1A;
   --sidebar-primary: #C49A38;
   --sidebar-primary-foreground: #FFFFFF;
