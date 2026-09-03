@@ -28,7 +28,7 @@ function getMimeType(file: File): string {
 }
 
 async function callGemini(apiKey: string, parts: any[]): Promise<any> {
-  var models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+  var models = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
   var lastError = ''
   for (var mi = 0; mi < models.length; mi++) {
     try {
