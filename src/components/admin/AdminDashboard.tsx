@@ -1647,9 +1647,21 @@ function MyStudentsPanel() {
                                 إجابات مقالية ({hr.writingAnswers.length}) - تحتاج تصحيح يدوي:
                               </p>
                               {hr.writingAnswers.map((wa: any, wi: number) => (
-                                <div key={wi} className="text-[10px] p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40">
+                                <div key={wi} className="text-[10px] p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 space-y-1">
                                   <p className="font-semibold text-amber-700 dark:text-amber-300">سؤال {wi + 1}: <span className="font-normal" dir="ltr" style={{ textAlign: 'left' }}>{wa.question}</span></p>
-                                  <p className="mt-1 text-foreground whitespace-pre-wrap break-words" dir="auto">{wa.answer || '(فارغ)'}</p>
+                                  <div className="mt-1 p-1.5 rounded bg-background/50 border border-border/30">
+                                    <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">إجابة الطالب:</p>
+                                    <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{wa.answer || '(فارغ)'}</p>
+                                  </div>
+                                  {wa.modelAnswer && (
+                                    <div className="mt-1 p-1.5 rounded bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/30">
+                                      <p className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">الإجابة النموذجية (للمقارنة):</p>
+                                      <p className="text-emerald-900 dark:text-emerald-200 whitespace-pre-wrap break-words" dir="auto">{wa.modelAnswer}</p>
+                                    </div>
+                                  )}
+                                  {wa.acceptedAnswers && wa.acceptedAnswers.length > 0 && (
+                                    <p className="text-[9px] text-muted-foreground">إجابات مقبولة: {wa.acceptedAnswers.join('، ')}</p>
+                                  )}
                                   <p className="text-[9px] text-muted-foreground mt-1">الدرجة: {wa.points} نقطة - بانتظار التصحيح</p>
                                 </div>
                               ))}

@@ -16,6 +16,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 import type { Video as VideoType, Homework, Exam, Announcement, Discussion, ExamResult } from '@/stores/app-store'
+import { MathKeyboard } from '@/components/student/MathKeyboard'
 
 export function StudentPortal() {
   const { currentStudent, logout } = useAppStore()
@@ -646,7 +647,7 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
 /* ========== HOMEWORK TAB ========== */
 function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { homework: Homework[]; studentId: string; completedHwIds: Set<string>; onHwSubmitted: (hwId: string) => void }) {
   const [expandedHw, setExpandedHw] = useState<string | null>(null)
-  const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number>>>({})
+  const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number | string>>>({})
   const [hwSubmitting, setHwSubmitting] = useState<string | null>(null)
   const [hwSubmitted, setHwSubmitted] = useState(false)
   const [submittedHwId, setSubmittedHwId] = useState<string | null>(null)
@@ -838,38 +839,63 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                 <div className="mt-4 pt-4 border-t space-y-4" dir="ltr">
                   {displayQuestions.map(function(q: any, di: number) {
                     var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+                    var isWriting = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0)
                     return (
                       <div key={di} className="space-y-2 rounded-lg p-2">
                         <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
-                        <div className="space-y-1.5">
-                          {q.options.map(function(opt: string, oi: number) {
-                            var isSelected = myAnswers[di] === oi
-                            return (
-                              <button
-                                key={oi}
-                                onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [di]: oi }; return a }) }}
-                                className={"w-full p-3 rounded-lg border text-sm transition-colors " + (
-                                  isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
-                                  'border-border hover:bg-muted/50'
-                                )}
-                                style={{ textAlign: 'left' }}
-                              >
-                                <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
-                              </button>
-                            )
-                          })}
-                        </div>
+                        {isWriting ? (
+                          <div dir="rtl">
+                            <MathKeyboard
+                              value={hwAnswers[hw.id]?.[di] || ''}
+                              onChange={function(val: string) {
+                                setHwAnswers(function(prev) {
+                                  var a = { ...prev }
+                                  a[hw.id] = { ...(a[hw.id] || {}), [di]: val }
+                                  return a
+                                })
+                              }}
+                              placeholder="اكتب إجابتك هنا أو ارفع صورة للحل..."
+                              rows={4}
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {q.options.map(function(opt: string, oi: number) {
+                              var isSelected = myAnswers[di] === oi
+                              return (
+                                <button
+                                  key={oi}
+                                  onClick={function() { setHwAnswers(function(prev) { var a = { ...prev }; a[hw.id] = { ...(a[hw.id] || {}), [di]: oi }; return a }) }}
+                                  className={"w-full p-3 rounded-lg border text-sm transition-colors " + (
+                                    isSelected ? 'border-primary bg-primary/10 text-primary font-medium' :
+                                    'border-border hover:bg-muted/50'
+                                  )}
+                                  style={{ textAlign: 'left' }}
+                                >
+                                  <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
                   <Button size="sm" disabled={Object.keys(myAnswers).length === 0 || hwSubmitting === hw.id} onClick={async function() {
                     setHwSubmitting(hw.id)
                     try {
-                      var mappedAnswers: Record<number, number> = {}
+                      var mappedAnswers: Record<number, any> = {}
                       if (shuffleMap.length > 0) {
                         Object.keys(myAnswers).forEach(function(di) { mappedAnswers[shuffleMap[parseInt(di)]] = myAnswers[di] })
                       } else {
                         mappedAnswers = { ...myAnswers }
+                      }
+                      // Also include writing answers from hwAnswers
+                      if (hwAnswers[hw.id]) {
+                        Object.keys(hwAnswers[hw.id]).forEach(function(di) {
+                          var origIdx = shuffleMap.length > 0 ? shuffleMap[parseInt(di)] : parseInt(di)
+                          mappedAnswers[origIdx] = hwAnswers[hw.id][di]
+                        })
                       }
                       var res = await fetch('/api/homework/submit', {
                         method: 'POST',

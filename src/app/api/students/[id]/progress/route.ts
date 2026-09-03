@@ -223,6 +223,8 @@ export async function GET(
               question: qText,
               answer: typeof studentText === 'string' ? studentText : String(studentText || ''),
               points: pts,
+              modelAnswer: q.modelAnswer || q.answer || '',
+              acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : [],
               needsGrading: true,
             })
           })
