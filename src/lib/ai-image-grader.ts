@@ -4,7 +4,7 @@
 
 import { db } from '@/lib/db'
 
-const MODELS = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-flash-latest']
+const MODELS = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-flash-latest', 'gemini-2.0-flash-exp']
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
   var lastError = ''
@@ -119,18 +119,27 @@ export async function gradeImageAnswer(params: {
     ? '\n\nإجابات مقبولة أخرى:\n' + acceptedAnswers.map(function(a, i) { return (i + 1) + '. ' + a }).join('\n')
     : ''
 
-  var prompt = 'أنت معلم رياضيات. الطالب رفع صورة لحله لهذا السؤال:\n\n'
+  var prompt = 'أنت معلم رياضيات محترم ودقيق. الطالب رفع صورة لحله لهذا السؤال:\n\n'
   prompt += 'السؤال: ' + question + '\n\n'
   if (modelAnswer) {
-    prompt += 'الإجابة النموذجية: ' + modelAnswer + acceptedAnswersStr + '\n\n'
+    prompt += 'الإجابة النموالجية الكاملة: ' + modelAnswer + acceptedAnswersStr + '\n\n'
   }
-  prompt += 'المطلوب:\n'
-  prompt += '1. اقرأ الصورة بدقة واستخرج إجابة الطالب كما هي مكتوبة (نصياً أو رياضياً)\n'
-  prompt += '2. قارنها بالإجابة النموذجية\n'
-  prompt += '3. حدد إن كانت صحيحة أم خاطئة\n\n'
+  prompt += 'المطلوب منك:\n'
+  prompt += '1. اقرأ الصورة بدقة شديدة - استخرج كل المكتوب فيها (نصوص وأرقام ورموز رياضية)\n'
+  prompt += '2. حدد الإجابة النهائية للطالب (آخر نتيجة وصل ليها في الصورة - مثلاً: 2¹⁰ = 1024 أو x⁴y³)\n'
+  prompt += '3. قارن الإجابة النهائية للطالب بالإجابة النهائية النموذجية (آخر نتيجة في الإجابة النموذجية)\n'
+  prompt += '4. لو الإجابة النهائية صحيحة حتى لو الخطوات مختلفة، اعتبرها صحيحة (isCorrect: true)\n'
+  prompt += '5. لو الإجابة النهائية غلط، اعتبرها خاطئة (isCorrect: false)\n'
+  prompt += '6. اقبل الإجابات المكافئة (مثلاً: 1024 = 2¹⁰، أو x^4*y^3 = x⁴y³ = x4y3)\n\n'
+  prompt += 'ملاحظات مهمة جداً:\n'
+  prompt += '- اقرا الصورة كويس جداً - حتى الأرقام والأسس الصغيرة\n'
+  prompt += '- ركز على الإجابة النهائية (آخر نتيجة) مش الخطوات\n'
+  prompt += '- لو الطالب وصل لنفس النتيجة النهائية بطريقة مختلفة، اعتبرها صحيحة\n'
+  prompt += '- استخدم الترميز الرياضي العادي (m^2 بدل m²)\n\n'
   prompt += 'أرجع النتيجة بصيغة JSON فقط (بدون أي شرح إضافي):\n'
   prompt += '{\n'
-  prompt += '  "extractedAnswer": "نص إجابة الطالب كما هي في الصورة",\n'
+  prompt += '  "extractedAnswer": "نص إجابة الطالب كما هي في الصورة - كل المكتوب",\n'
+  prompt += '  "finalAnswer": "الإجابة النهائية للطالب فقط (مثلاً: 1024 أو x⁴y³)",\n'
   prompt += '  "isCorrect": true أو false,\n'
   prompt += '  "feedback": "تعليق قصير بالعربية - صح أو غلط وليه"\n'
   prompt += '}\n'
@@ -173,9 +182,17 @@ export async function gradeImageAnswer(params: {
 
   var isCorrect = parsed.isCorrect === true
   var awardedPoints = isCorrect ? maxPoints : 0
+  var extractedAnswer = parsed.extractedAnswer || ''
+  var finalAns = parsed.finalAnswer || ''
+
+  // Combine extracted answer with final answer for display
+  var displayExtracted = extractedAnswer
+  if (finalAns && finalAns !== extractedAnswer) {
+    displayExtracted = extractedAnswer + '\nالإجابة النهائية: ' + finalAns
+  }
 
   return {
-    extractedAnswer: parsed.extractedAnswer || '',
+    extractedAnswer: displayExtracted,
     isCorrect: isCorrect,
     feedback: parsed.feedback || (isCorrect ? 'إجابة صحيحة' : 'إجابة خاطئة'),
     awardedPoints: awardedPoints,
