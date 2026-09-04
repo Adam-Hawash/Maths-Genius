@@ -27,6 +27,18 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
   {
     title: 'أساسيات',
     symbols: [
+      { label: '1', insert: '1', hint: 'رقم 1' },
+      { label: '2', insert: '2', hint: 'رقم 2' },
+      { label: '3', insert: '3', hint: 'رقم 3' },
+      { label: '4', insert: '4', hint: 'رقم 4' },
+      { label: '5', insert: '5', hint: 'رقم 5' },
+      { label: '6', insert: '6', hint: 'رقم 6' },
+      { label: '7', insert: '7', hint: 'رقم 7' },
+      { label: '8', insert: '8', hint: 'رقم 8' },
+      { label: '9', insert: '9', hint: 'رقم 9' },
+      { label: '0', insert: '0', hint: 'رقم 0' },
+      { label: '.', insert: '.', hint: 'نقطة عشرية' },
+      { label: ',', insert: ',', hint: 'فاصلة' },
       { label: '+', insert: '+', hint: 'جمع' },
       { label: '−', insert: '-', hint: 'طرح' },
       { label: '×', insert: '×', hint: 'ضرب' },
