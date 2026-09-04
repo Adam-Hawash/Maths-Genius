@@ -161,7 +161,7 @@ export default function HeroSection() {
 
       {/* Subtle gradient when no banner */}
       {!showBg && (
-        <div className="absolute inset-0 bg-gradient-to-br from-background dark:from-[#0F0D0A] via-card dark:via-[#1A1714] to-background dark:to-[#0F0D0A] -z-10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0F0D0A] via-[#1A1714] to-[#0F0D0A] -z-10" />
       )}
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12 lg:py-14">
@@ -169,7 +169,7 @@ export default function HeroSection() {
           {/* Text Content */}
           <div className="space-y-6 text-center lg:text-right order-2 lg:order-1">
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 rounded-full bg-[#C49A38]/15 px-4 py-1.5 text-sm font-medium text-[#8B6914] dark:text-[#E5BE5A] border border-[#C49A38]/20">
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#C49A38]/15 px-4 py-1.5 text-sm font-medium text-[#E5BE5A] border border-[#C49A38]/20">
               <Award className="h-4 w-4" />
               <span>
                 {cfg.hero_badge ||
@@ -179,7 +179,7 @@ export default function HeroSection() {
 
             {/* Title */}
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-white">
-              <span className="block text-[#8B6914] dark:text-[#E5BE5A]">
+              <span className="block text-[#E5BE5A]">
                 {cfg.hero_title_line1 || 'Maths Genius'}
               </span>
               <span className="block mt-1 text-2xl sm:text-3xl lg:text-4xl font-semibold text-white/80">
@@ -205,7 +205,7 @@ export default function HeroSection() {
               <Button
                 variant="outline"
                 size="lg"
-                className="text-base px-8 py-6 min-h-[44px] border-[#C49A38]/40 text-[#8B6914] dark:text-[#E5BE5A] hover:bg-[#C49A38]/10 hover:text-[#8B6914] dark:hover:text-[#E5BE5A] transition-colors duration-200"
+                className="text-base px-8 py-6 min-h-[44px] border-[#C49A38]/40 text-[#E5BE5A] hover:bg-[#C49A38]/10 hover:text-[#E5BE5A] transition-colors duration-200"
                 onClick={() => setView('auth-login')}
               >
                 عندك حساب؟ ادخل هنا
@@ -231,7 +231,7 @@ export default function HeroSection() {
                 href={cfg.hero_developer_url || 'https://hero-developer-portfolio-11.vercel.app'}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm font-semibold text-white/60 hover:text-[#8B6914] dark:hover:text-[#E5BE5A] transition-colors underline underline-offset-4 decoration-white/20 hover:decoration-[#C49A38]/50"
+                className="text-sm font-semibold text-white/60 hover:text-[#E5BE5A] transition-colors underline underline-offset-4 decoration-white/20 hover:decoration-[#C49A38]/50"
               >
                 {cfg.hero_developer_label || 'Hero Developer'}
               </a>
@@ -240,7 +240,7 @@ export default function HeroSection() {
                 href={cfg.hero_developer_url || 'https://hero-developer-portfolio-11.vercel.app'}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-white/40 font-light tracking-wider hover:text-[#8B6914] dark:hover:text-[#E5BE5A] transition-colors"
+                className="text-xs text-white/40 font-light tracking-wider hover:text-[#E5BE5A] transition-colors"
               >
                 {cfg.footer_made_by_label || 'Made by Adam Hawash'}
               </a>
@@ -251,7 +251,7 @@ export default function HeroSection() {
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <BookOpen className="h-4 w-4 text-[#8B6914]/60 dark:text-[#E5BE5A]/60" />
-                  <p className="text-2xl font-bold text-[#8B6914] dark:text-[#E5BE5A]">
+                  <p className="text-2xl font-bold text-[#E5BE5A]">
                     {stats?.totalVideos
                       ? stats.totalVideos
                       : cfg.hero_stat1_value || '100+'}
@@ -267,7 +267,7 @@ export default function HeroSection() {
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <Users className="h-4 w-4 text-[#8B6914]/60 dark:text-[#E5BE5A]/60" />
-                  <p className="text-2xl font-bold text-[#8B6914] dark:text-[#E5BE5A]">
+                  <p className="text-2xl font-bold text-[#E5BE5A]">
                     {stats?.approvedStudents
                       ? stats.approvedStudents
                       : cfg.hero_stat2_value || '500+'}
@@ -283,7 +283,7 @@ export default function HeroSection() {
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <Clock className="h-4 w-4 text-[#8B6914]/60 dark:text-[#E5BE5A]/60" />
-                  <p className="text-2xl font-bold text-[#8B6914] dark:text-[#E5BE5A]">
+                  <p className="text-2xl font-bold text-[#E5BE5A]">
                     {cfg.hero_stat3_value || '24/7'}
                   </p>
                 </div>
@@ -307,7 +307,7 @@ export default function HeroSection() {
                 <circle cx="50" cy="50" r="42" fill="none" stroke="#C49A38" strokeWidth="2.5" strokeDasharray="3 7" />
               </svg>
               {/* Square photo container with gold frame */}
-              <div className="relative w-56 h-56 sm:w-64 sm:h-64 lg:w-72 lg:h-72 rounded-3xl overflow-hidden border-2 border-[#C49A38]/40 gold-glow bg-muted shadow-2xl">
+              <div className="relative w-56 h-56 sm:w-64 sm:h-64 lg:w-72 lg:h-72 rounded-3xl overflow-hidden border-2 border-[#C49A38]/40 gold-glow bg-[#1A1714] shadow-2xl">
                 {showPhoto ? (
                   <img
                     src={heroPhoto}
@@ -325,7 +325,7 @@ export default function HeroSection() {
               </div>
               {/* Badge overlay */}
               <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#0F0D0A] border border-[#C49A38]/40 rounded-full px-5 py-2 shadow-lg">
-                <p className="text-[#8B6914] dark:text-[#E5BE5A] font-bold text-sm tracking-wider whitespace-nowrap">
+                <p className="text-[#E5BE5A] font-bold text-sm tracking-wider whitespace-nowrap">
                   {cfg.instructor_name || 'مستر وائل خضير'}
                 </p>
               </div>

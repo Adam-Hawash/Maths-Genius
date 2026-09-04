@@ -119,6 +119,45 @@ export async function GET(
         }
 
         var passScore = row.passScore || 50
+        // Build all questions review (correct + wrong)
+        var allExamQuestions: any[] = []
+        try {
+          var mcqAll = []
+          if (row.questions) {
+            var rawAll = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
+            if (Array.isArray(rawAll)) mcqAll = rawAll
+          }
+          var studentAnsAll: any = {}
+          if (row.answers) {
+            studentAnsAll = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
+          }
+          mcqAll.forEach(function(q, qi) {
+            var qText = q.question || q.q || ''
+            var opts = Array.isArray(q.options) ? q.options : []
+            var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+            if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
+            var ans = undefined
+            if (Array.isArray(studentAnsAll)) {
+              ans = studentAnsAll[qi]
+            } else if (studentAnsAll !== null && typeof studentAnsAll === 'object') {
+              ans = studentAnsAll[qi] !== undefined ? studentAnsAll[qi] : studentAnsAll[String(qi)]
+            }
+            var isCorrect = ans !== undefined && ans !== null && Number(ans) === correctIdx
+            var studentAnswerText = (typeof ans === 'number' && opts[ans])
+              ? String.fromCharCode(65 + ans) + ') ' + opts[ans]
+              : 'Not answered'
+            var correctAnswerText = opts[correctIdx]
+              ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
+              : ''
+            allExamQuestions.push({
+              question: qText,
+              studentAnswer: studentAnswerText,
+              correctAnswer: correctAnswerText,
+              isCorrect: isCorrect,
+            })
+          })
+        } catch(e) {}
+
         examResultsEnriched.push({
           id: row.id,
           examTitle: row.title || 'امتحان محذوف',
@@ -129,6 +168,7 @@ export async function GET(
           maxScore: row.maxScore || 100,
           submittedAt: row.submittedAt,
           wrongQuestions: wrongQuestions,
+          allQuestions: allExamQuestions,
         })
       }
     } catch (e) {
