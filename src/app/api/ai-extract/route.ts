@@ -205,6 +205,33 @@ export async function POST(request) {
       if (!extracted) {
         return NextResponse.json({ error: 'Could not parse AI response', raw: (singleRes.text || '').substring(0, 500) }, { status: 500 })
       }
+      // If we got questions but writing questions have empty modelAnswer, try a second pass to extract answers
+      var writingWithEmptyModel = (extracted.questions || []).filter(function(q: any) {
+        return (q.type === 'writing' || q.type === 'essay') && !(q.modelAnswer || q.answer || '').trim()
+      })
+      if (writingWithEmptyModel.length > 0) {
+        console.log('[AI Extract] Found', writingWithEmptyModel.length, 'writing questions with empty modelAnswer. Running answer extraction pass...')
+        var answersPrompt = buildAnswersOnlyPrompt(grade, type, extracted.questions)
+        var answersParts = [{ text: answersPrompt }, qPart]
+        var answersRes = await callGemini(apiKey, answersParts)
+        if (answersRes.ok) {
+          var answersData = parseAIJson(answersRes.text)
+          if (answersData && Array.isArray(answersData.answers)) {
+            // Merge answers into extracted questions
+            extracted.questions = extracted.questions.map(function(q: any, i: number) {
+              var ans = answersData.answers[i]
+              if (ans) {
+                return Object.assign({}, q, {
+                  modelAnswer: q.modelAnswer || ans.modelAnswer || ans.answer || '',
+                  acceptedAnswers: Array.isArray(q.acceptedAnswers) && q.acceptedAnswers.length > 0 ? q.acceptedAnswers : (Array.isArray(ans.acceptedAnswers) ? ans.acceptedAnswers : []),
+                  correct: (q.type === 'writing' || q.type === 'essay') ? -1 : (typeof ans.correct === 'number' ? ans.correct : (typeof q.correct === 'number' ? q.correct : 0))
+                })
+              }
+              return q
+            })
+          }
+        }
+      }
       return finalizeExtracted(extracted, type, grade, false)
     }
 
