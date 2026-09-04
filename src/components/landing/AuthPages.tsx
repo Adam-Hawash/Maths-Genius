@@ -22,6 +22,15 @@ var PHONE_REGEX = /^\d{11}$/
 var ADMIN_PHONE = '11111111111'
 var ADMIN_PASSWORD = 'wael2026#'
 
+// Convert Arabic-Indic (٠-٩) and Extended Arabic-Indic (۰-۹) digits to Latin (0-9)
+// Samsung keyboard in Arabic mode types Arabic digits which break phone validation + DB lookup
+function normalizeDigits(str) {
+  if (!str) return ''
+  return String(str)
+    .replace(/[\u0660-\u0669]/g, function (d) { return String.fromCharCode(48 + d.charCodeAt(0) - 0x0660) })
+    .replace(/[\u06F0-\u06F9]/g, function (d) { return String.fromCharCode(48 + d.charCodeAt(0) - 0x06F0) })
+}
+
 function PhoneField(props) {
   var value = props.value
   var onChange = props.onChange
@@ -32,8 +41,24 @@ function PhoneField(props) {
     <div className="space-y-2">
       <Label htmlFor={id} className="text-foreground">{placeholder} <span className="text-destructive">*</span></Label>
       <div className="relative">
-        <Phone className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input id={id} placeholder={placeholder} value={value} onChange={function (e) { var v = e.target.value.replace(/[^\d]/g, ''); if (v.length <= 11) onChange(v) }} dir="ltr" className={'pr-10 min-h-[44px]' + (error ? ' border-destructive focus-visible:ring-destructive' : '')} maxLength={11} />
+        <Phone className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          id={id}
+          inputMode="numeric"
+          pattern="[0-9]*"
+          placeholder={placeholder}
+          value={value}
+          onChange={function (e) {
+            // First normalize Arabic digits to Latin, then strip non-digits, cap at 11
+            var v = normalizeDigits(e.target.value)
+            v = v.replace(/[^\d]/g, '')
+            if (v.length <= 11) onChange(v)
+          }}
+          dir="ltr"
+          className={'pr-10 min-h-[44px] touch-manipulation' + (error ? ' border-destructive focus-visible:ring-destructive' : '')}
+          maxLength={11}
+          autoComplete="tel"
+        />
       </div>
       {error && <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3" />{error}</p>}
     </div>
@@ -49,7 +74,7 @@ function NameField(props) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id} className="text-foreground text-xs">{placeholder} <span className="text-destructive">*</span></Label>
-      <Input id={id} placeholder={placeholder} value={value} onChange={function (e) { onChange(e.target.value) }} className={'min-h-[44px]' + (error ? ' border-destructive focus-visible:ring-destructive' : '')} />
+      <Input id={id} placeholder={placeholder} value={value} onChange={function (e) { onChange(e.target.value) }} className={'min-h-[44px] touch-manipulation' + (error ? ' border-destructive focus-visible:ring-destructive' : '')} />
       {error && <p className="text-[10px] text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3" />{error}</p>}
     </div>
   )
@@ -68,9 +93,9 @@ function PasswordField(props) {
     <div className="space-y-2">
       <Label htmlFor={id} className="text-foreground">{placeholder} <span className="text-destructive">*</span></Label>
       <div className="relative">
-        <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input id={id} type={show ? 'text' : 'password'} placeholder={placeholder} value={value} onChange={function (e) { onChange(e.target.value) }} dir="ltr" className={'pr-10 pl-10 min-h-[44px]' + (error ? ' border-destructive focus-visible:ring-destructive' : '')} autoComplete={id.includes('login') ? 'current-password' : 'new-password'} />
-        <button type="button" onClick={function() { setShow(!show) }} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer">
+        <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input id={id} type={show ? 'text' : 'password'} placeholder={placeholder} value={value} onChange={function (e) { onChange(e.target.value) }} dir="ltr" className={'pr-10 pl-10 min-h-[44px] touch-manipulation' + (error ? ' border-destructive focus-visible:ring-destructive' : '')} autoComplete={id.includes('login') ? 'current-password' : 'new-password'} />
+        <button type="button" onClick={function() { setShow(!show) }} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer touch-manipulation" style={{ minHeight: '44px', minWidth: '44px' }}>
           {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
       </div>
@@ -95,13 +120,17 @@ export function LoginView() {
   var setStudentLoading = loadState1[1]
 
   var handleStudentLogin = async function () {
-    if (!studentPhone.trim()) { toast.error('الرجاء إدخال رقم الهاتف'); return }
-    if (!PHONE_REGEX.test(studentPhone.trim())) { toast.error('رقم الهاتف يجب أن يكون 11 رقم'); return }
-    if (!studentPassword.trim()) { toast.error('الرجاء إدخال كلمة المرور'); return }
+    // Normalize phone (in case Samsung keyboard typed Arabic digits)
+    var phone = normalizeDigits(studentPhone || '').replace(/[^\d]/g, '').trim()
+    var password = (studentPassword || '').trim()
+
+    if (!phone) { toast.error('الرجاء إدخال رقم الهاتف'); return }
+    if (!PHONE_REGEX.test(phone)) { toast.error('رقم الهاتف يجب أن يكون 11 رقم'); return }
+    if (!password) { toast.error('الرجاء إدخال كلمة المرور'); return }
     if (studentLoading) return
 
     // Hidden admin entry: special phone + password redirects to admin login
-    if (studentPhone.trim() === ADMIN_PHONE && studentPassword === ADMIN_PASSWORD) {
+    if (phone === ADMIN_PHONE && password === ADMIN_PASSWORD) {
       toast.success('جاري تحويلك إلى لوحة تحكم المشرف...')
       setStudentPhone('')
       setStudentPassword('')
@@ -112,11 +141,11 @@ export function LoginView() {
 
     setStudentLoading(true)
     try {
-      var res = await fetch('/api/students?phone=' + encodeURIComponent(studentPhone.trim()) + '&password=' + encodeURIComponent(studentPassword.trim()))
+      var res = await fetch('/api/students?phone=' + encodeURIComponent(phone) + '&password=' + encodeURIComponent(password))
       var data = await res.json()
       var students = data.students || []
       var student = null
-      for (var i = 0; i < students.length; i++) { if (students[i].phone === studentPhone.trim()) { student = students[i]; break } }
+      for (var i = 0; i < students.length; i++) { if (students[i].phone === phone) { student = students[i]; break } }
       if (!student) { toast.error('رقم الهاتف أو كلمة المرور غير صحيحة'); return }
       if (student.status === 'pending') { setCurrentStudent(student); setView('student-pending'); toast.info('حسابك قيد المراجعة، انتظر موافقة المسؤول') }
       else if (student.status === 'approved' || student.status === 'paid') { setCurrentStudent(student); setView('student-portal'); toast.success('مرحباً ' + student.name + '!'); fetch('/api/students/track-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: student.id }) }).catch(function () {}) }
@@ -141,19 +170,19 @@ export function LoginView() {
                 <PasswordField value={studentPassword} onChange={setStudentPassword} placeholder="كلمة المرور" id="login-password" />
                 <button
                   type="button"
-                  className="w-full min-h-[44px] font-semibold inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors px-4 py-2 cursor-pointer"
+                  className="w-full min-h-[48px] font-semibold inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed transition-colors px-4 py-3 cursor-pointer touch-manipulation select-none"
                   onClick={handleStudentLogin}
                   disabled={studentLoading}
-                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                  style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
                 >
                   {studentLoading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />استنى شوية...</>) : 'ادخل لحسابك'}
                 </button>
-                <p className="text-center text-sm text-muted-foreground">عندك حساب؟ <button onClick={function () { setView('auth-register') }} className="text-primary font-medium hover:underline cursor-pointer">اعمل حساب جديد</button></p>
+                <p className="text-center text-sm text-muted-foreground">عندك حساب؟ <button type="button" onClick={function () { setView('auth-register') }} className="text-primary font-medium hover:underline cursor-pointer touch-manipulation">اعمل حساب جديد</button></p>
               </div>
             </CardContent>
           </Card>
         </div>
-        <div className="mt-6 text-center"><button onClick={function () { setView('landing') }} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer"><ArrowRight className="h-4 w-4" />العودة للرئيسية</button></div>
+        <div className="mt-6 text-center"><button type="button" onClick={function () { setView('landing') }} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer touch-manipulation"><ArrowRight className="h-4 w-4" />العودة للرئيسية</button></div>
       </div>
     </div>
   )
@@ -179,17 +208,19 @@ export function RegisterView() {
 
   var validate = function () {
     var e = {}
+    var normPhone = normalizeDigits(phone).replace(/[^\d]/g, '')
+    var normParentPhone = normalizeDigits(parentPhone).replace(/[^\d]/g, '')
     if (!name1.trim()) e.name1 = 'مطلوب'; else if (!TEXT_ONLY_REGEX.test(name1.trim())) e.name1 = 'حروف فقط'
     if (!name2.trim()) e.name2 = 'مطلوب'; else if (!TEXT_ONLY_REGEX.test(name2.trim())) e.name2 = 'حروف فقط'
     if (!name3.trim()) e.name3 = 'مطلوب'; else if (!TEXT_ONLY_REGEX.test(name3.trim())) e.name3 = 'حروف فقط'
     if (!name4.trim()) e.name4 = 'مطلوب'; else if (!TEXT_ONLY_REGEX.test(name4.trim())) e.name4 = 'حروف فقط'
-    if (!phone.trim()) e.phone = 'مطلوب'; else if (!PHONE_REGEX.test(phone.trim())) e.phone = 'يجب أن يكون 11 رقم بالضبط'
+    if (!normPhone) e.phone = 'مطلوب'; else if (!PHONE_REGEX.test(normPhone)) e.phone = 'يجب أن يكون 11 رقم بالضبط'
     if (!password.trim()) e.password = 'مطلوب'; else if (password.trim().length < 4) e.password = 'كلمة المرور يجب أن تكون 4 أحرف على الأقل'
     if (password.trim() !== password2.trim()) e.password2 = 'كلمتا المرور غير متطابقتين'
     if (!grade) e.grade = 'مطلوب'
     if (!parentName1.trim()) e.parentName1 = 'مطلوب'; else if (!TEXT_ONLY_REGEX.test(parentName1.trim())) e.parentName1 = 'حروف فقط'
     if (!parentName2.trim()) e.parentName2 = 'مطلوب'; else if (!TEXT_ONLY_REGEX.test(parentName2.trim())) e.parentName2 = 'حروف فقط'
-    if (!parentPhone.trim()) e.parentPhone = 'مطلوب'; else if (!PHONE_REGEX.test(parentPhone.trim())) e.parentPhone = 'يجب أن يكون 11 رقم بالضبط'
+    if (!normParentPhone) e.parentPhone = 'مطلوب'; else if (!PHONE_REGEX.test(normParentPhone)) e.parentPhone = 'يجب أن يكون 11 رقم بالضبط'
     setErrors(e)
     if (Object.keys(e).length > 0) { toast.error('الرجاء تصحيح الحقول المشار إليها'); return false }
     return true
@@ -197,11 +228,13 @@ export function RegisterView() {
 
   var handleRegister = async function () {
     if (!validate()) return
+    var normPhone = normalizeDigits(phone).replace(/[^\d]/g, '')
+    var normParentPhone = normalizeDigits(parentPhone).replace(/[^\d]/g, '')
     var fullName = name1.trim() + ' ' + name2.trim() + ' ' + name3.trim() + ' ' + name4.trim()
     var fullParentName = parentName1.trim() + ' ' + parentName2.trim()
     setLoading(true)
     try {
-      var res = await fetch('/api/students', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fullName, phone: phone.trim(), grade: grade, parentName: fullParentName, parentPhone: parentPhone.trim(), password: password.trim() }) })
+      var res = await fetch('/api/students', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fullName, phone: normPhone, grade: grade, parentName: fullParentName, parentPhone: normParentPhone, password: password.trim() }) })
       var data = await res.json()
       if (res.ok) { setCurrentStudent(data.student); setView('student-pending'); toast.success('تم تسجيل طلبك بنجاح! انتظر موافقة المسؤول') }
       else { toast.error(data.error || 'حدث خطأ في التسجيل') }
