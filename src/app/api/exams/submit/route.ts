@@ -3,8 +3,10 @@
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { gradeImageAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 
 export const runtime = 'nodejs'
+export const maxDuration = 120
 
 async function ensureTable() {
   try {
@@ -68,7 +70,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
     }
 
-    // Parse questions
+    // Parse questions - separate MCQ from writing
     var questions = []
     if (exam.questions) {
       try {
@@ -82,25 +84,111 @@ export async function POST(request) {
       return NextResponse.json({ error: 'لا توجد أسئلة في هذا الامتحان' }, { status: 400 })
     }
 
-    // Grade
+    // Separate MCQ from writing questions
+    var mcqQuestions = []
+    var writingQuestions = []
+    questions.forEach(function(q) {
+      var isWriting = q.type === 'writing' || q.type === 'essay'
+      if (!isWriting && Array.isArray(q.options)) {
+        var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+        if (allNA) isWriting = true
+      }
+      if (!isWriting && (!q.options || q.options.length === 0)) isWriting = true
+      if (isWriting) writingQuestions.push(q)
+      else mcqQuestions.push(q)
+    })
+
+    // Grade MCQ
     var score = 0
     var maxScore = 0
-    questions.forEach(function(q, i) {
+    var mcqWrong = []
+    mcqQuestions.forEach(function(q, i) {
       var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
       maxScore += pts
       var opts = Array.isArray(q.options) ? q.options : []
       var correctIdx = typeof q.correct === 'number' ? q.correct : 0
       if (correctIdx < 0 || correctIdx >= opts.length) { correctIdx = 0 }
       var studentAnswer = undefined
-      if (Array.isArray(answers)) {
-        studentAnswer = answers[i]
-      } else if (answers !== null && typeof answers === 'object') {
-        studentAnswer = answers[i] !== undefined ? answers[i] : answers[String(i)]
-      }
+      // MCQ answers are at positions 0..mcqQuestions.length-1
+      try {
+        if (Array.isArray(answers)) {
+          studentAnswer = answers[i]
+        } else if (answers !== null && typeof answers === 'object') {
+          studentAnswer = answers[i] !== undefined ? answers[i] : answers[String(i)]
+        }
+      } catch (e) {}
       if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === correctIdx) {
         score += pts
+      } else {
+        mcqWrong.push({
+          question: q.question || q.q || '',
+          studentAnswer: (typeof studentAnswer === 'number' && opts[studentAnswer])
+            ? String.fromCharCode(65 + studentAnswer) + ') ' + opts[studentAnswer]
+            : 'لم يتم الإجابة',
+          correctAnswer: opts[correctIdx]
+            ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
+            : '',
+        })
       }
     })
+
+    // Collect writing answers + AI-grade images
+    var writingAnswers: any[] = []
+    var writingScore = 0
+    var mcqLen = mcqQuestions.length
+    for (var wi = 0; wi < writingQuestions.length; wi++) {
+      var wq = writingQuestions[wi]
+      var pts = (typeof wq.points === 'number' && wq.points > 0) ? wq.points : 5
+      maxScore += pts
+      var qText = wq.question || wq.q || ''
+      var studentText = ''
+      try {
+        if (Array.isArray(answers)) {
+          studentText = answers[mcqLen + wi] || ''
+        } else if (answers && typeof answers === 'object') {
+          studentText = answers[mcqLen + wi] || answers[String(mcqLen + wi)] || ''
+        }
+      } catch (e) {}
+      studentText = typeof studentText === 'string' ? studentText : String(studentText || '')
+
+      var wa: any = {
+        question: qText,
+        answer: studentText,
+        points: pts,
+        modelAnswer: wq.modelAnswer || wq.answer || '',
+        acceptedAnswers: Array.isArray(wq.acceptedAnswers) ? wq.acceptedAnswers : [],
+        needsGrading: true,
+      }
+
+      // AI image grading if image attached
+      var mediaIds = extractImageMediaIds(studentText)
+      if (mediaIds.length > 0) {
+        try {
+          var gradeData = await gradeImageAnswer({
+            mediaId: mediaIds[0],
+            question: qText,
+            modelAnswer: wa.modelAnswer,
+            acceptedAnswers: wa.acceptedAnswers,
+            maxPoints: pts,
+          })
+          if (gradeData.error === undefined || gradeData.extractedAnswer) {
+            wa.aiExtractedAnswer = gradeData.extractedAnswer
+            wa.aiIsCorrect = gradeData.isCorrect === true
+            wa.aiFeedback = gradeData.feedback || ''
+            wa.aiAwardedPoints = gradeData.awardedPoints || 0
+            wa.needsGrading = false
+            wa.isCorrect = gradeData.isCorrect === true
+            wa.awardedPoints = gradeData.awardedPoints || 0
+            writingScore += (gradeData.awardedPoints || 0)
+          }
+        } catch (gradeErr) {
+          console.error('[Exam Submit] AI grade image error:', gradeErr)
+        }
+      }
+      writingAnswers.push(wa)
+    }
+    score += writingScore
+
     if (maxScore === 0) { maxScore = questions.length }
 
     // Save with answers

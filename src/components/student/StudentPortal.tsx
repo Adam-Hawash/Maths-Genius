@@ -913,6 +913,13 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                         {writingAns && (
                           <div className="space-y-1 p-2 rounded-md bg-muted/30 border border-border/30">
                             <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="ltr">Your answer: {writingAns.answer || '(empty)'}</p>
+                            {/* AI extracted answer from image */}
+                            {writingAns.aiExtractedAnswer && (
+                              <div className="mt-2 p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
+                                <p className="text-[10px] font-bold text-blue-700 dark:text-blue-400 mb-1">🤖 AI قرأ إجابتك من الصورة:</p>
+                                <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="ltr">{writingAns.aiExtractedAnswer}</p>
+                              </div>
+                            )}
                             {writingAns.modelAnswer && (
                               <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="ltr">Correct answer: {writingAns.modelAnswer}</p>
                             )}

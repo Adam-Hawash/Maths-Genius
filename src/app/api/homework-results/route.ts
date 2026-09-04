@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { gradeImageAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 
 // GET /api/homework-results?studentId=xxx - Student: own results (basic info)
 // GET /api/homework-results?homeworkId=xxx - Admin: all results for a homework with per-student details
@@ -152,8 +153,9 @@ export async function GET(request: NextRequest) {
         })
 
         // Writing all questions (offset by mcq length)
-        writingQs.forEach(function(q, wi) {
-          var qText = q.question || q.q || ''
+        for (var wi = 0; wi < writingQs.length; wi++) {
+          var wq = writingQs[wi]
+          var qText = wq.question || wq.q || ''
           var studentText = ''
           var offset = mcqQs.length
           try {
@@ -163,28 +165,65 @@ export async function GET(request: NextRequest) {
               studentText = studentAns[offset + wi] || studentAns[String(offset + wi)] || ''
             }
           } catch (e) {}
+          studentText = typeof studentText === 'string' ? studentText : String(studentText || '')
 
-          var modelAnswer = q.modelAnswer || q.answer || ''
-          var acceptedAnswers = Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []
-          var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 5
+          var modelAnswer = wq.modelAnswer || wq.answer || ''
+          var acceptedAnswers = Array.isArray(wq.acceptedAnswers) ? wq.acceptedAnswers : []
+          var pts = (typeof wq.points === 'number' && wq.points > 0) ? wq.points : 5
+
+          // AI image grading
+          var aiExtracted = ''
+          var aiIsCorrect = false
+          var aiFeedback = ''
+          var imageGraded = false
+          var mediaIds = extractImageMediaIds(studentText)
+          if (mediaIds.length > 0) {
+            try {
+              var gradeData = await gradeImageAnswer({
+                mediaId: mediaIds[0],
+                question: qText,
+                modelAnswer: modelAnswer,
+                acceptedAnswers: acceptedAnswers,
+                maxPoints: pts,
+              })
+              if (gradeData.error === undefined || gradeData.extractedAnswer) {
+                aiExtracted = gradeData.extractedAnswer
+                aiIsCorrect = gradeData.isCorrect === true
+                aiFeedback = gradeData.feedback || ''
+                imageGraded = true
+              }
+            } catch (e) {
+              console.error('[HW Results] AI grade image error:', e)
+            }
+          }
 
           allQuestions.push({
             type: 'writing',
             question: qText,
-            studentAnswer: typeof studentText === 'string' ? studentText : String(studentText || ''),
+            studentAnswer: studentText,
             correctAnswer: modelAnswer,
-            isCorrect: false,
+            isCorrect: imageGraded ? aiIsCorrect : false,
+            aiExtractedAnswer: aiExtracted,
+            aiIsCorrect: aiIsCorrect,
+            aiFeedback: aiFeedback,
+            imageGraded: imageGraded,
           })
 
           writingAnswers.push({
             question: qText,
-            answer: typeof studentText === 'string' ? studentText : String(studentText || ''),
+            answer: studentText,
             points: pts,
             modelAnswer: modelAnswer,
             acceptedAnswers: acceptedAnswers,
-            needsGrading: true,
+            needsGrading: !imageGraded,
+            aiExtractedAnswer: aiExtracted,
+            aiIsCorrect: aiIsCorrect,
+            aiFeedback: aiFeedback,
+            imageGraded: imageGraded,
+            isCorrect: imageGraded ? aiIsCorrect : false,
+            awardedPoints: imageGraded ? (aiIsCorrect ? pts : 0) : 0,
           })
-        })
+        }
 
         return {
           id: r.id,
