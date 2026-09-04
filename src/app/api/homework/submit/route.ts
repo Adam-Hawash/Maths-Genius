@@ -252,10 +252,11 @@ export async function POST(request) {
             acceptedAnswers: wa.acceptedAnswers,
             maxPoints: wa.points,
           })
-          if (gradeData.extractedAnswer || gradeData.error === undefined) {
-            writingAnswers[waIdx].aiExtractedAnswer = gradeData.extractedAnswer
+          // ALWAYS use AI's verdict if AI returned any answer (even on parse failure)
+          if (gradeData) {
+            writingAnswers[waIdx].aiExtractedAnswer = gradeData.extractedAnswer || '(تعذر الاستخراج)'
             writingAnswers[waIdx].aiIsCorrect = gradeData.isCorrect === true
-            writingAnswers[waIdx].aiFeedback = gradeData.feedback || ''
+            writingAnswers[waIdx].aiFeedback = gradeData.feedback || (gradeData.isCorrect ? 'إجابة صحيحة' : 'إجابة خاطئة')
             writingAnswers[waIdx].aiAwardedPoints = gradeData.awardedPoints || 0
             writingAnswers[waIdx].needsGrading = false
             writingAnswers[waIdx].isCorrect = gradeData.isCorrect === true
@@ -263,6 +264,14 @@ export async function POST(request) {
           }
         } catch (gradeErr) {
           console.error('[HW Submit] AI grade image error for mediaId', mediaIds[0], ':', gradeErr)
+          // Even on error, mark as graded (not "manual") so admin sees AI tried
+          writingAnswers[waIdx].needsGrading = false
+          writingAnswers[waIdx].isCorrect = false
+          writingAnswers[waIdx].awardedPoints = 0
+          writingAnswers[waIdx].aiExtractedAnswer = '(فشل الـ AI في قراءة الصورة)'
+          writingAnswers[waIdx].aiIsCorrect = false
+          writingAnswers[waIdx].aiFeedback = 'فشل التصحيح بالـ AI - اعتبر خطأ'
+          writingAnswers[waIdx].aiAwardedPoints = 0
         }
         continue
       }
@@ -272,8 +281,10 @@ export async function POST(request) {
       if (!answerText || answerText === '[📷 صورة مرفقة]') {
         continue
       }
-      // Skip if no model answer (admin will grade manually)
+      // Skip if no model answer - mark as needs manual grading
       if (!wa.modelAnswer) {
+        // No model answer — admin will grade manually
+        writingAnswers[waIdx].needsGrading = true
         continue
       }
 
@@ -432,6 +443,7 @@ export async function POST(request) {
           feedback: 'لا توجد إجابة نموذجية - يحتاج تصحيح يدوي',
           needsGrading: true,
         }
+        continue
       }
       aiGraded = true
       score += writingScore
