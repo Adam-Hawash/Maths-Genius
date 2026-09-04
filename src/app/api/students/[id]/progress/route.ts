@@ -198,8 +198,9 @@ export async function GET(
         var row = hwRows[i]
         var wrongQuestions: any[] = []
         var writingAnswers: any[] = []
+        var allHwQuestions: any[] = []
 
-        // Re-grade to find wrong questions + collect writing answers
+        // Re-grade to find wrong questions + collect writing answers + build all questions
         try {
           var mcq = []
           var writingQs = []
@@ -207,7 +208,16 @@ export async function GET(
             var raw = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
             if (Array.isArray(raw)) {
               raw.forEach(function(q) {
-                if (q.type === 'writing' || q.type === 'essay') {
+                // Detect writing: type field, OR options empty/N/A
+                var isWriting = q.type === 'writing' || q.type === 'essay'
+                if (!isWriting && Array.isArray(q.options)) {
+                  var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+                  if (allNA) isWriting = true
+                }
+                if (!isWriting && (!q.options || q.options.length === 0)) {
+                  isWriting = true
+                }
+                if (isWriting) {
                   writingQs.push(q)
                 } else {
                   mcq.push(q)
@@ -272,6 +282,78 @@ export async function GET(
           console.error('Re-grade error for hw', row.homeworkId, ':', gradeErr)
         }
 
+        // Build all questions review (correct + wrong) for admin
+        try {
+          var mcqAll2 = []
+          var writingAll2 = []
+          if (row.questions) {
+            var rawAll2 = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
+            if (Array.isArray(rawAll2)) {
+              rawAll2.forEach(function(q) {
+                var isW = q.type === 'writing' || q.type === 'essay'
+                if (!isW && Array.isArray(q.options)) {
+                  var allNA2 = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+                  if (allNA2) isW = true
+                }
+                if (!isW && (!q.options || q.options.length === 0)) isW = true
+                if (isW) writingAll2.push(q)
+                else mcqAll2.push(q)
+              })
+            }
+          }
+          var studentAnsAll2: any = {}
+          if (row.answers) {
+            studentAnsAll2 = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
+          }
+          // MCQ all questions
+          mcqAll2.forEach(function(q, qi) {
+            var qText = q.question || q.q || ''
+            var opts = Array.isArray(q.options) ? q.options : []
+            var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+            if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
+            var ans = undefined
+            if (Array.isArray(studentAnsAll2)) {
+              ans = studentAnsAll2[qi]
+            } else if (studentAnsAll2 !== null && typeof studentAnsAll2 === 'object') {
+              ans = studentAnsAll2[qi] !== undefined ? studentAnsAll2[qi] : studentAnsAll2[String(qi)]
+            }
+            var isCorrect = ans !== undefined && ans !== null && Number(ans) === correctIdx
+            var studentAnswerText = (typeof ans === 'number' && opts[ans])
+              ? String.fromCharCode(65 + ans) + ') ' + opts[ans]
+              : 'Not answered'
+            var correctAnswerText = opts[correctIdx]
+              ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
+              : ''
+            allHwQuestions.push({
+              type: 'mcq',
+              question: qText,
+              studentAnswer: studentAnswerText,
+              correctAnswer: correctAnswerText,
+              isCorrect: isCorrect,
+            })
+          })
+          // Writing all questions
+          writingAll2.forEach(function(q, wi) {
+            var qText = q.question || q.q || ''
+            var studentText = ''
+            var offset = mcqAll2.length
+            try {
+              if (Array.isArray(studentAnsAll2)) {
+                studentText = studentAnsAll2[offset + wi] || ''
+              } else if (studentAnsAll2 && typeof studentAnsAll2 === 'object') {
+                studentText = studentAnsAll2[offset + wi] || studentAnsAll2[String(offset + wi)] || ''
+              }
+            } catch (e) {}
+            allHwQuestions.push({
+              type: 'writing',
+              question: qText,
+              studentAnswer: typeof studentText === 'string' ? studentText : String(studentText || ''),
+              correctAnswer: q.modelAnswer || q.answer || '',
+              isCorrect: false,
+            })
+          })
+        } catch(e) {}
+
         homeworkResults.push({
           id: row.id,
           homeworkTitle: row.title || 'واجب محذوف',
@@ -281,6 +363,7 @@ export async function GET(
           wrongQuestions: wrongQuestions,
           writingAnswers: writingAnswers,
           hasWritingAnswers: writingAnswers.length > 0,
+          allQuestions: allHwQuestions,
         })
       }
     } catch (e) {
