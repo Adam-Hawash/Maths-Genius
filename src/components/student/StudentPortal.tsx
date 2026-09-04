@@ -11,6 +11,7 @@ import {
   LogOut, Loader2, FileDown, Bell, PlayCircle, CheckCircle2,
   BookOpen, Target, TrendingUp, GraduationCap, ChevronLeft, ExternalLink,
   User, Phone, Award, Maximize, Minimize, Lock, X, ListTodo,
+  HelpCircle, ArrowLeft, Rocket,
 } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Image from 'next/image'
@@ -32,6 +33,7 @@ export function StudentPortal() {
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [showFullPortal, setShowFullPortal] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
   const [activeTab, setActiveTab] = useState('videos')
   const [completedExamIds, setCompletedExamIds] = useState<Set<string>>(new Set())
   const [completedHwIds, setCompletedHwIds] = useState<Set<string>>(new Set())
@@ -122,35 +124,49 @@ export function StudentPortal() {
 
     return (
       <div className="flex-1 py-6 px-4 sm:px-6">
-        <div className="mx-auto max-w-4xl space-y-6">
-          {/* Welcome Card */}
+        <div className="mx-auto max-w-4xl space-y-5">
+          {/* Welcome Card + Quick Actions on top */}
           <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/20">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="h-14 w-14 rounded-full bg-primary/20 flex items-center justify-center">
-                    <User className="h-7 w-7 text-primary" />
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                    <User className="h-6 w-6 text-primary" />
                   </div>
-                  <div>
-                    <h1 className="text-xl font-bold">أهلاً بك، {currentStudent?.name}</h1>
-                    <p className="text-sm text-muted-foreground">صفحتك الشخصية — كل حاجتك في مكان واحد</p>
+                  <div className="min-w-0">
+                    <h1 className="text-lg font-bold truncate">أهلاً يا {currentStudent?.name?.split(' ')[0]} 👋</h1>
+                    <p className="text-xs text-muted-foreground">كل حاجتك هنا في مكان واحد</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={logout} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                  <LogOut className="h-4 w-4 ml-1" />
-                  <span className="hidden sm:inline">خروج</span>
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="outline" size="sm" onClick={() => setShowGuide(true)} className="gap-1.5">
+                    <HelpCircle className="h-4 w-4" />
+                    <span className="hidden sm:inline">دليل التعامل</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={logout} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                    <LogOut className="h-4 w-4 ml-1" />
+                    <span className="hidden sm:inline">خروج</span>
+                  </Button>
+                </div>
               </div>
+              {/* Big Enter Button */}
+              <Button
+                onClick={() => setShowFullPortal(true)}
+                className="w-full mt-4 min-h-[48px] font-bold text-base gap-2"
+              >
+                <Rocket className="h-5 w-5" />
+                يلا ندخل صفحتنا
+              </Button>
             </CardContent>
           </Card>
 
           {/* Quick Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { icon: Video, label: 'الدروس', value: totalVideos, sub: watchedCount + ' مشاهدة', color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30' },
-              { icon: ClipboardList, label: 'الواجبات', value: pendingHomework, sub: pendingHomework > 0 ? 'مطلوب حلها' : 'لا توجد', color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30' },
-              { icon: FileText, label: 'الامتحانات', value: pendingExams, sub: pendingExams > 0 ? 'لم تقدم بعد' : 'تم الكل', color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30' },
-              { icon: TrendingUp, label: 'معدل المشاهدة', value: avgProgress + '%', sub: progressCount + ' فيديو', color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30' },
+              { icon: Video, label: 'الدروس', value: totalVideos, sub: watchedCount + ' اتفرجت', color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30' },
+              { icon: ClipboardList, label: 'الواجبات', value: pendingHomework, sub: pendingHomework > 0 ? 'محتاجة تتسلم' : 'كله تمام', color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30' },
+              { icon: FileText, label: 'الامتحانات', value: pendingExams, sub: pendingExams > 0 ? 'لسه متقدمتش' : 'خلصت كلها', color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30' },
+              { icon: TrendingUp, label: 'المشاهدة', value: avgProgress + '%', sub: progressCount + ' فيديو', color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30' },
             ].map((s, i) => (
               <Card key={i} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
@@ -175,15 +191,19 @@ export function StudentPortal() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <ListTodo className="h-5 w-5 text-amber-600" />
-                  <h2 className="font-bold text-sm">المهام المعلقة عليك</h2>
-                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 mr-auto">{pendingHomework + pendingExams} مهمة</Badge>
+                  <h2 className="font-bold text-sm">اللي لازم تعمله دلوقتي</h2>
+                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 mr-auto">{pendingHomework + pendingExams} حاجة</Badge>
                 </div>
                 <div className="space-y-2">
                   {initialData.homework.slice(0, 3).map(function(hw) {
                     var hasMCQ = false
                     try { if ((hw as any).questions) { var parsed = JSON.parse((hw as any).questions); hasMCQ = parsed.length > 0 } } catch {}
                     return (
-                      <div key={hw.id} className="flex items-center gap-3 p-2 rounded-lg bg-white dark:bg-white/5">
+                      <button
+                        key={hw.id}
+                        onClick={() => setShowFullPortal(true)}
+                        className="w-full flex items-center gap-3 p-2 rounded-lg bg-white dark:bg-white/5 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-right"
+                      >
                         <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
                           <ClipboardList className="h-4 w-4 text-blue-500" />
                         </div>
@@ -192,14 +212,19 @@ export function StudentPortal() {
                           <p className="text-[10px] text-muted-foreground">واجب {hasMCQ ? '· ' + JSON.parse((hw as any).questions || '[]').length + ' أسئلة' : ''}</p>
                         </div>
                         <Badge variant="outline" className="text-[9px] border-blue-500/30 text-blue-500">واجب</Badge>
-                      </div>
+                        <ChevronLeft className="h-3 w-3 text-muted-foreground shrink-0" />
+                      </button>
                     )
                   })}
                   {initialData.exams.filter(function(e) {
                     return !initialData.examResults.find(function(r) { return r.examId === e.id })
                   }).slice(0, 2).map(function(exam) {
                     return (
-                      <div key={exam.id} className="flex items-center gap-3 p-2 rounded-lg bg-white dark:bg-white/5">
+                      <button
+                        key={exam.id}
+                        onClick={() => setShowFullPortal(true)}
+                        className="w-full flex items-center gap-3 p-2 rounded-lg bg-white dark:bg-white/5 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors text-right"
+                      >
                         <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
                           <FileText className="h-4 w-4 text-orange-500" />
                         </div>
@@ -208,7 +233,8 @@ export function StudentPortal() {
                           <p className="text-[10px] text-muted-foreground">امتحان</p>
                         </div>
                         <Badge variant="outline" className="text-[9px] border-orange-500/30 text-orange-500">امتحان</Badge>
-                      </div>
+                        <ChevronLeft className="h-3 w-3 text-muted-foreground shrink-0" />
+                      </button>
                     )
                   })}
                 </div>
@@ -221,22 +247,17 @@ export function StudentPortal() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold text-sm flex items-center gap-2">
                 <Video className="h-4 w-4 text-purple-600" />
-                الدروس ({watchedCount}/{totalVideos} مشاهدة)
+                الدروس ({watchedCount}/{totalVideos} اتفرجت)
               </h2>
               <Button variant="link" size="sm" className="text-xs p-0 h-auto" onClick={() => setShowFullPortal(true)}>
-                عرض الكل
+                بص على الكل
               </Button>
             </div>
             <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={initialData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} />
           </div>
 
-          {/* Enter Full Portal */}
-          <div className="flex justify-center pt-2">
-            <Button variant="outline" onClick={() => setShowFullPortal(true)} className="gap-2">
-              <GraduationCap className="h-4 w-4" />
-              دخول البوابة الكاملة
-            </Button>
-          </div>
+          {/* Guide modal */}
+          {showGuide && <StudentGuide onClose={() => setShowGuide(false)} onEnterPortal={() => { setShowGuide(false); setShowFullPortal(true) }} />}
         </div>
       </div>
     )
@@ -249,19 +270,20 @@ export function StudentPortal() {
     { id: 'videos', label: 'الدروس', icon: Video },
     { id: 'homework', label: 'الواجبات', icon: ClipboardList },
     { id: 'exams', label: 'الامتحانات', icon: FileText },
-    { id: 'announcements', label: 'الإعلانات', icon: Megaphone },
-    { id: 'discussions', label: 'المجتمع', icon: MessageSquare },
+    { id: 'announcements', label: 'إعلانات الأستاذ', icon: Megaphone },
+    { id: 'discussions', label: 'أسئلة وزملاء', icon: MessageSquare },
   ]
 
   return (
     <div className="flex-1 flex flex-col">
       {/* Top Bar */}
       <div className="border-b px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setShowFullPortal(false)}>
-            <ChevronLeft className="h-4 w-4 ml-1" />
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowFullPortal(false)} className="gap-1">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline text-xs">رجوع</span>
           </Button>
-          <h1 className="font-bold text-sm sm:text-base truncate">{currentStudent?.name}</h1>
+          <h1 className="font-bold text-sm sm:text-base truncate">{currentStudent?.name?.split(' ')[0]}</h1>
           <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">{grade}</Badge>
         </div>
         <Button variant="ghost" size="sm" onClick={logout} className="text-destructive hover:text-destructive hover:bg-destructive/10">
@@ -1722,3 +1744,97 @@ function EmptyState({ message }: { message: string }) {
     </div>
   )
 }
+
+/* ========== Student Guide - دليل التعامل ========== */
+function StudentGuide({ onClose, onEnterPortal }: { onClose: () => void; onEnterPortal: () => void }) {
+  const steps = [
+    {
+      icon: Video,
+      title: 'اتفرج على الدروس',
+      desc: 'افتح تاب "الدروس" واتفرج على فيديوهات الأستاذ. كل ما تشوف فيديو لآخره، هيتسجل إنك خلصته عشان ترجعله بسهولة.',
+      color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30',
+    },
+    {
+      icon: ClipboardList,
+      title: 'حل الواجبات',
+      desc: 'روح على تاب "الواجبات" وحل الواجبات. كل واجب فيه أسئلة اختيارات أو أسئلة مقالية، تقدر ترفع صورة لحلك في المقالية.',
+      color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30',
+    },
+    {
+      icon: FileText,
+      title: 'ادخل الامتحانات',
+      desc: 'تاب "الامتحانات" فيه كل الامتحانات اللي الأستاذ نزلها لصفك. اضغط على الامتحان وادخل حل الأسئلة، هتشوف نتيجتك بعد ما تخلص.',
+      color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30',
+    },
+    {
+      icon: Megaphone,
+      title: 'إعلانات الأستاذ',
+      desc: 'تاب "إعلانات الأستاذ" فيه كل الإعلانات المهمة من الأستاذ - مواعيد، اخبار، وملاحظات مهمة. دايماً تابعها.',
+      color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30',
+    },
+    {
+      icon: MessageSquare,
+      title: 'اسأل وزملائك',
+      desc: 'تاب "أسئلة وزملاء" تقدر تسأل أي سؤال وتشارك مع زملائك في نفس الصف. الأستاذ بيرد عليكوا كمان.',
+      color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30',
+    },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={function(e) { e.stopPropagation() }}>
+        <CardContent className="p-6 space-y-4">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="h-10 w-10 rounded-full bg-primary/15 flex items-center justify-center">
+                <HelpCircle className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-bold text-base">دليل التعامل</h2>
+                <p className="text-[10px] text-muted-foreground">إزاي تستخدم صفحتك</p>
+              </div>
+            </div>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Steps */}
+          <div className="space-y-3">
+            {steps.map(function(step, i) {
+              return (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                  <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 " + step.color}>
+                    <step.icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold bg-muted text-muted-foreground rounded-full h-5 w-5 flex items-center justify-center shrink-0">{i + 1}</span>
+                      <h3 className="font-semibold text-sm">{step.title}</h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{step.desc}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Footer tip */}
+          <div className="p-3 rounded-lg bg-primary/5 border border-primary/15">
+            <p className="text-xs text-foreground leading-relaxed">
+              <span className="font-bold">نصيحة:</span> لو لقيت واجب أو امتحان مكتوب عليه "محتاجة تتسلم" أو "لسه متقدمتش" يبقى لازم تخلصه. اضغط عليه وادخل تخلصه على طول.
+            </p>
+          </div>
+
+          {/* CTA */}
+          <Button onClick={onEnterPortal} className="w-full gap-2 min-h-[44px] font-semibold">
+            <Rocket className="h-4 w-4" />
+            يلا نبدأ
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
