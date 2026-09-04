@@ -270,7 +270,7 @@ export function StudentPortal() {
     { id: 'videos', label: 'الدروس', icon: Video },
     { id: 'homework', label: 'الواجبات', icon: ClipboardList },
     { id: 'exams', label: 'الامتحانات', icon: FileText },
-    { id: 'announcements', label: 'إعلانات الأستاذ', icon: Megaphone },
+    { id: 'announcements', label: 'إعلانات المستر', icon: Megaphone },
     { id: 'discussions', label: 'أسئلة وزملاء', icon: MessageSquare },
   ]
 
@@ -790,7 +790,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
             <div className="text-center py-6 px-4">
               <ClipboardList className="h-10 w-10 text-muted-foreground/40 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">لا توجد واجبات أخرى حالياً</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">انتظر إضافة الأستاذ لواجبات جديدة</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">انتظر إضافة المستر لواجبات جديدة</p>
             </div>
           )}
           {bDone.length > 0 && (
@@ -980,7 +980,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
             <div className="text-center py-6 px-4">
               <ClipboardList className="h-10 w-10 text-muted-foreground/40 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">لا توجد واجبات أخرى حالياً</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">انتظر إضافة الأستاذ لواجبات جديدة</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">انتظر إضافة المستر لواجبات جديدة</p>
             </div>
           )}
         </div>
@@ -1009,7 +1009,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
             <CardContent className="p-6 text-center">
               <ClipboardList className="h-10 w-10 text-emerald-500/40 mx-auto mb-2" />
               <p className="text-sm font-medium text-muted-foreground">خلصت كل الواجبات المتاحة!</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">انتظر إضافة الأستاذ لواجبات جديدة، أو راجع واجباتك المسلمة تحت.</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">انتظر إضافة المستر لواجبات جديدة، أو راجع واجباتك المسلمة تحت.</p>
             </CardContent>
           </Card>
         )}
@@ -1751,7 +1751,7 @@ function StudentGuide({ onClose, onEnterPortal }: { onClose: () => void; onEnter
     {
       icon: Video,
       title: 'اتفرج على الدروس',
-      desc: 'افتح تاب "الدروس" واتفرج على فيديوهات الأستاذ. كل ما تشوف فيديو لآخره، هيتسجل إنك خلصته عشان ترجعله بسهولة.',
+      desc: 'افتح تاب "الدروس" واتفرج على فيديوهات المستر. كل ما تشوف فيديو لآخره، هيتسجل إنك خلصته عشان ترجعله بسهولة.',
       color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30',
     },
     {
@@ -1763,19 +1763,19 @@ function StudentGuide({ onClose, onEnterPortal }: { onClose: () => void; onEnter
     {
       icon: FileText,
       title: 'ادخل الامتحانات',
-      desc: 'تاب "الامتحانات" فيه كل الامتحانات اللي الأستاذ نزلها لصفك. اضغط على الامتحان وادخل حل الأسئلة، هتشوف نتيجتك بعد ما تخلص.',
+      desc: 'تاب "الامتحانات" فيه كل الامتحانات اللي المستر نزلها لصفك. اضغط على الامتحان وادخل حل الأسئلة، هتشوف نتيجتك بعد ما تخلص.',
       color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30',
     },
     {
       icon: Megaphone,
-      title: 'إعلانات الأستاذ',
-      desc: 'تاب "إعلانات الأستاذ" فيه كل الإعلانات المهمة من الأستاذ - مواعيد، اخبار، وملاحظات مهمة. دايماً تابعها.',
+      title: 'إعلانات المستر',
+      desc: 'تاب "إعلانات المستر" فيه كل الإعلانات المهمة من المستر - مواعيد، اخبار، وملاحظات مهمة. دايماً تابعها.',
       color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30',
     },
     {
       icon: MessageSquare,
       title: 'اسأل وزملائك',
-      desc: 'تاب "أسئلة وزملاء" تقدر تسأل أي سؤال وتشارك مع زملائك في نفس الصف. الأستاذ بيرد عليكوا كمان.',
+      desc: 'تاب "أسئلة وزملاء" تقدر تسأل أي سؤال وتشارك مع زملائك في نفس الصف. المستر بيرد عليكوا كمان.',
       color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30',
     },
   ]
