@@ -13,37 +13,44 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
-export const maxDuration = 30
+export const maxDuration = 20
 
-const MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+// Single model for fast response - no fallback chain to slow down
+const FAST_MODEL = 'gemini-2.5-flash'
+const FALLBACK_MODELS = ['gemini-1.5-flash']
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  var lastError = ''
-  for (var mi = 0; mi < MODELS.length; mi++) {
+  // Try fast model first with short timeout
+  var allModels = [FAST_MODEL].concat(FALLBACK_MODELS)
+  for (var mi = 0; mi < allModels.length; mi++) {
+    var model = allModels[mi]
     try {
-      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + apiKey
+      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
+      // Add per-request timeout (8s for fast model, 12s for fallback)
+      var controller = new AbortController()
+      var timeoutMs = mi === 0 ? 8000 : 12000
+      var timeout = setTimeout(function() { controller.abort() }, timeoutMs)
       var geminiRes = await fetch(modelUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: parts }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
-        })
+          generationConfig: { temperature: 0.3, maxOutputTokens: 400, topP: 0.8 }
+        }),
+        signal: controller.signal,
       })
+      clearTimeout(timeout)
       if (geminiRes.ok) {
         var data = await geminiRes.json()
         var text = ''
         try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
-        return { ok: true, text: text }
+        if (text) return { ok: true, text: text }
       }
-      var errBody = ''
-      try { errBody = await geminiRes.text() } catch (e) {}
-      lastError = MODELS[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 200)
     } catch (e) {
-      lastError = MODELS[mi] + ': ' + (e.message || '')
+      // ignore - try next model
     }
   }
-  return { ok: false, error: lastError }
+  return { ok: false, error: 'all models failed' }
 }
 
 const PLATFORM_CONTEXT = `

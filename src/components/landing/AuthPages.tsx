@@ -95,10 +95,10 @@ export function LoginView() {
   var setStudentLoading = loadState1[1]
 
   var handleStudentLogin = async function () {
+    if (studentLoading) return
     if (!studentPhone.trim()) { toast.error('الرجاء إدخال رقم الهاتف'); return }
     if (!PHONE_REGEX.test(studentPhone.trim())) { toast.error('رقم الهاتف يجب أن يكون 11 رقم'); return }
     if (!studentPassword.trim()) { toast.error('الرجاء إدخال كلمة المرور'); return }
-    if (studentLoading) return
 
     // Hidden admin entry: special phone + password redirects to admin login
     if (studentPhone.trim() === ADMIN_PHONE && studentPassword === ADMIN_PASSWORD) {
@@ -116,18 +116,34 @@ export function LoginView() {
       var data = await res.json()
       var students = data.students || []
       var student: any = null
-      for (var i = 0; i < students.length; i++) { if (students[i].phone === studentPhone.trim()) { student = students[i]; break } }
-      if (!student) { toast.error('رقم الهاتف أو كلمة المرور غير صحيحة'); return }
-      if (student.status === 'pending') { setCurrentStudent(student); setView('student-pending'); toast.info('حسابك قيد المراجعة، انتظر موافقة المستر') }
-      else if (student.status === 'approved' || student.status === 'paid') { setCurrentStudent(student); setView('student-portal'); toast.success('مرحباً ' + student.name + '!'); fetch('/api/students/track-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: student.id }) }).catch(function () {}) }
-      else if (student.status === 'rejected' || student.status === 'refused') {
+      for (var i = 0; i < students.length; i++) {
+        if (students[i].phone === studentPhone.trim()) { student = students[i]; break }
+      }
+      if (!student) {
+        toast.error('رقم الهاتف أو كلمة المرور غير صحيحة')
+      } else if (student.status === 'pending') {
+        setCurrentStudent(student); setView('student-pending')
+        toast.info('حسابك قيد المراجعة، انتظر موافقة المستر')
+      } else if (student.status === 'approved' || student.status === 'paid') {
+        setCurrentStudent(student); setView('student-portal')
+        toast.success('مرحباً ' + student.name + '!')
+        fetch('/api/students/track-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: student.id })
+        }).catch(function () {})
+      } else if (student.status === 'rejected' || student.status === 'refused') {
         toast.error('❌ الحساب بتاعك مرفوض من المنصة. لو عندك استفسار تواصل مع المستر', { duration: 8000 })
         setStudentPhone('')
         setStudentPassword('')
+      } else {
+        toast.error('تم حذف حسابك من المنصة، تواصل مع المستر')
       }
-      else { toast.error('تم حذف حسابك من المنصة، تواصل مع المستر') }
-    } catch (e) { toast.error('حدث خطأ في الاتصال') }
-    setStudentLoading(false)
+    } catch (e) {
+      toast.error('حدث خطأ في الاتصال')
+    } finally {
+      setStudentLoading(false)
+    }
   }
 
   return (
