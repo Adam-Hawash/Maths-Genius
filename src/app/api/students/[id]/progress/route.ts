@@ -186,6 +186,42 @@ export async function GET(
       } catch(e2) { examResultsEnriched = [] }
     }
 
+    // If examResults is still empty, try simpler query without JOIN
+    if (examResultsEnriched.length === 0) {
+      try {
+        var simpleExamRows = await db.$queryRawUnsafe(
+          'SELECT id, examId, score, maxScore, submittedAt, answers FROM ExamResult WHERE studentId = ? ORDER BY submittedAt DESC',
+          id
+        )
+        for (var sei = 0; sei < (simpleExamRows || []).length; sei++) {
+          var ser = simpleExamRows[sei]
+          var examTitle2 = 'امتحان'
+          var passScore2 = 50
+          try {
+            var examInfo = await db.$queryRawUnsafe('SELECT title, passScore FROM Exam WHERE id = ? LIMIT 1', ser.examId)
+            if (examInfo && examInfo.length > 0) {
+              examTitle2 = examInfo[0].title || 'امتحان'
+              passScore2 = examInfo[0].passScore || 50
+            }
+          } catch (e3) {}
+          examResultsEnriched.push({
+            id: ser.id,
+            examTitle: examTitle2,
+            examGrade: '',
+            passScore: passScore2,
+            passed: (ser.score || 0) >= passScore2,
+            score: ser.score || 0,
+            maxScore: ser.maxScore || 100,
+            submittedAt: ser.submittedAt,
+            wrongQuestions: [],
+            allQuestions: [],
+          })
+        }
+      } catch (e4) {
+        console.error('Simple exam fetch error:', e4)
+      }
+    }
+
     // Get homework results using RAW SQL — include answers column
     var homeworkResults: any[] = []
     try {
