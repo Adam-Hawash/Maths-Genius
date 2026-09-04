@@ -83,7 +83,16 @@ export async function POST(request) {
         var raw = typeof homework.questions === 'string' ? JSON.parse(homework.questions) : homework.questions
         if (Array.isArray(raw)) {
           raw.forEach(function(q) {
-            if (q.type === 'writing' || q.type === 'essay') {
+            // Detect writing: type field, OR options are empty/N/A
+            var isWriting = q.type === 'writing' || q.type === 'essay'
+            if (!isWriting && Array.isArray(q.options)) {
+              var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+              if (allNA) isWriting = true
+            }
+            if (!isWriting && (!q.options || q.options.length === 0)) {
+              isWriting = true
+            }
+            if (isWriting) {
               writingQuestions.push(q)
             } else {
               mcq.push(q)

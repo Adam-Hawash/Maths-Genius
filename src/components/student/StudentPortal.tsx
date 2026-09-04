@@ -817,21 +817,33 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         var myAnswers = hwAnswers[hw.id] || {}
         var existingResult = hwResults[hw.id]
 
-        // Shuffle MCQ and writing separately (MCQ first, then writing)
-        // Build a combined shuffle map: [shuffled_mcq_indices..., shuffled_writing_indices...]
-        var mcqShuffle: number[] = []
-        var writingShuffle: number[] = []
-        if (hasQuestions && isExpanded && !isSubmitted) {
-          var existing = hwShuffleMaps.current[hw.id]
-          if (existing && existing.length === allQuestions.length) {
-            // Use existing shuffle - need to re-split
-            existing.forEach(function(origIdx: number) {
-              if (origIdx < mcqQuestions.length || (allQuestions[origIdx] && (allQuestions[origIdx].type === 'writing' || allQuestions[origIdx].type === 'essay'))) {
-                // This is complex - let's just rebuild from scratch
-              }
-            })
-          }
-          // Simpler approach: shuffle mcq indices and writing indices separately
+        // Use cached shuffle if available, otherwise create new
+        var cachedMap = hwShuffleMaps.current[hw.id]
+        if (cachedMap && cachedMap.length === allQuestions.length) {
+          // Rebuild display arrays from cached map
+          var mcqOrigIdx: number[] = []
+          var writingOrigIdx: number[] = []
+          allQuestions.forEach(function(q: any, i: number) {
+            var isW = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' }))
+            if (isW) writingOrigIdx.push(i)
+            else mcqOrigIdx.push(i)
+          })
+          // Rebuild mcqShuffle and writingShuffle from cached map
+          var cachedMcq: number[] = []
+          var cachedWriting: number[] = []
+          cachedMap.forEach(function(origIdx: number, displayIdx: number) {
+            if (displayIdx < mcqOrigIdx.length) {
+              cachedMcq.push(mcqOrigIdx.indexOf(origIdx))
+            } else {
+              cachedWriting.push(writingOrigIdx.indexOf(origIdx))
+            }
+          })
+          mcqShuffle = cachedMcq.filter(function(i: number) { return i >= 0 })
+          writingShuffle = cachedWriting.filter(function(i: number) { return i >= 0 })
+          if (mcqShuffle.length === 0) mcqShuffle = mcqQuestions.map(function(_, i) { return i })
+          if (writingShuffle.length === 0) writingShuffle = writingQuestions.map(function(_, i) { return i })
+        } else {
+          // Create new shuffle
           mcqShuffle = mcqQuestions.map(function(_, i) { return i })
           for (var si = mcqShuffle.length - 1; si > 0; si--) {
             var sj = Math.floor(Math.random() * (si + 1))
@@ -842,17 +854,15 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
             var wj = Math.floor(Math.random() * (wi + 1))
             var wt = writingShuffle[wi]; writingShuffle[wi] = writingShuffle[wj]; writingShuffle[wj] = wt
           }
-          // Store combined map for submit
-          var combinedMap: number[] = []
-          // Original indices: mcq are 0..mcqQuestions.length-1 in allQuestions (but need to track actual positions)
-          // Actually, we need to track original positions in allQuestions
+          // Build combined map
           var mcqOriginalIndices: number[] = []
           var writingOriginalIndices: number[] = []
           allQuestions.forEach(function(q: any, i: number) {
-            var isWriting = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' }))
-            if (isWriting) writingOriginalIndices.push(i)
+            var isW = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' }))
+            if (isW) writingOriginalIndices.push(i)
             else mcqOriginalIndices.push(i)
           })
+          var combinedMap: number[] = []
           mcqShuffle.forEach(function(shuffleIdx: number) {
             combinedMap.push(mcqOriginalIndices[shuffleIdx])
           })

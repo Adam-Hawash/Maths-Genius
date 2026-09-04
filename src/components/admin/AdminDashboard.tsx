@@ -22,6 +22,7 @@ import { SocialLinksPanel } from './SocialLinksPanel'
 import { CommunityPanel } from './CommunityPanel'
 import { ActivityPanel } from './ActivityPanel'
 import { PaymentsPanel } from '@/components/PaymentsPanel'
+import { MathKeyboard } from '@/components/student/MathKeyboard'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
@@ -2398,7 +2399,12 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-[10px] text-muted-foreground">الإجابة النموذجية (خطوة بخطوة)</Label>
-                      <Textarea value={q.modelAnswer || ''} onChange={function(e) { updateQuestion(qi, 'modelAnswer', e.target.value) }} placeholder="اكتب الحل الكامل خطوة بخطوة..." rows={3} className="text-xs" />
+                      <MathKeyboard
+                        value={q.modelAnswer || ''}
+                        onChange={function(val: string) { updateQuestion(qi, 'modelAnswer', val) }}
+                        placeholder="اكتب الحل الكامل خطوة بخطوة..."
+                        rows={3}
+                      />
                     </div>
                   </>
                 )}
