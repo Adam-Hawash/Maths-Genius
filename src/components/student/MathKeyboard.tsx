@@ -359,7 +359,29 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            // Auto-convert ^ followed by digit to superscript
+            var val = e.target.value
+            var superMap: Record<string, string> = {
+              '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+              '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+            }
+            // Replace ^digit patterns with superscript
+            var converted = val.replace(/\^([0-9])/g, function(match, digit) {
+              return superMap[digit] || match
+            })
+            // Also handle multi-digit powers like ^12 → ¹²
+            converted = converted.replace(/\^([0-9]+)/g, function(match, digits) {
+              var result = ''
+              for (var i = 0; i < digits.length; i++) {
+                result += superMap[digits[i]] || digits[i]
+              }
+              return result
+            })
+            // Also convert √3 → ∛ and √4 → ∜ (smart root conversion)
+            converted = converted.replace(/√3/g, '∛').replace(/√4/g, '∜')
+            onChange(converted)
+          }}
           placeholder={placeholder}
           rows={rows}
           className="w-full min-h-[120px] p-3 text-sm rounded-lg border border-border bg-background text-foreground resize-y font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"

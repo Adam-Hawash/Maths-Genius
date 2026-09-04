@@ -771,11 +771,11 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
               var correctIdx = typeof q.correct === 'number' ? q.correct : 0
               var correctAnswer = qType === 'mcq' && Array.isArray(q.options) ? (String.fromCharCode(65 + correctIdx) + ') ' + q.options[correctIdx]) : ''
               return (
-                <Card key={qi} className={isWrong ? 'border-red-200 dark:border-red-900/40' : 'border-emerald-200 dark:border-emerald-900/40'}>
+                <Card key={qi} className={qType === 'writing' ? 'border-amber-200 dark:border-amber-900/40' : isWrong ? 'border-red-200 dark:border-red-900/40' : 'border-emerald-200 dark:border-emerald-900/40'}>
                   <CardContent className="p-3 space-y-2">
                     <div className="flex items-start gap-2">
-                      <span className={"shrink-0 mt-0.5 text-xs font-bold px-2 py-0.5 rounded-full " + (isWrong ? 'bg-red-500/10 text-red-600' : 'bg-emerald-500/10 text-emerald-600')}>
-                        {isWrong ? 'غلط' : 'صح'}
+                      <span className={"shrink-0 mt-0.5 text-xs font-bold px-2 py-0.5 rounded-full " + (qType === 'writing' ? 'bg-amber-500/10 text-amber-600' : isWrong ? 'bg-red-500/10 text-red-600' : 'bg-emerald-500/10 text-emerald-600')}>
+                        {qType === 'writing' ? 'مقالي' : isWrong ? 'غلط' : 'صح'}
                       </span>
                       <p className="text-sm font-medium flex-1" dir="ltr" style={{ textAlign: 'left' }}>{qi + 1}. {q.question || q.q}</p>
                     </div>
