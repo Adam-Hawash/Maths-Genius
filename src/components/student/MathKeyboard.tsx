@@ -54,7 +54,7 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
       { label: 'x⁸', insert: '⁸', hint: 'أس 8' },
       { label: 'x⁹', insert: '⁹', hint: 'أس 9' },
       { label: 'x⁰', insert: '⁰', hint: 'أس 0' },
-      { label: 'xⁿ', insert: 'ⁿ', hint: 'أس n' },
+      { label: 'xⁿ', insert: '^', hint: 'أس مخصص - اكتب الرقم بعد علامة ^' },
       { label: '√', insert: '√', hint: 'جذر تربيعي' },
       { label: '∛', insert: '∛', hint: 'جذر تكعيبي' },
       { label: '∜', insert: '∜', hint: 'جذر رابع' },
