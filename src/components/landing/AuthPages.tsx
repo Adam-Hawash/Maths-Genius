@@ -115,12 +115,16 @@ export function LoginView() {
       var res = await fetch('/api/students?phone=' + encodeURIComponent(studentPhone.trim()) + '&password=' + encodeURIComponent(studentPassword.trim()))
       var data = await res.json()
       var students = data.students || []
-      var student = null
+      var student: any = null
       for (var i = 0; i < students.length; i++) { if (students[i].phone === studentPhone.trim()) { student = students[i]; break } }
       if (!student) { toast.error('رقم الهاتف أو كلمة المرور غير صحيحة'); return }
       if (student.status === 'pending') { setCurrentStudent(student); setView('student-pending'); toast.info('حسابك قيد المراجعة، انتظر موافقة المستر') }
       else if (student.status === 'approved' || student.status === 'paid') { setCurrentStudent(student); setView('student-portal'); toast.success('مرحباً ' + student.name + '!'); fetch('/api/students/track-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: student.id }) }).catch(function () {}) }
-      else if (student.status === 'rejected' || student.status === 'refused') { toast.error('الحساب بتاعك مرفوض. لو عندك استفسار تواصل مع المستر', { duration: 6000 }) }
+      else if (student.status === 'rejected' || student.status === 'refused') {
+        toast.error('❌ الحساب بتاعك مرفوض من المنصة. لو عندك استفسار تواصل مع المستر', { duration: 8000 })
+        setStudentPhone('')
+        setStudentPassword('')
+      }
       else { toast.error('تم حذف حسابك من المنصة، تواصل مع المستر') }
     } catch (e) { toast.error('حدث خطأ في الاتصال') }
     setStudentLoading(false)

@@ -1231,19 +1231,6 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                                 }}
                                 placeholder="اكتب إجابتك هنا أو ارفع صورة للحل..."
                                 rows={4}
-                                onImageUpload={function(filePath: string) {
-                                  if (filePath) {
-                                    setHwAnswers(function(prev) {
-                                      var a = { ...prev }
-                                      var existingRaw = a[hw.id]?.[displayIdx] || ''
-                                      var existing = typeof existingRaw === 'string' ? existingRaw : String(existingRaw)
-                                      if (!existing.includes('[📷 صورة مرفقة]')) {
-                                        a[hw.id] = { ...(a[hw.id] || {}), [displayIdx]: existing + (existing ? '\n' : '') + '[📷 صورة مرفقة: ' + filePath + ']' }
-                                      }
-                                      return a
-                                    })
-                                  }
-                                }}
                               />
                             </div>
                           </div>
