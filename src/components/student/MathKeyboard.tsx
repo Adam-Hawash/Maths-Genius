@@ -44,18 +44,18 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
   {
     title: 'الأُسس والجذور',
     symbols: [
+      { label: 'x¹', insert: '¹', hint: 'أس 1' },
       { label: 'x²', insert: '²', hint: 'تربيع' },
       { label: 'x³', insert: '³', hint: 'تكعيب' },
-      { label: 'xⁿ', insert: '^', hint: 'أس' },
+      { label: 'x⁴', insert: '⁴', hint: 'أس 4' },
+      { label: 'x⁵', insert: '⁵', hint: 'أس 5' },
+      { label: 'xⁿ', insert: 'ⁿ', hint: 'أس n' },
       { label: '√', insert: '√', hint: 'جذر تربيعي' },
       { label: '∛', insert: '∛', hint: 'جذر تكعيبي' },
       { label: '∜', insert: '∜', hint: 'جذر رابع' },
       { label: '½', insert: '½', hint: 'نصف' },
       { label: '⅓', insert: '⅓', hint: 'ثلث' },
       { label: '¼', insert: '¼', hint: 'ربع' },
-      { label: '¾', insert: '¾', hint: 'ثلاثة أرباع' },
-      { label: '∞', insert: '∞', hint: 'ما لا نهاية' },
-      { label: 'π', insert: 'π', hint: 'باي' },
     ],
   },
   {
