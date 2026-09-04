@@ -62,7 +62,7 @@ export default function HeroSection() {
   const showPhoto = !!dbPhoto || fallbackPhotoExists
 
   return (
-    <section className="relative overflow-hidden bg-background dark:bg-[#0F0D0A]" dir="rtl">
+    <section className="relative overflow-hidden bg-[#0F0D0A]" dir="rtl">
       {/* Subtle tiny dots + faint math/geometric symbols background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
         {/* Faint math symbols - very subtle background */}
@@ -324,7 +324,7 @@ export default function HeroSection() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
               </div>
               {/* Badge overlay */}
-              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-background border border-[#C49A38]/40 rounded-full px-5 py-2 shadow-lg">
+              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#0F0D0A] border border-[#C49A38]/40 rounded-full px-5 py-2 shadow-lg">
                 <p className="text-[#8B6914] dark:text-[#E5BE5A] font-bold text-sm tracking-wider whitespace-nowrap">
                   {cfg.instructor_name || 'مستر وائل خضير'}
                 </p>
