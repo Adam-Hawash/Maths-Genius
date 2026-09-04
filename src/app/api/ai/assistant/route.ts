@@ -27,7 +27,6 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
     'gemini-2.0-flash',
     'gemini-2.5-flash-preview-05-20',
     'gemini-flash-latest',
-    'gemini-2.0-flash-lite',
   ]
   var lastError = ''
   for (var mi = 0; mi < allModels.length; mi++) {
