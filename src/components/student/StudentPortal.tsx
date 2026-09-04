@@ -1127,6 +1127,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
 function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId }: { exams: Exam[]; results: ExamResult[]; completedExamIds: Set<string>; onExamSubmitted: (examId: string) => void; studentId: string }) {
   const [takingExam, setTakingExam] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [writingAnswers, setWritingAnswers] = useState<Record<number, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [examQuestions, setExamQuestions] = useState<any[]>([])
   const [examShuffleMap, setExamShuffleMap] = useState<number[]>([])
@@ -1164,7 +1165,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
     )
   }
 
-  // EXAM SUBMITTED SUCCESS SCREEN — NO window.location.reload(), NO score shown
+  // EXAM SUBMITTED SUCCESS SCREEN — NO score shown
   if (examSubmitted) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 space-y-6">
@@ -1173,17 +1174,16 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         </div>
         <div className="text-center space-y-2">
           <h2 className="text-xl font-bold text-emerald-600">تم تقديم الامتحان بنجاح</h2>
-          <p className="text-sm text-muted-foreground">انتظر النتيجة من مستر وائل خضير</p>
+          <p className="text-sm text-muted-foreground">انتظر نتيجتك من مستر وائل خضير</p>
         </div>
         <Button
           onClick={() => {
-            // Notify parent so exam list shows "تم تقديم الامتحان"
             if (submittedExamId) onExamSubmitted(submittedExamId)
-            // Reset local state — NO reload, session stays intact
             setExamSubmitted(false)
             setSubmittedExamId(null)
             setTakingExam(null)
             setAnswers({})
+            setWritingAnswers({})
             setExamQuestions([])
             setExamShuffleMap([])
           }}
@@ -1202,50 +1202,105 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       setTakingExam(null)
       return null
     }
+    // Separate MCQ from Writing
+    var mcqQs: any[] = []
+    var writingQs: any[] = []
+    examQuestions.forEach(function(q: any) {
+      var isWriting = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' }))
+      if (isWriting) writingQs.push(q)
+      else mcqQs.push(q)
+    })
     return (
       <div className="space-y-4" dir="ltr">
         <div className="flex items-center justify-between">
           <h3 className="font-bold">{exam.title}</h3>
-          <Button variant="outline" size="sm" onClick={() => { setTakingExam(null); setAnswers({}); setExamQuestions([]); setExamShuffleMap([]) }}>رجوع</Button>
+          <Button variant="outline" size="sm" onClick={() => { setTakingExam(null); setAnswers({}); setWritingAnswers({}); setExamQuestions([]); setExamShuffleMap([]) }}>Back</Button>
         </div>
-        {examQuestions.map((q: any, di: number) => {
-          var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
-          var qText = q.question || q.q || ''
-          return (
-          <Card key={di}>
-            <CardContent className="p-4 space-y-3">
-              <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{di + 1}. {qText} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
-              <div className="space-y-2">
-                {q.options.map((opt: string, oi: number) => (
-                  <button
-                    key={oi}
-                    onClick={() => setAnswers(prev => ({ ...prev, [di]: oi }))}
-                    className={`w-full p-3 rounded-lg border text-sm transition-colors ${
-                      answers[di] === oi ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
-                    }`}
-                    style={{ textAlign: 'left' }}
-                  >
-                    <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-          )
-        })}
+        
+        {/* MCQ Section */}
+        {mcqQs.length > 0 && (
+          <div className="space-y-3">
+            {writingQs.length > 0 && <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">Multiple Choice:</p>}
+            {mcqQs.map((q: any, mi: number) => {
+              var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+              var qText = q.question || q.q || ''
+              return (
+                <Card key={'mcq-' + mi}>
+                  <CardContent className="p-4 space-y-3">
+                    <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{mi + 1}. {qText} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
+                    <div className="space-y-2">
+                      {(q.options || []).map((opt: string, oi: number) => (
+                        <button
+                          key={oi}
+                          onClick={() => setAnswers(prev => ({ ...prev, [mi]: oi }))}
+                          className={`w-full p-3 rounded-lg border text-sm transition-colors ${
+                            answers[mi] === oi ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
+                          }`}
+                          style={{ textAlign: 'left' }}
+                        >
+                          <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
+                        </button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Writing Section */}
+        {writingQs.length > 0 && (
+          <div className="space-y-3">
+            {mcqQs.length > 0 && <div className="border-t pt-3"><p className="text-xs font-semibold text-amber-600 dark:text-amber-400">Written Questions:</p></div>}
+            {writingQs.map((q: any, wi: number) => {
+              var displayIdx = mcqQs.length + wi
+              var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 5
+              var qText = q.question || q.q || ''
+              return (
+                <Card key={'writing-' + wi} className="border-amber-500/20">
+                  <CardContent className="p-4 space-y-3">
+                    <p className="font-medium text-sm" style={{ textAlign: 'left' }}>
+                      {mcqQs.length > 0 ? mcqQs.length + wi + 1 : wi + 1}. {qText}
+                      <span className="text-muted-foreground text-xs ml-2">({pts} pts)</span>
+                      <Badge variant="outline" className="text-[9px] ml-2 border-amber-500/40 text-amber-600">Writing</Badge>
+                    </p>
+                    <div dir="ltr">
+                      <MathKeyboard
+                        value={writingAnswers[displayIdx] || ''}
+                        onChange={function(val: string) {
+                          setWritingAnswers(function(prev) { return { ...prev, [displayIdx]: val } })
+                        }}
+                        placeholder="Write your answer here or upload an image..."
+                        rows={4}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+
         <Button
           className="w-full"
-          disabled={Object.keys(answers).length < examQuestions.length || submitting}
+          disabled={submitting}
           onClick={async () => {
             setSubmitting(true)
             try {
-              // Map shuffled display indices back to original DB indices for grading
-              var mappedAnswers: Record<number, number> = {}
-              if (examShuffleMap.length > 0) {
-                Object.keys(answers).forEach(function(di) { mappedAnswers[examShuffleMap[parseInt(di)]] = answers[di] })
-              } else {
-                mappedAnswers = { ...answers }
-              }
+              // Combine MCQ + writing answers
+              var mappedAnswers: Record<number, any> = {}
+              // MCQ answers
+              Object.keys(answers).forEach(function(di) {
+                var origIdx = examShuffleMap.length > 0 ? examShuffleMap[parseInt(di)] : parseInt(di)
+                mappedAnswers[origIdx] = answers[di]
+              })
+              // Writing answers
+              Object.keys(writingAnswers).forEach(function(di) {
+                var displayIdx = parseInt(di)
+                var origIdx = examShuffleMap.length > 0 ? examShuffleMap[displayIdx] : displayIdx
+                mappedAnswers[origIdx] = writingAnswers[di]
+              })
               const res = await fetch('/api/exams/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1253,13 +1308,10 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
               })
               const data = await res.json()
               if (res.ok && (data.submitted || data.alreadySubmitted)) {
-                // Show success screen — NO score revealed
                 setSubmittedExamId(takingExam)
                 setExamSubmitted(true)
-                // Notify parent immediately so exam list updates even if they don't click return
                 onExamSubmitted(takingExam)
               } else if (data.blocked || data.alreadySubmitted) {
-                // Server blocked re-submission
                 onExamSubmitted(takingExam)
                 setBlockedExamId(takingExam)
               } else {
@@ -1269,7 +1321,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
             setSubmitting(false)
           }}
         >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : `تقديم الامتحان (${Object.keys(answers).length}/${examQuestions.length})`}
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : `Submit Exam (${Object.keys(answers).length + Object.keys(writingAnswers).length}/${examQuestions.length})`}
         </Button>
       </div>
     )
@@ -1281,9 +1333,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       {exams.map((exam) => {
         const examResult = results.find(r => r.examId === exam.id)
         const isCompleted = examResult || completedExamIds.has(exam.id)
-        let hasMCQ = false
+        let hasQuestions = false
         let parsedQuestions: any[] = []
-        try { if ((exam as any).questions) { parsedQuestions = JSON.parse((exam as any).questions); hasMCQ = parsedQuestions.length > 0 } } catch {}
+        try { if ((exam as any).questions) { parsedQuestions = JSON.parse((exam as any).questions); hasQuestions = parsedQuestions.length > 0 } } catch {}
         return (
           <Card key={exam.id} className={isCompleted ? 'border-emerald-500/30' : ''}>
             <CardContent className="p-4">
@@ -1298,9 +1350,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                       <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                         تم تقديم الامتحان
                       </Badge>
-                    ) : hasMCQ ? (
+                    ) : hasQuestions ? (
                       <Button size="sm" disabled={checkingServer} onClick={async () => {
-                        // Double-check server before allowing start
                         setCheckingServer(true)
                         try {
                           var checkRes = await fetch('/api/exam-results?studentId=' + studentId + '&examId=' + exam.id)
