@@ -32,6 +32,7 @@ async function callGemini(apiKey: string, parts: any[]): Promise<any> {
   var lastError = ''
   for (var mi = 0; mi < models.length; mi++) {
     try {
+      console.log('[AI Extract] Trying model:', models[mi])
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[mi] + ':generateContent?key=' + apiKey
       var geminiRes = await fetch(modelUrl, {
         method: 'POST',
@@ -42,6 +43,7 @@ async function callGemini(apiKey: string, parts: any[]): Promise<any> {
         })
       })
       if (geminiRes.ok) {
+        console.log('[AI Extract] Model', models[mi], 'succeeded')
         var data = await geminiRes.json()
         var text = ''
         try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
@@ -50,6 +52,7 @@ async function callGemini(apiKey: string, parts: any[]): Promise<any> {
       var errBody = ''
       try { errBody = await geminiRes.text() } catch (e) {}
       lastError = models[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 200)
+      console.error('[AI Extract] Model', models[mi], 'failed:', geminiRes.status, errBody.substring(0, 200))
     } catch (e) {
       lastError = models[mi] + ': ' + (e.message || '')
     }
@@ -129,13 +132,23 @@ export async function POST(request) {
     var type = formData.get('type') || 'exam'
     var grade = formData.get('grade') || ''
 
+    console.log('[AI Extract] Request received:', {
+      hasQuestionFile: !!(questionFile && questionFile.size > 0),
+      hasAnswerFile: !!(answerFile && answerFile.size > 0),
+      fileUrl: fileUrl ? 'yes' : 'no',
+      answerUrl: answerUrl ? 'yes' : 'no',
+      type: type,
+      grade: grade,
+    })
+
     if ((!questionFile || questionFile.size === 0) && !fileUrl.trim()) {
       return NextResponse.json({ error: 'Upload a question file or enter a URL' }, { status: 400 })
     }
 
     var apiKey = process.env.GEMINI_API_KEY || ''
     if (!apiKey) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY not found' }, { status: 500 })
+      console.error('[AI Extract] GEMINI_API_KEY not found in environment')
+      return NextResponse.json({ error: 'GEMINI_API_KEY not found — أضف المفتاح في Vercel Environment Variables أو ملف .env.local' }, { status: 500 })
     }
 
     // ============= Load question file (or URL) =============
