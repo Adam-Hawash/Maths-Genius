@@ -15,7 +15,8 @@ import {
   Megaphone, Plus, Check, X, Trash2, LogOut, Loader2,
   BarChart3, RefreshCw, Settings, Upload, MessageSquare,
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
-  PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet
+  PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
+  ChevronLeft
 } from 'lucide-react'
 import { CMSPanel } from './CMSPanel'
 import { SocialLinksPanel } from './SocialLinksPanel'
@@ -775,6 +776,8 @@ function ExamTrackingPanel() {
   const [selectedExam, setSelectedExam] = useState<string>('')
   const [results, setResults] = useState<ExamResult[]>([])
   const [notTaken, setNotTaken] = useState<any[]>([])
+  const [expandedResult, setExpandedResult] = useState<string | null>(null)
+  const [examInfo, setExamInfo] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [formGrade, setFormGrade] = useState('')
@@ -819,12 +822,13 @@ function ExamTrackingPanel() {
   useEffect(() => { loadExams() }, [])
 
   const loadExamResults = async (examId: string) => {
-    if (!examId) { setResults([]); setNotTaken([]); return }
+    if (!examId) { setResults([]); setNotTaken([]); setExamInfo(null); return }
     try {
       const res = await fetch(`/api/exam-results?examId=${examId}`)
       const data = await res.json()
       setResults(data.results || [])
       setNotTaken(data.notTaken || [])
+      setExamInfo(data.examInfo || null)
     } catch { toast.error('خطأ في تحميل النتائج') }
   }
 
@@ -1076,19 +1080,118 @@ function ExamTrackingPanel() {
                     <div className="text-center px-4 py-2 rounded-lg bg-emerald-500/10"><p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{avgScore}</p><p className="text-[10px] text-muted-foreground">متوسط الدرجات</p></div>
                     <div className="text-center px-4 py-2 rounded-lg bg-red-500/10"><p className="text-lg font-bold text-red-600 dark:text-red-400">{notTaken.length}</p><p className="text-[10px] text-muted-foreground">لم يقدموا بعد</p></div>
                   </div>
+                  {examInfo && (
+                    <div className="flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground bg-muted/30 p-2 rounded-lg">
+                      <Badge variant="outline" className="text-[9px] border-blue-500/40 text-blue-600">اختياري: {examInfo.totalMcq || 0}</Badge>
+                      {examInfo.totalWriting > 0 && <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-600">مقالي: {examInfo.totalWriting}</Badge>}
+                      <span>درجة النجاح: {examInfo.passScore || 50}%</span>
+                    </div>
+                  )}
                   {results.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">الطلاب الذين قدموا الامتحان</p>
-                      <div className="max-h-[200px] overflow-y-auto custom-scrollbar space-y-1">
-                        {results.map((r) => (
-                          <div key={r.id} className="flex items-center justify-between p-2 rounded-lg border bg-card text-sm">
-                            <div><span className="font-medium">{r.student?.name || '—'}</span> <span className="text-[10px] text-muted-foreground" dir="ltr">{r.student?.phone || ''}</span></div>
-                            <div className="flex items-center gap-2">
-                              <span className={`font-bold ${r.score >= 50 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{r.score}/{r.maxScore}</span>
-                              <span className="text-[10px] text-muted-foreground">{new Date(r.submittedAt).toLocaleDateString('ar-EG')}</span>
+                      <p className="text-xs font-medium text-muted-foreground">الطلاب الذين قدموا الامتحان (اضغط على الطالب لرؤية التفاصيل)</p>
+                      <div className="max-h-[500px] overflow-y-auto custom-scrollbar space-y-2">
+                        {results.map((r: any) => {
+                          var isExpanded = expandedResult === r.id
+                          var allQs = r.allQuestions || []
+                          var writingAns = r.writingAnswers || []
+                          var wrongQs = r.wrongQuestions || []
+                          return (
+                            <div key={r.id} className={`rounded-lg border overflow-hidden transition-all ${isExpanded ? 'border-primary' : 'border-border bg-card'}`}>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedResult(isExpanded ? null : r.id)}
+                                className="w-full flex items-center justify-between p-3 text-right hover:bg-muted/30 transition-colors"
+                              >
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <div className={"h-8 w-8 rounded-lg flex items-center justify-center shrink-0 " + (r.passed ? 'bg-emerald-500/10' : 'bg-red-500/10')}>
+                                    <span className={"text-xs font-bold " + (r.passed ? 'text-emerald-600' : 'text-red-500')}>{r.score}/{r.maxScore}</span>
+                                  </div>
+                                  <div className="min-w-0 text-right">
+                                    <p className="font-medium text-sm truncate">{r.student?.name || '—'}</p>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-[10px] text-muted-foreground" dir="ltr">{r.student?.phone || ''}</span>
+                                      <span className="text-[10px] text-muted-foreground">{new Date(r.submittedAt).toLocaleDateString('ar-EG')}</span>
+                                      {wrongQs.length > 0 && (
+                                        <Badge variant="outline" className="text-[9px] border-red-500/40 text-red-600">{wrongQs.length} خطأ</Badge>
+                                      )}
+                                      {writingAns.length > 0 && (
+                                        <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-600">{writingAns.length} مقالي</Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <Badge variant={r.passed ? 'default' : 'outline'} className={`text-[9px] h-5 ${r.passed ? '' : 'border-amber-500 text-amber-600'}`}>
+                                    {r.passed ? 'ناجح' : 'محتاج مراجعة'}
+                                  </Badge>
+                                  <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform " + (isExpanded ? 'rotate-90' : '')} />
+                                </div>
+                              </button>
+                              {isExpanded && (
+                                <div className="border-t bg-muted/20 p-3 space-y-2">
+                                  {/* All questions review */}
+                                  {allQs.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      <p className="text-[10px] font-semibold text-muted-foreground">جميع الأسئلة ({allQs.length}):</p>
+                                      {allQs.map((aq: any, qi: number) => (
+                                        <div key={qi} className="text-[10px] p-2 rounded border bg-card" dir="ltr">
+                                          <div className="flex items-start gap-1.5">
+                                            <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${
+                                              aq.type === 'writing'
+                                                ? 'bg-amber-500/10 text-amber-600'
+                                                : aq.isCorrect
+                                                  ? 'bg-emerald-500/10 text-emerald-600'
+                                                  : 'bg-red-500/10 text-red-600'
+                                            }`}>
+                                              {aq.type === 'writing' ? 'Writing' : aq.isCorrect ? 'Correct' : 'Wrong'}
+                                            </span>
+                                            <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
+                                          </div>
+                                          <div className="mt-1 pl-6 space-y-0.5">
+                                            {aq.type === 'writing' ? (
+                                              <div className="space-y-1 p-2 rounded bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/40">
+                                                <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">إجابة الطالب:</p>
+                                                <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
+                                                {aq.correctAnswer && (
+                                                  <>
+                                                    <p className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5 mt-1">الإجابة النموذجية:</p>
+                                                    <p className="text-emerald-900 dark:text-emerald-200 whitespace-pre-wrap break-words" dir="auto">{aq.correctAnswer}</p>
+                                                  </>
+                                                )}
+                                              </div>
+                                            ) : (
+                                              <>
+                                                <p className="text-red-600">إجابة الطالب: <span dir="ltr">{aq.studentAnswer}</span></p>
+                                                <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{aq.correctAnswer}</span></p>
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : wrongQs.length > 0 ? (
+                                    <div className="space-y-1">
+                                      <p className="text-[10px] font-semibold text-red-600">الأسئلة الخاطئة ({wrongQs.length}):</p>
+                                      {wrongQs.map((wq: any, wi: number) => (
+                                        <div key={wi} className="flex items-start gap-2 text-[10px] p-1.5 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40">
+                                          <span className="shrink-0 font-bold text-red-500">{wi + 1}.</span>
+                                          <div className="min-w-0">
+                                            <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wq.question}</p>
+                                            <p className="text-red-600 mt-0.5">إجابة الطالب: <span dir="ltr">{wq.studentAnswer}</span></p>
+                                            <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-center text-muted-foreground text-xs py-2">لا توجد تفاصيل أسئلة محفوظة</p>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
                   )}

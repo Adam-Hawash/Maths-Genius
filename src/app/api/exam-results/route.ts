@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 
 // GET /api/exam-results?studentId=xxx&examId=yyy - Student pre-submit check (raw SQL)
 // GET /api/exam-results?studentId=xxx - Student: all exam results
-// GET /api/exam-results?examId=xxx - Admin: results for exam with analytics
+// GET /api/exam-results?examId=xxx - Admin: results for exam with analytics (RAW SQL with answers)
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const examId = searchParams.get('examId')
@@ -38,49 +38,269 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Admin mode: results for a specific exam with analytics (Prisma OK here - admin page)
+  // Admin mode: results for a specific exam with full per-student answer review
   if (!examId) {
     return NextResponse.json({ error: 'examId required' }, { status: 400 })
   }
 
   try {
-    var whereClause: any = { examId }
-    const results = await db.examResult.findMany({
-      where: whereClause,
-      include: { student: { select: { name: true, phone: true, grade: true, status: true } } },
-      orderBy: { submittedAt: 'desc' },
+    // Ensure ExamResult table has answers column (created by submit route)
+    try {
+      await db.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS ExamResult (id TEXT PRIMARY KEY, examId TEXT NOT NULL, studentId TEXT NOT NULL, score REAL DEFAULT 0, maxScore REAL DEFAULT 100, submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP)')
+    } catch (e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN answers TEXT DEFAULT ""') } catch (e) {}
+
+    // Get exam info first (title, questions, grade, passScore)
+    var examInfo: any = null
+    try {
+      var examRows = await db.$queryRawUnsafe(
+        'SELECT id, title, grade, questions, passScore FROM Exam WHERE id = ? LIMIT 1',
+        examId
+      )
+      examInfo = examRows && examRows.length > 0 ? examRows[0] : null
+    } catch (e) {
+      console.error('Exam lookup error:', e)
+      try {
+        examInfo = await db.exam.findUnique({ where: { id: examId }, select: { id: true, title: true, grade: true, questions: true, passScore: true } })
+      } catch (e2) {}
+    }
+
+    if (!examInfo) {
+      return NextResponse.json({ error: 'Exam not found' }, { status: 404 })
+    }
+
+    // Get all results for this exam using RAW SQL with answers
+    var rawResults: any[] = []
+    try {
+      rawResults = await db.$queryRawUnsafe(
+        'SELECT id, examId, studentId, score, maxScore, submittedAt, answers FROM ExamResult WHERE examId = ? ORDER BY submittedAt DESC',
+        examId
+      ) || []
+    } catch (e) {
+      console.error('Exam results fetch error:', e)
+      // Fallback to Prisma
+      try {
+        var prismaResults = await db.examResult.findMany({
+          where: { examId },
+          orderBy: { submittedAt: 'desc' },
+        })
+        rawResults = prismaResults.map((r: any) => ({ ...r, answers: '' }))
+      } catch (e2) { rawResults = [] }
+    }
+
+    // Get student info for each result
+    var studentIds = rawResults.map((r: any) => r.studentId).filter(Boolean)
+    var studentMap: any = {}
+    if (studentIds.length > 0) {
+      try {
+        var placeholders = studentIds.map(function() { return '?' }).join(',')
+        var students = await db.$queryRawUnsafe(
+          'SELECT id, name, phone, grade FROM Student WHERE id IN (' + placeholders + ')',
+          ...studentIds
+        ) || []
+        students.forEach(function(s: any) { studentMap[s.id] = s })
+      } catch (e) {
+        console.error('Student lookup error:', e)
+      }
+    }
+
+    // Parse exam questions
+    var examQuestions: any[] = []
+    try {
+      if (examInfo.questions) {
+        var raw = typeof examInfo.questions === 'string' ? JSON.parse(examInfo.questions) : examInfo.questions
+        if (Array.isArray(raw)) examQuestions = raw
+      }
+    } catch (e) {}
+
+    // Separate MCQ from writing for re-grading + display
+    var mcqQs: any[] = []
+    var writingQs: any[] = []
+    examQuestions.forEach(function(q: any) {
+      var isWriting = q.type === 'writing' || q.type === 'essay'
+      if (!isWriting && Array.isArray(q.options)) {
+        var allNA = q.options.length > 0 && q.options.every(function(o: any) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+        if (allNA) isWriting = true
+      }
+      if (!isWriting && (!q.options || q.options.length === 0)) isWriting = true
+      if (isWriting) writingQs.push(q)
+      else mcqQs.push(q)
     })
 
-    // Full admin analytics
-    const exam = await db.exam.findUnique({ where: { id: examId } })
-    const submittedStudentIds = new Set(results.map((r: any) => r.studentId))
-    const notTaken = exam ? await db.student.findMany({
-      where: { grade: exam.grade, status: 'approved', id: { not: { in: Array.from(submittedStudentIds) } } },
-      select: { id: true, name: true, phone: true },
-    }) : []
+    // Build per-student results with all questions review
+    var passScore = examInfo.passScore || 50
+    var results = rawResults.map(function(r: any) {
+      var student = studentMap[r.studentId] || {}
+      // Parse student answers
+      var studentAns: any = {}
+      try {
+        if (r.answers) {
+          studentAns = typeof r.answers === 'string' ? JSON.parse(r.answers) : r.answers
+        }
+      } catch (e) {}
 
-    const questionMisses: Record<number, { question: string; total: number; wrong: number }> = {}
-    results.forEach((r: any) => {
-      if (r.details) {
+      var allQuestions: any[] = []
+      var wrongQuestions: any[] = []
+      var writingAnswers: any[] = []
+
+      // MCQ all questions
+      mcqQs.forEach(function(q, qi) {
+        var qText = q.question || q.q || ''
+        var opts = Array.isArray(q.options) ? q.options : []
+        var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+        if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
+
+        var ans = undefined
         try {
-          const dets = JSON.parse(r.details)
-          dets.forEach((d: any, idx: number) => {
-            if (!questionMisses[idx]) {
-              questionMisses[idx] = { question: d.question, total: 0, wrong: 0 }
-            }
-            questionMisses[idx].total++
-            if (!d.correct) questionMisses[idx].wrong++
+          if (Array.isArray(studentAns)) {
+            ans = studentAns[qi]
+          } else if (studentAns !== null && typeof studentAns === 'object') {
+            ans = studentAns[qi] !== undefined ? studentAns[qi] : studentAns[String(qi)]
+          }
+        } catch (e) {}
+
+        var isCorrect = ans !== undefined && ans !== null && Number(ans) === correctIdx
+        var studentAnswerText = (typeof ans === 'number' && opts[ans] && opts[ans] !== 'N/A')
+          ? String.fromCharCode(65 + ans) + ') ' + opts[ans]
+          : 'Not answered'
+        var correctAnswerText = (opts[correctIdx] && opts[correctIdx] !== 'N/A')
+          ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
+          : (q.modelAnswer || 'No correct answer stored')
+
+        allQuestions.push({
+          type: 'mcq',
+          question: qText,
+          studentAnswer: studentAnswerText,
+          correctAnswer: correctAnswerText,
+          isCorrect: isCorrect,
+        })
+
+        if (!isCorrect) {
+          wrongQuestions.push({
+            question: qText,
+            studentAnswer: studentAnswerText,
+            correctAnswer: correctAnswerText,
           })
-        } catch {}
+        }
+      })
+
+      // Writing all questions (offset by mcq length)
+      writingQs.forEach(function(q, wi) {
+        var qText = q.question || q.q || ''
+        var studentText = ''
+        var offset = mcqQs.length
+        try {
+          if (Array.isArray(studentAns)) {
+            studentText = studentAns[offset + wi] || ''
+          } else if (studentAns && typeof studentAns === 'object') {
+            studentText = studentAns[offset + wi] || studentAns[String(offset + wi)] || ''
+          }
+        } catch (e) {}
+
+        var modelAnswer = q.modelAnswer || q.answer || ''
+        var acceptedAnswers = Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []
+        var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 5
+
+        allQuestions.push({
+          type: 'writing',
+          question: qText,
+          studentAnswer: typeof studentText === 'string' ? studentText : String(studentText || ''),
+          correctAnswer: modelAnswer,
+          isCorrect: false,
+        })
+
+        writingAnswers.push({
+          question: qText,
+          answer: typeof studentText === 'string' ? studentText : String(studentText || ''),
+          points: pts,
+          modelAnswer: modelAnswer,
+          acceptedAnswers: acceptedAnswers,
+          needsGrading: true,
+        })
+      })
+
+      return {
+        id: r.id,
+        studentId: r.studentId,
+        student: {
+          name: student.name || 'طالب محذوف',
+          phone: student.phone || '',
+          grade: student.grade || examInfo.grade || '',
+        },
+        score: r.score || 0,
+        maxScore: r.maxScore || 100,
+        submittedAt: r.submittedAt,
+        passed: (r.score || 0) >= passScore,
+        allQuestions: allQuestions,
+        wrongQuestions: wrongQuestions,
+        writingAnswers: writingAnswers,
+        hasWritingAnswers: writingAnswers.length > 0,
       }
     })
-    const mostMissed = Object.values(questionMisses)
-      .filter(q => q.wrong > 0)
-      .sort((a, b) => b.wrong - a.wrong)
 
-    const avgScore = results.length > 0 ? (results.reduce((sum, r) => sum + r.score, 0) / results.length).toFixed(1) : '—'
+    // Get students who haven't taken the exam yet
+    var notTaken: any[] = []
+    try {
+      var submittedIds = rawResults.map(function(r) { return r.studentId })
+      if (submittedIds.length > 0) {
+        var notPlaceholders = submittedIds.map(function() { return '?' }).join(',')
+        notTaken = await db.$queryRawUnsafe(
+          'SELECT id, name, phone FROM Student WHERE grade = ? AND status = ? AND id NOT IN (' + notPlaceholders + ')',
+          examInfo.grade, 'approved', ...submittedIds
+        ) || []
+      } else {
+        notTaken = await db.$queryRawUnsafe(
+          'SELECT id, name, phone FROM Student WHERE grade = ? AND status = ?',
+          examInfo.grade, 'approved'
+        ) || []
+      }
+    } catch (e) {
+      console.error('Not-taken lookup error:', e)
+      // Fallback to Prisma
+      try {
+        var submittedSet = new Set(submittedIds)
+        notTaken = await db.student.findMany({
+          where: { grade: examInfo.grade, status: 'approved', id: { not: { in: Array.from(submittedSet) } } },
+          select: { id: true, name: true, phone: true },
+        })
+      } catch (e2) { notTaken = [] }
+    }
 
-    return NextResponse.json({ results, notTaken, mostMissed, avgScore })
+    // Calculate most missed questions (across all submissions)
+    var questionMisses: Record<number, { question: string; total: number; wrong: number }> = {}
+    results.forEach(function(r: any) {
+      r.allQuestions.forEach(function(aq: any, idx: number) {
+        if (!questionMisses[idx]) {
+          questionMisses[idx] = { question: aq.question, total: 0, wrong: 0 }
+        }
+        if (aq.type === 'mcq') {
+          questionMisses[idx].total++
+          if (!aq.isCorrect) questionMisses[idx].wrong++
+        }
+      })
+    })
+    var mostMissed = Object.values(questionMisses)
+      .filter(function(q) { return q.wrong > 0 })
+      .sort(function(a, b) { return b.wrong - a.wrong })
+
+    var avgScore = results.length > 0
+      ? (results.reduce(function(sum, r) { return sum + r.score }, 0) / results.length).toFixed(1)
+      : '—'
+
+    return NextResponse.json({
+      results,
+      notTaken,
+      mostMissed,
+      avgScore,
+      examInfo: {
+        id: examInfo.id,
+        title: examInfo.title,
+        grade: examInfo.grade,
+        passScore: passScore,
+        totalMcq: mcqQs.length,
+        totalWriting: writingQs.length,
+      },
+    })
   } catch (error) {
     console.error('Exam results error:', error)
     return NextResponse.json({ error: 'Failed to fetch results' }, { status: 500 })
