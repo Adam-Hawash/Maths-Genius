@@ -199,36 +199,190 @@ export async function POST(request) {
       }
     }
 
-    // Try AI grading for writing questions (best-effort, non-blocking on failure)
+    // AI grading for writing questions - inline (no external fetch)
     var writingScore = 0
     var gradedWriting: any[] = []
     var aiGraded = false
     if (writingAnswers.length > 0) {
-      try {
-        // Build absolute URL for production (Vercel) and localhost for dev
-        var baseUrl = process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : (process.env.NEXTAUTH_URL || 'http://localhost:3000')
-        var gradeRes = await fetch(baseUrl + '/api/homework/grade-writing', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            studentId: studentId,
-            homeworkId: homeworkId,
-            writingAnswers: writingAnswers,
-          }),
-        })
-        if (gradeRes.ok) {
-          var gradeData = await gradeRes.json()
-          if (gradeData.success) {
-            writingScore = gradeData.totalAwarded || 0
-            gradedWriting = gradeData.graded || []
-            aiGraded = true
-            score += writingScore
+      var apiKey = process.env.GEMINI_API_KEY || ''
+      
+      // First pass: quick match against acceptedAnswers
+      for (var wi = 0; wi < writingAnswers.length; wi++) {
+        var wa = writingAnswers[wi]
+        var pts = wa.points || 5
+        var studentAns = (wa.answer || '').trim()
+        var modelAns = (wa.modelAnswer || '').trim()
+        
+        // Empty answer
+        if (!studentAns || studentAns === '[📷 صورة مرفقة]') {
+          gradedWriting[wi] = {
+            question: wa.question,
+            answer: wa.answer || '',
+            modelAnswer: modelAns,
+            awardedPoints: 0,
+            maxPoints: pts,
+            isCorrect: false,
+            feedback: 'Not answered',
+          }
+          continue
+        }
+        
+        // Quick match against acceptedAnswers
+        var quickCorrect = false
+        if (wa.acceptedAnswers && wa.acceptedAnswers.length > 0) {
+          var cleanedStudent = studentAns.toLowerCase().replace(/\s+/g, ' ')
+          for (var ai = 0; ai < wa.acceptedAnswers.length; ai++) {
+            var acc = (wa.acceptedAnswers[ai] || '').trim().toLowerCase().replace(/\s+/g, ' ')
+            if (acc && (cleanedStudent === acc || cleanedStudent.includes(acc) || acc.includes(cleanedStudent))) {
+              quickCorrect = true
+              break
+            }
           }
         }
-      } catch (gradeErr) {
-        console.error('AI grading error:', gradeErr)
-        // Continue without AI grading
+        
+        if (quickCorrect) {
+          gradedWriting[wi] = {
+            question: wa.question,
+            answer: studentAns,
+            modelAnswer: modelAns,
+            awardedPoints: pts,
+            maxPoints: pts,
+            isCorrect: true,
+            feedback: 'Correct answer',
+          }
+          writingScore += pts
+          continue
+        }
+        
+        // If no modelAnswer, can't grade
+        if (!modelAns) {
+          gradedWriting[wi] = {
+            question: wa.question,
+            answer: studentAns,
+            modelAnswer: '',
+            awardedPoints: 0,
+            maxPoints: pts,
+            isCorrect: false,
+            feedback: 'No model answer available for grading',
+          }
+          continue
+        }
+        
+        // Need AI grading
+        gradedWriting[wi] = {
+          question: wa.question,
+          answer: studentAns,
+          modelAnswer: modelAns,
+          awardedPoints: 0,
+          maxPoints: pts,
+          isCorrect: false,
+          feedback: 'Pending AI grading...',
+          needsAI: true,
+        }
       }
+      
+      // AI grading pass (if API key available)
+      if (apiKey) {
+        var needAI = gradedWriting.filter(function(g: any) { return g.needsAI })
+        if (needAI.length > 0) {
+          try {
+            var gradeLines = []
+            gradeLines.push('You are an expert math teacher grading student answers.')
+            gradeLines.push('For each question, compare the student answer with the model answer.')
+            gradeLines.push('Focus on the FINAL ANSWER - if the final answer matches, it is correct.')
+            gradeLines.push('')
+            gradeLines.push('Rules:')
+            gradeLines.push('- If the student final answer matches the model answer, give full credit (isCorrect: true)')
+            gradeLines.push('- If the final answer is correct but steps are missing, give 50% credit')
+            gradeLines.push('- If steps are correct but final answer is wrong, give 30% credit')
+            gradeLines.push('- If completely wrong or unrelated, give 0 (isCorrect: false)')
+            gradeLines.push('- If the student answer is empty, give 0 and isCorrect: false, feedback: "Not answered"')
+            gradeLines.push('- Round awarded points to nearest integer')
+            gradeLines.push('- Provide brief feedback in English')
+            gradeLines.push('- Use Unicode math symbols (√ ² ³ × ÷ π)')
+            gradeLines.push('')
+            gradeLines.push('Return JSON array ONLY:')
+            gradeLines.push('[{"index":0,"awardedPoints":5,"isCorrect":true,"feedback":"brief feedback"}]')
+            gradeLines.push('')
+            gradeLines.push('Questions to grade:')
+            
+            needAI.forEach(function(g: any, idx: number) {
+              gradeLines.push('--- Question ' + idx + ' (max ' + g.maxPoints + ' pts) ---')
+              gradeLines.push('Student answer: ' + g.answer)
+              gradeLines.push('Model answer: ' + g.modelAnswer)
+              gradeLines.push('')
+            })
+            
+            var aiModels = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']
+            var aiSuccess = false
+            for (var mi = 0; mi < aiModels.length; mi++) {
+              try {
+                var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + aiModels[mi] + ':generateContent?key=' + apiKey
+                var aiRes = await fetch(modelUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    contents: [{ parts: [{ text: gradeLines.join('\n') }] }],
+                    generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+                  })
+                })
+                if (aiRes.ok) {
+                  var aiData = await aiRes.json()
+                  var aiText = ''
+                  try { aiText = aiData.candidates[0].content.parts[0].text || '' } catch (e) {}
+                  var aiMatch = aiText.match(/\[[\s\S]*\]/)
+                  if (aiMatch) {
+                    var aiResults = JSON.parse(aiMatch[0])
+                    if (Array.isArray(aiResults)) {
+                      needAI.forEach(function(g: any, idx: number) {
+                        // Find this graded item in gradedWriting
+                        for (var gi = 0; gi < gradedWriting.length; gi++) {
+                          if (gradedWriting[gi] === g) {
+                            var aiRes2 = aiResults.find(function(r: any) { return r.index === idx })
+                            if (aiRes2) {
+                              var awarded = Math.min(Math.max(Math.round(aiRes2.awardedPoints || 0), 0), g.maxPoints)
+                              gradedWriting[gi].awardedPoints = awarded
+                              gradedWriting[gi].isCorrect = aiRes2.isCorrect === true || awarded >= (g.maxPoints * 0.5)
+                              gradedWriting[gi].feedback = aiRes2.feedback || (aiRes2.isCorrect ? 'Correct' : 'Incorrect')
+                              gradedWriting[gi].needsAI = false
+                              writingScore += awarded
+                            }
+                            break
+                          }
+                        }
+                      })
+                      aiSuccess = true
+                      break
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error('AI model', aiModels[mi], 'failed:', e.message)
+              }
+            }
+            aiGraded = aiSuccess
+          } catch (aiErr) {
+            console.error('AI grading error:', aiErr)
+          }
+        } else {
+          aiGraded = true // All were quick-matched
+        }
+      }
+      
+      // Mark any remaining pending items
+      for (var pi = 0; pi < gradedWriting.length; pi++) {
+        if (gradedWriting[pi] && gradedWriting[pi].needsAI && !aiGraded) {
+          gradedWriting[pi].isCorrect = false
+          gradedWriting[pi].feedback = 'Not graded (AI unavailable) - answer: ' + gradedWriting[pi].answer
+          gradedWriting[pi].needsAI = false
+        }
+        // Ensure modelAnswer and steps are always shown
+        if (!gradedWriting[pi].modelAnswer) {
+          gradedWriting[pi].modelAnswer = writingAnswers[pi] ? (writingAnswers[pi].modelAnswer || '') : ''
+        }
+      }
+      
+      score += writingScore
     }
 
     // Update the saved result with the final score (MCQ + writing)
