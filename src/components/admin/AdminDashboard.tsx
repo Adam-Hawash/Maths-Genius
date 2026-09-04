@@ -1822,20 +1822,32 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       if (formFile) { fd.append('file', formFile) }
       else if (formFileUrl.trim()) { fd.append('fileUrl', formFileUrl.trim()) }
       else { toast.error('ارفع ملف الأسئلة أولاً أو حط رابط'); setAiExtracting(false); setUploadMsg(''); return }
+      // Send answer key file if available
+      if (answerKeyFile) { fd.append('answerFile', answerKeyFile) }
+      else if (answerKeyUrl.trim()) { fd.append('answerUrl', answerKeyUrl.trim()) }
       fd.append('type', 'exam')
       fd.append('grade', formGrade)
       var ctrl = new AbortController()
-      var tmr = setTimeout(function() { ctrl.abort() }, 60000)
+      var tmr = setTimeout(function() { ctrl.abort() }, 180000)
       var res = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl.signal })
       clearTimeout(tmr)
       var data = await res.json()
       if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
-        var extracted = data.extracted.questions.map(function(q: any) { return { question: q.question || '', options: (q.options || ['','','','']).slice(0, 4), correct: q.correct || 0 } })
+        // Preserve question type (mcq/writing) and all fields
+        var extracted = data.extracted.questions.map(function(q: any) {
+          if (q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' }))) {
+            return { type: 'writing', question: q.question || '', options: [], correct: -1, points: q.points || 5, modelAnswer: q.modelAnswer || '', acceptedAnswers: q.acceptedAnswers || [] }
+          }
+          return { type: 'mcq', question: q.question || '', options: (q.options || ['','','','']).slice(0, 4), correct: q.correct || 0, points: q.points || 1, modelAnswer: q.modelAnswer || '' }
+        })
         setMcqQuestions(extracted)
-        toast.success('تم استخراج ' + extracted.length + ' سؤال بنجاح!')
-      } else { toast.error(data.error || 'لم يتم استخراج أسئلة') }
+        var stats = data.extracted.stats || {}
+        var msg = 'تم استخراج ' + extracted.length + ' سؤال بنجاح!'
+        if (stats.mcq || stats.writing) { msg += ' (' + (stats.mcq || 0) + ' اختيارات، ' + (stats.writing || 0) + ' مقالي)' }
+        toast.success(msg)
+      } else { toast.error(data.error || 'لم يتم استخراج أسئلة — تأكد من وجود GEMINI_API_KEY في الإعدادات') }
     } catch (err: any) {
-      if (err && err.name === 'AbortError') { toast.error('انتهت مهلة الاستخراج') }
+      if (err && err.name === 'AbortError') { toast.error('انتهت مهلة الاستخراج - حاول مرة أخرى') }
       else { toast.error('خطأ: ' + (err.message || '')) }
     }
     setAiExtracting(false)
