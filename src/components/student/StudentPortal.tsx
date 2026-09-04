@@ -1012,13 +1012,13 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                         var displayIdx = displayMcq.length + wi
                         var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 5
                         return (
-                          <div key={'writing-' + wi} className="space-y-2 rounded-lg p-2 border border-amber-500/20 bg-amber-50 dark:bg-amber-900/10">
-                            <p className="font-medium text-sm" style={{ textAlign: 'right' }}>
+                          <div key={'writing-' + wi} className="space-y-2 rounded-lg p-2 border border-amber-500/20 bg-amber-50 dark:bg-amber-900/10" dir="ltr">
+                            <p className="font-medium text-sm" style={{ textAlign: 'left' }}>
                               {hasMCQ ? displayMcq.length + wi + 1 : wi + 1}. {q.question || q.q}
-                              <span className="text-muted-foreground text-xs mr-2">({pts} نقطة)</span>
-                              <Badge variant="outline" className="text-[9px] mr-2 border-amber-500/40 text-amber-600">مقالي</Badge>
+                              <span className="text-muted-foreground text-xs ml-2">({pts} pts)</span>
+                              <Badge variant="outline" className="text-[9px] ml-2 border-amber-500/40 text-amber-600">Writing</Badge>
                             </p>
-                            <div dir="rtl">
+                            <div dir="ltr">
                               <MathKeyboard
                                 value={hwAnswers[hw.id]?.[displayIdx] || ''}
                                 onChange={function(val: string) {
