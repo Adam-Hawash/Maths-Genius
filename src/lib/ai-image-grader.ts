@@ -61,7 +61,14 @@ export async function gradeImageAnswer(params: {
   maxPoints: number
   error?: string
 }> {
-  var mediaId = params.mediaId
+  var rawMediaId = (params.mediaId || '').trim()
+  // If mediaId is a path like /api/files/ID, extract the ID segment
+  var mediaId = rawMediaId
+  if (rawMediaId.indexOf('/') >= 0) {
+    var lastSlash = rawMediaId.lastIndexOf('/')
+    mediaId = rawMediaId.substring(lastSlash + 1).trim()
+  }
+  mediaId = mediaId.replace(/^["']|["']$/g, '')
   var question = params.question || ''
   var modelAnswer = params.modelAnswer || ''
   var acceptedAnswers = Array.isArray(params.acceptedAnswers) ? params.acceptedAnswers : []
@@ -170,14 +177,27 @@ export async function gradeImageAnswer(params: {
   }
 }
 
-// Extract media IDs from a student answer that contains "[📷 صورة مرفقة: MEDIA_ID]" tags
+// Extract media IDs from a student answer that contains image attachment tags.
+// Supports two formats:
+//   1. [📷 صورة مرفقة: MEDIA_ID]              → returns ['MEDIA_ID']
+//   2. [📷 صورة مرفقة: /api/files/MEDIA_ID]   → returns ['MEDIA_ID']
+//   3. [📷 صورة مرفقة: /some/path/MEDIA_ID]   → returns ['MEDIA_ID']
 export function extractImageMediaIds(answerText: string): string[] {
   if (!answerText || typeof answerText !== 'string') return []
-  var matches = answerText.match(/\[📷 صورة مرفقة:\s*([^\]\s]+)\]/g) || []
+  var matches = answerText.match(/\[📷\s*صورة\s*مرفقة:\s*([^\]]+?)\]/g) || []
   var ids: string[] = []
   matches.forEach(function(m) {
-    var idMatch = m.match(/\[📷 صورة مرفقة:\s*([^\]\s]+)\]/)
-    if (idMatch && idMatch[1]) ids.push(idMatch[1])
+    var idMatch = m.match(/\[📷\s*صورة\s*مرفقة:\s*([^\]]+?)\]/)
+    if (idMatch && idMatch[1]) {
+      var raw = idMatch[1].trim()
+      // Strip surrounding quotes
+      raw = raw.replace(/^["']|["']$/g, '')
+      // If it's a path like /api/files/ID or anything/ID, take the last segment
+      var lastSlash = raw.lastIndexOf('/')
+      var mediaId = lastSlash >= 0 ? raw.substring(lastSlash + 1) : raw
+      mediaId = mediaId.trim()
+      if (mediaId) ids.push(mediaId)
+    }
   })
   return ids
 }

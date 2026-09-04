@@ -28,6 +28,18 @@ import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 
+// Extract image URL/path from student answer text that contains "[📷 صورة مرفقة: PATH]" tags.
+// Returns the first matched path or '' if none.
+function extractFirstImagePath(text: string): string {
+  if (!text || typeof text !== 'string') return ''
+  var m = text.match(/\[📷\s*صورة\s*مرفقة:\s*([^\]]+?)\]/)
+  if (m && m[1]) {
+    var path = m[1].trim().replace(/^["']|["']$/g, '')
+    return path
+  }
+  return ''
+}
+
 export function AdminDashboard() {
   const { adminTab, setAdminTab, logout, currentAdmin, setCurrentAdmin } = useAppStore()
   const [stats, setStats] = useState<Stats | null>(null)
@@ -335,10 +347,10 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
     setStudentProgress(null)
   }
 
-  const handleAction = async (id: string, status: 'approved' | 'paid') => {
+  const handleAction = async (id: string, status: 'approved' | 'paid' | 'rejected') => {
     try {
       await fetch(`/api/students/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
-      toast.success(status === 'approved' ? 'تم قبول الطالب - مجاني' : 'تم تحويل الطالب لبفلوس')
+      toast.success(status === 'approved' ? 'تم قبول الطالب - مجاني' : status === 'paid' ? 'تم تحويل الطالب لبفلوس' : 'تم رفض الطالب - مش هيدخل على المنصة تاني')
       loadStudents(false); onStatsRefresh()
     } catch { toast.error('خطأ في تحديث حالة الطالب') }
   }
@@ -348,8 +360,8 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
     catch { toast.error('خطأ في حذف الطالب') }
   }
 
-  const statusColors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', paid: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }
-  const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول (مجاني)', paid: 'بفلوس' }
+  const statusColors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', paid: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', refused: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
+  const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول (مجاني)', paid: 'بفلوس', rejected: 'مرفوض', refused: 'مرفوض' }
 
   // Student Details Panel
   if (selectedStudentId && studentProgress) {
@@ -477,12 +489,22 @@ function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                   {s.status === 'pending' && (<>
                     <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="مقبول - مجاني"><Check className="h-4 w-4" /></Button>
                     <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleAction(s.id, 'paid')} title="بفلوس"><span className="text-sm font-bold">$</span></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')} title="رفض الطالب - مش هيدخل على المنصة"><X className="h-4 w-4" /></Button>
                   </>)}
                   {s.status === 'approved' && (
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleAction(s.id, 'paid')} title="تحويل لبفلوس"><span className="text-sm font-bold">$</span></Button>
+                    <>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleAction(s.id, 'paid')} title="تحويل لبفلوس"><span className="text-sm font-bold">$</span></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')} title="رفض الطالب"><X className="h-4 w-4" /></Button>
+                    </>
                   )}
                   {s.status === 'paid' && (
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="تحويل لمجاني"><Check className="h-4 w-4" /></Button>
+                    <>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="تحويل لمجاني"><Check className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')} title="رفض الطالب"><X className="h-4 w-4" /></Button>
+                    </>
+                  )}
+                  {s.status === 'rejected' && (
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="إلغاء الرفض وقبول الطالب"><Check className="h-4 w-4" /></Button>
                   )}
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(s.id)} title="حذف من النظام"><Trash2 className="h-4 w-4" /></Button>
                 </div>
@@ -1157,6 +1179,19 @@ function ExamTrackingPanel() {
                                               <div className="space-y-1 p-2 rounded bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/40">
                                                 <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">إجابة الطالب:</p>
                                                 <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
+                                                {/* Image preview */}
+                                                {extractFirstImagePath(aq.studentAnswer) && (
+                                                  <div className="mt-1">
+                                                    <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">📷 الصورة المرفقة:</p>
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                    <img
+                                                      src={extractFirstImagePath(aq.studentAnswer)}
+                                                      alt="Student answer image"
+                                                      className="max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 object-contain"
+                                                      onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
+                                                    />
+                                                  </div>
+                                                )}
                                                 {/* AI extracted answer from image */}
                                                 {aq.aiExtractedAnswer && (
                                                   <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
@@ -1734,6 +1769,19 @@ function MyStudentsPanel() {
                                       <>
                                         <p className="text-[9px] font-semibold text-muted-foreground">إجابة الطالب:</p>
                                         <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
+                                        {/* Image preview */}
+                                        {extractFirstImagePath(aq.studentAnswer) && (
+                                          <div className="mt-1">
+                                            <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">📷 الصورة المرفقة:</p>
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                              src={extractFirstImagePath(aq.studentAnswer)}
+                                              alt="Student answer image"
+                                              className="max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 object-contain"
+                                              onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
+                                            />
+                                          </div>
+                                        )}
                                         {aq.aiExtractedAnswer && (
                                           <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
                                             <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
@@ -1824,6 +1872,19 @@ function MyStudentsPanel() {
                                       <>
                                         <p className="text-[9px] font-semibold text-muted-foreground">إجابة الطالب:</p>
                                         <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
+                                        {/* Image preview */}
+                                        {extractFirstImagePath(aq.studentAnswer) && (
+                                          <div className="mt-1">
+                                            <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">📷 الصورة المرفقة:</p>
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                              src={extractFirstImagePath(aq.studentAnswer)}
+                                              alt="Student answer image"
+                                              className="max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 object-contain"
+                                              onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
+                                            />
+                                          </div>
+                                        )}
                                         {aq.aiExtractedAnswer && (
                                           <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
                                             <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>

@@ -913,17 +913,40 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                         {writingAns && (
                           <div className="space-y-1 p-2 rounded-md bg-muted/30 border border-border/30">
                             <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="ltr">Your answer: {writingAns.answer || '(empty)'}</p>
+                            {/* Image preview */}
+                            {(function() {
+                              var m = (writingAns.answer || '').match(/\[📷\s*صورة\s*مرفقة:\s*([^\]]+?)\]/)
+                              if (m && m[1]) {
+                                var path = m[1].trim().replace(/^["']|["']$/g, '')
+                                return (
+                                  <div className="mt-1">
+                                    <p className="text-[10px] font-semibold text-muted-foreground mb-0.5">📷 الصورة المرفقة:</p>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={path}
+                                      alt="Your answer image"
+                                      className="max-w-[200px] max-h-[150px] rounded-md border border-border/50 object-contain"
+                                      onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
+                                    />
+                                  </div>
+                                )
+                              }
+                              return null
+                            })()}
                             {/* AI extracted answer from image */}
                             {writingAns.aiExtractedAnswer && (
                               <div className="mt-2 p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
                                 <p className="text-[10px] font-bold text-blue-700 dark:text-blue-400 mb-1">🤖 AI قرأ إجابتك من الصورة:</p>
                                 <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="ltr">{writingAns.aiExtractedAnswer}</p>
+                                {writingAns.aiFeedback && (
+                                  <p className="text-[10px] text-muted-foreground mt-1">{writingAns.aiFeedback}</p>
+                                )}
                               </div>
                             )}
                             {writingAns.modelAnswer && (
                               <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="ltr">Correct answer: {writingAns.modelAnswer}</p>
                             )}
-                            {writingAns.feedback && (
+                            {writingAns.feedback && !writingAns.aiExtractedAnswer && (
                               <p className="text-[10px] text-muted-foreground" dir="ltr">{writingAns.feedback}</p>
                             )}
                             {writingAns.awardedPoints !== undefined && (

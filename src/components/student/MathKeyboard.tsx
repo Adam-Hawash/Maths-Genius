@@ -403,19 +403,35 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
       </div>
 
       {uploadedImage && (
-        <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/40">
-          <ImageIcon className="h-4 w-4 text-emerald-600" />
-          <span className="text-xs text-emerald-700 dark:text-emerald-300">تم رفع الصورة بنجاح - هتظهر للأستاذ في التصحيح</span>
-          <button
-            type="button"
-            onClick={() => {
-              setUploadedImage('')
-              if (onImageUpload) onImageUpload('')
-            }}
-            className="mr-auto text-xs text-red-500 hover:underline"
-          >
-            حذف
-          </button>
+        <div className="mt-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/40 space-y-2">
+          <div className="flex items-center gap-2">
+            <ImageIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span className="text-xs text-emerald-700 dark:text-emerald-300">تم رفع الصورة - الـ AI هيمر عليها ويستخرج إجابتك</span>
+            <button
+              type="button"
+              onClick={() => {
+                setUploadedImage('')
+                if (onImageUpload) onImageUpload('')
+              }}
+              className="mr-auto text-xs text-red-500 hover:underline"
+            >
+              حذف
+            </button>
+          </div>
+          {/* Image preview */}
+          <div className="relative w-full max-w-[200px] max-h-[150px] rounded-md overflow-hidden border border-emerald-200 dark:border-emerald-900/40">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={uploadedImage}
+              alt="Uploaded answer"
+              className="w-full h-auto max-h-[150px] object-contain"
+              onError={function(e) {
+                // Hide on error
+                var target = e.target as HTMLImageElement
+                if (target.parentElement) target.parentElement.style.display = 'none'
+              }}
+            />
+          </div>
         </div>
       )}
 
