@@ -794,7 +794,12 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                     {qType === 'mcq' ? (
                       <div className="space-y-1 pl-8" dir="ltr">
                         {wrongQ && wrongQ.studentAnswer === 'لم يتم الإجابة' && (
-                          <p className="text-xs text-gray-500">Your answer: (not answered)</p>
+                          <>
+                            <p className="text-xs text-gray-500">Your answer: (not answered)</p>
+                            {correctAnswer && (
+                              <p className="text-xs text-emerald-600">Correct answer: <span dir="ltr">{correctAnswer}</span></p>
+                            )}
+                          </>
                         )}
                         {wrongQ && wrongQ.studentAnswer !== 'لم يتم الإجابة' && (
                           <>
@@ -823,7 +828,12 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                           </div>
                         )}
                         {!writingAns && (
-                          <p className="text-xs text-gray-500">Your answer: (empty - not answered)</p>
+                          <>
+                            <p className="text-xs text-gray-500">Your answer: (empty - not answered)</p>
+                            {q.modelAnswer && (
+                              <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="ltr">Correct answer: {q.modelAnswer}</p>
+                            )}
+                          </>
                         )}
                       </div>
                     )}

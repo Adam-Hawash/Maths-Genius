@@ -124,6 +124,14 @@ export function Footer() {
             <Heart className="h-3 w-3 text-red-400" />
           </a>
         </div>
+        
+        {/* Powered by Prime Developer */}
+        <div className="mt-6 pt-4 border-t border-border/40 text-center">
+          <p className="text-xs text-white/70">
+            Powered by{' '}
+            <span className="font-bold text-yellow-400">Prime Developer</span>
+          </p>
+        </div>
       </div>
     </footer>
   )
