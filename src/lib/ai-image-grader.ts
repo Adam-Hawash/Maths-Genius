@@ -11,19 +11,25 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
   for (var mi = 0; mi < MODELS.length; mi++) {
     try {
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + apiKey
+      // Per-request timeout (10s for first model, 15s for fallbacks)
+      var controller = new AbortController()
+      var timeoutMs = mi === 0 ? 10000 : 15000
+      var timeoutHandle = setTimeout(function() { controller.abort() }, timeoutMs)
       var geminiRes = await fetch(modelUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: parts }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
-        })
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
+        }),
+        signal: controller.signal,
       })
+      clearTimeout(timeoutHandle)
       if (geminiRes.ok) {
         var data = await geminiRes.json()
         var text = ''
         try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
-        return { ok: true, text: text }
+        if (text) return { ok: true, text: text }
       }
       var errBody = ''
       try { errBody = await geminiRes.text() } catch (e) {}

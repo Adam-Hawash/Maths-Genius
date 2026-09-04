@@ -58,11 +58,14 @@ export function AIAssistant() {
         }
       } catch (e) {}
 
-      var res = await fetch('/api/ai/assistant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg, context: { page: page, studentId: studentId } }),
-      })
+      var res = await Promise.race([
+        fetch('/api/ai/assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg, context: { page: page, studentId: studentId } }),
+        }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000)),
+      ])
       var data = await res.json()
       var reply = data.reply || 'مش قادر أرد دلوقتي. حاول تاني 🙏'
       setMessages(function(prev) {

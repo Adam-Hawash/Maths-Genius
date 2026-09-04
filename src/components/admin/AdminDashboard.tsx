@@ -40,10 +40,45 @@ function extractFirstImagePath(text: string): string {
   return ''
 }
 
+// Global image modal helper - opens an overlay showing the full image
+function ImageModal({ imageSrc, onClose }: { imageSrc: string | null; onClose: () => void }) {
+  if (!imageSrc) return null
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80"
+      onClick={onClose}
+    >
+      <div className="relative max-w-[90vw] max-h-[90vh]" onClick={function(e) { e.stopPropagation() }}>
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -top-2 -right-2 z-10 h-9 w-9 rounded-full bg-red-500 text-white hover:bg-red-600 flex items-center justify-center shadow-lg"
+          aria-label="إغلاق"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageSrc}
+          alt="Student answer"
+          className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+          onError={function(e) {
+            var t = e.currentTarget as HTMLImageElement
+            if (t.parentElement) {
+              t.parentElement.innerHTML = '<div class="bg-white text-black p-8 rounded-lg text-center">تعذر تحميل الصورة</div>'
+            }
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function AdminDashboard() {
   const { adminTab, setAdminTab, logout, currentAdmin, setCurrentAdmin } = useAppStore()
   const [stats, setStats] = useState<Stats | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [imageModalSrc, setImageModalSrc] = useState<string | null>(null)
   const [settingsOldPass, setSettingsOldPass] = useState('')
   const [settingsEmail, setSettingsEmail] = useState('')
   const [settingsNewPass, setSettingsNewPass] = useState('')
@@ -155,8 +190,8 @@ export function AdminDashboard() {
             <TabsTrigger value="ai-extract" className="text-xs sm:text-sm gap-1 text-purple-600 dark:text-purple-400"><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">استخراج AI</span></TabsTrigger>
           </TabsList>
 
-          <TabsContent value="students"><StudentsManager onStatsRefresh={fetchStats} /></TabsContent>
-          <TabsContent value="my-students"><MyStudentsPanel /></TabsContent>
+          <TabsContent value="students"><StudentsManager onStatsRefresh={fetchStats} onViewImage={setImageModalSrc} /></TabsContent>
+          <TabsContent value="my-students"><MyStudentsPanel onViewImage={setImageModalSrc} /></TabsContent>
           <TabsContent value="videos"><VideoManager onStatsRefresh={fetchStats} /></TabsContent>
           <TabsContent value="homework">
             <ContentManager<Homework> title="إدارة الواجبات | Homework" apiPath="/api/homework" itemName="homework"
@@ -164,7 +199,7 @@ export function AdminDashboard() {
               renderTitle={(item) => item.title} renderSubtitle={(item) => item.content?.substring(0, 80) || (item.filePath ? `📎 ${item.fileType}` : '')}
               supportFileUpload fileCategory="homework" acceptedTypes=".pdf,.doc,.docx,image/*" supportAnswerKey supportThumbnail supportMCQ onRefresh={fetchStats} />
           </TabsContent>
-          <TabsContent value="exams"><ExamTrackingPanel /></TabsContent>
+          <TabsContent value="exams"><ExamTrackingPanel onViewImage={setImageModalSrc} /></TabsContent>
           <TabsContent value="announcements">
             <ContentManager<Announcement> title="إدارة الإعلانات | Announcements" apiPath="/api/announcements" itemName="announcements"
               fields={{ title: { label: 'عنوان | Title', type: 'text' }, content: { label: 'المحتوى | Content', type: 'textarea' } }}
@@ -290,6 +325,8 @@ export function AdminDashboard() {
           </div>
         )}
       </div>
+      {/* Image modal for viewing student answer images */}
+      <ImageModal imageSrc={imageModalSrc} onClose={function() { setImageModalSrc(null) }} />
     </div>
   )
 }
@@ -307,7 +344,7 @@ function StatCard({ icon: Icon, label, value, color }: { icon: any; label: strin
 }
 
 /* ========== STUDENTS MANAGER ========== */
-function StudentsManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () => void; onViewImage: (src: string) => void }) {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'paid'>('pending')
@@ -793,7 +830,7 @@ interface MCQQuestion {
   points: number
 }
 
-function ExamTrackingPanel() {
+function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => void }) {
   const [exams, setExams] = useState<Exam[]>([])
   const [selectedExam, setSelectedExam] = useState<string>('')
   const [results, setResults] = useState<ExamResult[]>([])
@@ -1179,17 +1216,23 @@ function ExamTrackingPanel() {
                                               <div className="space-y-1 p-2 rounded bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/40">
                                                 <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">إجابة الطالب:</p>
                                                 <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
-                                                {/* Image preview */}
-                                                {extractFirstImagePath(aq.studentAnswer) && (
+                                                {/* Image preview - click to enlarge */}
+                                                {extractFirstImagePath(aq.studentAnswer) && onViewImage && (
                                                   <div className="mt-1">
-                                                    <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">📷 الصورة المرفقة:</p>
-                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                    <img
-                                                      src={extractFirstImagePath(aq.studentAnswer)}
-                                                      alt="Student answer image"
-                                                      className="max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 object-contain"
-                                                      onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
-                                                    />
+                                                    <button
+                                                      type="button"
+                                                      onClick={function() { onViewImage(extractFirstImagePath(aq.studentAnswer)) }}
+                                                      className="group relative block max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 overflow-hidden hover:border-amber-500 transition-colors cursor-pointer"
+                                                    >
+                                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                      <img
+                                                        src={extractFirstImagePath(aq.studentAnswer)}
+                                                        alt="Student answer image - click to enlarge"
+                                                        className="max-w-[250px] max-h-[200px] object-contain"
+                                                        onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
+                                                      />
+                                                      <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">🔍 اعرض الصورة</span>
+                                                    </button>
                                                   </div>
                                                 )}
                                                 {/* AI extracted answer from image */}
@@ -1539,7 +1582,7 @@ interface StudentAnalytics {
   avgExamScore: number; activityScore: number
 }
 
-function MyStudentsPanel() {
+function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void }) {
   const [grade, setGrade] = useState('')
   const [students, setStudents] = useState<StudentAnalytics[]>([])
   const [summary, setSummary] = useState<any>(null)
@@ -1769,17 +1812,23 @@ function MyStudentsPanel() {
                                       <>
                                         <p className="text-[9px] font-semibold text-muted-foreground">إجابة الطالب:</p>
                                         <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
-                                        {/* Image preview */}
-                                        {extractFirstImagePath(aq.studentAnswer) && (
+                                        {/* Image preview - click to enlarge */}
+                                        {extractFirstImagePath(aq.studentAnswer) && onViewImage && (
                                           <div className="mt-1">
-                                            <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">📷 الصورة المرفقة:</p>
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img
-                                              src={extractFirstImagePath(aq.studentAnswer)}
-                                              alt="Student answer image"
-                                              className="max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 object-contain"
-                                              onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
-                                            />
+                                            <button
+                                              type="button"
+                                              onClick={function() { onViewImage(extractFirstImagePath(aq.studentAnswer)) }}
+                                              className="group relative block max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 overflow-hidden hover:border-amber-500 transition-colors cursor-pointer"
+                                            >
+                                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                                              <img
+                                                src={extractFirstImagePath(aq.studentAnswer)}
+                                                alt="Student answer image - click to enlarge"
+                                                className="max-w-[250px] max-h-[200px] object-contain"
+                                                onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
+                                              />
+                                              <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">🔍 اعرض الصورة</span>
+                                            </button>
                                           </div>
                                         )}
                                         {aq.aiExtractedAnswer && (
@@ -1872,17 +1921,23 @@ function MyStudentsPanel() {
                                       <>
                                         <p className="text-[9px] font-semibold text-muted-foreground">إجابة الطالب:</p>
                                         <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
-                                        {/* Image preview */}
-                                        {extractFirstImagePath(aq.studentAnswer) && (
+                                        {/* Image preview - click to enlarge */}
+                                        {extractFirstImagePath(aq.studentAnswer) && onViewImage && (
                                           <div className="mt-1">
-                                            <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">📷 الصورة المرفقة:</p>
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img
-                                              src={extractFirstImagePath(aq.studentAnswer)}
-                                              alt="Student answer image"
-                                              className="max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 object-contain"
-                                              onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
-                                            />
+                                            <button
+                                              type="button"
+                                              onClick={function() { onViewImage(extractFirstImagePath(aq.studentAnswer)) }}
+                                              className="group relative block max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 overflow-hidden hover:border-amber-500 transition-colors cursor-pointer"
+                                            >
+                                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                                              <img
+                                                src={extractFirstImagePath(aq.studentAnswer)}
+                                                alt="Student answer image - click to enlarge"
+                                                className="max-w-[250px] max-h-[200px] object-contain"
+                                                onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
+                                              />
+                                              <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">🔍 اعرض الصورة</span>
+                                            </button>
                                           </div>
                                         )}
                                         {aq.aiExtractedAnswer && (
