@@ -2,6 +2,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+// Ensure tables exist before querying
+async function ensureTables() {
+  try {
+    await db.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS HomeworkResult (id TEXT PRIMARY KEY, homeworkId TEXT NOT NULL, studentId TEXT NOT NULL, score REAL DEFAULT 0, maxScore REAL DEFAULT 100, answers TEXT DEFAULT '', submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+    await db.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS ExamResult (id TEXT PRIMARY KEY, examId TEXT NOT NULL, studentId TEXT NOT NULL, score REAL DEFAULT 0, maxScore REAL DEFAULT 100, answers TEXT DEFAULT '', submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+    try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN answers TEXT DEFAULT ""') } catch(e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN answers TEXT DEFAULT ""') } catch(e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP') } catch(e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP') } catch(e) {}
+  } catch (e) {
+    console.error('Ensure tables error:', e)
+  }
+}
+
 // GET /api/students/[id]/progress - Get student's video progress + exam results + homework results with wrong questions
 export async function GET(
   request: NextRequest,
@@ -9,6 +23,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+
+    // Ensure tables exist
+    await ensureTables()
 
     // Use raw SQL for student lookup (Prisma schema out of sync - isPaidAccess column missing in DB)
     var student: any = null
