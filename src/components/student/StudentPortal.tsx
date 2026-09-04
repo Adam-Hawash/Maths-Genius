@@ -654,6 +654,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
   const [blockedHwId, setBlockedHwId] = useState<string | null>(null)
   const [hwResults, setHwResults] = useState<Record<string, { score: number; maxScore: number }>>({})
   const [hwWrongQuestions, setHwWrongQuestions] = useState<Record<string, { question: string; studentAnswer: string; correctAnswer: string }[]>>({})
+  const [hwAllQuestions, setHwAllQuestions] = useState<Record<string, any[]>>({})
+  const [hwWritingAnswers, setHwWritingAnswers] = useState<Record<string, any[]>>({})
   const hwShuffleMaps = useRef<Record<string, number[]>>({})
 
   useEffect(() => {
@@ -728,10 +730,12 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     )
   }
 
-  // SUCCESS SCREEN — just submitted, show score + wrong answers
+  // SUCCESS SCREEN — just submitted, show score + ALL questions review
   if (hwSubmitted && submittedHwId) {
     var sScore = hwResults[submittedHwId]
     var sWrong = hwWrongQuestions[submittedHwId] || []
+    var sAllQuestions = hwAllQuestions[submittedHwId] || []
+    var sWritingAnswers = hwWritingAnswers[submittedHwId] || []
     return (
       <div className="space-y-4">
         <div className="flex flex-col items-center justify-center py-10 px-6 space-y-4">
@@ -745,7 +749,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
             setHwSubmitted(false); setSubmittedHwId(null); setExpandedHw(null)
           }} className="mt-2">العودة إلى قائمة الواجبات</Button>
         </div>
-        {/* Score + wrong answers */}
+        {/* Score */}
         {sScore && (
           <div className="mx-4">
             <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
@@ -754,28 +758,66 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                 <p className="font-bold text-sm text-emerald-700 dark:text-emerald-400">النتيجة: {sScore.score}/{sScore.maxScore}</p>
               </div>
             </div>
-            {sWrong.length > 0 && (
-              <div className="mt-3 space-y-2">
-                <p className="text-sm font-semibold text-red-600">الإجابات الخاطئة ({sWrong.length}):</p>
-                {sWrong.map(function(wq, wi) {
-                  return (
-                    <Card key={wi} className="border-red-200 dark:border-red-900/40">
-                      <CardContent className="p-3 space-y-2">
-                        <p className="text-sm font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wi + 1}. {wq.question}</p>
-                        <div className="space-y-1">
-                          <p className="text-xs text-red-600">إجابتك: <span dir="ltr">{wq.studentAnswer}</span></p>
-                          <p className="text-xs text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-              </div>
-            )}
-            {sWrong.length === 0 && (
-              <p className="mt-3 text-sm text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
-            )}
           </div>
+        )}
+        {/* All Questions Review */}
+        {sAllQuestions.length > 0 && (
+          <div className="mx-4 space-y-3">
+            <p className="text-sm font-semibold text-foreground">مراجعة الأسئلة:</p>
+            {sAllQuestions.map(function(q: any, qi: number) {
+              var qType = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' })) ? 'writing' : 'mcq'
+              var isWrong = sWrong.some(function(w: any) { return w.question === (q.question || q.q) })
+              var wrongQ = sWrong.find(function(w: any) { return w.question === (q.question || q.q) })
+              var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+              var correctAnswer = qType === 'mcq' && Array.isArray(q.options) ? (String.fromCharCode(65 + correctIdx) + ') ' + q.options[correctIdx]) : ''
+              return (
+                <Card key={qi} className={isWrong ? 'border-red-200 dark:border-red-900/40' : 'border-emerald-200 dark:border-emerald-900/40'}>
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <span className={"shrink-0 mt-0.5 text-xs font-bold px-2 py-0.5 rounded-full " + (isWrong ? 'bg-red-500/10 text-red-600' : 'bg-emerald-500/10 text-emerald-600')}>
+                        {isWrong ? 'غلط' : 'صح'}
+                      </span>
+                      <p className="text-sm font-medium flex-1" dir="ltr" style={{ textAlign: 'left' }}>{qi + 1}. {q.question || q.q}</p>
+                    </div>
+                    {qType === 'mcq' ? (
+                      <div className="space-y-1 pl-8">
+                        {wrongQ && (
+                          <>
+                            <p className="text-xs text-red-600">إجابتك: <span dir="ltr">{wrongQ.studentAnswer}</span></p>
+                            <p className="text-xs text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wrongQ.correctAnswer}</span></p>
+                          </>
+                        )}
+                        {!wrongQ && correctAnswer && (
+                          <p className="text-xs text-emerald-600">إجابتك صحيحة: <span dir="ltr">{correctAnswer}</span></p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-1 pl-8">
+                        {sWritingAnswers.map(function(wa: any, wai: number) {
+                          if (wa.question !== (q.question || q.q)) return null
+                          return (
+                            <div key={wai} className="space-y-1 p-2 rounded-md bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+                              <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">سؤال مقالي:</p>
+                              <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="auto">إجابتك: {wa.answer || '(فارغ)'}</p>
+                              {wa.modelAnswer && (
+                                <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="auto">الإجابة النموذجية: {wa.modelAnswer}</p>
+                              )}
+                              {wa.awardedPoints !== undefined && (
+                                <p className="text-[10px] text-muted-foreground">الدرجة: {wa.awardedPoints}/{wa.maxPoints || wa.points}</p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+        {sAllQuestions.length === 0 && sWrong.length === 0 && (
+          <p className="mx-4 text-sm text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
         )}
       </div>
     )
@@ -1022,6 +1064,12 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                           setHwResults(function(prev) { return { ...prev, [hw.id]: { score: data.result.score, maxScore: data.result.maxScore } } })
                           if (data.result.wrongQuestions && data.result.wrongQuestions.length > 0) {
                             setHwWrongQuestions(function(prev) { return { ...prev, [hw.id]: data.result.wrongQuestions } })
+                          }
+                          // Save all questions for review
+                          setHwAllQuestions(function(prev) { return { ...prev, [hw.id]: allQuestions } })
+                          // Save writing answers if graded
+                          if (data.result.writingAnswers && data.result.writingAnswers.length > 0) {
+                            setHwWritingAnswers(function(prev) { return { ...prev, [hw.id]: data.result.writingAnswers } })
                           }
                         }
                         onHwSubmitted(hw.id)
