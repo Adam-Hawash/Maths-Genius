@@ -724,7 +724,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
               </div>
             )}
             {bWrong.length === 0 && (
-              <p className="mt-3 text-sm text-muted-foreground">تم تقديم إجاباتك بنجاح</p>
+              <p className="mt-3 text-sm text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
             )}
           </div>
         )}
@@ -844,7 +844,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
           </div>
         )}
         {sDisplayQuestions.length === 0 && sWrong.length === 0 && (
-          <p className="mx-4 text-sm text-muted-foreground">تم تقديم إجاباتك بنجاح</p>
+          <p className="mx-4 text-sm text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
         )}
       </div>
     )

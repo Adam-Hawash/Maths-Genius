@@ -60,24 +60,42 @@ export async function GET(request: NextRequest) {
       where: { studentId: { in: studentIds } },
     })
 
-    // Get all videos for this grade
+    // Get all videos for this grade (with fuzzy matching)
     const gradeVideos = await db.video.findMany({
-      where: { grade },
+      where: {
+        OR: [
+          { grade: grade },
+          { grade: normalizedGrade },
+          { grade: { contains: normalizedGrade.split(' ')[0] } },
+        ]
+      },
       select: { id: true, title: true },
     })
     const totalGradeVideos = gradeVideos.length
     const gradeVideoIds = new Set(gradeVideos.map(v => v.id))
 
-    // Get all exams for this grade
+    // Get all exams for this grade (with fuzzy matching)
     const gradeExams = await db.exam.findMany({
-      where: { grade },
+      where: {
+        OR: [
+          { grade: grade },
+          { grade: normalizedGrade },
+          { grade: { contains: normalizedGrade.split(' ')[0] } },
+        ]
+      },
       select: { id: true, title: true, passScore: true },
     })
     const totalGradeExams = gradeExams.length
 
-    // Get all homework for this grade
+    // Get all homework for this grade (with fuzzy matching)
     const gradeHomework = await db.homework.findMany({
-      where: { grade },
+      where: {
+        OR: [
+          { grade: grade },
+          { grade: normalizedGrade },
+          { grade: { contains: normalizedGrade.split(' ')[0] } },
+        ]
+      },
       select: { id: true, title: true },
     })
     const totalGradeHomework = gradeHomework.length
