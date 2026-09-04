@@ -207,3 +207,111 @@ export function extractImageMediaIds(answerText: string): string[] {
   })
   return ids
 }
+
+// ============= AI TEXT GRADING =============
+// Grades a writing answer (no image) against the model answer using Gemini.
+// Returns: { isCorrect, awardedPoints, feedback } or null if AI fails.
+export async function gradeTextAnswer(params: {
+  question: string
+  studentAnswer: string
+  modelAnswer: string
+  acceptedAnswers?: string[]
+  maxPoints?: number
+}): Promise<{
+  extractedAnswer: string
+  isCorrect: boolean
+  feedback: string
+  awardedPoints: number
+  maxPoints: number
+} | null> {
+  var question = params.question || ''
+  var studentAnswer = params.studentAnswer || ''
+  var modelAnswer = params.modelAnswer || ''
+  var acceptedAnswers = Array.isArray(params.acceptedAnswers) ? params.acceptedAnswers : []
+  var maxPoints = typeof params.maxPoints === 'number' ? params.maxPoints : 5
+
+  if (!studentAnswer || !modelAnswer) return null
+
+  var apiKey = process.env.GEMINI_API_KEY || ''
+  if (!apiKey) return null
+
+  var acceptedStr = acceptedAnswers.length > 0
+    ? '\nإجابات مقبولة أخرى:\n' + acceptedAnswers.map(function(a, i) { return (i + 1) + '. ' + a }).join('\n')
+    : ''
+
+  var prompt = 'أنت معلم رياضيات محترم. صحح إجابة الطالب ده السؤال:\n\n'
+  prompt += 'السؤال: ' + question + '\n\n'
+  prompt += 'إجابة الطالب: ' + studentAnswer + '\n\n'
+  prompt += 'الإجابة النموذجية: ' + modelAnswer + acceptedStr + '\n\n'
+  prompt += 'المطلوب:\n'
+  prompt += '1. قارن الإجابة النهائية للطالب بالإجابة النموذجية\n'
+  prompt += '2. لو الإجابة النهائية صح، اعتبرها صحيحة навn لو الخطوات ناقصة\n'
+  prompt += '3. لو الإجابة النهائية غلط، اعتبرها خاطئة\n\n'
+  prompt += 'أرجع JSON فقط:\n'
+  prompt += '{\n'
+  prompt += '  "isCorrect": true أو false,\n'
+  prompt += '  "feedback": "تعليق قصير بالعربية - صح أو غلط وليه"\n'
+  prompt += '}\n'
+
+  var parts = [{ text: prompt }]
+  var result = await callGeminiShared(apiKey, parts)
+  if (!result.ok || !result.text) return null
+
+  var parsed = parseAIJsonShared(result.text)
+  if (!parsed) return null
+
+  var isCorrect = parsed.isCorrect === true
+  return {
+    extractedAnswer: studentAnswer,
+    isCorrect: isCorrect,
+    feedback: parsed.feedback || (isCorrect ? 'إجابة صحيحة' : 'إجابة خاطئة'),
+    awardedPoints: isCorrect ? maxPoints : 0,
+    maxPoints: maxPoints,
+  }
+}
+
+// Shared helpers (re-used by gradeImageAnswer + gradeTextAnswer)
+async function callGeminiShared(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
+  var lastError = ''
+  for (var mi = 0; mi < MODELS.length; mi++) {
+    try {
+      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + apiKey
+      var controller = new AbortController()
+      var timeoutMs = mi === 0 ? 15000 : 20000
+      var timeoutHandle = setTimeout(function() { controller.abort() }, timeoutMs)
+      var geminiRes = await fetch(modelUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: parts }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
+        }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutHandle)
+      if (geminiRes.ok) {
+        var data = await geminiRes.json()
+        var text = ''
+        try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
+        if (text) return { ok: true, text: text }
+      }
+      var errBody = ''
+      try { errBody = await geminiRes.text() } catch (e) {}
+      lastError = MODELS[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 200)
+    } catch (e) {
+      lastError = MODELS[mi] + ': ' + (e.message || '')
+    }
+  }
+  return { ok: false, error: lastError }
+}
+
+function parseAIJsonShared(text: string): any | null {
+  if (!text || !text.trim()) return null
+  var jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) return null
+  try {
+    return JSON.parse(jsonMatch[0])
+  } catch (e) {
+    return null
+  }
+}
