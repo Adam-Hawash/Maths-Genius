@@ -25,7 +25,6 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
   // gemini-3.6-flash is requested first (will be used when Google releases it).
   // gemini-1.5-flash and gemini-1.5-pro are deprecated - replaced with -latest variants.
   var allModels = [
-    'gemini-3.6-flash',
     'gemini-2.0-flash',
     'gemini-2.5-flash-preview-05-20',
     'gemini-flash-latest',
