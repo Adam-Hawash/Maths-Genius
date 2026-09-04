@@ -314,7 +314,45 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full space-y-2">
+      {/* Toolbar above textarea - not overlapping */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
+          title="رفع صورة الحل"
+        >
+          {uploading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <ImageIcon className="h-3.5 w-3.5" />
+          )}
+          <span>{uploading ? 'جاري الرفع...' : 'رفع صورة'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowKeyboard(!showKeyboard)}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+            showKeyboard
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+          }`}
+          title="آلة حاسبة للرموز الرياضية"
+        >
+          <Calculator className="h-3.5 w-3.5" />
+          <span>الرموز الرياضية</span>
+        </button>
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImageUpload}
+      />
+      {/* Textarea below the toolbar */}
       <div className="relative">
         <textarea
           ref={textareaRef}
@@ -324,42 +362,6 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
           rows={rows}
           className="w-full min-h-[120px] p-3 text-sm rounded-lg border border-border bg-background text-foreground resize-y font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
           dir="auto"
-        />
-        <div className="absolute top-2 left-2 flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
-            title="رفع صورة الحل"
-          >
-            {uploading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <ImageIcon className="h-3.5 w-3.5" />
-            )}
-            <span>{uploading ? 'جاري الرفع...' : 'صورة'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowKeyboard(!showKeyboard)}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-              showKeyboard
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-            title="آلة حاسبة للرموز الرياضية"
-          >
-            <Calculator className="h-3.5 w-3.5" />
-            <span>الرموز</span>
-          </button>
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleImageUpload}
         />
       </div>
 
