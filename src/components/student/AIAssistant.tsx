@@ -14,7 +14,7 @@ export function AIAssistant() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'أهلاً بيكي 👋 أنا المساعد الذكي بتاع المنصة. اسألني عن أي حاجة - الواجبات، الامتحانات، الدروس، أو أي مشكلة تقنية!',
+      content: 'أهلاً بك 👋 أنا المساعد الذكي بتاع المنصة. اسألني عن أي حاجة - الواجبات، الامتحانات، الدروس، أو أي مشكلة تقنية!',
     },
   ])
   const [input, setInput] = useState('')
@@ -82,7 +82,7 @@ export function AIAssistant() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="fixed bottom-5 left-5 z-50 h-14 w-14 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-lg hover:scale-105 transition-transform flex items-center justify-center"
+        className="fixed bottom-5 right-5 z-50 h-14 w-14 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-lg hover:scale-105 transition-transform flex items-center justify-center"
         style={{ boxShadow: '0 4px 20px rgba(139, 92, 246, 0.4)' }}
         title="مساعد ذكي"
         aria-label="مساعد ذكي"
@@ -92,7 +92,7 @@ export function AIAssistant() {
 
       {/* Chat Window */}
       {open && (
-        <div className="fixed bottom-24 left-5 z-50 w-[calc(100vw-2.5rem)] sm:w-[400px] max-w-[400px] max-h-[500px] flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+        <div className="fixed bottom-24 right-5 z-50 w-[calc(100vw-2.5rem)] sm:w-[400px] max-w-[400px] max-h-[500px] flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-purple-500 to-blue-500 text-white p-3 flex items-center gap-2 shrink-0">
             <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">

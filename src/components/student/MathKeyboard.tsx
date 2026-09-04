@@ -317,8 +317,8 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
       if (onImageUpload) {
         onImageUpload(data.filePath)
       }
-      // Also append a marker in the text so the teacher can see an image was attached
-      const marker = '\n[📷 صورة مرفقة]\n'
+      // Append the image marker WITH the path so AI grader can find and read it
+      const marker = '\n[📷 صورة مرفقة: ' + data.filePath + ']\n'
       onChange(value + marker)
     } catch (err: any) {
       alert('فشل رفع الصورة: ' + (err.message || 'حاول مرة أخرى'))
