@@ -1613,11 +1613,11 @@ function MyStudentsPanel() {
                 )}
 
                 {/* Homework Results Detail */}
-                {detail.homeworkResults && detail.homeworkResults.length > 0 && (
-                  <div className="sm:col-span-2 lg:col-span-4">
+                <div className="sm:col-span-2 lg:col-span-4">
                     <h4 className="text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5 text-emerald-500" />نتائج الواجبات</h4>
                     <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
-                      {detail.homeworkResults.map((hr: any) => (
+                      {detail.homeworkResults && detail.homeworkResults.length > 0 ? (
+                      detail.homeworkResults.map((hr: any) => (
                         <div key={hr.id} className="border rounded-lg p-3 space-y-2">
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-semibold truncate max-w-[250px]">{hr.homeworkTitle}</p>
@@ -1670,10 +1670,12 @@ function MyStudentsPanel() {
                           )}
                           {(!hr.wrongQuestions || hr.wrongQuestions.length === 0) && (!hr.writingAnswers || hr.writingAnswers.length === 0) && null}
                         </div>
-                      ))}
+                      ))
+                      ) : (
+                        <p className="text-center text-muted-foreground py-4 text-xs">لا توجد نتائج واجبات لهذا الطالب</p>
+                      )}
                     </div>
                   </div>
-                )}
               </div>
             ) : (
               <p className="text-center text-muted-foreground py-6 text-sm">لم يتم تحميل البيانات</p>
