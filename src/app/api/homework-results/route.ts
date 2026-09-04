@@ -97,7 +97,9 @@ export async function GET(request: NextRequest) {
       })
 
       // Build per-student results with all questions review
-      var results = rawResults.map(function(r: any) {
+      var results: any[] = []
+      for (var ri = 0; ri < rawResults.length; ri++) {
+        var r = rawResults[ri]
         var student = studentMap[r.studentId] || {}
         // Parse student answers
         var studentAns: any = {}
@@ -225,7 +227,7 @@ export async function GET(request: NextRequest) {
           })
         }
 
-        return {
+        results.push({
           id: r.id,
           studentId: r.studentId,
           student: {
@@ -241,8 +243,8 @@ export async function GET(request: NextRequest) {
           wrongQuestions: wrongQuestions,
           writingAnswers: writingAnswers,
           hasWritingAnswers: writingAnswers.length > 0,
-        }
-      })
+        })
+      }
 
       // Get students who haven't submitted the homework yet
       var notSubmitted: any[] = []
