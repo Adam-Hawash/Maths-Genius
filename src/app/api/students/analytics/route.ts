@@ -2,6 +2,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+// Normalize grade names
+function normalizeGrade(grade: string): string {
+  if (!grade) return ''
+  var g = grade.trim()
+  g = g.replace(/^الصف\s+/i, '')
+  g = g.replace(/الاعدادي/gi, 'إعدادي').replace(/الإعدادي/gi, 'إعدادي')
+  g = g.replace(/البكالوريا/gi, 'بكالوريا')
+  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
+  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
+  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
+  if (g.includes('الرابع')) g = 'الرابع'
+  if (g.includes('الخامس')) g = 'الخامس'
+  if (g.includes('السادس')) g = 'السادس'
+  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
+  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
+  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
+  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
+  return g
+}
+
 // GET /api/students/analytics?grade=X - Get all students in grade with aggregated analytics
 export async function GET(request: NextRequest) {
   try {
@@ -12,9 +32,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Grade is required' }, { status: 400 })
     }
 
-    // Get all active students in this grade (approved or paid)
+    // Normalize grade for fuzzy matching
+    const normalizedGrade = normalizeGrade(grade)
+    
+    // Get all active students in this grade (approved or paid) with fuzzy matching
     const students = await db.student.findMany({
-      where: { grade, status: { in: ['approved', 'paid'] } },
+      where: {
+        OR: [
+          { grade: grade },
+          { grade: normalizedGrade },
+          { grade: { contains: normalizedGrade.split(' ')[0] } },
+        ],
+        status: { in: ['approved', 'paid'] }
+      },
       orderBy: { name: 'asc' },
       select: { id: true, name: true, phone: true, grade: true, loginCount: true, lastLogin: true, createdAt: true },
     })

@@ -89,7 +89,7 @@ export function Navbar() {
             className="flex items-center gap-2 transition-opacity hover:opacity-80 cursor-pointer"
           >
             {instructorPhoto ? (
-              <Image
+              <img
                 src={instructorPhoto}
                 alt="Mr Wael Khodier"
                 width={36}
