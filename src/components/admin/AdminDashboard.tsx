@@ -1139,12 +1139,16 @@ function ExamTrackingPanel() {
                                           <div className="flex items-start gap-1.5">
                                             <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${
                                               aq.type === 'writing'
-                                                ? 'bg-amber-500/10 text-amber-600'
+                                                ? (aq.imageGraded
+                                                    ? (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')
+                                                    : 'bg-amber-500/10 text-amber-600')
                                                 : aq.isCorrect
                                                   ? 'bg-emerald-500/10 text-emerald-600'
                                                   : 'bg-red-500/10 text-red-600'
                                             }`}>
-                                              {aq.type === 'writing' ? 'Writing' : aq.isCorrect ? 'Correct' : 'Wrong'}
+                                              {aq.type === 'writing'
+                                                ? (aq.imageGraded ? (aq.aiIsCorrect ? 'AI: Correct' : 'AI: Wrong') : 'Writing')
+                                                : aq.isCorrect ? 'Correct' : 'Wrong'}
                                             </span>
                                             <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
                                           </div>
@@ -1153,6 +1157,16 @@ function ExamTrackingPanel() {
                                               <div className="space-y-1 p-2 rounded bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/40">
                                                 <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">إجابة الطالب:</p>
                                                 <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
+                                                {/* AI extracted answer from image */}
+                                                {aq.aiExtractedAnswer && (
+                                                  <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
+                                                    <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
+                                                    <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.aiExtractedAnswer}</p>
+                                                    {aq.aiFeedback && (
+                                                      <p className="text-[9px] text-muted-foreground mt-1">التعليق: {aq.aiFeedback}</p>
+                                                    )}
+                                                  </div>
+                                                )}
                                                 {aq.correctAnswer && (
                                                   <>
                                                     <p className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5 mt-1">الإجابة النموذجية:</p>
@@ -1700,14 +1714,45 @@ function MyStudentsPanel() {
                               {er.allQuestions.map((aq: any, qi: number) => (
                                 <div key={qi} className="text-[10px] p-1.5 rounded border" dir="ltr">
                                   <div className="flex items-start gap-1.5">
-                                    <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${aq.isCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
-                                      {aq.isCorrect ? 'Correct' : 'Wrong'}
+                                    <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${
+                                      aq.type === 'writing'
+                                        ? (aq.imageGraded
+                                            ? (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')
+                                            : 'bg-amber-500/10 text-amber-600')
+                                        : aq.isCorrect
+                                          ? 'bg-emerald-500/10 text-emerald-600'
+                                          : 'bg-red-500/10 text-red-600'
+                                    }`}>
+                                      {aq.type === 'writing'
+                                        ? (aq.imageGraded ? (aq.aiIsCorrect ? 'AI: Correct' : 'AI: Wrong') : 'Writing')
+                                        : aq.isCorrect ? 'Correct' : 'Wrong'}
                                     </span>
                                     <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
                                   </div>
                                   <div className="mt-1 pl-6 space-y-0.5">
-                                    <p className="text-red-600">Student answer: <span dir="ltr">{aq.studentAnswer}</span></p>
-                                    <p className="text-emerald-600">Correct answer: <span dir="ltr">{aq.correctAnswer}</span></p>
+                                    {aq.type === 'writing' ? (
+                                      <>
+                                        <p className="text-[9px] font-semibold text-muted-foreground">إجابة الطالب:</p>
+                                        <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
+                                        {aq.aiExtractedAnswer && (
+                                          <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
+                                            <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
+                                            <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.aiExtractedAnswer}</p>
+                                            {aq.aiFeedback && (
+                                              <p className="text-[9px] text-muted-foreground mt-1">التعليق: {aq.aiFeedback}</p>
+                                            )}
+                                          </div>
+                                        )}
+                                        {aq.correctAnswer && (
+                                          <p className="text-emerald-600 whitespace-pre-wrap break-words" dir="auto">الإجابة الصحيحة: {aq.correctAnswer}</p>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <p className="text-red-600">Student answer: <span dir="ltr">{aq.studentAnswer}</span></p>
+                                        <p className="text-emerald-600">Correct answer: <span dir="ltr">{aq.correctAnswer}</span></p>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -1759,14 +1804,45 @@ function MyStudentsPanel() {
                               {hr.allQuestions.map((aq: any, qi: number) => (
                                 <div key={qi} className="text-[10px] p-1.5 rounded border" dir="ltr">
                                   <div className="flex items-start gap-1.5">
-                                    <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${aq.isCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
-                                      {aq.isCorrect ? 'Correct' : 'Wrong'}
+                                    <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${
+                                      aq.type === 'writing'
+                                        ? (aq.imageGraded
+                                            ? (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')
+                                            : 'bg-amber-500/10 text-amber-600')
+                                        : aq.isCorrect
+                                          ? 'bg-emerald-500/10 text-emerald-600'
+                                          : 'bg-red-500/10 text-red-600'
+                                    }`}>
+                                      {aq.type === 'writing'
+                                        ? (aq.imageGraded ? (aq.aiIsCorrect ? 'AI: Correct' : 'AI: Wrong') : 'Writing')
+                                        : aq.isCorrect ? 'Correct' : 'Wrong'}
                                     </span>
                                     <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
                                   </div>
                                   <div className="mt-1 pl-6 space-y-0.5">
-                                    <p className="text-red-600">Student answer: <span dir="ltr">{aq.studentAnswer}</span></p>
-                                    <p className="text-emerald-600">Correct answer: <span dir="ltr">{aq.correctAnswer}</span></p>
+                                    {aq.type === 'writing' ? (
+                                      <>
+                                        <p className="text-[9px] font-semibold text-muted-foreground">إجابة الطالب:</p>
+                                        <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
+                                        {aq.aiExtractedAnswer && (
+                                          <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
+                                            <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
+                                            <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.aiExtractedAnswer}</p>
+                                            {aq.aiFeedback && (
+                                              <p className="text-[9px] text-muted-foreground mt-1">التعليق: {aq.aiFeedback}</p>
+                                            )}
+                                          </div>
+                                        )}
+                                        {aq.correctAnswer && (
+                                          <p className="text-emerald-600 whitespace-pre-wrap break-words" dir="auto">الإجابة الصحيحة: {aq.correctAnswer}</p>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <p className="text-red-600">Student answer: <span dir="ltr">{aq.studentAnswer}</span></p>
+                                        <p className="text-emerald-600">Correct answer: <span dir="ltr">{aq.correctAnswer}</span></p>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               ))}

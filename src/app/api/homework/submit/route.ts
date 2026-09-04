@@ -3,8 +3,10 @@
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { gradeImageAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 
 export const runtime = 'nodejs'
+export const maxDuration = 120
 
 // Ensure table exists
 async function ensureTable() {
@@ -232,6 +234,40 @@ export async function POST(request) {
       })
     })
 
+    // ============= AI IMAGE GRADING =============
+    // For each writing answer that has an attached image ([📷 صورة مرفقة: MEDIA_ID]),
+    // call the AI to extract the answer from the image and compare with model answer.
+    for (var waIdx = 0; waIdx < writingAnswers.length; waIdx++) {
+      var wa = writingAnswers[waIdx]
+      var answerText = wa.answer || ''
+      var mediaIds = extractImageMediaIds(answerText)
+
+      if (mediaIds.length === 0) continue
+
+      // For the first image only, run AI grading (avoid timeouts)
+      try {
+        var gradeData = await gradeImageAnswer({
+          mediaId: mediaIds[0],
+          question: wa.question,
+          modelAnswer: wa.modelAnswer,
+          acceptedAnswers: wa.acceptedAnswers,
+          maxPoints: wa.points,
+        })
+        if (gradeData.extractedAnswer || gradeData.error === undefined) {
+          // Append AI extraction to the student answer
+          writingAnswers[waIdx].aiExtractedAnswer = gradeData.extractedAnswer
+          writingAnswers[waIdx].aiIsCorrect = gradeData.isCorrect === true
+          writingAnswers[waIdx].aiFeedback = gradeData.feedback || ''
+          writingAnswers[waIdx].aiAwardedPoints = gradeData.awardedPoints || 0
+          writingAnswers[waIdx].needsGrading = false
+          writingAnswers[waIdx].isCorrect = gradeData.isCorrect === true
+          writingAnswers[waIdx].awardedPoints = gradeData.awardedPoints || 0
+        }
+      } catch (gradeErr) {
+        console.error('[HW Submit] AI grade image error for mediaId', mediaIds[0], ':', gradeErr)
+      }
+    }
+
     // Save result with score
     var resultId = 'hwr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
     var answersJson = ''
@@ -259,17 +295,37 @@ export async function POST(request) {
     }
 
     // AI grading for writing questions - quick match only (fast, no AI call to avoid timeout)
+    // For image-attached answers, the AI grading was already done above (writingAnswers[waIdx].aiIsCorrect etc.)
     var writingScore = 0
     var gradedWriting: any[] = []
     var aiGraded = false
     if (writingAnswers.length > 0) {
-      // Quick pass: empty check + acceptedAnswers match
+      // Quick pass: empty check + acceptedAnswers match + text comparison
       for (var wi = 0; wi < writingAnswers.length; wi++) {
         var wa = writingAnswers[wi]
         var pts = wa.points || 5
         var studentAns = (wa.answer || '').trim()
         var modelAns = (wa.modelAnswer || '').trim()
-        
+
+        // === IMAGE-GRADED ANSWER (already done above) ===
+        // Use the AI's verdict if it ran for this writing answer
+        if (wa.aiExtractedAnswer !== undefined && wa.needsGrading === false) {
+          gradedWriting[wi] = {
+            question: wa.question,
+            answer: wa.answer || '',
+            modelAnswer: modelAns,
+            awardedPoints: wa.aiAwardedPoints || 0,
+            maxPoints: pts,
+            isCorrect: wa.aiIsCorrect === true,
+            feedback: wa.aiFeedback || '',
+            aiExtractedAnswer: wa.aiExtractedAnswer,
+            imageGraded: true,
+          }
+          writingScore += (wa.aiAwardedPoints || 0)
+          continue
+        }
+
+        // === TEXT-BASED QUICK MATCH ===
         if (!studentAns || studentAns === '[📷 صورة مرفقة]') {
           gradedWriting[wi] = {
             question: wa.question,
@@ -282,7 +338,7 @@ export async function POST(request) {
           }
           continue
         }
-        
+
         // Quick match against acceptedAnswers
         var quickCorrect = false
         if (wa.acceptedAnswers && wa.acceptedAnswers.length > 0) {
@@ -295,7 +351,7 @@ export async function POST(request) {
             }
           }
         }
-        
+
         if (quickCorrect) {
           gradedWriting[wi] = {
             question: wa.question,
@@ -309,7 +365,7 @@ export async function POST(request) {
           writingScore += pts
           continue
         }
-        
+
         // If modelAnswer exists, do a simple text comparison
         if (modelAns) {
           var cleanModel = modelAns.toLowerCase().replace(/\s+/g, ' ').trim()
@@ -319,7 +375,7 @@ export async function POST(request) {
           var studentParts = cleanStudent2.split('=')
           var modelFinal = modelParts[modelParts.length - 1].trim()
           var studentFinal = studentParts[studentParts.length - 1].trim()
-          
+
           if (modelFinal && studentFinal && (modelFinal === studentFinal || modelFinal.includes(studentFinal) || studentFinal.includes(modelFinal))) {
             gradedWriting[wi] = {
               question: wa.question,
@@ -334,7 +390,7 @@ export async function POST(request) {
             continue
           }
         }
-        
+
         // Not matched - mark as wrong but show modelAnswer
         gradedWriting[wi] = {
           question: wa.question,

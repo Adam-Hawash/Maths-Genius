@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { gradeImageAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 
 // Ensure tables exist before querying
 async function ensureTables() {
@@ -253,25 +254,56 @@ export async function GET(
             })
           })
           // Writing all questions
-          writingAllExam.forEach(function(q, wi) {
-            var qText = q.question || q.q || ''
-            var studentText = ''
-            var offset = mcqAll.length
+          for (var ewi = 0; ewi < writingAllExam.length; ewi++) {
+            var ewq = writingAllExam[ewi]
+            var eqText = ewq.question || ewq.q || ''
+            var estudentText = ''
+            var eoffset = mcqAll.length
             try {
               if (Array.isArray(studentAnsAll)) {
-                studentText = studentAnsAll[offset + wi] || ''
+                estudentText = studentAnsAll[eoffset + ewi] || ''
               } else if (studentAnsAll && typeof studentAnsAll === 'object') {
-                studentText = studentAnsAll[offset + wi] || studentAnsAll[String(offset + wi)] || ''
+                estudentText = studentAnsAll[eoffset + ewi] || studentAnsAll[String(eoffset + ewi)] || ''
               }
             } catch (e) {}
+            estudentText = typeof estudentText === 'string' ? estudentText : String(estudentText || '')
+
+            // AI image grading for exam writing answer
+            var eaiExtracted = ''
+            var eaiIsCorrect = false
+            var eaiFeedback = ''
+            var eImageGraded = false
+            var emediaIds = extractImageMediaIds(estudentText)
+            if (emediaIds.length > 0) {
+              try {
+                var egrade = await gradeImageAnswer({
+                  mediaId: emediaIds[0],
+                  question: eqText,
+                  modelAnswer: ewq.modelAnswer || ewq.answer || '',
+                  acceptedAnswers: Array.isArray(ewq.acceptedAnswers) ? ewq.acceptedAnswers : [],
+                  maxPoints: (typeof ewq.points === 'number' && ewq.points > 0) ? ewq.points : 5,
+                })
+                if (egrade.error === undefined || egrade.extractedAnswer) {
+                  eaiExtracted = egrade.extractedAnswer
+                  eaiIsCorrect = egrade.isCorrect === true
+                  eaiFeedback = egrade.feedback || ''
+                  eImageGraded = true
+                }
+              } catch (e) {}
+            }
+
             allExamQuestions.push({
               type: 'writing',
-              question: qText,
-              studentAnswer: typeof studentText === 'string' ? studentText : String(studentText || ''),
-              correctAnswer: q.modelAnswer || q.answer || 'No model answer',
-              isCorrect: false,
+              question: eqText,
+              studentAnswer: estudentText,
+              correctAnswer: ewq.modelAnswer || ewq.answer || 'No model answer',
+              isCorrect: eImageGraded ? eaiIsCorrect : false,
+              aiExtractedAnswer: eaiExtracted,
+              aiIsCorrect: eaiIsCorrect,
+              aiFeedback: eaiFeedback,
+              imageGraded: eImageGraded,
             })
-          })
+          }
         } catch(e) {}
 
         examResultsEnriched.push({
@@ -434,6 +466,36 @@ export async function GET(
           console.error('Re-grade error for hw', row.homeworkId, ':', gradeErr)
         }
 
+        // ============= AI IMAGE GRADING for admin view =============
+        // For each writing answer that has an attached image, run AI grading
+        // so admin can see the AI's verdict (extracted answer + correct/wrong)
+        for (var wai = 0; wai < writingAnswers.length; wai++) {
+          var waItem = writingAnswers[wai]
+          var ansText = waItem.answer || ''
+          var mediaIds = extractImageMediaIds(ansText)
+          if (mediaIds.length === 0) continue
+          try {
+            var gradeData = await gradeImageAnswer({
+              mediaId: mediaIds[0],
+              question: waItem.question,
+              modelAnswer: waItem.modelAnswer,
+              acceptedAnswers: waItem.acceptedAnswers,
+              maxPoints: waItem.points,
+            })
+            if (gradeData.error === undefined || gradeData.extractedAnswer) {
+              writingAnswers[wai].aiExtractedAnswer = gradeData.extractedAnswer
+              writingAnswers[wai].aiIsCorrect = gradeData.isCorrect === true
+              writingAnswers[wai].aiFeedback = gradeData.feedback || ''
+              writingAnswers[wai].aiAwardedPoints = gradeData.awardedPoints || 0
+              writingAnswers[wai].needsGrading = false
+              writingAnswers[wai].isCorrect = gradeData.isCorrect === true
+              writingAnswers[wai].awardedPoints = gradeData.awardedPoints || 0
+            }
+          } catch (e) {
+            console.error('[Progress] AI grade image error:', e)
+          }
+        }
+
         // Build all questions review (correct + wrong) for admin
         try {
           var mcqAll2 = []
@@ -502,6 +564,11 @@ export async function GET(
               studentAnswer: typeof studentText === 'string' ? studentText : String(studentText || ''),
               correctAnswer: q.modelAnswer || q.answer || '',
               isCorrect: false,
+              // Augment with AI image grading result (if image was attached)
+              aiExtractedAnswer: writingAnswers[wai] && writingAnswers[wai].aiExtractedAnswer,
+              aiIsCorrect: writingAnswers[wai] && writingAnswers[wai].aiIsCorrect === true,
+              aiFeedback: writingAnswers[wai] && writingAnswers[wai].aiFeedback,
+              imageGraded: !!(writingAnswers[wai] && writingAnswers[wai].aiExtractedAnswer !== undefined),
             })
           })
         } catch(e) {}
