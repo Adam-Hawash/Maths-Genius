@@ -9,20 +9,79 @@ export const runtime = 'nodejs'
 // Ensure table exists
 async function ensureTable() {
   try {
-    await db.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS HomeworkResult (
-        id TEXT PRIMARY KEY,
-        homeworkId TEXT NOT NULL,
-        studentId TEXT NOT NULL,
-        score REAL NOT NULL DEFAULT 0,
-        maxScore REAL NOT NULL DEFAULT 100,
-        answers TEXT DEFAULT '',
-        submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `)
-    // Try adding columns if missing
-    try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN answers TEXT DEFAULT ""') } catch(e) {}
-    try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP') } catch(e) {}
+    // Try creating the table fresh (will be ignored if already exists)
+    try {
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS HomeworkResult (
+          id TEXT PRIMARY KEY,
+          homeworkId TEXT NOT NULL,
+          studentId TEXT NOT NULL,
+          score REAL NOT NULL DEFAULT 0,
+          maxScore REAL NOT NULL DEFAULT 100,
+          answers TEXT DEFAULT '',
+          submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `)
+    } catch (e) {}
+
+    // Check if submittedAt column exists. If not, rebuild the table.
+    // SQLite ALTER TABLE ADD COLUMN with non-constant default is NOT supported by Turso/libsql,
+    // so we need to rebuild the table.
+    var needsRebuild = false
+    try {
+      var cols = await db.$queryRawUnsafe('PRAGMA table_info(HomeworkResult)')
+      var hasSubmittedAt = (cols || []).some(function(c) { return c.name === 'submittedAt' })
+      var hasAnswers = (cols || []).some(function(c) { return c.name === 'answers' })
+      if (!hasSubmittedAt) {
+        needsRebuild = true
+      }
+    } catch (e) {
+      // PRAGMA failed, probably table doesn't exist - the CREATE above will have made it
+    }
+
+    if (needsRebuild) {
+      try {
+        // Rebuild: rename old table, create fresh, copy data with default submittedAt, drop old
+        await db.$executeRawUnsafe('ALTER TABLE HomeworkResult RENAME TO HomeworkResult_old')
+        await db.$executeRawUnsafe(`
+          CREATE TABLE HomeworkResult (
+            id TEXT PRIMARY KEY,
+            homeworkId TEXT NOT NULL,
+            studentId TEXT NOT NULL,
+            score REAL NOT NULL DEFAULT 0,
+            maxScore REAL NOT NULL DEFAULT 100,
+            answers TEXT DEFAULT '',
+            submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `)
+        // Copy existing data (handle both cases: with/without answers column)
+        try {
+          await db.$executeRawUnsafe(`
+            INSERT INTO HomeworkResult (id, homeworkId, studentId, score, maxScore, answers, submittedAt)
+            SELECT id, homeworkId, studentId, score, maxScore,
+                   CASE WHEN answers IS NULL OR answers = '' THEN '' ELSE answers END,
+                   CURRENT_TIMESTAMP
+            FROM HomeworkResult_old
+          `)
+        } catch (copyErr) {
+          // Old table may not have answers column - try without it
+          try {
+            await db.$executeRawUnsafe(`
+              INSERT INTO HomeworkResult (id, homeworkId, studentId, score, maxScore, answers, submittedAt)
+              SELECT id, homeworkId, studentId, score, maxScore, '', CURRENT_TIMESTAMP
+              FROM HomeworkResult_old
+            `)
+          } catch (copyErr2) {
+            console.error('Copy old homework data error:', copyErr2)
+          }
+        }
+        await db.$executeRawUnsafe('DROP TABLE HomeworkResult_old')
+      } catch (rebuildErr) {
+        console.error('Rebuild HomeworkResult error:', rebuildErr)
+        // If rebuild failed, try to recover by renaming back
+        try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult_old RENAME TO HomeworkResult') } catch (e) {}
+      }
+    }
   } catch (e) {
     console.error('Ensure HomeworkResult table error:', e)
   }
@@ -182,15 +241,15 @@ export async function POST(request) {
 
     try {
       await db.$executeRawUnsafe(
-        'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore, answers) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore, answers, submittedAt) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
         resultId, studentId, homeworkId, score, maxScore, answersJson
       )
     } catch (insertErr) {
       console.error('Insert homework result error:', insertErr)
-      // Retry without answers column
+      // Retry without answers column (older schema)
       try {
         await db.$executeRawUnsafe(
-          'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore) VALUES (?, ?, ?, ?, ?)',
+          'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore, submittedAt) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
           resultId, studentId, homeworkId, score, maxScore
         )
       } catch (retryErr) {
