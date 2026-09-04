@@ -818,6 +818,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         var existingResult = hwResults[hw.id]
 
         // Use cached shuffle if available, otherwise create new
+        var mcqShuffle: number[] = []
+        var writingShuffle: number[] = []
         var cachedMap = hwShuffleMaps.current[hw.id]
         if (cachedMap && cachedMap.length === allQuestions.length) {
           // Rebuild display arrays from cached map
