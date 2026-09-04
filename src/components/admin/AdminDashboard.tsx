@@ -1590,22 +1590,45 @@ function MyStudentsPanel() {
                               <Badge variant={er.passed ? 'default' : 'outline'} className={`text-[9px] h-5 ${er.passed ? '' : 'border-amber-500 text-amber-600'}`}>{er.passed ? 'ناجح' : 'عايز مراجعة'}</Badge>
                             </div>
                           </div>
-                          {er.wrongQuestions && er.wrongQuestions.length > 0 && (
+                          {/* All Questions Review (correct + wrong) */}
+                          {er.allQuestions && er.allQuestions.length > 0 ? (
                             <div className="mt-1 space-y-1">
-                              <p className="text-[10px] font-semibold text-red-600">الأسئلة الخاطئة ({er.wrongQuestions.length}):</p>
-                              {er.wrongQuestions.map((wq: any, wi: number) => (
-                                <div key={wi} className="flex items-start gap-2 text-[10px] p-1.5 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40">
-                                  <span className="shrink-0 font-bold text-red-500">{wi + 1}.</span>
-                                  <div className="min-w-0">
-                                    <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wq.question}</p>
-                                    <p className="text-red-600 mt-0.5">إجابة الطالب: <span dir="ltr">{wq.studentAnswer}</span></p>
-                                    <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
+                              <p className="text-[10px] font-semibold text-muted-foreground">جميع الأسئلة ({er.allQuestions.length}):</p>
+                              {er.allQuestions.map((aq: any, qi: number) => (
+                                <div key={qi} className="text-[10px] p-1.5 rounded border" dir="ltr">
+                                  <div className="flex items-start gap-1.5">
+                                    <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${aq.isCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
+                                      {aq.isCorrect ? 'Correct' : 'Wrong'}
+                                    </span>
+                                    <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
+                                  </div>
+                                  <div className="mt-1 pl-6 space-y-0.5">
+                                    <p className="text-red-600">Student answer: <span dir="ltr">{aq.studentAnswer}</span></p>
+                                    <p className="text-emerald-600">Correct answer: <span dir="ltr">{aq.correctAnswer}</span></p>
                                   </div>
                                 </div>
                               ))}
                             </div>
+                          ) : (
+                            <>
+                              {er.wrongQuestions && er.wrongQuestions.length > 0 && (
+                                <div className="mt-1 space-y-1">
+                                  <p className="text-[10px] font-semibold text-red-600">الأسئلة الخاطئة ({er.wrongQuestions.length}):</p>
+                                  {er.wrongQuestions.map((wq: any, wi: number) => (
+                                    <div key={wi} className="flex items-start gap-2 text-[10px] p-1.5 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40">
+                                      <span className="shrink-0 font-bold text-red-500">{wi + 1}.</span>
+                                      <div className="min-w-0">
+                                        <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wq.question}</p>
+                                        <p className="text-red-600 mt-0.5">إجابة الطالب: <span dir="ltr">{wq.studentAnswer}</span></p>
+                                        <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {(!er.wrongQuestions || er.wrongQuestions.length === 0) && null}
+                            </>
                           )}
-                          {(!er.wrongQuestions || er.wrongQuestions.length === 0) && null}
                         </div>
                       ))}
                     </div>
@@ -1626,49 +1649,71 @@ function MyStudentsPanel() {
                               <span className="text-[9px] text-muted-foreground">{hr.submittedAt ? new Date(hr.submittedAt).toLocaleDateString('ar-EG') : ''}</span>
                             </div>
                           </div>
-                          {hr.wrongQuestions && hr.wrongQuestions.length > 0 && (
+                          {/* All Questions Review (correct + wrong) */}
+                          {hr.allQuestions && hr.allQuestions.length > 0 ? (
                             <div className="mt-1 space-y-1">
-                              <p className="text-[10px] font-semibold text-red-600">الأسئلة الخاطئة ({hr.wrongQuestions.length}):</p>
-                              {hr.wrongQuestions.map((wq: any, wi: number) => (
-                                <div key={wi} className="flex items-start gap-2 text-[10px] p-1.5 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40">
-                                  <span className="shrink-0 font-bold text-red-500">{wi + 1}.</span>
-                                  <div className="min-w-0">
-                                    <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wq.question}</p>
-                                    <p className="text-red-600 mt-0.5">إجابة الطالب: <span dir="ltr">{wq.studentAnswer}</span></p>
-                                    <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
+                              <p className="text-[10px] font-semibold text-muted-foreground">جميع الأسئلة ({hr.allQuestions.length}):</p>
+                              {hr.allQuestions.map((aq: any, qi: number) => (
+                                <div key={qi} className="text-[10px] p-1.5 rounded border" dir="ltr">
+                                  <div className="flex items-start gap-1.5">
+                                    <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${aq.isCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
+                                      {aq.isCorrect ? 'Correct' : 'Wrong'}
+                                    </span>
+                                    <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
+                                  </div>
+                                  <div className="mt-1 pl-6 space-y-0.5">
+                                    <p className="text-red-600">Student answer: <span dir="ltr">{aq.studentAnswer}</span></p>
+                                    <p className="text-emerald-600">Correct answer: <span dir="ltr">{aq.correctAnswer}</span></p>
                                   </div>
                                 </div>
                               ))}
                             </div>
-                          )}
-                          {hr.writingAnswers && hr.writingAnswers.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                              <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                                <FileText className="h-3 w-3" />
-                                إجابات مقالية ({hr.writingAnswers.length}) - تحتاج تصحيح يدوي:
-                              </p>
-                              {hr.writingAnswers.map((wa: any, wi: number) => (
-                                <div key={wi} className="text-[10px] p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 space-y-1">
-                                  <p className="font-semibold text-amber-700 dark:text-amber-300">سؤال {wi + 1}: <span className="font-normal" dir="ltr" style={{ textAlign: 'left' }}>{wa.question}</span></p>
-                                  <div className="mt-1 p-1.5 rounded bg-background/50 border border-border/30">
-                                    <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">إجابة الطالب:</p>
-                                    <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{wa.answer || '(فارغ)'}</p>
-                                  </div>
-                                  {wa.modelAnswer && (
-                                    <div className="mt-1 p-1.5 rounded bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/30">
-                                      <p className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">الإجابة النموذجية (للمقارنة):</p>
-                                      <p className="text-emerald-900 dark:text-emerald-200 whitespace-pre-wrap break-words" dir="auto">{wa.modelAnswer}</p>
+                          ) : (
+                            <>
+                              {hr.wrongQuestions && hr.wrongQuestions.length > 0 && (
+                                <div className="mt-1 space-y-1">
+                                  <p className="text-[10px] font-semibold text-red-600">الأسئلة الخاطئة ({hr.wrongQuestions.length}):</p>
+                                  {hr.wrongQuestions.map((wq: any, wi: number) => (
+                                    <div key={wi} className="flex items-start gap-2 text-[10px] p-1.5 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40">
+                                      <span className="shrink-0 font-bold text-red-500">{wi + 1}.</span>
+                                      <div className="min-w-0">
+                                        <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wq.question}</p>
+                                        <p className="text-red-600 mt-0.5">إجابة الطالب: <span dir="ltr">{wq.studentAnswer}</span></p>
+                                        <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
+                                      </div>
                                     </div>
-                                  )}
-                                  {wa.acceptedAnswers && wa.acceptedAnswers.length > 0 && (
-                                    <p className="text-[9px] text-muted-foreground">إجابات مقبولة: {wa.acceptedAnswers.join('، ')}</p>
-                                  )}
-                                  <p className="text-[9px] text-muted-foreground mt-1">الدرجة: {wa.points} نقطة - بانتظار التصحيح</p>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
+                              )}
+                              {hr.writingAnswers && hr.writingAnswers.length > 0 && (
+                                <div className="mt-2 space-y-1">
+                                  <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                    <FileText className="h-3 w-3" />
+                                    إجابات مقالية ({hr.writingAnswers.length}) - تحتاج تصحيح يدوي:
+                                  </p>
+                                  {hr.writingAnswers.map((wa: any, wi: number) => (
+                                    <div key={wi} className="text-[10px] p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 space-y-1">
+                                      <p className="font-semibold text-amber-700 dark:text-amber-300">سؤال {wi + 1}: <span className="font-normal" dir="ltr" style={{ textAlign: 'left' }}>{wa.question}</span></p>
+                                      <div className="mt-1 p-1.5 rounded bg-background/50 border border-border/30">
+                                        <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">إجابة الطالب:</p>
+                                        <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{wa.answer || '(فارغ)'}</p>
+                                      </div>
+                                      {wa.modelAnswer && (
+                                        <div className="mt-1 p-1.5 rounded bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/30">
+                                          <p className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">الإجابة النموذجية (للمقارنة):</p>
+                                          <p className="text-emerald-900 dark:text-emerald-200 whitespace-pre-wrap break-words" dir="auto">{wa.modelAnswer}</p>
+                                        </div>
+                                      )}
+                                      {wa.acceptedAnswers && wa.acceptedAnswers.length > 0 && (
+                                        <p className="text-[9px] text-muted-foreground">إجابات مقبولة: {wa.acceptedAnswers.join('، ')}</p>
+                                      )}
+                                      <p className="text-[9px] text-muted-foreground mt-1">الدرجة: {wa.points} نقطة - بانتظار التصحيح</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
                           )}
-                          {(!hr.wrongQuestions || hr.wrongQuestions.length === 0) && (!hr.writingAnswers || hr.writingAnswers.length === 0) && null}
                         </div>
                       ))
                       ) : (
