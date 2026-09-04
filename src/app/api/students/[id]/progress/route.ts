@@ -407,6 +407,94 @@ export async function GET(
       homeworkResults = []
     }
 
+    // If homework results is still empty, try simpler query without JOIN
+    if (homeworkResults.length === 0) {
+      try {
+        var simpleHwRows = await db.$queryRawUnsafe(
+          'SELECT id, homeworkId, score, maxScore, submittedAt, answers FROM HomeworkResult WHERE studentId = ? ORDER BY submittedAt DESC',
+          id
+        )
+        for (var shi = 0; shi < (simpleHwRows || []).length; shi++) {
+          var shr = simpleHwRows[shi]
+          var hwTitle2 = 'واجب'
+          var hwQuestions2 = ''
+          try {
+            var hwInfo = await db.$queryRawUnsafe('SELECT title, questions FROM Homework WHERE id = ? LIMIT 1', shr.homeworkId)
+            if (hwInfo && hwInfo.length > 0) {
+              hwTitle2 = hwInfo[0].title || 'واجب'
+              hwQuestions2 = hwInfo[0].questions || ''
+            }
+          } catch (e5) {}
+
+          // Build all questions from simple data
+          var simpleAllQs: any[] = []
+          try {
+            var rawQs = hwQuestions2 ? (typeof hwQuestions2 === 'string' ? JSON.parse(hwQuestions2) : hwQuestions2) : []
+            var studentAnsSimple = {}
+            if (shr.answers) {
+              studentAnsSimple = typeof shr.answers === 'string' ? JSON.parse(shr.answers) : shr.answers
+            }
+            if (Array.isArray(rawQs)) {
+              rawQs.forEach(function(q, qi) {
+                var isW = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' }))
+                if (isW) {
+                  var studentText2 = ''
+                  try {
+                    if (Array.isArray(studentAnsSimple)) {
+                      studentText2 = studentAnsSimple[qi] || ''
+                    } else if (studentAnsSimple && typeof studentAnsSimple === 'object') {
+                      studentText2 = studentAnsSimple[qi] || studentAnsSimple[String(qi)] || ''
+                    }
+                  } catch (e6) {}
+                  simpleAllQs.push({
+                    type: 'writing',
+                    question: q.question || q.q || '',
+                    studentAnswer: typeof studentText2 === 'string' ? studentText2 : String(studentText2 || ''),
+                    correctAnswer: q.modelAnswer || q.answer || '',
+                    isCorrect: false,
+                  })
+                } else {
+                  var opts2 = Array.isArray(q.options) ? q.options : []
+                  var correctIdx2 = typeof q.correct === 'number' ? q.correct : 0
+                  if (correctIdx2 < 0 || correctIdx2 >= opts2.length) correctIdx2 = 0
+                  var ans2 = undefined
+                  try {
+                    if (Array.isArray(studentAnsSimple)) {
+                      ans2 = studentAnsSimple[qi]
+                    } else if (studentAnsSimple && typeof studentAnsSimple === 'object') {
+                      ans2 = studentAnsSimple[qi] !== undefined ? studentAnsSimple[qi] : studentAnsSimple[String(qi)]
+                    }
+                  } catch (e7) {}
+                  var isCorrect2 = ans2 !== undefined && ans2 !== null && Number(ans2) === correctIdx2
+                  simpleAllQs.push({
+                    type: 'mcq',
+                    question: q.question || q.q || '',
+                    studentAnswer: (typeof ans2 === 'number' && opts2[ans2]) ? String.fromCharCode(65 + ans2) + ') ' + opts2[ans2] : 'Not answered',
+                    correctAnswer: opts2[correctIdx2] ? String.fromCharCode(65 + correctIdx2) + ') ' + opts2[correctIdx2] : '',
+                    isCorrect: isCorrect2,
+                  })
+                }
+              })
+            }
+          } catch (e8) {}
+
+          homeworkResults.push({
+            id: shr.id,
+            homeworkTitle: hwTitle2,
+            score: shr.score || 0,
+            maxScore: shr.maxScore || 100,
+            submittedAt: shr.submittedAt,
+            wrongQuestions: [],
+            writingAnswers: [],
+            hasWritingAnswers: false,
+            allQuestions: simpleAllQs,
+          })
+        }
+      } catch (e9) {
+        console.error('Simple homework fetch error:', e9)
+      }
+    }
+
     // Summary stats
     const totalVideosWatched = videoProgress.length
     const completedVideos = videoProgress.filter((vp: any) => vp.completed).length
