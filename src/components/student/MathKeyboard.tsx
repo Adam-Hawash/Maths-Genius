@@ -25,90 +25,90 @@ interface SymbolGroup {
 
 const SYMBOL_GROUPS: SymbolGroup[] = [
   {
-    title: 'الأرقام والعمليات',
+    title: 'Numbers & Operations',
     symbols: [
-      { label: '1', insert: '1', hint: 'واحد' },
-      { label: '2', insert: '2', hint: 'اثنان' },
-      { label: '3', insert: '3', hint: 'ثلاثة' },
-      { label: '4', insert: '4', hint: 'أربعة' },
-      { label: '5', insert: '5', hint: 'خمسة' },
-      { label: '6', insert: '6', hint: 'ستة' },
-      { label: '7', insert: '7', hint: 'سبعة' },
-      { label: '8', insert: '8', hint: 'ثمانية' },
-      { label: '9', insert: '9', hint: 'تسعة' },
-      { label: '0', insert: '0', hint: 'صفر' },
-      { label: '.', insert: '.', hint: 'نقطة عشرية' },
-      { label: ',', insert: ',', hint: 'فاصلة' },
-      { label: '+', insert: '+', hint: 'جمع' },
-      { label: '−', insert: '-', hint: 'طرح' },
-      { label: '×', insert: '×', hint: 'ضرب' },
-      { label: '÷', insert: '÷', hint: 'قسمة' },
-      { label: '=', insert: '=', hint: 'يساوي' },
-      { label: '≠', insert: '≠', hint: 'لا يساوي' },
-      { label: '<', insert: '<', hint: 'أصغر من' },
-      { label: '>', insert: '>', hint: 'أكبر من' },
-      { label: '≤', insert: '≤', hint: 'أصغر أو يساوي' },
-      { label: '≥', insert: '≥', hint: 'أكبر أو يساوي' },
-      { label: '±', insert: '±', hint: 'زائد أو ناقص' },
-      { label: '(', insert: '(', hint: 'قوس مفتوح' },
-      { label: ')', insert: ')', hint: 'قوس مقفول' },
+      { label: '1', insert: '1', hint: 'One' },
+      { label: '2', insert: '2', hint: 'Two' },
+      { label: '3', insert: '3', hint: 'Three' },
+      { label: '4', insert: '4', hint: 'Four' },
+      { label: '5', insert: '5', hint: 'Five' },
+      { label: '6', insert: '6', hint: 'Six' },
+      { label: '7', insert: '7', hint: 'Seven' },
+      { label: '8', insert: '8', hint: 'Eight' },
+      { label: '9', insert: '9', hint: 'Nine' },
+      { label: '0', insert: '0', hint: 'Zero' },
+      { label: '.', insert: '.', hint: 'Decimal point' },
+      { label: ',', insert: ',', hint: 'Comma' },
+      { label: '+', insert: '+', hint: 'Plus' },
+      { label: '−', insert: '-', hint: 'Minus' },
+      { label: '×', insert: '×', hint: 'Multiply' },
+      { label: '÷', insert: '÷', hint: 'Divide' },
+      { label: '=', insert: '=', hint: 'Equals' },
+      { label: '≠', insert: '≠', hint: 'Not equal' },
+      { label: '<', insert: '<', hint: 'Less than' },
+      { label: '>', insert: '>', hint: 'Greater than' },
+      { label: '≤', insert: '≤', hint: 'Less than or equal' },
+      { label: '≥', insert: '≥', hint: 'Greater than or equal' },
+      { label: '±', insert: '±', hint: 'Plus or minus' },
+      { label: '(', insert: '(', hint: 'Open parenthesis' },
+      { label: ')', insert: ')', hint: 'Close parenthesis' },
     ],
   },
   {
-    title: 'الأُسس والجذور',
+    title: 'Powers & Roots',
     symbols: [
-      { label: 'x¹', insert: '¹', hint: 'أس 1' },
-      { label: 'x²', insert: '²', hint: 'تربيع' },
-      { label: 'x³', insert: '³', hint: 'تكعيب' },
-      { label: 'x⁴', insert: '⁴', hint: 'أس 4' },
-      { label: 'x⁵', insert: '⁵', hint: 'أس 5' },
-      { label: 'x⁶', insert: '⁶', hint: 'أس 6' },
-      { label: 'x⁷', insert: '⁷', hint: 'أس 7' },
-      { label: 'x⁸', insert: '⁸', hint: 'أس 8' },
-      { label: 'x⁹', insert: '⁹', hint: 'أس 9' },
-      { label: 'x⁰', insert: '⁰', hint: 'أس 0' },
-      { label: 'xⁿ', insert: '^', hint: 'أس مخصص - اكتب الرقم بعد علامة ^' },
-      { label: '√', insert: '√', hint: 'جذر تربيعي' },
-      { label: '∛', insert: '∛', hint: 'جذر تكعيبي' },
-      { label: '∜', insert: '∜', hint: 'جذر رابع' },
+      { label: 'x¹', insert: '¹', hint: 'Power 1' },
+      { label: 'x²', insert: '²', hint: 'Squared' },
+      { label: 'x³', insert: '³', hint: 'Cubed' },
+      { label: 'x⁴', insert: '⁴', hint: 'Power 4' },
+      { label: 'x⁵', insert: '⁵', hint: 'Power 5' },
+      { label: 'x⁶', insert: '⁶', hint: 'Power 6' },
+      { label: 'x⁷', insert: '⁷', hint: 'Power 7' },
+      { label: 'x⁸', insert: '⁸', hint: 'Power 8' },
+      { label: 'x⁹', insert: '⁹', hint: 'Power 9' },
+      { label: 'x⁰', insert: '⁰', hint: 'Power 0' },
+      { label: 'xⁿ', insert: '^', hint: 'Custom power - type number after ^' },
+      { label: '√', insert: '√', hint: 'Square root' },
+      { label: '∛', insert: '∛', hint: 'Cube root' },
+      { label: '∜', insert: '∜', hint: 'Fourth root' },
     ],
   },
   {
-    title: 'رموز متقدمة',
+    title: 'Advanced Symbols',
     symbols: [
-      { label: '∑', insert: '∑', hint: 'سيجما' },
-      { label: '∫', insert: '∫', hint: 'تكامل' },
-      { label: 'Δ', insert: 'Δ', hint: 'دلتا' },
-      { label: 'θ', insert: 'θ', hint: 'ثيتا' },
-      { label: 'α', insert: 'α', hint: 'ألفا' },
-      { label: 'β', insert: 'β', hint: 'بيتا' },
-      { label: 'γ', insert: 'γ', hint: 'جاما' },
-      { label: 'λ', insert: 'λ', hint: 'لامدا' },
-      { label: 'μ', insert: 'μ', hint: 'ميو' },
-      { label: 'σ', insert: 'σ', hint: 'سيجما' },
-      { label: 'φ', insert: 'φ', hint: 'فاي' },
-      { label: 'ω', insert: 'ω', hint: 'أوميجا' },
+      { label: '∑', insert: '∑', hint: 'Sigma' },
+      { label: '∫', insert: '∫', hint: 'Integral' },
+      { label: 'Δ', insert: 'Δ', hint: 'Delta' },
+      { label: 'θ', insert: 'θ', hint: 'Theta' },
+      { label: 'α', insert: 'α', hint: 'Alpha' },
+      { label: 'β', insert: 'β', hint: 'Beta' },
+      { label: 'γ', insert: 'γ', hint: 'Gamma' },
+      { label: 'λ', insert: 'λ', hint: 'Lambda' },
+      { label: 'μ', insert: 'μ', hint: 'Mu' },
+      { label: 'σ', insert: 'σ', hint: 'Sigma' },
+      { label: 'φ', insert: 'φ', hint: 'Phi' },
+      { label: 'ω', insert: 'ω', hint: 'Omega' },
     ],
   },
   {
-    title: 'أن角ات ونسب',
+    title: 'Angles & Ratios',
     symbols: [
-      { label: '°', insert: '°', hint: 'درجة' },
-      { label: '∠', insert: '∠', hint: 'زاوية' },
-      { label: '⊥', insert: '⊥', hint: 'تعامد' },
-      { label: '∥', insert: '∥', hint: 'توازي' },
-      { label: 'sin', insert: 'sin', hint: 'جيب' },
-      { label: 'cos', insert: 'cos', hint: 'جتا' },
-      { label: 'tan', insert: 'tan', hint: 'ظل' },
-      { label: 'log', insert: 'log', hint: 'لوغاريتم' },
-      { label: 'ln', insert: 'ln', hint: 'لوغاريتم طبيعي' },
-      { label: '|x|', insert: '|', hint: 'قيمة مطلقة' },
-      { label: 'gcd', insert: 'gcd', hint: 'ق.م.م' },
-      { label: 'lcm', insert: 'lcm', hint: 'م.م.م' },
+      { label: '°', insert: '°', hint: 'Degree' },
+      { label: '∠', insert: '∠', hint: 'Angle' },
+      { label: '⊥', insert: '⊥', hint: 'Perpendicular' },
+      { label: '∥', insert: '∥', hint: 'Parallel' },
+      { label: 'sin', insert: 'sin', hint: 'Sine' },
+      { label: 'cos', insert: 'cos', hint: 'Cosine' },
+      { label: 'tan', insert: 'tan', hint: 'Tangent' },
+      { label: 'log', insert: 'log', hint: 'Logarithm' },
+      { label: 'ln', insert: 'ln', hint: 'Natural log' },
+      { label: '|x|', insert: '|', hint: 'Absolute value' },
+      { label: 'gcd', insert: 'gcd', hint: 'GCD' },
+      { label: 'lcm', insert: 'lcm', hint: 'LCM' },
     ],
   },
   {
-    title: 'أرقام',
+    title: 'Numbers',
     symbols: [
       { label: '0', insert: '0' },
       { label: '1', insert: '1' },
@@ -126,7 +126,7 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
   },
 ]
 
-export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجابتك هنا...', rows = 4, onImageUpload }: MathKeyboardProps) {
+export function MathKeyboard({ value, onChange, placeholder = 'Type your answer here...', rows = 4, onImageUpload }: MathKeyboardProps) {
   const [showKeyboard, setShowKeyboard] = useState(false)
   const [activeGroup, setActiveGroup] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -337,14 +337,14 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
-          title="رفع صورة الحل"
+          title="Upload image"
         >
           {uploading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <ImageIcon className="h-3.5 w-3.5" />
           )}
-          <span>{uploading ? 'جاري الرفع...' : 'رفع صورة'}</span>
+          <span>{uploading ? 'Uploading...' : 'Image'}</span>
         </button>
         <button
           type="button"
@@ -357,7 +357,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
           title="آلة حاسبة للرموز الرياضية"
         >
           <Calculator className="h-3.5 w-3.5" />
-          <span>الرموز الرياضية</span>
+          <span>Symbols</span>
         </button>
       </div>
       <input
@@ -482,7 +482,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
               className="mt-2 w-full py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors flex items-center justify-center gap-1.5"
             >
               <X className="h-3.5 w-3.5" />
-              إغلاق لوحة الرموز
+              Close keyboard
             </button>
           </div>
         </div>
