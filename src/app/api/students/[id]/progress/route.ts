@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { gradeImageAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
+import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 
 // Ensure tables exist before querying
 async function ensureTables() {
@@ -466,33 +466,129 @@ export async function GET(
           console.error('Re-grade error for hw', row.homeworkId, ':', gradeErr)
         }
 
-        // ============= AI IMAGE GRADING for admin view =============
-        // For each writing answer that has an attached image, run AI grading
-        // so admin can see the AI's verdict (extracted answer + correct/wrong)
+        // ============= AI GRADING for admin view (image + text) =============
+        // For each writing answer, run AI grading so admin sees AI verdict
         for (var wai = 0; wai < writingAnswers.length; wai++) {
           var waItem = writingAnswers[wai]
           var ansText = waItem.answer || ''
           var mediaIds = extractImageMediaIds(ansText)
-          if (mediaIds.length === 0) continue
+
+          // Skip if empty answer
+          if (!ansText || ansText === '[📷 صورة مرفقة]') {
+            writingAnswers[wai].needsGrading = false
+            writingAnswers[wai].isCorrect = false
+            writingAnswers[wai].awardedPoints = 0
+            writingAnswers[wai].aiExtractedAnswer = ''
+            writingAnswers[wai].aiIsCorrect = false
+            writingAnswers[wai].aiFeedback = 'لم يجب الطالب'
+            writingAnswers[wai].aiAwardedPoints = 0
+            continue
+          }
+
+          // Skip if no modelAnswer - keep needsGrading=true for manual
+          if (!waItem.modelAnswer) {
+            continue
+          }
+
+          // IMAGE GRADING
+          if (mediaIds.length > 0) {
+            try {
+              var gradeData = await gradeImageAnswer({
+                mediaId: mediaIds[0],
+                question: waItem.question,
+                modelAnswer: waItem.modelAnswer,
+                acceptedAnswers: waItem.acceptedAnswers,
+                maxPoints: waItem.points,
+              })
+              if (gradeData) {
+                writingAnswers[wai].aiExtractedAnswer = gradeData.extractedAnswer || '(تعذر الاستخراج)'
+                writingAnswers[wai].aiIsCorrect = gradeData.isCorrect === true
+                writingAnswers[wai].aiFeedback = gradeData.feedback || (gradeData.isCorrect ? 'صح' : 'غلط')
+                writingAnswers[wai].aiAwardedPoints = gradeData.awardedPoints || 0
+                writingAnswers[wai].needsGrading = false
+                writingAnswers[wai].isCorrect = gradeData.isCorrect === true
+                writingAnswers[wai].awardedPoints = gradeData.awardedPoints || 0
+              }
+            } catch (e) {
+              console.error('[Progress] AI grade image error:', e)
+              writingAnswers[wai].needsGrading = false
+              writingAnswers[wai].isCorrect = false
+              writingAnswers[wai].awardedPoints = 0
+              writingAnswers[wai].aiExtractedAnswer = '(فشل الـ AI)'
+              writingAnswers[wai].aiFeedback = 'فشل التصحيح'
+            }
+            continue
+          }
+
+          // TEXT GRADING (no image)
+          // First try quick match
+          var cleanedStudent = (ansText || '').toLowerCase().replace(/\s+/g, ' ').trim()
+          var cleanedModel = (waItem.modelAnswer || '').toLowerCase().replace(/\s+/g, ' ').trim()
+          var quickMatched = false
+
+          if (waItem.acceptedAnswers && waItem.acceptedAnswers.length > 0) {
+            for (var qai = 0; qai < waItem.acceptedAnswers.length; qai++) {
+              var accAns = (waItem.acceptedAnswers[qai] || '').trim().toLowerCase().replace(/\s+/g, ' ')
+              if (accAns && (cleanedStudent === accAns || cleanedStudent.includes(accAns) || accAns.includes(cleanedStudent))) {
+                quickMatched = true
+                break
+              }
+            }
+          }
+          if (quickMatched) {
+            writingAnswers[wai].needsGrading = false
+            writingAnswers[wai].isCorrect = true
+            writingAnswers[wai].awardedPoints = waItem.points
+            writingAnswers[wai].aiExtractedAnswer = ansText
+            writingAnswers[wai].aiIsCorrect = true
+            writingAnswers[wai].aiFeedback = 'صح (تطابق نصي)'
+            writingAnswers[wai].aiAwardedPoints = waItem.points
+            continue
+          }
+
+          // Match final answer
+          if (cleanedModel) {
+            var mParts = cleanedModel.split('=')
+            var sParts = cleanedStudent.split('=')
+            var mFinal = (mParts[mParts.length - 1] || '').trim()
+            var sFinal = (sParts[sParts.length - 1] || '').trim()
+            if (mFinal && sFinal && (mFinal === sFinal || mFinal.includes(sFinal) || sFinal.includes(mFinal))) {
+              writingAnswers[wai].needsGrading = false
+              writingAnswers[wai].isCorrect = true
+              writingAnswers[wai].awardedPoints = waItem.points
+              writingAnswers[wai].aiExtractedAnswer = ansText
+              writingAnswers[wai].aiIsCorrect = true
+              writingAnswers[wai].aiFeedback = 'صح (الإجابة النهائية مطابقة)'
+              writingAnswers[wai].aiAwardedPoints = waItem.points
+              continue
+            }
+          }
+
+          // AI text grading
           try {
-            var gradeData = await gradeImageAnswer({
-              mediaId: mediaIds[0],
+            var textGradeData = await gradeTextAnswer({
               question: waItem.question,
+              studentAnswer: ansText,
               modelAnswer: waItem.modelAnswer,
               acceptedAnswers: waItem.acceptedAnswers,
               maxPoints: waItem.points,
             })
-            if (gradeData.error === undefined || gradeData.extractedAnswer) {
-              writingAnswers[wai].aiExtractedAnswer = gradeData.extractedAnswer
-              writingAnswers[wai].aiIsCorrect = gradeData.isCorrect === true
-              writingAnswers[wai].aiFeedback = gradeData.feedback || ''
-              writingAnswers[wai].aiAwardedPoints = gradeData.awardedPoints || 0
+            if (textGradeData) {
               writingAnswers[wai].needsGrading = false
-              writingAnswers[wai].isCorrect = gradeData.isCorrect === true
-              writingAnswers[wai].awardedPoints = gradeData.awardedPoints || 0
+              writingAnswers[wai].isCorrect = textGradeData.isCorrect === true
+              writingAnswers[wai].awardedPoints = textGradeData.awardedPoints || 0
+              writingAnswers[wai].aiExtractedAnswer = ansText
+              writingAnswers[wai].aiIsCorrect = textGradeData.isCorrect === true
+              writingAnswers[wai].aiFeedback = textGradeData.feedback || (textGradeData.isCorrect ? 'صح' : 'غلط')
+              writingAnswers[wai].aiAwardedPoints = textGradeData.awardedPoints || 0
             }
           } catch (e) {
-            console.error('[Progress] AI grade image error:', e)
+            console.error('[Progress] AI text grading error:', e)
+            writingAnswers[wai].needsGrading = false
+            writingAnswers[wai].isCorrect = false
+            writingAnswers[wai].awardedPoints = 0
+            writingAnswers[wai].aiExtractedAnswer = ansText
+            writingAnswers[wai].aiFeedback = 'فشل التصحيح'
           }
         }
 
