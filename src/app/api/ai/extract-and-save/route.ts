@@ -35,19 +35,41 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No questions to save' }, { status: 400 })
     }
 
-    // Convert to DB format
+    // Convert to DB format - preserve ALL fields (type, modelAnswer, acceptedAnswers)
     var dbQuestions = questions.map(function(q) {
-      var questionText = q.question || ''
+      var questionText = q.question || q.q || ''
+      var isWriting = q.type === 'writing' || q.type === 'essay'
+      if (!isWriting && Array.isArray(q.options)) {
+        var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+        if (allNA) isWriting = true
+      }
+      if (!isWriting && (!q.options || q.options.length === 0)) {
+        isWriting = true
+      }
+      var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : (isWriting ? 5 : 1)
+      if (isWriting) {
+        return {
+          type: 'writing',
+          question: questionText,
+          options: [],
+          correct: -1,
+          points: pts,
+          modelAnswer: q.modelAnswer || q.answer || '',
+          acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : [],
+        }
+      }
       var opts = Array.isArray(q.options) ? q.options.slice(0, 4) : ['N/A', 'N/A', 'N/A', 'N/A']
       while (opts.length < 4) { opts.push('N/A') }
       var correctIdx = typeof q.correct === 'number' ? q.correct : 0
       if (correctIdx < 0 || correctIdx > 3) { correctIdx = 0 }
-      var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
-
-      if (type === 'exam') {
-        return { q: questionText, options: opts, correct: correctIdx, points: pts }
+      return {
+        type: 'mcq',
+        question: questionText,
+        options: opts,
+        correct: correctIdx,
+        points: pts,
+        modelAnswer: q.modelAnswer || '',
       }
-      return { question: questionText, options: opts, correct: correctIdx, points: pts }
     })
 
     var questionsStr = JSON.stringify(dbQuestions)
