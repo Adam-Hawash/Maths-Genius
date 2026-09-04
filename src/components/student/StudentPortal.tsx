@@ -682,6 +682,9 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     var blockedHw = homework.find(function(h) { return h.id === blockedHwId })
     var bScore = hwResults[blockedHwId]
     var bWrong = hwWrongQuestions[blockedHwId] || []
+    // remaining homeworks: not yet submitted (excluding the blocked one)
+    var bRemaining = homework.filter(function(h) { return h.id !== blockedHwId && !completedHwIds.has(h.id) })
+    var bDone = homework.filter(function(h) { return h.id !== blockedHwId && completedHwIds.has(h.id) })
     return (
       <div className="space-y-4">
         {/* Block header */}
@@ -728,6 +731,75 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
             )}
           </div>
         )}
+
+        {/* OTHER HOMEWORKS — quick navigation */}
+        <div className="mx-4 mt-2 space-y-3">
+          {bRemaining.length > 0 && (
+            <Card className="border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-900/10">
+              <CardContent className="p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <ListTodo className="h-4 w-4 text-emerald-600" />
+                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">واجبات جديدة لم تبدأها ({bRemaining.length})</p>
+                </div>
+                <div className="space-y-1.5">
+                  {bRemaining.map(function(hw) {
+                    var qCount = 0
+                    try { if ((hw as any).questions) qCount = JSON.parse((hw as any).questions).length } catch {}
+                    return (
+                      <button
+                        key={hw.id}
+                        onClick={function() { setBlockedHwId(null); setTimeout(function() { setExpandedHw(hw.id) }, 50) }}
+                        className="w-full flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-white/5 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors text-right"
+                      >
+                        <ClipboardList className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <div className="flex-1 min-w-0 text-right">
+                          <p className="text-xs font-medium truncate">{hw.title}</p>
+                          {qCount > 0 && <p className="text-[10px] text-muted-foreground">{qCount} سؤال</p>}
+                        </div>
+                        <ChevronLeft className="h-3 w-3 text-muted-foreground shrink-0" />
+                      </button>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {bRemaining.length === 0 && bDone.length === 0 && (
+            <div className="text-center py-6 px-4">
+              <ClipboardList className="h-10 w-10 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">لا توجد واجبات أخرى حالياً</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">انتظر إضافة الأستاذ لواجبات جديدة</p>
+            </div>
+          )}
+          {bDone.length > 0 && (
+            <Card className="border-muted">
+              <CardContent className="p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  <p className="text-sm font-bold text-muted-foreground">واجبات مُسلمة ({bDone.length})</p>
+                </div>
+                <div className="space-y-1.5">
+                  {bDone.map(function(hw) {
+                    var dScore = hwResults[hw.id]
+                    return (
+                      <button
+                        key={hw.id}
+                        onClick={function() { setBlockedHwId(hw.id) }}
+                        className="w-full flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors text-right"
+                      >
+                        <ClipboardList className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <div className="flex-1 min-w-0 text-right">
+                          <p className="text-xs font-medium truncate">{hw.title}</p>
+                          {dScore && <p className="text-[10px] text-muted-foreground">النتيجة: {dScore.score}/{dScore.maxScore}</p>}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     )
   }
@@ -738,6 +810,9 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     var sWrong = hwWrongQuestions[submittedHwId] || []
     var sDisplayQuestions = hwDisplayQuestions[submittedHwId] || hwAllQuestions[submittedHwId] || []
     var sWritingAnswers = hwWritingAnswers[submittedHwId] || []
+    // remaining homeworks: not yet submitted (excluding just-submitted)
+    var sRemaining = homework.filter(function(h) { return h.id !== submittedHwId && !completedHwIds.has(h.id) })
+    var sDone = homework.filter(function(h) { return h.id !== submittedHwId && completedHwIds.has(h.id) })
     return (
       <div className="space-y-4">
         <div className="flex flex-col items-center justify-center py-10 px-6 space-y-4">
@@ -846,13 +921,77 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         {sDisplayQuestions.length === 0 && sWrong.length === 0 && (
           <p className="mx-4 text-sm text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
         )}
+
+        {/* OTHER HOMEWORKS — quick navigation after submission */}
+        <div className="mx-4 mt-4 space-y-3">
+          {sRemaining.length > 0 && (
+            <Card className="border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-900/10">
+              <CardContent className="p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <ListTodo className="h-4 w-4 text-emerald-600" />
+                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">واجبات جديدة لم تبدأها ({sRemaining.length})</p>
+                </div>
+                <div className="space-y-1.5">
+                  {sRemaining.map(function(hw) {
+                    var qCount = 0
+                    try { if ((hw as any).questions) qCount = JSON.parse((hw as any).questions).length } catch {}
+                    return (
+                      <button
+                        key={hw.id}
+                        onClick={function() { setHwSubmitted(false); setSubmittedHwId(null); setTimeout(function() { setExpandedHw(hw.id) }, 50) }}
+                        className="w-full flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-white/5 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors text-right"
+                      >
+                        <ClipboardList className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <div className="flex-1 min-w-0 text-right">
+                          <p className="text-xs font-medium truncate">{hw.title}</p>
+                          {qCount > 0 && <p className="text-[10px] text-muted-foreground">{qCount} سؤال</p>}
+                        </div>
+                        <ChevronLeft className="h-3 w-3 text-muted-foreground shrink-0" />
+                      </button>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {sRemaining.length === 0 && sDone.length === 0 && (
+            <div className="text-center py-6 px-4">
+              <ClipboardList className="h-10 w-10 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">لا توجد واجبات أخرى حالياً</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">انتظر إضافة الأستاذ لواجبات جديدة</p>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
 
+  // Split homework into new (not submitted) and done (submitted)
+  var newHomework = homework.filter(function(hw) { return !completedHwIds.has(hw.id) })
+  var doneHomework = homework.filter(function(hw) { return completedHwIds.has(hw.id) })
+
   return (
-    <div className="space-y-3">
-      {homework.map((hw) => {
+    <div className="space-y-4">
+      {/* NEW HOMEWORK SECTION — prominently highlighted */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <ListTodo className="h-5 w-5 text-emerald-600" />
+          <h2 className="font-bold text-sm text-emerald-700 dark:text-emerald-400">
+            {newHomework.length > 0
+              ? 'واجبات جديدة (' + newHomework.length + ')'
+              : 'لا توجد واجبات جديدة'}
+          </h2>
+        </div>
+        {newHomework.length === 0 && (
+          <Card className="border-dashed border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-900/5">
+            <CardContent className="p-6 text-center">
+              <ClipboardList className="h-10 w-10 text-emerald-500/40 mx-auto mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">خلصت كل الواجبات المتاحة!</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">انتظر إضافة الأستاذ لواجبات جديدة، أو راجع واجباتك المسلمة تحت.</p>
+            </CardContent>
+          </Card>
+        )}
+        {newHomework.map((hw) => {
         var allQuestions = (hw as any).questions ? JSON.parse((hw as any).questions) : []
         var hasQuestions = Array.isArray(allQuestions) && allQuestions.length > 0
 
@@ -1030,7 +1169,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                             </p>
                             <div dir="ltr">
                               <MathKeyboard
-                                value={hwAnswers[hw.id]?.[displayIdx] || ''}
+                                value={typeof hwAnswers[hw.id]?.[displayIdx] === 'string' ? (hwAnswers[hw.id]?.[displayIdx] as string) : ''}
                                 onChange={function(val: string) {
                                   setHwAnswers(function(prev) {
                                     var a = { ...prev }
@@ -1044,7 +1183,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                                   if (filePath) {
                                     setHwAnswers(function(prev) {
                                       var a = { ...prev }
-                                      var existing = a[hw.id]?.[displayIdx] || ''
+                                      var existingRaw = a[hw.id]?.[displayIdx] || ''
+                                      var existing = typeof existingRaw === 'string' ? existingRaw : String(existingRaw)
                                       if (!existing.includes('[📷 صورة مرفقة]')) {
                                         a[hw.id] = { ...(a[hw.id] || {}), [displayIdx]: existing + (existing ? '\n' : '') + '[📷 صورة مرفقة: ' + filePath + ']' }
                                       }
@@ -1119,6 +1259,49 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
           </Card>
         )
       })}
+      </div>
+
+      {/* DONE HOMEWORK SECTION — submitted homeworks collapsed */}
+      {doneHomework.length > 0 && (
+        <div className="space-y-3 pt-2 border-t border-border/50 mt-4">
+          <div className="flex items-center gap-2 pt-3">
+            <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
+            <h2 className="font-bold text-sm text-muted-foreground">
+              واجبات مُسلمة ({doneHomework.length})
+            </h2>
+          </div>
+          {doneHomework.map(function(hw) {
+            var dScore = hwResults[hw.id]
+            var qCount = 0
+            try { if ((hw as any).questions) qCount = JSON.parse((hw as any).questions).length } catch {}
+            return (
+              <button
+                key={hw.id}
+                onClick={function() { setBlockedHwId(hw.id) }}
+                className="w-full text-right"
+              >
+                <Card className="border-muted bg-muted/20 hover:bg-muted/40 transition-colors">
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <div className="flex-1 min-w-0 text-right">
+                      <p className="text-xs font-medium truncate">{hw.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {dScore && (
+                          <Badge className="text-[9px] bg-emerald-500 text-white">النتيجة: {dScore.score}/{dScore.maxScore}</Badge>
+                        )}
+                        {qCount > 0 && <span className="text-[10px] text-muted-foreground">{qCount} سؤال</span>}
+                      </div>
+                    </div>
+                    <ChevronLeft className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </CardContent>
+                </Card>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
