@@ -127,7 +127,7 @@ export function LoginView() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-12">
-      <motion.div className="w-full max-w-md" initial="hidden" animate="visible" variants={fadeInUp} transition={{ duration: 0.5, ease: 'easeOut' }}>
+      <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-primary/10 mb-4"><GraduationCap className="h-8 w-8 text-primary" /></div>
           <h1 className="text-2xl font-bold text-foreground mb-2">تسجيل الدخول</h1>
@@ -139,14 +139,22 @@ export function LoginView() {
               <div className="space-y-4">
                 <PhoneField value={studentPhone} onChange={setStudentPhone} placeholder="رقم الهاتف" id="login-phone" />
                 <PasswordField value={studentPassword} onChange={setStudentPassword} placeholder="كلمة المرور" id="login-password" />
-                <Button className="w-full min-h-[44px] font-semibold" onClick={handleStudentLogin} disabled={studentLoading}>{studentLoading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />استنى شوية...</>) : 'ادخل لحسابك'}</Button>
+                <button
+                  type="button"
+                  className="w-full min-h-[44px] font-semibold inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors px-4 py-2 cursor-pointer"
+                  onClick={handleStudentLogin}
+                  disabled={studentLoading}
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  {studentLoading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />استنى شوية...</>) : 'ادخل لحسابك'}
+                </button>
                 <p className="text-center text-sm text-muted-foreground">عندك حساب؟ <button onClick={function () { setView('auth-register') }} className="text-primary font-medium hover:underline cursor-pointer">اعمل حساب جديد</button></p>
               </div>
             </CardContent>
           </Card>
         </div>
         <div className="mt-6 text-center"><button onClick={function () { setView('landing') }} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer"><ArrowRight className="h-4 w-4" />العودة للرئيسية</button></div>
-      </motion.div>
+      </div>
     </div>
   )
 }
