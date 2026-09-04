@@ -127,9 +127,9 @@ export function Footer() {
         
         {/* Powered by Prime Developer */}
         <div className="mt-6 pt-4 border-t border-border/40 text-center">
-          <p className="text-xs text-white/70">
+          <p className="text-xs text-foreground">
             Powered by{' '}
-            <span className="font-bold text-yellow-400">Prime Developer</span>
+            <span className="font-bold text-[#C49A38]">Prime Developer</span>
           </p>
         </div>
       </div>
