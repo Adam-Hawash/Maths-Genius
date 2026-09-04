@@ -21,24 +21,29 @@ const FALLBACK_MODELS = ['gemini-1.5-flash']
 // (no longer used - replaced with hardcoded array inside callGemini)
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  // Use gemini-2.5-flash (verified working in Google's API)
-  // Fallback to gemini-1.5-flash if first fails
-  var allModels = ['gemini-2.5-flash', 'gemini-1.5-flash']
+  // Models in order of preference. All these are valid for v1beta generateContent API.
+  // gemini-1.5-flash and gemini-1.5-pro are deprecated - replaced with -latest variants.
+  var allModels = [
+    'gemini-2.0-flash',
+    'gemini-2.5-flash-preview-05-20',
+    'gemini-flash-latest',
+    'gemini-2.0-flash-lite',
+  ]
   var lastError = ''
   for (var mi = 0; mi < allModels.length; mi++) {
     var model = allModels[mi]
     try {
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
-      // Per-request timeout (15s for first, 20s for fallback)
+      // Per-request timeout (10s for fast model, 15s for fallback)
       var controller = new AbortController()
-      var timeoutMs = mi === 0 ? 15000 : 20000
+      var timeoutMs = mi === 0 ? 10000 : 15000
       var timeout = setTimeout(function() { controller.abort() }, timeoutMs)
       var geminiRes = await fetch(modelUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: parts }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 800 }
+          generationConfig: { temperature: 0.4, maxOutputTokens: 600 }
         }),
         signal: controller.signal,
       })
@@ -49,10 +54,9 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
         try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
         if (text) return { ok: true, text: text }
       } else {
-        // Capture error body for debugging
         var errBody = ''
         try { errBody = await geminiRes.text() } catch (e) {}
-        lastError = model + ': HTTP ' + geminiRes.status + ' - ' + errBody.substring(0, 200)
+        lastError = model + ': HTTP ' + geminiRes.status + ' - ' + errBody.substring(0, 150)
         console.error('[AI Assistant] ' + lastError)
       }
     } catch (e: any) {
