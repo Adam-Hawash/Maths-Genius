@@ -205,7 +205,9 @@ export async function POST(request) {
     var aiGraded = false
     if (writingAnswers.length > 0) {
       try {
-        var gradeRes = await fetch('http://localhost:3000/api/homework/grade-writing', {
+        // Build absolute URL for production (Vercel) and localhost for dev
+        var baseUrl = process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : (process.env.NEXTAUTH_URL || 'http://localhost:3000')
+        var gradeRes = await fetch(baseUrl + '/api/homework/grade-writing', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -226,6 +228,18 @@ export async function POST(request) {
       } catch (gradeErr) {
         console.error('AI grading error:', gradeErr)
         // Continue without AI grading
+      }
+    }
+
+    // Update the saved result with the final score (MCQ + writing)
+    if (aiGraded && writingScore > 0) {
+      try {
+        await db.$executeRawUnsafe(
+          'UPDATE HomeworkResult SET score = ? WHERE id = ?',
+          score, resultId
+        )
+      } catch (updateErr) {
+        console.error('Update score error:', updateErr)
       }
     }
 
