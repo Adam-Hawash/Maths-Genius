@@ -38,7 +38,8 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
       { label: '≤', insert: '≤', hint: 'أصغر أو يساوي' },
       { label: '≥', insert: '≥', hint: 'أكبر أو يساوي' },
       { label: '±', insert: '±', hint: 'زائد أو ناقص' },
-      { label: '( )', insert: '(', hint: 'أقواس' },
+      { label: '(', insert: '(', hint: 'قوس مفتوح' },
+      { label: ')', insert: ')', hint: 'قوس مقفول' },
     ],
   },
   {

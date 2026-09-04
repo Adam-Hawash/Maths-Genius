@@ -778,22 +778,25 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
               var writingIsWrong = writingAns && writingAns.isCorrect === false && writingAns.answer && writingAns.answer.trim()
               return (
                 <Card key={di} className={qType === 'writing' ? (writingIsWrong ? 'border-red-200 dark:border-red-900/40' : writingIsCorrect ? 'border-emerald-200 dark:border-emerald-900/40' : 'border-amber-200 dark:border-amber-900/40') : isWrong ? 'border-red-200 dark:border-red-900/40' : 'border-emerald-200 dark:border-emerald-900/40'}>
-                  <CardContent className="p-3 space-y-2">
+                  <CardContent className="p-3 space-y-2" dir="ltr">
                     <div className="flex items-start gap-2">
                       <span className={"shrink-0 mt-0.5 text-xs font-bold px-2 py-0.5 rounded-full " + (
                         qType === 'writing'
                           ? (writingIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : writingIsWrong ? 'bg-red-500/10 text-red-600' : 'bg-amber-500/10 text-amber-600')
-                          : isWrong ? 'bg-red-500/10 text-red-600' : 'bg-emerald-500/10 text-emerald-600'
+                          : isWrong ? (wrongQ && wrongQ.studentAnswer === 'لم يتم الإجابة' ? 'bg-gray-500/10 text-gray-600' : 'bg-red-500/10 text-red-600') : 'bg-emerald-500/10 text-emerald-600'
                       )}>
                         {qType === 'writing'
-                          ? (writingIsCorrect ? 'صح' : writingIsWrong ? 'غلط' : 'بانتظار التصحيح')
-                          : isWrong ? 'غلط' : 'صح'}
+                          ? (writingIsCorrect ? 'Correct' : writingIsWrong ? 'Wrong' : (!writingAns || !writingAns.answer || !writingAns.answer.trim() ? 'Empty' : 'Pending'))
+                          : isWrong ? (wrongQ && wrongQ.studentAnswer === 'لم يتم الإجابة' ? 'Empty' : 'Wrong') : 'Correct'}
                       </span>
-                      <p className="text-sm font-medium flex-1" dir="ltr" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q}</p>
+                      <p className="text-sm font-medium flex-1" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q}</p>
                     </div>
                     {qType === 'mcq' ? (
                       <div className="space-y-1 pl-8" dir="ltr">
-                        {wrongQ && (
+                        {wrongQ && wrongQ.studentAnswer === 'لم يتم الإجابة' && (
+                          <p className="text-xs text-gray-500">Your answer: (not answered)</p>
+                        )}
+                        {wrongQ && wrongQ.studentAnswer !== 'لم يتم الإجابة' && (
                           <>
                             <p className="text-xs text-red-600">Your answer: <span dir="ltr">{wrongQ.studentAnswer}</span></p>
                             <p className="text-xs text-emerald-600">Correct answer: <span dir="ltr">{wrongQ.correctAnswer}</span></p>
@@ -804,20 +807,23 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                         )}
                       </div>
                     ) : (
-                      <div className="space-y-1 pl-8" dir="rtl">
+                      <div className="space-y-1 pl-8" dir="ltr">
                         {writingAns && (
                           <div className="space-y-1 p-2 rounded-md bg-muted/30 border border-border/30">
-                            <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="auto">إجابتك: {writingAns.answer || '(فارغ)'}</p>
+                            <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="ltr">Your answer: {writingAns.answer || '(empty)'}</p>
                             {writingAns.modelAnswer && (
-                              <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="auto">الإجابة الصحيحة: {writingAns.modelAnswer}</p>
+                              <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="ltr">Correct answer: {writingAns.modelAnswer}</p>
                             )}
                             {writingAns.feedback && (
-                              <p className="text-[10px] text-muted-foreground" dir="auto">{writingAns.feedback}</p>
+                              <p className="text-[10px] text-muted-foreground" dir="ltr">{writingAns.feedback}</p>
                             )}
                             {writingAns.awardedPoints !== undefined && (
-                              <p className="text-[10px] font-semibold text-muted-foreground">الدرجة: {writingAns.awardedPoints}/{writingAns.maxPoints || writingAns.points}</p>
+                              <p className="text-[10px] font-semibold text-muted-foreground">Score: {writingAns.awardedPoints}/{writingAns.maxPoints || writingAns.points}</p>
                             )}
                           </div>
+                        )}
+                        {!writingAns && (
+                          <p className="text-xs text-gray-500">Your answer: (empty - not answered)</p>
                         )}
                       </div>
                     )}

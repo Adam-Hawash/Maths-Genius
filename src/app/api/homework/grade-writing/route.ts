@@ -62,7 +62,7 @@ export async function POST(request) {
       var wa = writingAnswers[i]
       totalMax += wa.points || 0
 
-      // If student answer is empty, give 0
+      // If student answer is empty, give 0 and mark as not answered
       if (!wa.answer || wa.answer.trim() === '' || wa.answer.trim() === '[📷 صورة مرفقة]') {
         graded[i] = {
           question: wa.question,
@@ -71,7 +71,7 @@ export async function POST(request) {
           awardedPoints: 0,
           maxPoints: wa.points || 0,
           isCorrect: false,
-          feedback: 'لم يتم تقديم إجابة'
+          feedback: 'Not answered'
         }
         continue
       }
@@ -138,13 +138,15 @@ export async function POST(request) {
     var lines = []
     lines.push('You are an expert math teacher grading student answers.')
     lines.push('For each question, compare the student answer with the model answer.')
+    lines.push('Focus on the FINAL ANSWER - if the final answer matches, it is correct.')
     lines.push('Award partial credit if the student shows correct steps but has minor errors.')
     lines.push('')
     lines.push('Rules:')
-    lines.push('- If the student answer is mathematically equivalent to the model answer, give full credit')
+    lines.push('- If the student final answer matches the model answer, give full credit (isCorrect: true)')
     lines.push('- If the final answer is correct but steps are missing, give 50% credit')
     lines.push('- If steps are correct but final answer is wrong, give 30% credit')
-    lines.push('- If completely wrong or unrelated, give 0')
+    lines.push('- If completely wrong or unrelated, give 0 (isCorrect: false)')
+    lines.push('- If the student answer is empty, give 0 and isCorrect: false, feedback: "Not answered"')
     lines.push('- Round awarded points to nearest integer (0, 1, 2, ..., up to maxPoints)')
     lines.push('- Provide brief feedback in English explaining the score')
     lines.push('- Use Unicode math symbols (√ ² ³ × ÷ π) — do not use LaTeX')
