@@ -1021,7 +1021,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                       }
                     } catch { toast.error('خطأ في الاتصال') }
                     setHwSubmitting(null)
-                  }}>{hwSubmitting === hw.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم الإجابات (' + Object.keys(myAnswers).length + '/' + mcq.length + ')'}</Button>
+                  }}>{hwSubmitting === hw.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم الإجابات (' + Object.keys(myAnswers).length + '/' + allQuestions.length + ')'}</Button>
                 </div>
               )}
             </CardContent>
