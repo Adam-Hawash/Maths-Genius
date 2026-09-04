@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { gradeImageAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
+import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 
 // GET /api/exam-results?studentId=xxx&examId=yyy - Student pre-submit check (raw SQL)
 // GET /api/exam-results?studentId=xxx - Student: all exam results
@@ -115,18 +115,30 @@ export async function GET(request: NextRequest) {
     } catch (e) {}
 
     // Separate MCQ from writing for re-grading + display
-    var mcqQs: any[] = []
-    var writingQs: any[] = []
-    examQuestions.forEach(function(q: any) {
+    // Track ORIGINAL index for each question (key for student answers lookup)
+    var mcqQs: any[] = []        // [{q: ..., origIdx: 0}, ...]
+    var writingQs: any[] = []    // [{q: ..., origIdx: 1}, ...]
+    examQuestions.forEach(function(q: any, idx: number) {
       var isWriting = q.type === 'writing' || q.type === 'essay'
       if (!isWriting && Array.isArray(q.options)) {
         var allNA = q.options.length > 0 && q.options.every(function(o: any) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
         if (allNA) isWriting = true
       }
       if (!isWriting && (!q.options || q.options.length === 0)) isWriting = true
-      if (isWriting) writingQs.push(q)
-      else mcqQs.push(q)
+      if (isWriting) writingQs.push({ q: q, origIdx: idx })
+      else mcqQs.push({ q: q, origIdx: idx })
     })
+
+    // Helper: look up student answer at original index
+    function lookupAnswer(studentAns: any, origIdx: number): any {
+      try {
+        if (Array.isArray(studentAns)) return studentAns[origIdx]
+        if (studentAns !== null && typeof studentAns === 'object') {
+          return studentAns[origIdx] !== undefined ? studentAns[origIdx] : studentAns[String(origIdx)]
+        }
+      } catch (e) {}
+      return undefined
+    }
 
     // Build per-student results with all questions review
     var passScore = examInfo.passScore || 50
@@ -146,21 +158,16 @@ export async function GET(request: NextRequest) {
       var wrongQuestions: any[] = []
       var writingAnswers: any[] = []
 
-      // MCQ all questions
-      mcqQs.forEach(function(q, qi) {
+      // MCQ all questions - iterate by ORIGINAL index
+      mcqQs.forEach(function(item, qi) {
+        var q = item.q
+        var origIdx = item.origIdx
         var qText = q.question || q.q || ''
         var opts = Array.isArray(q.options) ? q.options : []
         var correctIdx = typeof q.correct === 'number' ? q.correct : 0
         if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
 
-        var ans = undefined
-        try {
-          if (Array.isArray(studentAns)) {
-            ans = studentAns[qi]
-          } else if (studentAns !== null && typeof studentAns === 'object') {
-            ans = studentAns[qi] !== undefined ? studentAns[qi] : studentAns[String(qi)]
-          }
-        } catch (e) {}
+        var ans = lookupAnswer(studentAns, origIdx)
 
         var isCorrect = ans !== undefined && ans !== null && Number(ans) === correctIdx
         var studentAnswerText = (typeof ans === 'number' && opts[ans] && opts[ans] !== 'N/A')
@@ -187,48 +194,114 @@ export async function GET(request: NextRequest) {
         }
       })
 
-      // Writing all questions (offset by mcq length)
+      // Writing all questions - iterate by ORIGINAL index
       for (var wi = 0; wi < writingQs.length; wi++) {
-        var wq = writingQs[wi]
+        var wItem = writingQs[wi]
+        var wq = wItem.q
+        var wOrigIdx = wItem.origIdx
         var qText = wq.question || wq.q || ''
         var studentText = ''
-        var offset = mcqQs.length
-        try {
-          if (Array.isArray(studentAns)) {
-            studentText = studentAns[offset + wi] || ''
-          } else if (studentAns && typeof studentAns === 'object') {
-            studentText = studentAns[offset + wi] || studentAns[String(offset + wi)] || ''
-          }
-        } catch (e) {}
+        // Look up student answer by ORIGINAL index (key used during submit)
+        var lookedUp = lookupAnswer(studentAns, wOrigIdx)
+        studentText = lookedUp !== undefined && lookedUp !== null ? String(lookedUp) : ''
         studentText = typeof studentText === 'string' ? studentText : String(studentText || '')
 
         var modelAnswer = wq.modelAnswer || wq.answer || ''
         var acceptedAnswers = Array.isArray(wq.acceptedAnswers) ? wq.acceptedAnswers : []
         var pts = (typeof wq.points === 'number' && wq.points > 0) ? wq.points : 5
 
-        // AI image grading
+        // AI grading - image OR text
         var aiExtracted = ''
         var aiIsCorrect = false
         var aiFeedback = ''
         var imageGraded = false
-        var mediaIds = extractImageMediaIds(studentText)
-        if (mediaIds.length > 0) {
-          try {
-            var gradeData = await gradeImageAnswer({
-              mediaId: mediaIds[0],
-              question: qText,
-              modelAnswer: modelAnswer,
-              acceptedAnswers: acceptedAnswers,
-              maxPoints: pts,
-            })
-            if (gradeData.error === undefined || gradeData.extractedAnswer) {
-              aiExtracted = gradeData.extractedAnswer
-              aiIsCorrect = gradeData.isCorrect === true
-              aiFeedback = gradeData.feedback || ''
-              imageGraded = true
+        var textGraded = false
+        var needsGrading = false
+
+        // Skip if empty
+        if (!studentText || studentText === '[📷 صورة مرفقة]') {
+          needsGrading = false
+          aiFeedback = 'لم يجب الطالب'
+        } else if (!modelAnswer) {
+          // No model answer — admin will grade manually
+          needsGrading = true
+        } else {
+          var mediaIds = extractImageMediaIds(studentText)
+
+          // IMAGE GRADING
+          if (mediaIds.length > 0) {
+            try {
+              var gradeData = await gradeImageAnswer({
+                mediaId: mediaIds[0],
+                question: qText,
+                modelAnswer: modelAnswer,
+                acceptedAnswers: acceptedAnswers,
+                maxPoints: pts,
+              })
+              if (gradeData) {
+                aiExtracted = gradeData.extractedAnswer || '(تعذر الاستخراج)'
+                aiIsCorrect = gradeData.isCorrect === true
+                aiFeedback = gradeData.feedback || (gradeData.isCorrect ? 'صح' : 'غلط')
+                imageGraded = true
+              }
+            } catch (e) {
+              console.error('[Exam Results] AI grade image error:', e)
+              aiFeedback = 'فشل التصحيح'
             }
-          } catch (e) {
-            console.error('[Exam Results] AI grade image error:', e)
+          } else {
+            // TEXT GRADING - quick match first
+            var cleanStud = (studentText || '').toLowerCase().replace(/\s+/g, ' ').trim()
+            var cleanMod = (modelAnswer || '').toLowerCase().replace(/\s+/g, ' ').trim()
+            var quickMatch = false
+
+            if (acceptedAnswers && acceptedAnswers.length > 0) {
+              for (var eai = 0; eai < acceptedAnswers.length; eai++) {
+                var eAcc = (acceptedAnswers[eai] || '').trim().toLowerCase().replace(/\s+/g, ' ')
+                if (eAcc && (cleanStud === eAcc || cleanStud.includes(eAcc) || eAcc.includes(cleanStud))) {
+                  quickMatch = true
+                  break
+                }
+              }
+            }
+
+            if (quickMatch) {
+              aiExtracted = studentText
+              aiIsCorrect = true
+              aiFeedback = 'صح (تطابق نصي)'
+              textGraded = true
+            } else if (cleanMod) {
+              // Match final answer
+              var eMParts = cleanMod.split('=')
+              var eSParts = cleanStud.split('=')
+              var eMFinal = (eMParts[eMParts.length - 1] || '').trim()
+              var eSFinal = (eSParts[eSParts.length - 1] || '').trim()
+              if (eMFinal && eSFinal && (eMFinal === eSFinal || eMFinal.includes(eSFinal) || eSFinal.includes(eMFinal))) {
+                aiExtracted = studentText
+                aiIsCorrect = true
+                aiFeedback = 'صح (الإجابة النهائية مطابقة)'
+                textGraded = true
+              } else {
+                // AI text grading
+                try {
+                  var eTextGrade = await gradeTextAnswer({
+                    question: qText,
+                    studentAnswer: studentText,
+                    modelAnswer: modelAnswer,
+                    acceptedAnswers: acceptedAnswers,
+                    maxPoints: pts,
+                  })
+                  if (eTextGrade) {
+                    aiExtracted = studentText
+                    aiIsCorrect = eTextGrade.isCorrect === true
+                    aiFeedback = eTextGrade.feedback || (eTextGrade.isCorrect ? 'صح' : 'غلط')
+                    textGraded = true
+                  }
+                } catch (e) {
+                  console.error('[Exam Results] AI text grading error:', e)
+                  aiFeedback = 'فشل التصحيح'
+                }
+              }
+            }
           }
         }
 
@@ -237,11 +310,13 @@ export async function GET(request: NextRequest) {
           question: qText,
           studentAnswer: studentText,
           correctAnswer: modelAnswer,
-          isCorrect: imageGraded ? aiIsCorrect : false,
+          isCorrect: (imageGraded || textGraded) ? aiIsCorrect : false,
           aiExtractedAnswer: aiExtracted,
           aiIsCorrect: aiIsCorrect,
           aiFeedback: aiFeedback,
           imageGraded: imageGraded,
+          textGraded: textGraded,
+          needsGrading: needsGrading,
         })
 
         writingAnswers.push({
@@ -250,12 +325,13 @@ export async function GET(request: NextRequest) {
           points: pts,
           modelAnswer: modelAnswer,
           acceptedAnswers: acceptedAnswers,
-          needsGrading: !imageGraded,
+          needsGrading: needsGrading,
           aiExtractedAnswer: aiExtracted,
           aiIsCorrect: aiIsCorrect,
           aiFeedback: aiFeedback,
           imageGraded: imageGraded,
-          isCorrect: imageGraded ? aiIsCorrect : false,
+          textGraded: textGraded,
+          isCorrect: (imageGraded || textGraded) ? aiIsCorrect : false,
           awardedPoints: imageGraded ? (aiIsCorrect ? pts : 0) : 0,
         })
       }
