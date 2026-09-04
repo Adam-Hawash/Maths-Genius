@@ -5,12 +5,75 @@ import { db } from '@/lib/db'
 // Ensure tables exist before querying
 async function ensureTables() {
   try {
-    await db.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS HomeworkResult (id TEXT PRIMARY KEY, homeworkId TEXT NOT NULL, studentId TEXT NOT NULL, score REAL DEFAULT 0, maxScore REAL DEFAULT 100, answers TEXT DEFAULT '', submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP)`)
-    await db.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS ExamResult (id TEXT PRIMARY KEY, examId TEXT NOT NULL, studentId TEXT NOT NULL, score REAL DEFAULT 0, maxScore REAL DEFAULT 100, answers TEXT DEFAULT '', submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP)`)
-    try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN answers TEXT DEFAULT ""') } catch(e) {}
-    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN answers TEXT DEFAULT ""') } catch(e) {}
-    try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP') } catch(e) {}
-    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP') } catch(e) {}
+    // HomeworkResult: create if not exists
+    try {
+      await db.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS HomeworkResult (id TEXT PRIMARY KEY, homeworkId TEXT NOT NULL, studentId TEXT NOT NULL, score REAL DEFAULT 0, maxScore REAL DEFAULT 100, answers TEXT DEFAULT '', submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+    } catch (e) {}
+
+    // Check HomeworkResult schema - rebuild if submittedAt is missing
+    var hwNeedsRebuild = false
+    try {
+      var hwCols = await db.$queryRawUnsafe('PRAGMA table_info(HomeworkResult)')
+      var hwHasSubmittedAt = (hwCols || []).some(function(c) { return c.name === 'submittedAt' })
+      if (!hwHasSubmittedAt) {
+        hwNeedsRebuild = true
+      }
+    } catch (e) {}
+
+    if (hwNeedsRebuild) {
+      try {
+        await db.$executeRawUnsafe('ALTER TABLE HomeworkResult RENAME TO HomeworkResult_old')
+        await db.$executeRawUnsafe(`CREATE TABLE HomeworkResult (id TEXT PRIMARY KEY, homeworkId TEXT NOT NULL, studentId TEXT NOT NULL, score REAL DEFAULT 0, maxScore REAL DEFAULT 100, answers TEXT DEFAULT '', submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+        try {
+          await db.$executeRawUnsafe(`INSERT INTO HomeworkResult (id, homeworkId, studentId, score, maxScore, answers, submittedAt) SELECT id, homeworkId, studentId, score, maxScore, CASE WHEN answers IS NULL OR answers = '' THEN '' ELSE answers END, CURRENT_TIMESTAMP FROM HomeworkResult_old`)
+        } catch (copyErr) {
+          try {
+            await db.$executeRawUnsafe(`INSERT INTO HomeworkResult (id, homeworkId, studentId, score, maxScore, answers, submittedAt) SELECT id, homeworkId, studentId, score, maxScore, '', CURRENT_TIMESTAMP FROM HomeworkResult_old`)
+          } catch (copyErr2) {
+            console.error('Copy old HomeworkResult data error:', copyErr2)
+          }
+        }
+        await db.$executeRawUnsafe('DROP TABLE HomeworkResult_old')
+      } catch (rebuildErr) {
+        console.error('Rebuild HomeworkResult error:', rebuildErr)
+        try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult_old RENAME TO HomeworkResult') } catch (e) {}
+      }
+    }
+
+    // ExamResult: create if not exists
+    try {
+      await db.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS ExamResult (id TEXT PRIMARY KEY, examId TEXT NOT NULL, studentId TEXT NOT NULL, score REAL DEFAULT 0, maxScore REAL DEFAULT 100, answers TEXT DEFAULT '', submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+    } catch (e) {}
+
+    // Check ExamResult schema - rebuild if submittedAt is missing
+    var exNeedsRebuild = false
+    try {
+      var exCols = await db.$queryRawUnsafe('PRAGMA table_info(ExamResult)')
+      var exHasSubmittedAt = (exCols || []).some(function(c) { return c.name === 'submittedAt' })
+      if (!exHasSubmittedAt) {
+        exNeedsRebuild = true
+      }
+    } catch (e) {}
+
+    if (exNeedsRebuild) {
+      try {
+        await db.$executeRawUnsafe('ALTER TABLE ExamResult RENAME TO ExamResult_old')
+        await db.$executeRawUnsafe(`CREATE TABLE ExamResult (id TEXT PRIMARY KEY, examId TEXT NOT NULL, studentId TEXT NOT NULL, score REAL DEFAULT 0, maxScore REAL DEFAULT 100, answers TEXT DEFAULT '', submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+        try {
+          await db.$executeRawUnsafe(`INSERT INTO ExamResult (id, examId, studentId, score, maxScore, answers, submittedAt) SELECT id, examId, studentId, score, maxScore, CASE WHEN answers IS NULL OR answers = '' THEN '' ELSE answers END, CURRENT_TIMESTAMP FROM ExamResult_old`)
+        } catch (copyErr) {
+          try {
+            await db.$executeRawUnsafe(`INSERT INTO ExamResult (id, examId, studentId, score, maxScore, answers, submittedAt) SELECT id, examId, studentId, score, maxScore, '', CURRENT_TIMESTAMP FROM ExamResult_old`)
+          } catch (copyErr2) {
+            console.error('Copy old ExamResult data error:', copyErr2)
+          }
+        }
+        await db.$executeRawUnsafe('DROP TABLE ExamResult_old')
+      } catch (rebuildErr) {
+        console.error('Rebuild ExamResult error:', rebuildErr)
+        try { await db.$executeRawUnsafe('ALTER TABLE ExamResult_old RENAME TO ExamResult') } catch (e) {}
+      }
+    }
   } catch (e) {
     console.error('Ensure tables error:', e)
   }
