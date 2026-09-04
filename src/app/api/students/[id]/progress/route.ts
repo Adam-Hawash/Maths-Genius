@@ -140,17 +140,32 @@ export async function GET(
         var allExamQuestions: any[] = []
         try {
           var mcqAll = []
+          var writingAllExam = []
           if (row.questions) {
             var rawAll = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
-            if (Array.isArray(rawAll)) mcqAll = rawAll
+            if (Array.isArray(rawAll)) {
+              rawAll.forEach(function(q) {
+                var isW = q.type === 'writing' || q.type === 'essay'
+                if (!isW && Array.isArray(q.options)) {
+                  var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+                  if (allNA) isW = true
+                }
+                if (!isW && (!q.options || q.options.length === 0)) isW = true
+                if (isW) writingAllExam.push(q)
+                else mcqAll.push(q)
+              })
+            }
           }
           var studentAnsAll: any = {}
           if (row.answers) {
             studentAnsAll = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
           }
+          // MCQ all questions
           mcqAll.forEach(function(q, qi) {
             var qText = q.question || q.q || ''
             var opts = Array.isArray(q.options) ? q.options : []
+            // Filter out N/A options for display
+            var realOpts = opts.filter(function(o) { return o && o !== 'N/A' && o !== 'لا يوجد' && String(o).trim() !== '' })
             var correctIdx = typeof q.correct === 'number' ? q.correct : 0
             if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
             var ans = undefined
@@ -160,17 +175,38 @@ export async function GET(
               ans = studentAnsAll[qi] !== undefined ? studentAnsAll[qi] : studentAnsAll[String(qi)]
             }
             var isCorrect = ans !== undefined && ans !== null && Number(ans) === correctIdx
-            var studentAnswerText = (typeof ans === 'number' && opts[ans])
+            var studentAnswerText = (typeof ans === 'number' && opts[ans] && opts[ans] !== 'N/A')
               ? String.fromCharCode(65 + ans) + ') ' + opts[ans]
               : 'Not answered'
-            var correctAnswerText = opts[correctIdx]
+            var correctAnswerText = opts[correctIdx] && opts[correctIdx] !== 'N/A'
               ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
-              : ''
+              : (q.modelAnswer || 'No correct answer stored')
             allExamQuestions.push({
+              type: 'mcq',
               question: qText,
               studentAnswer: studentAnswerText,
               correctAnswer: correctAnswerText,
               isCorrect: isCorrect,
+            })
+          })
+          // Writing all questions
+          writingAllExam.forEach(function(q, wi) {
+            var qText = q.question || q.q || ''
+            var studentText = ''
+            var offset = mcqAll.length
+            try {
+              if (Array.isArray(studentAnsAll)) {
+                studentText = studentAnsAll[offset + wi] || ''
+              } else if (studentAnsAll && typeof studentAnsAll === 'object') {
+                studentText = studentAnsAll[offset + wi] || studentAnsAll[String(offset + wi)] || ''
+              }
+            } catch (e) {}
+            allExamQuestions.push({
+              type: 'writing',
+              question: qText,
+              studentAnswer: typeof studentText === 'string' ? studentText : String(studentText || ''),
+              correctAnswer: q.modelAnswer || q.answer || 'No model answer',
+              isCorrect: false,
             })
           })
         } catch(e) {}
