@@ -66,40 +66,40 @@ export default function HeroSection() {
       {/* Subtle tiny dots + faint math/geometric symbols background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
         {/* Faint math symbols - very subtle background */}
-        <div className="absolute text-[120px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '5%', right: '5%' }}>√</div>
-        <div className="absolute text-[90px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '15%', left: '8%' }}>π</div>
-        <div className="absolute text-[100px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '50%', left: '5%' }}>∑</div>
-        <div className="absolute text-[80px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '65%', right: '10%' }}>∫</div>
-        <div className="absolute text-[70px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '85%', left: '15%' }}>∞</div>
-        <div className="absolute text-[60px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '25%', right: '40%' }}>a²</div>
-        <div className="absolute text-[55px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '70%', left: '40%' }}>b²</div>
-        <div className="absolute text-[65px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '40%', right: '8%' }}>Δ</div>
-        <div className="absolute text-[50px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '10%', left: '30%' }}>θ</div>
-        <div className="absolute text-[75px] font-bold text-foreground/[0.04] leading-none select-none" style={{ top: '80%', right: '30%' }}>÷</div>
+        <div className="absolute text-[120px] font-bold text-white/[0.04] leading-none select-none" style={{ top: '5%', right: '5%' }}>√</div>
+        <div className="absolute text-[90px] font-bold text-white/[0.04] leading-none select-none" style={{ top: '15%', left: '8%' }}>π</div>
+        <div className="absolute text-[100px] font-bold text-white/[0.04] leading-none select-none" style={{ top: '50%', left: '5%' }}>∑</div>
+        <div className="absolute text-[80px] font-bold text-white/[0.04] leading-none select-none" style={{ top: '65%', right: '10%' }}>∫</div>
+        <div className="absolute text-[70px] font-bold text-white/[0.04] leading-none select-none" style={{ top: '85%', left: '15%' }}>∞</div>
+        <div className="absolute text-[60px] font-bold text-white/[0.04] leading-none select-none" style={{ top: '25%', right: '40%' }}>a²</div>
+        <div className="absolute text-[55px] font-bold text-white/[0.04] leading-none select-none" style={{ top: '70%', left: '40%' }}>b²</div>
+        <div className="absolute text-[65px] font-bold text-white/[0.04] leading-none select-none" style={{ top: '40%', right: '8%' }}>Δ</div>
+        <div className="absolute text-[50px] font-bold text-white/[0.04] leading-none select-none" style={{ top: '10%', left: '30%' }}>θ</div>
+        <div className="absolute text-[75px] font-bold text-white/[0.04] leading-none select-none" style={{ top: '80%', right: '30%' }}>÷</div>
 
         {/* Geometric shapes - very subtle background */}
         {/* Triangle */}
-        <svg className="absolute text-foreground/[0.05]" style={{ top: '8%', left: '20%', width: '50px', height: '50px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="absolute text-white/[0.05]" style={{ top: '8%', left: '20%', width: '50px', height: '50px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
           <polygon points="25,5 45,45 5,45" />
         </svg>
         {/* Circle */}
-        <svg className="absolute text-foreground/[0.05]" style={{ top: '55%', right: '20%', width: '55px', height: '55px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="absolute text-white/[0.05]" style={{ top: '55%', right: '20%', width: '55px', height: '55px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="25" cy="25" r="20" />
         </svg>
         {/* Square */}
-        <svg className="absolute text-foreground/[0.05]" style={{ top: '78%', left: '40%', width: '45px', height: '45px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="absolute text-white/[0.05]" style={{ top: '78%', left: '40%', width: '45px', height: '45px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="8" y="8" width="34" height="34" />
         </svg>
         {/* Pentagon */}
-        <svg className="absolute text-foreground/[0.05]" style={{ top: '32%', right: '45%', width: '50px', height: '50px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="absolute text-white/[0.05]" style={{ top: '32%', right: '45%', width: '50px', height: '50px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
           <polygon points="25,5 45,20 38,45 12,45 5,20" />
         </svg>
         {/* Hexagon */}
-        <svg className="absolute text-foreground/[0.05]" style={{ top: '92%', right: '5%', width: '55px', height: '55px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="absolute text-white/[0.05]" style={{ top: '92%', right: '5%', width: '55px', height: '55px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
           <polygon points="25,5 42,15 42,35 25,45 8,35 8,15" />
         </svg>
         {/* Right triangle */}
-        <svg className="absolute text-foreground/[0.05]" style={{ top: '45%', left: '48%', width: '50px', height: '50px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="absolute text-white/[0.05]" style={{ top: '45%', left: '48%', width: '50px', height: '50px' }} viewBox="0 0 50 50" fill="none" stroke="currentColor" strokeWidth="2">
           <polygon points="5,45 45,45 5,5" />
           <path d="M 5,15 L 15,15 L 15,45" stroke="currentColor" strokeWidth="1.5" fill="none" />
         </svg>
@@ -178,17 +178,17 @@ export default function HeroSection() {
             </div>
 
             {/* Title */}
-            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-foreground">
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-white">
               <span className="block text-[#8B6914] dark:text-[#E5BE5A]">
                 {cfg.hero_title_line1 || 'Maths Genius'}
               </span>
-              <span className="block mt-1 text-2xl sm:text-3xl lg:text-4xl font-semibold text-foreground/80">
+              <span className="block mt-1 text-2xl sm:text-3xl lg:text-4xl font-semibold text-white/80">
                 {cfg.hero_title_line2 || 'Mr Wael Khodier'}
               </span>
             </h1>
 
             {/* Subtitle */}
-            <p className="max-w-xl text-muted-foreground text-base sm:text-lg leading-relaxed lg:mx-0 mx-auto">
+            <p className="max-w-xl text-white/70 text-base sm:text-lg leading-relaxed lg:mx-0 mx-auto">
               {cfg.hero_subtitle ||
                 'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.'}
             </p>
@@ -217,7 +217,7 @@ export default function HeroSection() {
               <Button
                 variant="outline"
                 size="lg"
-                className="text-sm px-6 py-4 min-h-[44px] border-foreground/15 bg-foreground/5 hover:bg-foreground/10 text-foreground font-medium rounded-xl transition-colors duration-200 gap-2"
+                className="text-sm px-6 py-4 min-h-[44px] border-white/15 bg-white/5 hover:bg-white/10 text-white font-medium rounded-xl transition-colors duration-200 gap-2"
                 onClick={() => window.location.href = '/schedule'}
               >
                 <CalendarClock className="h-4 w-4" />
@@ -231,16 +231,16 @@ export default function HeroSection() {
                 href={cfg.hero_developer_url || 'https://hero-developer-portfolio-11.vercel.app'}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm font-semibold text-muted-foreground/60 hover:text-[#8B6914] dark:hover:text-[#E5BE5A] transition-colors underline underline-offset-4 decoration-muted-foreground/20 hover:decoration-[#C49A38]/50"
+                className="text-sm font-semibold text-white/60 hover:text-[#8B6914] dark:hover:text-[#E5BE5A] transition-colors underline underline-offset-4 decoration-white/20 hover:decoration-[#C49A38]/50"
               >
                 {cfg.hero_developer_label || 'Hero Developer'}
               </a>
-              <div className="h-px w-16 bg-muted-foreground/10" />
+              <div className="h-px w-16 bg-white/10" />
               <a
                 href={cfg.hero_developer_url || 'https://hero-developer-portfolio-11.vercel.app'}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-muted-foreground/40 font-light tracking-wider hover:text-[#8B6914] dark:hover:text-[#E5BE5A] transition-colors"
+                className="text-xs text-white/40 font-light tracking-wider hover:text-[#8B6914] dark:hover:text-[#E5BE5A] transition-colors"
               >
                 {cfg.footer_made_by_label || 'Made by Adam Hawash'}
               </a>
@@ -257,12 +257,12 @@ export default function HeroSection() {
                       : cfg.hero_stat1_value || '100+'}
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-white/70">
                   {cfg.hero_stat1_label || 'Video Lessons | دروس فيديو'}
                 </p>
               </div>
 
-              <div className="h-8 w-px bg-muted-foreground/10" />
+              <div className="h-8 w-px bg-white/10" />
 
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -273,12 +273,12 @@ export default function HeroSection() {
                       : cfg.hero_stat2_value || '500+'}
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-white/70">
                   {cfg.hero_stat2_label || 'Students | طالب'}
                 </p>
               </div>
 
-              <div className="h-8 w-px bg-muted-foreground/10" />
+              <div className="h-8 w-px bg-white/10" />
 
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -287,7 +287,7 @@ export default function HeroSection() {
                     {cfg.hero_stat3_value || '24/7'}
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-white/70">
                   {cfg.hero_stat3_label || 'Tracking | متابعة'}
                 </p>
               </div>
