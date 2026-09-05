@@ -4,7 +4,7 @@
 
 import { db } from '@/lib/db'
 
-const MODELS = ['gemini-2.0-flash', 'gemini-flash-latest']
+const MODELS = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
   var lastError = ''
@@ -12,7 +12,7 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
     try {
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + apiKey
       var controller = new AbortController()
-      var timeoutMs = 25000
+      var timeoutMs = mi === 0 ? 5000 : 25000
       var timeoutHandle = setTimeout(function() { controller.abort() }, timeoutMs)
       var geminiRes = await fetch(modelUrl, {
         method: 'POST',
@@ -327,7 +327,7 @@ async function callGeminiShared(apiKey: string, parts: any[]): Promise<{ ok: boo
     try {
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + apiKey
       var controller = new AbortController()
-      var timeoutMs = 25000
+      var timeoutMs = mi === 0 ? 5000 : 25000
       var timeoutHandle = setTimeout(function() { controller.abort() }, timeoutMs)
       var geminiRes = await fetch(modelUrl, {
         method: 'POST',

@@ -64,7 +64,7 @@ export function AIAssistant() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: msg, context: { page: page, studentId: studentId } }),
         }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000)),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 30000)),
       ])
       var data = await res.json()
       var reply = data.reply || 'مش قادر أرد دلوقتي. حاول تاني 🙏'
