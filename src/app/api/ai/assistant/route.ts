@@ -18,17 +18,16 @@ export const maxDuration = 30
 // (unused - models list is in callGemini below)
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  // gemini-2.0-flash is the verified working model - try it FIRST
-  // gemini-3.6-flash may not exist in Google API (404)
+  // gemini-2.0-flash FIRST (verified working), 3.6 last
   var allModels = [
     'gemini-2.0-flash',
-    'gemini-flash-latest',
     'gemini-3.6-flash',
+    'gemini-flash-latest',
   ]
   var lastError = ''
   for (var mi = 0; mi < allModels.length; mi++) {
     var model = allModels[mi]
-    var modelTimeout = mi === 2 ? 5000 : 20000  // short timeout for 3.6
+    var modelTimeout = mi === 1 ? 5000 : 20000  // short timeout for 3.6
     try {
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
       var controller = new AbortController()
@@ -49,9 +48,11 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
         try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
         if (text) return { ok: true, text: text }
       } else {
-        lastError = model + ': HTTP ' + geminiRes.status
-        // If 429, don't try other models - they'll also 429 (same API key quota)
-        if (geminiRes.status === 429) break
+        var status = geminiRes.status
+        lastError = model + ': HTTP ' + status
+        // 404 or 400 = model doesn't exist, try next
+        // 429 = quota exceeded, try next model (might work with different model quota)
+        // 503 = overloaded, try next
       }
     } catch (e: any) {
       lastError = model + ': ' + (e.message || '')
