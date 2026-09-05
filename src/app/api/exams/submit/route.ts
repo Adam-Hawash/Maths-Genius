@@ -132,161 +132,16 @@ export async function POST(request) {
       }
     })
 
-    // Collect writing answers + AI-grade images
-    var writingAnswers: any[] = []
+    // Collect writing answers (NO AI grading during submit - too slow)
+    // AI grading happens when admin views results in /api/exam-results and /api/students/[id]/progress
     var writingScore = 0
     var mcqLen = mcqQuestions.length
     for (var wi = 0; wi < writingQuestions.length; wi++) {
       var wq = writingQuestions[wi]
       var pts = (typeof wq.points === 'number' && wq.points > 0) ? wq.points : 5
       maxScore += pts
-      var qText = wq.question || wq.q || ''
-      var studentText = ''
-      try {
-        if (Array.isArray(answers)) {
-          studentText = answers[mcqLen + wi] || ''
-        } else if (answers && typeof answers === 'object') {
-          studentText = answers[mcqLen + wi] || answers[String(mcqLen + wi)] || ''
-        }
-      } catch (e) {}
-      studentText = typeof studentText === 'string' ? studentText : String(studentText || '')
-
-      var wa: any = {
-        question: qText,
-        answer: studentText,
-        points: pts,
-        modelAnswer: wq.modelAnswer || wq.answer || '',
-        acceptedAnswers: Array.isArray(wq.acceptedAnswers) ? wq.acceptedAnswers : [],
-        needsGrading: true,
-      }
-
-      // Skip if empty answer
-      if (!studentText || studentText === '[📷 صورة مرفقة]') {
-        wa.needsGrading = false
-        wa.isCorrect = false
-        wa.awardedPoints = 0
-        wa.aiExtractedAnswer = ''
-        wa.aiFeedback = 'لم يجب الطالب'
-        writingAnswers.push(wa)
-        continue
-      }
-
-      // Skip if no modelAnswer
-      if (!wa.modelAnswer) {
-        writingAnswers.push(wa)
-        continue
-      }
-
-      var mediaIds = extractImageMediaIds(studentText)
-
-      // IMAGE GRADING
-      if (mediaIds.length > 0) {
-        try {
-          var gradeData = await gradeImageAnswer({
-            mediaId: mediaIds[0],
-            question: qText,
-            modelAnswer: wa.modelAnswer,
-            acceptedAnswers: wa.acceptedAnswers,
-            maxPoints: pts,
-          })
-          if (gradeData) {
-            wa.aiExtractedAnswer = gradeData.extractedAnswer || '(تعذر الاستخراج)'
-            wa.aiIsCorrect = gradeData.isCorrect === true
-            wa.aiFeedback = gradeData.feedback || (gradeData.isCorrect ? 'صح' : 'غلط')
-            wa.aiAwardedPoints = gradeData.awardedPoints || 0
-            wa.needsGrading = false
-            wa.isCorrect = gradeData.isCorrect === true
-            wa.awardedPoints = gradeData.awardedPoints || 0
-            writingScore += (gradeData.awardedPoints || 0)
-          }
-        } catch (gradeErr) {
-          console.error('[Exam Submit] AI grade image error:', gradeErr)
-          wa.needsGrading = false
-          wa.isCorrect = false
-          wa.awardedPoints = 0
-          wa.aiExtractedAnswer = '(فشل الـ AI)'
-          wa.aiFeedback = 'فشل التصحيح'
-        }
-        writingAnswers.push(wa)
-        continue
-      }
-
-      // TEXT GRADING - quick match first
-      var cleanStud = (studentText || '').toLowerCase().replace(/\s+/g, ' ').trim()
-      var cleanMod = (wa.modelAnswer || '').toLowerCase().replace(/\s+/g, ' ').trim()
-      var quickMatch = false
-
-      if (wa.acceptedAnswers && wa.acceptedAnswers.length > 0) {
-        for (var eai = 0; eai < wa.acceptedAnswers.length; eai++) {
-          var eAcc = (wa.acceptedAnswers[eai] || '').trim().toLowerCase().replace(/\s+/g, ' ')
-          if (eAcc && (cleanStud === eAcc || cleanStud.includes(eAcc) || eAcc.includes(cleanStud))) {
-            quickMatch = true
-            break
-          }
-        }
-      }
-      if (quickMatch) {
-        wa.needsGrading = false
-        wa.isCorrect = true
-        wa.awardedPoints = pts
-        wa.aiExtractedAnswer = studentText
-        wa.aiIsCorrect = true
-        wa.aiFeedback = 'صح (تطابق نصي)'
-        wa.aiAwardedPoints = pts
-        writingScore += pts
-        writingAnswers.push(wa)
-        continue
-      }
-
-      // Match final answer
-      if (cleanMod) {
-        var eMParts = cleanMod.split('=')
-        var eSParts = cleanStud.split('=')
-        var eMFinal = (eMParts[eMParts.length - 1] || '').trim()
-        var eSFinal = (eSParts[eSParts.length - 1] || '').trim()
-        if (eMFinal && eSFinal && (eMFinal === eSFinal || eMFinal.includes(eSFinal) || eSFinal.includes(eMFinal))) {
-          wa.needsGrading = false
-          wa.isCorrect = true
-          wa.awardedPoints = pts
-          wa.aiExtractedAnswer = studentText
-          wa.aiIsCorrect = true
-          wa.aiFeedback = 'صح (الإجابة النهائية مطابقة)'
-          wa.aiAwardedPoints = pts
-          writingScore += pts
-          writingAnswers.push(wa)
-          continue
-        }
-      }
-
-      // AI text grading
-      try {
-        var eTextGrade = await gradeTextAnswer({
-          question: qText,
-          studentAnswer: studentText,
-          modelAnswer: wa.modelAnswer,
-          acceptedAnswers: wa.acceptedAnswers,
-          maxPoints: pts,
-        })
-        if (eTextGrade) {
-          wa.needsGrading = false
-          wa.isCorrect = eTextGrade.isCorrect === true
-          wa.awardedPoints = eTextGrade.awardedPoints || 0
-          wa.aiExtractedAnswer = studentText
-          wa.aiIsCorrect = eTextGrade.isCorrect === true
-          wa.aiFeedback = eTextGrade.feedback || (eTextGrade.isCorrect ? 'صح' : 'غلط')
-          wa.aiAwardedPoints = eTextGrade.awardedPoints || 0
-          writingScore += (eTextGrade.awardedPoints || 0)
-        }
-      } catch (e) {
-        console.error('[Exam Submit] AI text grading error:', e)
-        wa.needsGrading = false
-        wa.isCorrect = false
-        wa.awardedPoints = 0
-        wa.aiExtractedAnswer = studentText
-        wa.aiFeedback = 'فشل التصحيح'
-      }
-      writingAnswers.push(wa)
     }
+
     score += writingScore
 
     if (maxScore === 0) { maxScore = questions.length }
