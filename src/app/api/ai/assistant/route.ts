@@ -5,6 +5,42 @@ import { db } from '@/lib/db'
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
+// Gemini 3.6 as primary model, then fallbacks
+const MODELS = ['gemini-3.6-flash', 'gemini-flash-latest']
+
+async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
+  var allErrors = []
+  for (var mi = 0; mi < MODELS.length; mi++) {
+    var model = MODELS[mi]
+    try {
+      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
+      var controller = new AbortController()
+      var timeout = setTimeout(function() { controller.abort() }, 20000)
+      var geminiRes = await fetch(modelUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: parts }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 800 }
+        }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeout)
+      if (geminiRes.ok) {
+        var data = await geminiRes.json()
+        var text = ''
+        try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
+        if (text) return { ok: true, text: text }
+      } else {
+        allErrors.push(model + ': ' + geminiRes.status)
+      }
+    } catch (e: any) {
+      allErrors.push(model + ': ' + (e.message || ''))
+    }
+  }
+  return { ok: false, error: allErrors.join(' | ') }
+}
+
 export async function POST(request: Request) {
   try {
     var body = await request.json()
@@ -17,46 +53,39 @@ export async function POST(request: Request) {
 
     var apiKey = process.env.GEMINI_API_KEY || ''
     if (!apiKey) {
-      return NextResponse.json({ reply: 'عفواً، مفتاح الـ AI غير مضبوط في البيئة.' }, { status: 500 })
+      return NextResponse.json({ reply: 'مفتاح الـ AI مش متظبط في البيئة' })
     }
 
-    var contextStr = `أنت مساعد ذكي في منصة Maths Genius للmath. جاوب بالعامية المصرية بسرعة وذكاء.`
-    if (context.page) {
-      contextStr += '\n\nالصفحة الحالية: ' + context.page
-    }
-
-    // استدعاء المباشر والصريح لنموذج جيميناي من غير تعقيد
-    var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey
+    var contextStr = 'أنت مساعد ذكي في منصة Maths Genius للرياضيات. جاوب بالعامية المصرية بسرعة وذكاء.\n\nعن المنصة: دروس فيديو، واجبات، امتحانات، تنبيهات، ومجتمع.\nالطالب بيسجل برقم الهاتف وكلمة المرور.\n\nالتابات: الدروس، الواجبات، الامتحانات، التنبيهات، المجتمع.\nلو الحساب مرفوض يتواصل مع المستر. لو قيد المراجعة يستنى.\n\nتقدر تشرح رياضيات: أسس، جذور، معادلات، هندسة، أي حاجة.\n\nقواعد:\n- جاوب بالعامية المصرية\n- جاوب بسرعة وذكاء - افهم السؤال كويس\n- لو رياضي اشرح الخطوات بوضوح\n- استخدم رموز (📚 📝 ✅ 🧮)\n- لو مش فاهم السؤال اسأل توضيح'
     
-    var geminiRes = await fetch(modelUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: contextStr + '\n\nسؤال المستخدم: ' + message }]
-        }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 1000 }
+    if (context.page) {
+      contextStr += '\n\nالطالب في صفحة: ' + context.page
+    }
+    if (context.studentId) {
+      try {
+        var student = await db.$queryRawUnsafe(
+          'SELECT name, grade, status FROM Student WHERE id = ? LIMIT 1',
+          context.studentId
+        )
+        if (student && student.length > 0) {
+          contextStr += '\n\nبيانات الطالب:\n- الاسم: ' + (student[0].name || '') + '\n- الصف: ' + (student[0].grade || '') + '\n- الحالة: ' + (student[0].status || '')
+        }
+      } catch (e) {}
+    }
+
+    var parts = [{ text: contextStr + '\n\nسؤال الطالب: ' + message + '\n\nالرد:' }]
+    var result = await callGemini(apiKey, parts)
+
+    if (!result.ok || !result.text) {
+      return NextResponse.json({
+        reply: 'استنى ثانية 🙏 بجهز الرد...',
+        debug: result.error || 'no text',
       })
-    })
-
-    var data = await geminiRes.json()
-
-    if (!geminiRes.ok) {
-      // إرجاع تفاصيل الخطأ الحقيقي مباشرة بدل رسائل الأعذار المخفية
-      return NextResponse.json({ 
-        reply: 'عاد خطأ من سيرفر جيميناي: ' + (data.error?.message || JSON.stringify(data)) 
-      }, { status: 200 })
     }
 
-    var replyText = data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!replyText) {
-      return NextResponse.json({ reply: 'لم يتم استلام نص من النموذج.' }, { status: 200 })
-    }
-
-    return NextResponse.json({ reply: replyText.trim() })
-
+    return NextResponse.json({ reply: result.text.trim() })
   } catch (error: any) {
     console.error('[AI Assistant Error]:', error)
-    return NextResponse.json({ reply: 'خطأ تقني في السيرفر: ' + error.message }, { status: 200 })
+    return NextResponse.json({ reply: 'استنى ثانية 🙏 بجهز الرد...' })
   }
 }
