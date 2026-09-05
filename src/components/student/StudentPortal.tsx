@@ -450,11 +450,15 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                   </div>
                 </div>
               ) : ytId ? (
-                <YouTubePlayer
+                <CustomVideoPlayer
                   videoId={video.id}
-                  ytId={ytId}
+                  src={'https://www.youtube.com/embed/' + ytId + '?modestbranding=1&rel=0&playsinline=1&controls=1&showinfo=0&iv_load_policy=3'}
                   poster={thumbSrc || undefined}
-                  onWatch={() => { trackVideoWatch(video.id); setLocalWatched(prev => new Set([...prev, video.id])) }}
+                  studentId={studentId}
+                  onWatch={() => {
+                    trackVideoWatch(video.id)
+                    setLocalWatched(prev => new Set([...prev, video.id]))
+                  }}
                 />
               ) : isVideoFile ? (
                 <CustomVideoPlayer
@@ -682,7 +686,7 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
     >
       <video
         ref={videoRef}
-        className="w-full h-full object-contain"
+        className="w-full h-full object-contain pointer-events-none"
         src={src}
         poster={poster}
         preload="metadata"
