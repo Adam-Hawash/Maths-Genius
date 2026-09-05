@@ -3,41 +3,18 @@
 // /api/homework/submit + /api/exams/submit (in-process) to avoid localhost fetch.
 
 import { db } from '@/lib/db'
+import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
 
-const MODELS = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
-
+// Central helper: Gemini 3.6 first + automatic key rotation on quota (429)
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  var lastError = ''
-  for (var mi = 0; mi < MODELS.length; mi++) {
-    try {
-      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + apiKey
-      var controller = new AbortController()
-      var timeoutMs = mi === 0 ? 5000 : 25000
-      var timeoutHandle = setTimeout(function() { controller.abort() }, timeoutMs)
-      var geminiRes = await fetch(modelUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: parts }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
-        }),
-        signal: controller.signal,
-      })
-      clearTimeout(timeoutHandle)
-      if (geminiRes.ok) {
-        var data = await geminiRes.json()
-        var text = ''
-        try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
-        if (text) return { ok: true, text: text }
-      }
-      var errBody = ''
-      try { errBody = await geminiRes.text() } catch (e) {}
-      lastError = MODELS[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 200)
-    } catch (e) {
-      lastError = MODELS[mi] + ': ' + (e.message || '')
-    }
-  }
-  return { ok: false, error: lastError }
+  var result = await callGeminiCentral({
+    parts: parts,
+    generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+    timeoutMs: 25000,
+    fastFailFirstMs: 6000,
+  })
+  if (result.ok) return { ok: true, text: result.text }
+  return { ok: false, error: result.error || 'unknown' }
 }
 
 function parseAIJson(text: string): any | null {
@@ -84,7 +61,7 @@ export async function gradeImageAnswer(params: {
   }
 
   var apiKey = process.env.GEMINI_API_KEY || ''
-  if (!apiKey) {
+  if (!hasGeminiKey()) {
     return { extractedAnswer: '', isCorrect: false, feedback: 'AI غير متاح', awardedPoints: 0, maxPoints: maxPoints, error: 'no api key' }
   }
 
@@ -278,7 +255,7 @@ export async function gradeTextAnswer(params: {
   if (!studentAnswer || !modelAnswer) return null
 
   var apiKey = process.env.GEMINI_API_KEY || ''
-  if (!apiKey) return null
+  if (!hasGeminiKey()) return null
 
   var acceptedStr = acceptedAnswers.length > 0
     ? '\nإجابات مقبولة أخرى:\n' + acceptedAnswers.map(function(a, i) { return (i + 1) + '. ' + a }).join('\n')
@@ -322,37 +299,7 @@ export async function gradeTextAnswer(params: {
 
 // Shared helpers (re-used by gradeImageAnswer + gradeTextAnswer)
 async function callGeminiShared(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  var lastError = ''
-  for (var mi = 0; mi < MODELS.length; mi++) {
-    try {
-      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + apiKey
-      var controller = new AbortController()
-      var timeoutMs = mi === 0 ? 5000 : 25000
-      var timeoutHandle = setTimeout(function() { controller.abort() }, timeoutMs)
-      var geminiRes = await fetch(modelUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: parts }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
-        }),
-        signal: controller.signal,
-      })
-      clearTimeout(timeoutHandle)
-      if (geminiRes.ok) {
-        var data = await geminiRes.json()
-        var text = ''
-        try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
-        if (text) return { ok: true, text: text }
-      }
-      var errBody = ''
-      try { errBody = await geminiRes.text() } catch (e) {}
-      lastError = MODELS[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 200)
-    } catch (e) {
-      lastError = MODELS[mi] + ': ' + (e.message || '')
-    }
-  }
-  return { ok: false, error: lastError }
+  return callGemini(apiKey, parts)
 }
 
 function parseAIJsonShared(text: string): any | null {
