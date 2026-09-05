@@ -28,6 +28,21 @@ import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 
+// Extract ALL image URLs/paths from student answer text
+function extractAllImagePaths(text: string): string[] {
+  if (!text || typeof text !== 'string') return []
+  var matches = text.match(/\[📷\s*صورة\s*مرفقة:\s*([^\]]+?)\]/g) || []
+  var paths: string[] = []
+  matches.forEach(function(m) {
+    var idMatch = m.match(/\[📷\s*صورة\s*مرفقة:\s*([^\]]+?)\]/)
+    if (idMatch && idMatch[1]) {
+      var raw = idMatch[1].trim().replace(/^["']|["']$/g, '')
+      if (raw) paths.push(raw)
+    }
+  })
+  return paths
+}
+
 // Extract image URL/path from student answer text that contains "[📷 صورة مرفقة: PATH]" tags.
 // Returns the first matched path or '' if none.
 function extractFirstImagePath(text: string): string {
@@ -1220,23 +1235,28 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                                               <div className="space-y-1 p-2 rounded bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/40">
                                                 <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">إجابة الطالب:</p>
                                                 <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
-                                                {/* Image preview - click to enlarge */}
-                                                {extractFirstImagePath(aq.studentAnswer) && onViewImage && (
-                                                  <div className="mt-1">
-                                                    <button
-                                                      type="button"
-                                                      onClick={function() { onViewImage(extractFirstImagePath(aq.studentAnswer)) }}
-                                                      className="group relative block max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 overflow-hidden hover:border-amber-500 transition-colors cursor-pointer"
-                                                    >
-                                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                      <img
-                                                        src={extractFirstImagePath(aq.studentAnswer)}
-                                                        alt="Student answer image - click to enlarge"
-                                                        className="max-w-[250px] max-h-[200px] object-contain"
-                                                        onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
-                                                      />
-                                                      <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">🔍 اعرض الصورة</span>
-                                                    </button>
+                                                {/* Image preview - click to enlarge - show ALL images */}
+                                                {extractAllImagePaths(aq.studentAnswer).length > 0 && onViewImage && (
+                                                  <div className="mt-1 flex flex-wrap gap-2">
+                                                    {extractAllImagePaths(aq.studentAnswer).map(function(imgPath, imgIdx) {
+                                                      return (
+                                                        <button
+                                                          key={imgIdx}
+                                                          type="button"
+                                                          onClick={function() { onViewImage(imgPath) }}
+                                                          className="group relative block rounded-md border border-amber-200 dark:border-amber-900/40 overflow-hidden hover:border-amber-500 transition-colors cursor-pointer"
+                                                        >
+                                                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                          <img
+                                                            src={imgPath}
+                                                            alt={'Student answer image ' + (imgIdx + 1) + ' - click to enlarge'}
+                                                            className="w-[300px] h-[250px] object-contain bg-white"
+                                                            onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
+                                                          />
+                                                          <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">🔍 صورة {imgIdx + 1} - اعرض</span>
+                                                        </button>
+                                                      )
+                                                    })}
                                                   </div>
                                                 )}
                                                 {/* AI extracted answer from image */}
@@ -1820,23 +1840,28 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                       <>
                                         <p className="text-[9px] font-semibold text-muted-foreground">إجابة الطالب:</p>
                                         <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
-                                        {/* Image preview - click to enlarge */}
-                                        {extractFirstImagePath(aq.studentAnswer) && onViewImage && (
-                                          <div className="mt-1">
-                                            <button
-                                              type="button"
-                                              onClick={function() { onViewImage(extractFirstImagePath(aq.studentAnswer)) }}
-                                              className="group relative block max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 overflow-hidden hover:border-amber-500 transition-colors cursor-pointer"
-                                            >
-                                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                                              <img
-                                                src={extractFirstImagePath(aq.studentAnswer)}
-                                                alt="Student answer image - click to enlarge"
-                                                className="max-w-[250px] max-h-[200px] object-contain"
-                                                onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
-                                              />
-                                              <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">🔍 اعرض الصورة</span>
-                                            </button>
+                                        {/* Image preview - click to enlarge - show ALL images */}
+                                        {extractAllImagePaths(aq.studentAnswer).length > 0 && onViewImage && (
+                                          <div className="mt-1 flex flex-wrap gap-2">
+                                            {extractAllImagePaths(aq.studentAnswer).map(function(imgPath, imgIdx) {
+                                              return (
+                                                <button
+                                                  key={imgIdx}
+                                                  type="button"
+                                                  onClick={function() { onViewImage(imgPath) }}
+                                                  className="group relative block rounded-md border border-amber-200 dark:border-amber-900/40 overflow-hidden hover:border-amber-500 transition-colors cursor-pointer"
+                                                >
+                                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                  <img
+                                                    src={imgPath}
+                                                    alt={'Student answer image ' + (imgIdx + 1) + ' - click to enlarge'}
+                                                    className="w-[300px] h-[250px] object-contain bg-white"
+                                                    onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
+                                                  />
+                                                  <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">🔍 صورة {imgIdx + 1} - اعرض</span>
+                                                </button>
+                                              )
+                                            })}
                                           </div>
                                         )}
                                         {aq.aiExtractedAnswer && (
@@ -1933,23 +1958,28 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                       <>
                                         <p className="text-[9px] font-semibold text-muted-foreground">إجابة الطالب:</p>
                                         <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
-                                        {/* Image preview - click to enlarge */}
-                                        {extractFirstImagePath(aq.studentAnswer) && onViewImage && (
-                                          <div className="mt-1">
-                                            <button
-                                              type="button"
-                                              onClick={function() { onViewImage(extractFirstImagePath(aq.studentAnswer)) }}
-                                              className="group relative block max-w-[250px] max-h-[200px] rounded-md border border-amber-200 dark:border-amber-900/40 overflow-hidden hover:border-amber-500 transition-colors cursor-pointer"
-                                            >
-                                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                                              <img
-                                                src={extractFirstImagePath(aq.studentAnswer)}
-                                                alt="Student answer image - click to enlarge"
-                                                className="max-w-[250px] max-h-[200px] object-contain"
-                                                onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
-                                              />
-                                              <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">🔍 اعرض الصورة</span>
-                                            </button>
+                                        {/* Image preview - click to enlarge - show ALL images */}
+                                        {extractAllImagePaths(aq.studentAnswer).length > 0 && onViewImage && (
+                                          <div className="mt-1 flex flex-wrap gap-2">
+                                            {extractAllImagePaths(aq.studentAnswer).map(function(imgPath, imgIdx) {
+                                              return (
+                                                <button
+                                                  key={imgIdx}
+                                                  type="button"
+                                                  onClick={function() { onViewImage(imgPath) }}
+                                                  className="group relative block rounded-md border border-amber-200 dark:border-amber-900/40 overflow-hidden hover:border-amber-500 transition-colors cursor-pointer"
+                                                >
+                                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                  <img
+                                                    src={imgPath}
+                                                    alt={'Student answer image ' + (imgIdx + 1) + ' - click to enlarge'}
+                                                    className="w-[300px] h-[250px] object-contain bg-white"
+                                                    onError={function(e) { var t = e.currentTarget as HTMLImageElement; if (t.parentElement) t.parentElement.style.display = 'none' }}
+                                                  />
+                                                  <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">🔍 صورة {imgIdx + 1} - اعرض</span>
+                                                </button>
+                                              )
+                                            })}
                                           </div>
                                         )}
                                         {aq.aiExtractedAnswer && (
