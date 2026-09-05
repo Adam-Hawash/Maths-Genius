@@ -18,17 +18,17 @@ export const maxDuration = 30
 // (unused - models list is in callGemini below)
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  // User requested: gemini-3.6-flash as primary model
+  // gemini-2.0-flash is the verified working model - try it FIRST
+  // gemini-3.6-flash may not exist in Google API (404)
   var allModels = [
-    'gemini-3.6-flash',
     'gemini-2.0-flash',
     'gemini-flash-latest',
+    'gemini-3.6-flash',
   ]
   var lastError = ''
   for (var mi = 0; mi < allModels.length; mi++) {
     var model = allModels[mi]
-    // Short timeout for 3.6 (will fail fast with 404), longer for working models
-    var modelTimeout = mi === 0 ? 5000 : 20000
+    var modelTimeout = mi === 2 ? 5000 : 20000  // short timeout for 3.6
     try {
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
       var controller = new AbortController()
@@ -50,6 +50,8 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
         if (text) return { ok: true, text: text }
       } else {
         lastError = model + ': HTTP ' + geminiRes.status
+        // If 429, don't try other models - they'll also 429 (same API key quota)
+        if (geminiRes.status === 429) break
       }
     } catch (e: any) {
       lastError = model + ': ' + (e.message || '')
