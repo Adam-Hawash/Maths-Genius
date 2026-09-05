@@ -15,17 +15,13 @@ import { db } from '@/lib/db'
 export const runtime = 'nodejs'
 export const maxDuration = 20
 
-// Single model for fast response - no fallback chain to slow down
-const FAST_MODEL = 'gemini-2.5-flash'
-const FALLBACK_MODELS = ['gemini-1.5-flash']
-// (no longer used - replaced with hardcoded array inside callGemini)
+// (unused - models list is in callGemini below)
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
   // Models in order of preference. All these are valid for v1beta generateContent API.
   // gemini-3.6-flash is requested first (will be used when Google releases it).
   // gemini-1.5-flash and gemini-1.5-pro are deprecated - replaced with -latest variants.
   var allModels = [
-    'gemini-3.7-flash',
     'gemini-3.6-flash',
     'gemini-2.0-flash',
     'gemini-flash-latest',

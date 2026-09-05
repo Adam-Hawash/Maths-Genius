@@ -69,7 +69,7 @@ export async function POST(request) {
       generationConfig: { temperature: 0.2, maxOutputTokens: 8192 }
     }
 
-    var models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
+    var models = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
     var geminiRes = null
     var lastError = ''
 
