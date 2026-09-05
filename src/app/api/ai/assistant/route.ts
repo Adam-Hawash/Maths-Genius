@@ -18,21 +18,22 @@ export const maxDuration = 30
 // (unused - models list is in callGemini below)
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  // Primary model: gemini-2.0-flash (verified working)
+  // User requested: gemini-3.6-flash as primary model
   var allModels = [
+    'gemini-3.6-flash',
     'gemini-2.0-flash',
     'gemini-flash-latest',
   ]
   var lastError = ''
   for (var mi = 0; mi < allModels.length; mi++) {
     var model = allModels[mi]
-    // Try up to 2 times per model (retry on 429/503)
+    // Short timeout for 3.6 (will fail fast with 404), longer for working models
+    var modelTimeout = mi === 0 ? 5000 : 20000
     for (var attempt = 0; attempt < 2; attempt++) {
       try {
         var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
         var controller = new AbortController()
-        // Longer timeout: 20s per attempt
-        var timeout = setTimeout(function() { controller.abort() }, 20000)
+        var timeout = setTimeout(function() { controller.abort() }, modelTimeout)
         var geminiRes = await fetch(modelUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -49,16 +50,14 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
           try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
           if (text) return { ok: true, text: text }
         } else {
-          var errBody = ''
-          try { errBody = await geminiRes.text() } catch (e) {}
           lastError = model + ': HTTP ' + geminiRes.status
-          // If 429 or 503, wait 2s and retry
-          if ((geminiRes.status === 429 || geminiRes.status === 503) && attempt === 0) {
+          // If 429 or 503, wait 2s and retry (only for working models)
+          if ((geminiRes.status === 429 || geminiRes.status === 503) && attempt === 0 && mi > 0) {
             await new Promise(function(r) { setTimeout(r, 2000) })
             continue
           }
         }
-        break // Don't retry if not 429/503
+        break
       } catch (e: any) {
         lastError = model + ': ' + (e.message || '')
       }
