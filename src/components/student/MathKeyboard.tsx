@@ -129,6 +129,9 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
   const [uploading, setUploading] = useState(false)
   const [uploadedImage, setUploadedImage] = useState<string>('')
   const [cursorPos, setCursorPos] = useState(0)
+  const [showFraction, setShowFraction] = useState(false)
+  const [fractionTop, setFractionTop] = useState('')
+  const [fractionBottom, setFractionBottom] = useState('')
 
   // Smart insert: detect math context for "natural" writing feel
   // e.g. √ then 3 → ∛ (cube root), ^ then 2 → ² (squared), ^ then 3 → ³
@@ -287,6 +290,17 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
 
   const handleEnter = () => {
     insertSymbol('\n')
+  }
+
+  const handleFractionInsert = () => {
+    var top = fractionTop.trim()
+    var bottom = fractionBottom.trim()
+    if (top && bottom) {
+      insertSymbol('(' + top + '/' + bottom + ')')
+    }
+    setFractionTop('')
+    setFractionBottom('')
+    setShowFraction(false)
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -470,16 +484,16 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
                 <Delete className="h-4 w-4" />
               </button>
 
-              {/* Fraction button - inserts a/b format */}
+              {/* Fraction button - opens popup with numerator/denominator */}
               <button
                 type="button"
-                onClick={() => insertSymbol('/')}
-                title="كسر - اكتب البسط ثم / ثم المقام"
+                onClick={() => setShowFraction(true)}
+                title="كسر - اكتب البسط والمقام"
                 className="aspect-square flex flex-col items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-md transition-colors border border-amber-500/20 select-none"
               >
-                <span className="text-xs font-bold leading-none">a</span>
+                <span className="text-[10px] font-bold leading-none">a</span>
                 <span className="w-5 border-t border-current my-0.5"></span>
-                <span className="text-xs font-bold leading-none">b</span>
+                <span className="text-[10px] font-bold leading-none">b</span>
               </button>
 
               {/* Enter button */}
@@ -501,6 +515,52 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
             >
               <X className="h-3.5 w-3.5" />
               Close keyboard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Fraction popup - numerator on top, denominator below */}
+      {showFraction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowFraction(false)}>
+          <div className="bg-card border border-border rounded-xl p-4 shadow-2xl w-full max-w-xs" onClick={function(e) { e.stopPropagation() }}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold">إدخال الكسر</p>
+              <button type="button" onClick={() => setShowFraction(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {/* Fraction visual: box on top, line, box below */}
+            <div className="flex flex-col items-center gap-1 mb-3">
+              <input
+                type="text"
+                value={fractionTop}
+                onChange={function(e) { setFractionTop(e.target.value) }}
+                onKeyDown={function(e) { if (e.key === 'Enter') { var b = document.getElementById('frac-bottom'); if (b) b.focus() } }}
+                placeholder="البسط"
+                dir="ltr"
+                className="w-24 text-center text-lg font-bold px-2 py-1.5 rounded-md border-2 border-amber-500/40 bg-amber-50 dark:bg-amber-900/10 focus:outline-none focus:border-amber-500"
+                autoFocus
+              />
+              <div className="w-32 h-0.5 bg-foreground"></div>
+              <input
+                id="frac-bottom"
+                type="text"
+                value={fractionBottom}
+                onChange={function(e) { setFractionBottom(e.target.value) }}
+                onKeyDown={function(e) { if (e.key === 'Enter') handleFractionInsert() }}
+                placeholder="المقام"
+                dir="ltr"
+                className="w-24 text-center text-lg font-bold px-2 py-1.5 rounded-md border-2 border-amber-500/40 bg-amber-50 dark:bg-amber-900/10 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleFractionInsert}
+              disabled={!fractionTop.trim() || !fractionBottom.trim()}
+              className="w-full py-2 text-sm font-bold rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              إدراج الكسر
             </button>
           </div>
         </div>
