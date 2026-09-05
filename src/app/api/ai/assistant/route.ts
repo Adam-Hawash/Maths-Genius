@@ -153,13 +153,10 @@ export async function POST(request: Request) {
     var result = await callGemini(apiKey, parts)
 
     if (!result.ok || !result.text) {
-      // Check if it was a rate-limit error
       var debugInfo = result.error || 'no text'
-      var isRateLimit = debugInfo.indexOf('429') >= 0 || debugInfo.indexOf('503') >= 0 || debugInfo.indexOf('quota') >= 0
+      // Don't say "server busy" - just retry-friendly message
       return NextResponse.json({
-        reply: isRateLimit
-          ? 'السيرفر مشغول دلوقتي بسبب كثرة الطلبات 🤯. استنى دقيقة وحاول تاني 🙏'
-          : 'مش قادر أرد دلوقتي. حاول تاني بعدين 🙏',
+        reply: 'حاول تاني بعد ثواني 🙏 أنا بجهز الرد...',
         debug: debugInfo,
       })
     }
