@@ -1424,13 +1424,13 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       setTakingExam(null)
       return null
     }
-    // Separate MCQ from Writing
+    // Separate MCQ from Writing - track DISPLAY index in examQuestions array
     var mcqQs: any[] = []
     var writingQs: any[] = []
-    examQuestions.forEach(function(q: any) {
+    examQuestions.forEach(function(q: any, idx: number) {
       var isWriting = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' }))
-      if (isWriting) writingQs.push(q)
-      else mcqQs.push(q)
+      if (isWriting) writingQs.push({ q: q, displayIdx: idx })
+      else mcqQs.push({ q: q, displayIdx: idx })
     })
     return (
       <div className="space-y-4" dir="ltr">
@@ -1443,7 +1443,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         {mcqQs.length > 0 && (
           <div className="space-y-3">
             {writingQs.length > 0 && <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">Multiple Choice:</p>}
-            {mcqQs.map((q: any, mi: number) => {
+            {mcqQs.map(function(item, mi) {
+              var q = item.q
+              var displayIdx = item.displayIdx
               var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
               var qText = q.question || q.q || ''
               return (
@@ -1454,9 +1456,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                       {(q.options || []).map((opt: string, oi: number) => (
                         <button
                           key={oi}
-                          onClick={() => setAnswers(prev => ({ ...prev, [mi]: oi }))}
+                          onClick={() => setAnswers(prev => ({ ...prev, [displayIdx]: oi }))}
                           className={`w-full p-3 rounded-lg border text-sm transition-colors ${
-                            answers[mi] === oi ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
+                            answers[displayIdx] === oi ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50'
                           }`}
                           style={{ textAlign: 'left' }}
                         >
@@ -1475,8 +1477,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         {writingQs.length > 0 && (
           <div className="space-y-3">
             {mcqQs.length > 0 && <div className="border-t pt-3"><p className="text-xs font-semibold text-amber-600 dark:text-amber-400">Written Questions:</p></div>}
-            {writingQs.map((q: any, wi: number) => {
-              var displayIdx = mcqQs.length + wi
+            {writingQs.map(function(item, wi) {
+              var q = item.q
+              var displayIdx = item.displayIdx
               var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 5
               var qText = q.question || q.q || ''
               return (
@@ -1495,13 +1498,6 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                         }}
                         placeholder="Write your answer here or upload an image..."
                         rows={4}
-                        onImageUpload={function(filePath: string) {
-                          if (filePath) {
-                            // MathKeyboard already adds [📷 صورة مرفقة: PATH] to value,
-                            // so we just need to ensure the parent state is synced
-                            // (no extra marker needed - prevents duplicates)
-                          }
-                        }}
                       />
                     </div>
                   </CardContent>
@@ -1517,22 +1513,27 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
           onClick={async () => {
             setSubmitting(true)
             try {
-              // Combine MCQ + writing answers
+              // Combine MCQ + writing answers - use displayIdx as key
               var mappedAnswers: Record<number, any> = {}
-              // MCQ answers
+              // MCQ answers (answers keys are displayIdx)
               Object.keys(answers).forEach(function(di) {
-                var origIdx = examShuffleMap.length > 0 ? examShuffleMap[parseInt(di)] : parseInt(di)
+                var displayIdx = parseInt(di)
+                // displayIdx is the position in examQuestions array (shuffled)
+                // examShuffleMap maps displayIdx → original question index
+                var origIdx = examShuffleMap.length > 0 ? examShuffleMap[displayIdx] : displayIdx
+                if (origIdx === undefined) origIdx = displayIdx
                 mappedAnswers[origIdx] = answers[di]
               })
-              // Writing answers
+              // Writing answers (writingAnswers keys are displayIdx)
               Object.keys(writingAnswers).forEach(function(di) {
                 var displayIdx = parseInt(di)
                 var origIdx = examShuffleMap.length > 0 ? examShuffleMap[displayIdx] : displayIdx
+                if (origIdx === undefined) origIdx = displayIdx
                 mappedAnswers[origIdx] = writingAnswers[di]
               })
-              // Add client-side timeout (30s) to prevent infinite loading
+              // Add client-side timeout (60s - give server time to save)
               var submitController = new AbortController()
-              var submitTimeout = setTimeout(function() { submitController.abort() }, 30000)
+              var submitTimeout = setTimeout(function() { submitController.abort() }, 60000)
               const res = await fetch('/api/exams/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1552,7 +1553,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                 toast.error(data.error || 'خطأ في التقديم')
               }
             } catch (e) {
-              // If timeout, treat as submitted (server may still be processing)
+              // If timeout/network error, treat as submitted (server may still be processing)
               toast.success('تم تقديم الامتحان بنجاح')
               setSubmittedExamId(takingExam)
               setExamSubmitted(true)
