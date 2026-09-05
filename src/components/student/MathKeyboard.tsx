@@ -55,26 +55,6 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
     ],
   },
   {
-    title: 'الكسور',
-    symbols: [
-      { label: '½', insert: '½', hint: 'واحد على اثنين' },
-      { label: '⅓', insert: '⅓', hint: 'واحد على ثلاثة' },
-      { label: '¼', insert: '¼', hint: 'واحد على أربعة' },
-      { label: '⅔', insert: '⅔', hint: 'اثنين على ثلاثة' },
-      { label: '¾', insert: '¾', hint: 'ثلاثة على أربعة' },
-      { label: '⅕', insert: '⅕', hint: 'واحد على خمسة' },
-      { label: '⅖', insert: '⅖', hint: 'اثنين على خمسة' },
-      { label: '⅗', insert: '⅗', hint: 'ثلاثة على خمسة' },
-      { label: '⅘', insert: '⅘', hint: 'أربعة على خمسة' },
-      { label: '⅙', insert: '⅙', hint: 'واحد على ستة' },
-      { label: '⅚', insert: '⅚', hint: 'خمسة على ستة' },
-      { label: '⅛', insert: '⅛', hint: 'واحد على ثمانية' },
-      { label: '⅜', insert: '⅜', hint: 'ثلاثة على ثمانية' },
-      { label: '⅝', insert: '⅝', hint: 'خمسة على ثمانية' },
-      { label: '⅞', insert: '⅞', hint: 'سبعة على ثمانية' },
-    ],
-  },
-  {
     title: 'Powers & Roots',
     symbols: [
       { label: 'x^n', insert: '^', hint: 'Power - type number after ^' },
@@ -488,6 +468,18 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
                 className="aspect-square flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-600 rounded-md transition-colors border border-red-500/20 select-none"
               >
                 <Delete className="h-4 w-4" />
+              </button>
+
+              {/* Fraction button - inserts a/b format */}
+              <button
+                type="button"
+                onClick={() => insertSymbol('/')}
+                title="كسر - اكتب البسط ثم / ثم المقام"
+                className="aspect-square flex flex-col items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-md transition-colors border border-amber-500/20 select-none"
+              >
+                <span className="text-xs font-bold leading-none">a</span>
+                <span className="w-5 border-t border-current my-0.5"></span>
+                <span className="text-xs font-bold leading-none">b</span>
               </button>
 
               {/* Enter button */}

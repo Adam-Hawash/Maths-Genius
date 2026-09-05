@@ -18,9 +18,8 @@ export const maxDuration = 30
 // (unused - models list is in callGemini below)
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  // gemini-2.0-flash FIRST, then 3.6, then latest
+  // Gemini 3.6 FIRST as requested, then fallbacks
   var allModels = [
-    'gemini-2.0-flash',
     'gemini-3.6-flash',
     'gemini-flash-latest',
   ]
@@ -28,7 +27,7 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
   var allErrors = []  // collect ALL errors for debugging
   for (var mi = 0; mi < allModels.length; mi++) {
     var model = allModels[mi]
-    var modelTimeout = mi === 1 ? 5000 : 20000  // short timeout for 3.6
+    var modelTimeout = 20000  // same for all
     try {
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
       var controller = new AbortController()
