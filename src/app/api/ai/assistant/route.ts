@@ -13,52 +13,55 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
-export const maxDuration = 20
+export const maxDuration = 30
 
 // (unused - models list is in callGemini below)
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  // Models in order of preference. All these are valid for v1beta generateContent API.
-  // gemini-3.6-flash is requested first (will be used when Google releases it).
-  // gemini-1.5-flash and gemini-1.5-pro are deprecated - replaced with -latest variants.
+  // Primary model: gemini-2.0-flash (verified working)
   var allModels = [
-    'gemini-3.6-flash',
     'gemini-2.0-flash',
     'gemini-flash-latest',
   ]
   var lastError = ''
   for (var mi = 0; mi < allModels.length; mi++) {
     var model = allModels[mi]
-    try {
-      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
-      // Per-request timeout (10s for fast model, 15s for fallback)
-      var controller = new AbortController()
-      var timeoutMs = mi === 0 ? 10000 : 15000
-      var timeout = setTimeout(function() { controller.abort() }, timeoutMs)
-      var geminiRes = await fetch(modelUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: parts }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 1500 }
-        }),
-        signal: controller.signal,
-      })
-      clearTimeout(timeout)
-      if (geminiRes.ok) {
-        var data = await geminiRes.json()
-        var text = ''
-        try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
-        if (text) return { ok: true, text: text }
-      } else {
-        var errBody = ''
-        try { errBody = await geminiRes.text() } catch (e) {}
-        lastError = model + ': HTTP ' + geminiRes.status + ' - ' + errBody.substring(0, 150)
-        console.error('[AI Assistant] ' + lastError)
+    // Try up to 2 times per model (retry on 429/503)
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
+        var controller = new AbortController()
+        // Longer timeout: 20s per attempt
+        var timeout = setTimeout(function() { controller.abort() }, 20000)
+        var geminiRes = await fetch(modelUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: parts }],
+            generationConfig: { temperature: 0.5, maxOutputTokens: 1200 }
+          }),
+          signal: controller.signal,
+        })
+        clearTimeout(timeout)
+        if (geminiRes.ok) {
+          var data = await geminiRes.json()
+          var text = ''
+          try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
+          if (text) return { ok: true, text: text }
+        } else {
+          var errBody = ''
+          try { errBody = await geminiRes.text() } catch (e) {}
+          lastError = model + ': HTTP ' + geminiRes.status
+          // If 429 or 503, wait 2s and retry
+          if ((geminiRes.status === 429 || geminiRes.status === 503) && attempt === 0) {
+            await new Promise(function(r) { setTimeout(r, 2000) })
+            continue
+          }
+        }
+        break // Don't retry if not 429/503
+      } catch (e: any) {
+        lastError = model + ': ' + (e.message || '')
       }
-    } catch (e: any) {
-      lastError = model + ': ' + (e.message || '')
-      console.error('[AI Assistant] ' + lastError)
     }
   }
   return { ok: false, error: lastError }

@@ -270,7 +270,7 @@ export function StudentPortal() {
     { id: 'videos', label: 'الدروس', icon: Video },
     { id: 'homework', label: 'الواجبات', icon: ClipboardList },
     { id: 'exams', label: 'الامتحانات', icon: FileText },
-    { id: 'announcements', label: 'إعلانات المستر', icon: Megaphone },
+    { id: 'announcements', label: 'التنبيهات', icon: Megaphone },
     { id: 'discussions', label: 'المجتمع', icon: MessageSquare },
   ]
 
@@ -1804,8 +1804,8 @@ function StudentGuide({ onClose, onEnterPortal }: { onClose: () => void; onEnter
     },
     {
       icon: Megaphone,
-      title: 'إعلانات المستر',
-      desc: 'تاب "إعلانات المستر" فيه كل الإعلانات المهمة من المستر - مواعيد، اخبار، وملاحظات مهمة. دايماً تابعها.',
+      title: 'التنبيهات',
+      desc: 'تاب "التنبيهات" فيه كل الإعلانات المهمة من المستر - مواعيد، اخبار، وملاحظات مهمة. دايماً تابعها.',
       color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30',
     },
     {
