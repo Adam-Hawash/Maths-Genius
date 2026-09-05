@@ -450,15 +450,41 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                   </div>
                 </div>
               ) : ytId ? (
-                <div className="video-protected w-full h-full" onClick={() => trackVideoWatch(video.id)}>
+                <div className="video-protected w-full h-full relative" onClick={() => trackVideoWatch(video.id)}>
                   <iframe
-                    src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1&controls=0&showinfo=0&iv_load_policy=3`}
+                    src={`https://www.youtube.com/embed/${ytId}?modestbranding=1&rel=0&playsinline=1&controls=1&showinfo=0&iv_load_policy=3`}
                     title={video.title}
-                    className="w-full h-full"
+                    className="w-full h-full pointer-events-none"
                     allow="accelerometer; autoplay; encrypted-media; gyroscope"
                     allowFullScreen
                     loading="lazy"
                   />
+                  {/* Overlay thumbnail - click to open full screen */}
+                  {thumbSrc && (
+                    <button
+                      type="button"
+                      onClick={function(e) {
+                        e.stopPropagation()
+                        var iframe = (e.currentTarget.parentElement?.querySelector('iframe')) as HTMLIFrameElement
+                        if (iframe) {
+                          var src = iframe.src
+                          iframe.src = src.replace('controls=1', 'controls=1&autoplay=1')
+                          iframe.style.pointerEvents = 'auto'
+                          iframe.style.zIndex = '10'
+                          ;(e.currentTarget as HTMLElement).style.display = 'none'
+                        }
+                      }}
+                      className="absolute inset-0 z-20 flex items-center justify-center cursor-pointer group"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={thumbSrc} alt={video.title} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/40 transition-colors">
+                        <div className="h-16 w-16 rounded-full bg-red-600 flex items-center justify-center shadow-lg">
+                          <PlayCircle className="h-10 w-10 text-white" />
+                        </div>
+                      </div>
+                    </button>
+                  )}
                 </div>
               ) : isVideoFile ? (
                 <CustomVideoPlayer
