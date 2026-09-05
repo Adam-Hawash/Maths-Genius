@@ -179,7 +179,40 @@ export async function gradeImageAnswer(params: {
   var isCorrect = parsed.isCorrect === true
   var awardedPoints = isCorrect ? maxPoints : 0
   var extractedAnswer = parsed.extractedAnswer || ''
-  var finalAns = parsed.finalAnswer || ''
+  var finalAns = parsed.finalAnswer || parsed.final_answer || ''
+
+  // IMPORTANT: Override isCorrect based on finalAnswer matching modelAnswer
+  // The AI sometimes says isCorrect=false even when the final answer matches
+  if (finalAns && modelAnswer) {
+    var cleanFinal = finalAns.toLowerCase().replace(/\s+/g, ' ').trim()
+    var cleanModel = modelAnswer.toLowerCase().replace(/\s+/g, ' ').trim()
+    // Extract final answer from model (after last =)
+    var modelParts = cleanModel.split('=')
+    var modelFinal = (modelParts[modelParts.length - 1] || '').trim()
+    // Check if final answer matches
+    if (modelFinal && cleanFinal) {
+      if (modelFinal === cleanFinal || modelFinal.includes(cleanFinal) || cleanFinal.includes(modelFinal)) {
+        isCorrect = true
+        awardedPoints = maxPoints
+        if (!parsed.feedback || parsed.feedback.indexOf('خاطئة') >= 0 || parsed.feedback.indexOf('خطأ') >= 0) {
+          parsed.feedback = 'إجابة صحيحة - الإجابة النهائية مطابقة'
+        }
+      }
+    }
+  }
+
+  // Also check if extractedAnswer contains the model's final answer
+  if (!isCorrect && extractedAnswer && modelAnswer) {
+    var cleanExtracted = extractedAnswer.toLowerCase().replace(/\s+/g, ' ').trim()
+    var cleanModel2 = modelAnswer.toLowerCase().replace(/\s+/g, ' ').trim()
+    var modelParts2 = cleanModel2.split('=')
+    var modelFinal2 = (modelParts2[modelParts2.length - 1] || '').trim()
+    if (modelFinal2 && cleanExtracted.includes(modelFinal2)) {
+      isCorrect = true
+      awardedPoints = maxPoints
+      parsed.feedback = 'إجابة صحيحة - الإجابة النهائية موجودة في الحل'
+    }
+  }
 
   // Combine extracted answer with final answer for display
   var displayExtracted = extractedAnswer
