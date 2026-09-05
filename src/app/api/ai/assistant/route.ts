@@ -1,84 +1,9 @@
 // @ts-nocheck
-// POST /api/ai/assistant
-// Body: { message: string, context?: { page?: string, studentId?: string } }
-// Returns: { reply: string }
-
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
-
-async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  // تم تحديث الموديلات لتشمل أحدث إصدارات Gemini الذكية والسريعة
-  var allModels = [
-    'gemini-2.5-flash',
-    'gemini-1.5-flash',
-    'gemini-flash-latest'
-  ]
-  var lastError = ''
-  var allErrors = [] 
-  
-  for (var mi = 0; mi < allModels.length; mi++) {
-    var model = allModels[mi]
-    var modelTimeout = 25000 
-    try {
-      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
-      var controller = new AbortController()
-      var timeout = setTimeout(function() { controller.abort() }, modelTimeout)
-      
-      var geminiRes = await fetch(modelUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: parts }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 800 }
-        }),
-        signal: controller.signal,
-      })
-      
-      clearTimeout(timeout)
-      
-      if (geminiRes.ok) {
-        var data = await geminiRes.json()
-        var text = ''
-        try { 
-          text = data.candidates[0].content.parts[0].text || '' 
-        } catch (e) {}
-        if (text) return { ok: true, text: text }
-      } else {
-        var status = geminiRes.status
-        var errBody = await geminiRes.text().catch(() => '')
-        allErrors.push(model + ': ' + status + ' ' + errBody)
-        lastError = model + ': HTTP ' + status
-      }
-    } catch (e: any) {
-      allErrors.push(model + ': ' + (e.message || ''))
-      lastError = model + ': ' + (e.message || '')
-    }
-  }
-  return { ok: false, error: allErrors.join(' | ') }
-}
-
-const PLATFORM_CONTEXT = `أنت مساعد ذكي في منصة Maths Genius للرياضيات. جاوب بالعامية المصرية بسرعة وذكاء.
-
-عن المنصة: دروس فيديو، واجبات، امتحانات، تنبيهات، ومجتمع.
-الطالب بيسجل برقم الهاتف وكلمة المرور.
-
-التابات: الدروس، الواجبات، الامتحانات، التنبيهات، المجتمع.
-لو الحساب مرفوض يتواصل مع المستر. لو قيد المراجعة يستنى.
-
-تقدر تشرح رياضيات: أسس، جذور، معادلات، هندسة، أي حاجة.
-
-قواعد:
-- جاوب بالعامية المصرية
-- جاوب بسرعة وذكاء - افهم السؤال كويس
-- لو رياضي اشرح الخطوات بوضوح
-- استخدم رموز (📚 📝 ✅ 🧮)
-- ما تقلش أي رسالة خطأ أبداً
-- ما تقلش "حاول تاني" أو "مشغول"
-- لو مش فاهم السؤال اسأل توضيح
-`
 
 export async function POST(request: Request) {
   try {
@@ -90,58 +15,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'مفيش رسالة' }, { status: 400 })
     }
 
-    if (message.length > 500) {
-      return NextResponse.json({ error: 'الرسالة طويلة جداً (الحد 500 حرف)' }, { status: 400 })
-    }
-
     var apiKey = process.env.GEMINI_API_KEY || ''
     if (!apiKey) {
-      return NextResponse.json({
-        reply: 'الـ AI مش متاح دلوقتي. تأكد من ضبط المفتاح يا مستر 👨‍🏫',
-      })
+      return NextResponse.json({ reply: 'عفواً، مفتاح الـ AI غير مضبوط في البيئة.' }, { status: 500 })
     }
 
-    var contextStr = PLATFORM_CONTEXT
+    var contextStr = `أنت مساعد ذكي في منصة Maths Genius للmath. جاوب بالعامية المصرية بسرعة وذكاء.`
     if (context.page) {
-      contextStr += '\n\nالطالب دلوقتي في صفحة: ' + context.page
+      contextStr += '\n\nالصفحة الحالية: ' + context.page
     }
+
+    // استدعاء المباشر والصريح لنموذج جيميناي من غير تعقيد
+    var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey
     
-    if (context.studentId) {
-      try {
-        // متوافق مع قاعدة بيانات Torso / SQLite عبر Prisma ORM
-        var student = await db.student.findUnique({
-          where: { id: context.studentId },
-          select: { name: true, grade: true, status: true }
-        })
-        
-        if (student) {
-          contextStr += '\n\nبيانات الطالب:\n- الاسم: ' + (student.name || 'مش معروف') + '\n- الصف: ' + (student.grade || 'مش معروف') + '\n- الحالة: ' + (student.status || 'مش معروف')
-        }
-      } catch (e) {
-        console.error('Error fetching student context from Torso DB:', e)
-      }
-    }
-
-    var parts = [
-      { text: contextStr + '\n\nسؤال الطالب: ' + message + '\n\nالرد:' }
-    ]
-
-    var result = await callGemini(apiKey, parts)
-
-    if (!result.ok || !result.text) {
-      console.error('Gemini API Error details:', result.error)
-      return NextResponse.json({
-        reply: 'معلش يا بطل، حصل ضغط، اكتب سؤالك تاني وهرد عليك فوراً 🚀',
-        debug: result.error,
+    var geminiRes = await fetch(modelUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: contextStr + '\n\nسؤال المستخدم: ' + message }]
+        }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 1000 }
       })
+    })
+
+    var data = await geminiRes.json()
+
+    if (!geminiRes.ok) {
+      // إرجاع تفاصيل الخطأ الحقيقي مباشرة بدل رسائل الأعذار المخفية
+      return NextResponse.json({ 
+        reply: 'عاد خطأ من سيرفر جيميناي: ' + (data.error?.message || JSON.stringify(data)) 
+      }, { status: 200 })
     }
 
-    return NextResponse.json({ reply: result.text.trim() })
+    var replyText = data.candidates?.[0]?.content?.parts?.[0]?.text
+    if (!replyText) {
+      return NextResponse.json({ reply: 'لم يتم استلام نص من النموذج.' }, { status: 200 })
+    }
+
+    return NextResponse.json({ reply: replyText.trim() })
+
   } catch (error: any) {
-    console.error('[AI Assistant] Error:', error)
-    return NextResponse.json({
-      reply: 'حصلت مشكلة بسيطة، جرب تبعث تاني 🙏',
-      error: error.message,
-    })
+    console.error('[AI Assistant Error]:', error)
+    return NextResponse.json({ reply: 'خطأ تقني في السيرفر: ' + error.message }, { status: 200 })
   }
 }
