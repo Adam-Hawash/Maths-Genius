@@ -13,7 +13,7 @@
 //          GEMINI_API_KEYS=AIzaSy....,AIzaSy....,AIzaSy....
 // ============================================================
 
-export var GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.0-flash']
+export var GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest']
 
 const QUOTA_HINT = 'الحصة اليومية لمفتاح Gemini خلصت (429). الحل: ضيف مفتاح/مفاتيح تانية في Vercel → Settings → Environment Variables باسم GEMINI_API_KEYS (مفصولة بفواصل) أو فعّل الفاتورة من Google AI Studio.'
 
@@ -103,18 +103,28 @@ export async function callGemini(opts: {
   var attemptIndex = 0
 
   // Outer: models (Gemini 3.6 first) — Inner: keys (rotation on quota)
-  for (var mi = 0; mi < GEMINI_MODELS.length; mi++) {
-    for (var ki = 0; ki < keys.length; ki++) {
-      attemptIndex++
-      var t = timeoutMs
-      if (attemptIndex === 1 && opts.fastFailFirstMs) t = opts.fastFailFirstMs
-      var result = await attempt(GEMINI_MODELS[mi], keys[ki], opts.parts, generationConfig, t)
-      if (result.ok) return result
-      lastError = result.error || ''
-      if (result.status === 429) {
-        sawQuota = true
-        // small pause before switching key/model so we don't burn RPM
-        await new Promise(function(r) { setTimeout(r, 400) })
+  // Two passes: the second pass (after a short pause) clears short RPM blips.
+  for (var pass = 0; pass < 2; pass++) {
+    if (pass > 0) {
+      if (!sawQuota) break
+      await new Promise(function (r) { setTimeout(r, 2500) })
+    }
+    for (var mi = 0; mi < GEMINI_MODELS.length; mi++) {
+      for (var ki = 0; ki < keys.length; ki++) {
+        attemptIndex++
+        var t = timeoutMs
+        if (attemptIndex === 1 && opts.fastFailFirstMs) t = opts.fastFailFirstMs
+        var result = await attempt(GEMINI_MODELS[mi], keys[ki], opts.parts, generationConfig, t)
+        if (result.ok) return result
+        lastError = result.error || ''
+        if (result.status === 429) {
+          sawQuota = true
+          // small pause before switching key/model so we don't burn RPM
+          await new Promise(function (r) { setTimeout(r, 400) })
+        } else if (result.status === 404) {
+          // model retired (e.g. gemini-2.0-flash) — skip its remaining keys
+          break
+        }
       }
     }
   }
