@@ -19,7 +19,7 @@ import {
   ChevronLeft, CheckCircle2
 } from 'lucide-react'
 import { CMSPanel } from './CMSPanel'
-import { FractionText } from '@/components/FractionText'
+import { FractionText, hasMathMarkup } from '@/components/FractionText'
 import { SocialLinksPanel } from './SocialLinksPanel'
 import { CommunityPanel } from './CommunityPanel'
 import { ActivityPanel } from './ActivityPanel'
@@ -1405,13 +1405,13 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                                                     : (aq.aiIsCorrect === true ? 'AI: صح' : 'AI: غلط'))
                                                 : aq.isCorrect ? 'Correct' : 'Wrong'}
                                             </span>
-                                            <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
+                                            <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. <FractionText text={aq.question} /></p>
                                           </div>
                                           <div className="mt-1 pl-6 space-y-0.5">
                                             {aq.type === 'writing' ? (
                                               <div className="space-y-1 p-2 rounded bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/40">
                                                 <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">إجابة الطالب:</p>
-                                                <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
+                                                <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><FractionText text={aq.studentAnswer || '(فارغ)'} /></p>
                                                 {/* Image preview - click to enlarge - show ALL images */}
                                                 {extractAllImagePaths(aq.studentAnswer).length > 0 && onViewImage && (
                                                   <div className="mt-1 flex flex-wrap gap-2">
@@ -1440,7 +1440,7 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                                                 {aq.aiExtractedAnswer && (
                                                   <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
                                                     <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
-                                                    <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.aiExtractedAnswer}</p>
+                                                    <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><FractionText text={aq.aiExtractedAnswer} /></p>
                                                     {aq.aiFeedback && (
                                                       <p className="text-[9px] text-muted-foreground mt-1">التعليق: {aq.aiFeedback}</p>
                                                     )}
@@ -1449,14 +1449,14 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                                                 {aq.correctAnswer && (
                                                   <>
                                                     <p className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5 mt-1">الإجابة النموذجية:</p>
-                                                    <p className="text-emerald-900 dark:text-emerald-200 whitespace-pre-wrap break-words" dir="auto">{aq.correctAnswer}</p>
+                                                    <p className="text-emerald-900 dark:text-emerald-200 whitespace-pre-wrap break-words" dir="auto"><FractionText text={aq.correctAnswer} /></p>
                                                   </>
                                                 )}
                                               </div>
                                             ) : (
                                               <>
-                                                <p className="text-red-600">إجابة الطالب: <span dir="ltr">{aq.studentAnswer}</span></p>
-                                                <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{aq.correctAnswer}</span></p>
+                                                <p className="text-red-600">إجابة الطالب: <span dir="ltr"><FractionText text={aq.studentAnswer} /></span></p>
+                                                <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr"><FractionText text={aq.correctAnswer} /></span></p>
                                               </>
                                             )}
                                           </div>
@@ -1470,7 +1470,7 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                                         <div key={wi} className="flex items-start gap-2 text-[10px] p-1.5 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40">
                                           <span className="shrink-0 font-bold text-red-500">{wi + 1}.</span>
                                           <div className="min-w-0">
-                                            <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wq.question}</p>
+                                            <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}><FractionText text={wq.question} /></p>
                                             <p className="text-red-600 mt-0.5">إجابة الطالب: <span dir="ltr">{wq.studentAnswer}</span></p>
                                             <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
                                           </div>
@@ -2013,13 +2013,13 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                             : (aq.aiIsCorrect === true ? 'AI: صح' : 'AI: غلط'))
                                         : aq.isCorrect ? 'Correct' : 'Wrong'}
                                     </span>
-                                    <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
+                                    <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. <FractionText text={aq.question} /></p>
                                   </div>
                                   <div className="mt-1 pl-6 space-y-0.5">
                                     {aq.type === 'writing' ? (
                                       <>
                                         <p className="text-[9px] font-semibold text-muted-foreground">إجابة الطالب:</p>
-                                        <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
+                                        <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><FractionText text={aq.studentAnswer || '(فارغ)'} /></p>
                                         {/* Image preview - click to enlarge - show ALL images */}
                                         {extractAllImagePaths(aq.studentAnswer).length > 0 && onViewImage && (
                                           <div className="mt-1 flex flex-wrap gap-2">
@@ -2047,20 +2047,20 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                         {aq.aiExtractedAnswer && (
                                           <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
                                             <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
-                                            <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.aiExtractedAnswer}</p>
+                                            <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><FractionText text={aq.aiExtractedAnswer} /></p>
                                             {aq.aiFeedback && (
                                               <p className="text-[9px] text-muted-foreground mt-1">التعليق: {aq.aiFeedback}</p>
                                             )}
                                           </div>
                                         )}
                                         {aq.correctAnswer && (
-                                          <p className="text-emerald-600 whitespace-pre-wrap break-words" dir="auto">الإجابة الصحيحة: {aq.correctAnswer}</p>
+                                          <p className="text-emerald-600 whitespace-pre-wrap break-words" dir="auto">الإجابة الصحيحة: <FractionText text={aq.correctAnswer} /></p>
                                         )}
                                       </>
                                     ) : (
                                       <>
-                                        <p className="text-red-600">Student answer: <span dir="ltr">{aq.studentAnswer}</span></p>
-                                        <p className="text-emerald-600">Correct answer: <span dir="ltr">{aq.correctAnswer}</span></p>
+                                        <p className="text-red-600">Student answer: <span dir="ltr"><FractionText text={aq.studentAnswer} /></span></p>
+                                        <p className="text-emerald-600">Correct answer: <span dir="ltr"><FractionText text={aq.correctAnswer} /></span></p>
                                       </>
                                     )}
                                   </div>
@@ -2076,7 +2076,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                     <div key={wi} className="flex items-start gap-2 text-[10px] p-1.5 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40">
                                       <span className="shrink-0 font-bold text-red-500">{wi + 1}.</span>
                                       <div className="min-w-0">
-                                        <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wq.question}</p>
+                                        <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}><FractionText text={wq.question} /></p>
                                         <p className="text-red-600 mt-0.5">إجابة الطالب: <span dir="ltr">{wq.studentAnswer}</span></p>
                                         <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
                                       </div>
@@ -2131,13 +2131,13 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                             : (aq.aiIsCorrect === true ? 'AI: صح' : 'AI: غلط'))
                                         : aq.isCorrect ? 'Correct' : 'Wrong'}
                                     </span>
-                                    <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
+                                    <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. <FractionText text={aq.question} /></p>
                                   </div>
                                   <div className="mt-1 pl-6 space-y-0.5">
                                     {aq.type === 'writing' ? (
                                       <>
                                         <p className="text-[9px] font-semibold text-muted-foreground">إجابة الطالب:</p>
-                                        <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.studentAnswer || '(فارغ)'}</p>
+                                        <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><FractionText text={aq.studentAnswer || '(فارغ)'} /></p>
                                         {/* Image preview - click to enlarge - show ALL images */}
                                         {extractAllImagePaths(aq.studentAnswer).length > 0 && onViewImage && (
                                           <div className="mt-1 flex flex-wrap gap-2">
@@ -2165,20 +2165,20 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                         {aq.aiExtractedAnswer && (
                                           <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
                                             <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
-                                            <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{aq.aiExtractedAnswer}</p>
+                                            <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><FractionText text={aq.aiExtractedAnswer} /></p>
                                             {aq.aiFeedback && (
                                               <p className="text-[9px] text-muted-foreground mt-1">التعليق: {aq.aiFeedback}</p>
                                             )}
                                           </div>
                                         )}
                                         {aq.correctAnswer && (
-                                          <p className="text-emerald-600 whitespace-pre-wrap break-words" dir="auto">الإجابة الصحيحة: {aq.correctAnswer}</p>
+                                          <p className="text-emerald-600 whitespace-pre-wrap break-words" dir="auto">الإجابة الصحيحة: <FractionText text={aq.correctAnswer} /></p>
                                         )}
                                       </>
                                     ) : (
                                       <>
-                                        <p className="text-red-600">Student answer: <span dir="ltr">{aq.studentAnswer}</span></p>
-                                        <p className="text-emerald-600">Correct answer: <span dir="ltr">{aq.correctAnswer}</span></p>
+                                        <p className="text-red-600">Student answer: <span dir="ltr"><FractionText text={aq.studentAnswer} /></span></p>
+                                        <p className="text-emerald-600">Correct answer: <span dir="ltr"><FractionText text={aq.correctAnswer} /></span></p>
                                       </>
                                     )}
                                   </div>
@@ -2194,7 +2194,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                     <div key={wi} className="flex items-start gap-2 text-[10px] p-1.5 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40">
                                       <span className="shrink-0 font-bold text-red-500">{wi + 1}.</span>
                                       <div className="min-w-0">
-                                        <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wq.question}</p>
+                                        <p className="font-medium" dir="ltr" style={{ textAlign: 'left' }}><FractionText text={wq.question} /></p>
                                         <p className="text-red-600 mt-0.5">إجابة الطالب: <span dir="ltr">{wq.studentAnswer}</span></p>
                                         <p className="text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
                                       </div>
@@ -2210,19 +2210,19 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                   </p>
                                   {hr.writingAnswers.map((wa: any, wi: number) => (
                                     <div key={wi} className="text-[10px] p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 space-y-1">
-                                      <p className="font-semibold text-amber-700 dark:text-amber-300">سؤال {wi + 1}: <span className="font-normal" dir="ltr" style={{ textAlign: 'left' }}>{wa.question}</span></p>
+                                      <p className="font-semibold text-amber-700 dark:text-amber-300">سؤال {wi + 1}: <span className="font-normal" dir="ltr" style={{ textAlign: 'left' }}><FractionText text={wa.question} /></span></p>
                                       <div className="mt-1 p-1.5 rounded bg-background/50 border border-border/30">
                                         <p className="text-[9px] font-semibold text-muted-foreground mb-0.5">إجابة الطالب:</p>
-                                        <p className="text-foreground whitespace-pre-wrap break-words" dir="auto">{wa.answer || '(فارغ)'}</p>
+                                        <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><FractionText text={wa.answer || '(فارغ)'} /></p>
                                       </div>
                                       {wa.modelAnswer && (
                                         <div className="mt-1 p-1.5 rounded bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/30">
                                           <p className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">الإجابة النموذجية (للمقارنة):</p>
-                                          <p className="text-emerald-900 dark:text-emerald-200 whitespace-pre-wrap break-words" dir="auto">{wa.modelAnswer}</p>
+                                          <p className="text-emerald-900 dark:text-emerald-200 whitespace-pre-wrap break-words" dir="auto"><FractionText text={wa.modelAnswer} /></p>
                                         </div>
                                       )}
                                       {wa.acceptedAnswers && wa.acceptedAnswers.length > 0 && (
-                                        <p className="text-[9px] text-muted-foreground">إجابات مقبولة: {wa.acceptedAnswers.join('، ')}</p>
+                                        <p className="text-[9px] text-muted-foreground">إجابات مقبولة: <FractionText text={wa.acceptedAnswers.join('، ')} /></p>
                                       )}
                                       <p className="text-[9px] text-muted-foreground mt-1">الدرجة: {wa.points} نقطة - بانتظار التصحيح</p>
                                     </div>
@@ -2929,15 +2929,26 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
                   <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={function() { deleteQuestion(qi) }}><Trash2 className="h-3 w-3" /></Button>
                 </div>
                 <Input value={q.question || ''} onChange={function(e) { updateQuestion(qi, 'question', e.target.value) }} placeholder="نص السؤال..." className="text-sm" />
+                {hasMathMarkup(q.question || '') && (
+                  <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
+                    <p className="text-[9px] font-semibold text-muted-foreground mb-1">👁 معاينة عرض الطالب:</p>
+                    <p className="text-sm text-foreground" dir="ltr" style={{ textAlign: 'left' }}><FractionText text={q.question || ''} /></p>
+                  </div>
+                )}
 
                 {qType === 'mcq' ? (
                   <>
                     <div className="grid grid-cols-2 gap-2">
                       {(q.options || []).map(function(opt, oi) {
                         return (
-                          <div key={oi} className="flex items-center gap-1.5">
-                            <button type="button" className={"w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors " + (q.correct === oi ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30 hover:border-primary/50')} onClick={function() { updateQuestion(qi, 'correct', oi) }}>{String.fromCharCode(65 + oi)}</button>
-                            <Input value={opt} onChange={function(e) { updateQuestion(qi, 'option_' + oi, e.target.value) }} placeholder={"اختيار " + (oi + 1)} className="h-8 text-xs" />
+                          <div key={oi} className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <button type="button" className={"w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors " + (q.correct === oi ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30 hover:border-primary/50')} onClick={function() { updateQuestion(qi, 'correct', oi) }}>{String.fromCharCode(65 + oi)}</button>
+                              <Input value={opt} onChange={function(e) { updateQuestion(qi, 'option_' + oi, e.target.value) }} placeholder={"اختيار " + (oi + 1)} className="h-8 text-xs" />
+                            </div>
+                            {hasMathMarkup(opt || '') && (
+                              <p className="text-xs text-foreground pr-6" dir="ltr" style={{ textAlign: 'left' }}><FractionText text={opt || ''} /></p>
+                            )}
                           </div>
                         )
                       })}

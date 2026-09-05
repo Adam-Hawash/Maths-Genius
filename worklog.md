@@ -154,3 +154,30 @@ Stage Summary:
 - Enlarging on mobile now locks landscape and fills the screen; YouTube's native fullscreen bar physically cropped out
 - Pre-play/end states fully opaque — YouTube chrome impossible to see before playback starts
 - RTL SVG text bug fixed — written "YouTube" mark renders complete
+
+---
+Task ID: 7
+Agent: Main Agent (Z.ai Code)
+Task: Final fix for extraction math rendering — no more raw "frac"/caret junk: every fraction renders as a REAL stacked fraction (numerator above, denominator below) and every power as a real superscript, everywhere in the platform
+
+Work Log:
+- Root cause found: old FractionText parsed \frac with [^{}]+ so ANY nested brace (\frac{(2^{4})}{(2^{3})}, \frac{2^{12}}{2^{5}}) failed to match → raw LaTeX leaked into questions/options; also ^{} LaTeX superscripts and caret powers (2^5) were never rendered, and the AI prompt allowed inconsistent styles (unicode superscripts OR ^ OR ^{})
+- Rewrote src/components/FractionText.tsx as a full recursive-descent math renderer (same component name/API → every existing call site upgraded automatically):
+  * \frac{…}{…} with FULL nested-brace support (recursively rendered: stacked fractions containing superscripts, parens, multiple groups)
+  * powers: 2^5, 2^{12}, 2^{n-4} → real <sup>; subscripts x_1, x_{n+1} → real <sub>; Unicode ²³⁴ pass through as-is
+  * \sqrt{x} and \sqrt[3]{x} → real radical glyph with overline; legacy plain 3/4 and old stacked "3 ⏎ ─ ⏎ 4" still stack
+  * LaTeX symbol commands → Unicode (\times ×, \div ÷, \pi π, \le ≤, \approx ≈ …); $…$/$$…$$ wrappers, \left/\right, stray braces stripped; unknown commands degrade gracefully (never leak backslashes)
+  * image markers [📷 …] protected from the parser (paths with _ no longer mangled into subscripts)
+- Admin Step-3 extraction preview now shows a live "👁 معاينة عرض الطالب" rendered preview under every question input and every MCQ option input (via new hasMathMarkup helper) — the admin sees EXACTLY what students will see
+- Wrapped all remaining raw math displays in AdminDashboard with FractionText: exam/homework result views (aq.question, student answers, correct answers, model answers, AI-extracted answers, accepted answers — ~20 spots), including writing-question review
+- MathKeyboard got a live rendered preview under the textarea ("المعاينة زي ما الطالب هيشوفها") — typing \frac or ^ shows the real stacked/superscript result instantly
+- ai-extract route: added normalizeMath() server-side cleanup (strips $ wrappers, \left/\right, unwraps \frac{(X)}{(Y)} → \frac{X}{Y} only when one paren pair wraps the whole group — meaningful parens like (a+1)(a-1) preserved) applied to question/options/modelAnswer/acceptedAnswers in finalizeExtracted (covers both single-file and two-file merge modes)
+- Unified all 3 extraction prompts to ONE canonical format: ^ for powers, \frac{num}{den} for EVERY fraction (including options), no extra parentheses around whole numerator/denominator, no LaTeX beyond \frac, no markdown — written as "MATH FORMAT (very important)" rule blocks
+- Functionally verified with SSR test (12 cases from the user's exact screenshots + edge cases): nested frac, two-group numerator, caret powers, legacy slash, subscripts, radicals, image markers, $ wrappers, Arabic mixed text — all render clean, ZERO raw LaTeX leaks; test file removed after
+- tsc: only pre-existing baseline errors (examples/, skills/, AdminDashboard Video duplicate, page.tsx .default) — zero errors in FractionText.tsx, ai-extract/route.ts, MathKeyboard.tsx, AdminDashboard.tsx changes
+
+Stage Summary:
+- FINAL math rendering: any fraction from any source (AI extraction, math keyboard, legacy data) renders as a real stacked fraction with numerator above a bar and denominator below — including nested content like (2⁴)/(2³)
+- No more \frac / ^ / $ / \left junk visible anywhere — admin preview + student views + grading views all render real math
+- Existing DB data is fixed too (renderer handles old formats, no migration needed)
+- New extractions are normalized server-side and prompted to emit the canonical format, so storage is clean going forward

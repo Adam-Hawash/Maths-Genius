@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Calculator, X, Delete, CornerDownLeft, Image as ImageIcon, Loader2 } from 'lucide-react'
+import { Calculator, X, Delete, CornerDownLeft, Image as ImageIcon, Loader2, Eye } from 'lucide-react'
 import { chunkedUpload } from '@/lib/chunked-upload'
+import { FractionText, hasMathMarkup } from '@/components/FractionText'
 
 interface MathKeyboardProps {
   value: string
@@ -425,6 +426,16 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
           dir="auto"
         />
       </div>
+
+      {/* Live rendered preview — shows fractions stacked / powers as superscripts exactly like the student sees */}
+      {value && hasMathMarkup(value) && (
+        <div className="p-2 rounded-lg bg-muted/40 border border-border/40">
+          <p className="text-[10px] font-semibold text-muted-foreground mb-1 flex items-center gap-1"><Eye className="h-3 w-3" /> المعاينة (زي ما الطالب هيشوفها):</p>
+          <div className="text-sm text-foreground" dir="ltr" style={{ textAlign: 'left' }}>
+            <FractionText text={value} />
+          </div>
+        </div>
+      )}
 
       {uploadedImage && (
         <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/40">

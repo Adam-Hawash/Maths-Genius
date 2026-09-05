@@ -44,6 +44,23 @@ async function callGemini(apiKey: string, parts: any[]): Promise<any> {
   return { ok: false, error: result.error || 'unknown' }
 }
 
+/*
+ * normalizeMath — server-side cleanup of AI math output so the stored text
+ * matches the canonical platform format that FractionText renders:
+ *   - strip $…$ / $$…$$ wrappers
+ *   - \\left( \\right) → plain parens
+ *   - \\frac{(X)}{(Y)} → \\frac{X}{Y} (only when ONE paren pair wraps the
+ *     whole numerator/denominator — (a+1)(a-1) stays untouched)
+ */
+function normalizeMath(s: string): string {
+  if (!s) return s
+  var out = String(s)
+  out = out.replace(/\$\$([\s\S]+?)\$\$/g, '$1').replace(/\$([^$\n]+?)\$/g, '$1')
+  out = out.replace(/\\left\s*/g, '').replace(/\\right\s*/g, '')
+  out = out.replace(/\\frac\s*\{\s*\(([^{}]*)\)\s*\}\s*\{\s*\(([^{}]*)\)\s*\}/g, '\\frac{$1}{$2}')
+  return out
+}
+
 function parseAIJson(text: string): any | null {
   if (!text || !text.trim()) return null
   var jsonMatch = text.match(/\{[\s\S]*\}/)
@@ -296,27 +313,18 @@ function buildSingleFilePrompt(grade: string, type: string): string {
   lines.push('')
   lines.push('Rules:')
   lines.push('- ALL output text in English')
-  lines.push('- Write math using PROPER math symbols:')
-  lines.push('  * Powers: use Unicode superscripts - x\u00b2 (squared), x\u00b3 (cubed), x\u2074 (power 4)')
-  lines.push('  * OR use ^ symbol: x^2, x^3, x^4 (both are OK)')
-  lines.push('  * Square root: \u221a (e.g. \u221a9 = 3)')
-  lines.push('  * Cube root: \u221b')
-  lines.push('  * Multiplication: \u00d7 (e.g. 2 \u00d7 3 = 6)')
-  lines.push('  * Division: \u00f7 (e.g. 6 \u00f7 2 = 3)')
-  lines.push('  * Pi: \u03c0 (e.g. \u03c0 \u2248 3.14)')
-  lines.push('  * Fractions: write every fraction using the marker \\frac{numerator}{denominator} — the platform renders it as a REAL stacked fraction (numerator above a bar, denominator below).')
-  lines.push('    Example — three quarters must appear EXACTLY as: \\frac{3}{4}')
-  lines.push('    NEVER write fractions as a/b or ¾ or with ÷ — ALWAYS use the \\frac{numerator}{denominator} marker.')
-  lines.push('    EXCEPTION: inside MCQ options arrays keep fractions inline as a/b (e.g. 3/4) so options stay short.')
-  lines.push('  * Approximate: \u2248 (e.g. \u03c0 \u2248 3.14)')
-  lines.push('  * Less/greater than: < > \u2264 \u2265')
-  lines.push('  * Plus/minus: \u00b1')
-  lines.push('  * NOT equal: \u2260')
-  lines.push('  * Angle: \u2220')
-  lines.push('  * Degree: \u00b0')
-  lines.push('  * Percent: %')
-  lines.push('Do NOT write "squared", "cubed", "to the power of" as words.')
-  lines.push('Do NOT use LaTeX notation ($...$) - just plain text with these symbols. The ONLY exception is the \\frac{numerator}{denominator} fraction marker which is REQUIRED for every fraction.')
+  lines.push('- MATH FORMAT (very important — the platform renders this format as real math):')
+  lines.push('  * Powers: use the ^ symbol — x^2, y^5, 2^12. The platform renders them as REAL superscripts (x\u00b2).')
+  lines.push('  * Fractions: EVERY fraction must use the marker \\frac{numerator}{denominator} — the platform renders it as a REAL stacked fraction (numerator above a bar, denominator below).')
+  lines.push('    Example: \\frac{2^4}{2^3} renders as 2\u2074 above 2\u00b3 with a fraction bar.')
+  lines.push('    Do NOT wrap the whole numerator or denominator in parentheses: write \\frac{2^4}{2^3} NOT \\frac{(2^4)}{(2^3)}.')
+  lines.push('    Parentheses are allowed ONLY when they are part of the math itself, e.g. \\frac{(a+1)(a-1)}{a-1}.')
+  lines.push('    NEVER write fractions as a/b or \u00be or with \u00f7 — ALWAYS use the \\frac{numerator}{denominator} marker (also inside options and acceptedAnswers).')
+  lines.push('  * Square root: \u221a (e.g. \u221a9 = 3) | Cube root: \u221b | Fourth root: \u221c')
+  lines.push('  * Multiplication: \u00d7 (e.g. 2 \u00d7 3 = 6) | Division: \u00f7 | Pi: \u03c0 | Plus/minus: \u00b1')
+  lines.push('  * Less/greater than: < > \u2264 \u2265 | NOT equal: \u2260 | Approximate: \u2248 | Angle: \u2220 | Degree: \u00b0 | Percent: %')
+  lines.push('  * Do NOT write "squared", "cubed", "to the power of" as words.')
+  lines.push('  * Do NOT use any other LaTeX: no $ signs, no \\sqrt, no \\times, no \\left, no \\right, no markdown (**, *, #). The ONLY LaTeX allowed is \\frac{numerator}{denominator}.')
   lines.push('- Do NOT add questions from outside the document')
   lines.push('- Do NOT skip any question from the document')
   lines.push('- Preserve the order of questions as they appear in the document')
@@ -357,11 +365,13 @@ function buildQuestionsOnlyPrompt(grade: string, type: string): string {
   lines.push('')
   lines.push('Rules:')
   lines.push('- ALL output text in English')
-  lines.push('- Write math using proper math symbols. Use Unicode superscripts for powers: x\u00b2 for squared, x\u00b3 for cubed, x\u2074 for to the power of 4. Use \u221a for square root, \u221b for cubic root. Use \u00d7 for multiplication. Use \u00f7 for division. Do NOT use ^ or * symbols.')
-  lines.push('- Fractions: write every fraction using the marker \\frac{numerator}{denominator} — the platform renders it as a REAL stacked fraction (numerator above a bar, denominator below).')
-  lines.push('  Example — three quarters must appear EXACTLY as: \\frac{3}{4}')
-  lines.push('  NEVER write fractions as a/b or ¾ or with ÷ — ALWAYS use the \\frac{numerator}{denominator} marker.')
-  lines.push('  EXCEPTION: inside MCQ options arrays keep fractions inline as a/b (e.g. 3/4).')
+  lines.push('- MATH FORMAT (very important — the platform renders this format as real math):')
+  lines.push('  * Powers: use the ^ symbol — x^2, y^5, 2^12. The platform renders them as REAL superscripts.')
+  lines.push('  * Fractions: EVERY fraction must use the marker \\frac{numerator}{denominator} — rendered as a REAL stacked fraction (numerator above a bar, denominator below). Example: \\frac{3}{4}.')
+  lines.push('    Do NOT wrap the whole numerator or denominator in parentheses: write \\frac{2^4}{2^3} NOT \\frac{(2^4)}{(2^3)}.')
+  lines.push('    NEVER write fractions as a/b or \u00be or with \u00f7 — ALWAYS use the \\frac{numerator}{denominator} marker (also inside options arrays).')
+  lines.push('  * Use \u221a for square root, \u221b for cube root, \u00d7 for multiplication, \u00f7 for division, \u03c0 for pi.')
+  lines.push('  * Do NOT use any other LaTeX: no $ signs, no \\sqrt, no \\times, no \\left, no \\right, no markdown. The ONLY LaTeX allowed is \\frac{numerator}{denominator}.')
   lines.push('- Do NOT add questions from outside the document')
   lines.push('- Do NOT skip any question from the document')
   lines.push('- Preserve the order of questions as they appear in the document')
@@ -398,8 +408,11 @@ function buildAnswersOnlyPrompt(grade: string, type: string, questions: any[]): 
   lines.push('')
   lines.push('Rules:')
   lines.push('- ALL output text in English')
-  lines.push('- Write math using proper math symbols (√ ² ³ × ÷ π). Do NOT use ^ or * symbols.')
-  lines.push('- Fractions: in modelAnswer / acceptedAnswers write every fraction using the marker \\frac{numerator}{denominator} — the platform renders it as a REAL stacked fraction (numerator above a bar, denominator below). Example: "\\frac{3}{4}". NEVER write a/b or ¾.')
+  lines.push('- MATH FORMAT (very important — the platform renders this format as real math):')
+  lines.push('  * Powers: use the ^ symbol — x^2, y^5, 2^12 (rendered as REAL superscripts).')
+  lines.push('  * In modelAnswer / acceptedAnswers write every fraction as \\frac{numerator}{denominator} — rendered as a REAL stacked fraction. Example: "\\frac{3}{4}". NEVER write a/b or \u00be.')
+  lines.push('  * Do NOT wrap the whole numerator or denominator in parentheses: write \\frac{2^4}{2^3} NOT \\frac{(2^4)}{(2^3)}.')
+  lines.push('  * Use proper Unicode symbols: \u221a \u00d7 \u00f7 \u03c0 \u2264 \u2265 \u2260 \u2248 \u2220 \u00b0. Do NOT use other LaTeX ($, \\sqrt, \\times…) or markdown.')
   lines.push('- The "answers" array MUST have the same length and order as the questions above')
   lines.push('- Each answer object MUST have an "index" field matching the question number (0-based)')
   lines.push('')
@@ -419,21 +432,21 @@ function finalizeExtracted(extracted: any, type: string, grade: string, twoFiles
     if (qType === 'writing') {
       return {
         type: 'writing',
-        question: q.question || '',
+        question: normalizeMath(q.question || ''),
         options: [],
         correct: -1,
         points: q.points || 5,
-        modelAnswer: q.modelAnswer || q.answer || '',
-        acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []
+        modelAnswer: normalizeMath(q.modelAnswer || q.answer || ''),
+        acceptedAnswers: (Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []).map(function(a: any) { return normalizeMath(String(a)) })
       }
     }
     return {
       type: 'mcq',
-      question: q.question || '',
-      options: (q.options || ['N/A', 'N/A', 'N/A', 'N/A']).slice(0, 4),
+      question: normalizeMath(q.question || ''),
+      options: (q.options || ['N/A', 'N/A', 'N/A', 'N/A']).slice(0, 4).map(function(o: any) { return normalizeMath(String(o)) }),
       correct: typeof q.correct === 'number' ? q.correct : 0,
       points: q.points || 1,
-      modelAnswer: q.modelAnswer || ''
+      modelAnswer: normalizeMath(q.modelAnswer || '')
     }
   })
 
