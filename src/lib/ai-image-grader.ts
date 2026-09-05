@@ -4,7 +4,7 @@
 
 import { db } from '@/lib/db'
 
-const MODELS = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
+const MODELS = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
   var lastError = ''

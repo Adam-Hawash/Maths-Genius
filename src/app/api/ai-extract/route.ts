@@ -28,20 +28,26 @@ function getMimeType(file: File): string {
 }
 
 async function callGemini(apiKey: string, parts: any[]): Promise<any> {
-  var models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
+  // Primary: Gemini 3.6 (as requested), fallback to working models
+  var models = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
   var lastError = ''
   for (var mi = 0; mi < models.length; mi++) {
     try {
       console.log('[AI Extract] Trying model:', models[mi])
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[mi] + ':generateContent?key=' + apiKey
+      // Timeout to prevent infinite hanging
+      var controller = new AbortController()
+      var timeout = setTimeout(function() { controller.abort() }, 30000)
       var geminiRes = await fetch(modelUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: parts }],
           generationConfig: { temperature: 0.1, maxOutputTokens: 16384 }
-        })
+        }),
+        signal: controller.signal,
       })
+      clearTimeout(timeout)
       if (geminiRes.ok) {
         console.log('[AI Extract] Model', models[mi], 'succeeded')
         var data = await geminiRes.json()
