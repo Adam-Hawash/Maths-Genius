@@ -686,7 +686,7 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
     >
       <video
         ref={videoRef}
-        className="w-full h-full object-contain pointer-events-none"
+        className="w-full h-full object-contain"
         src={src}
         poster={poster}
         preload="metadata"
