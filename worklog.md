@@ -130,3 +130,27 @@ Stage Summary:
 - Assistant: photo-based problem solving live (Gemini vision via inlineData, same model-chain + key rotation)
 - Fractions everywhere render as real stacked fractions; extraction prompt emits the \frac marker; keyboard inserts it too; legacy formats auto-convert
 - Registration flow speaks the user's language: log in anytime and check your acceptance status instead of waiting for a notification
+
+---
+Task ID: 6
+Agent: Main Agent (Z.ai Code)
+Task: Round 5 — player bugfixes after user testing: pause button showing TWICE + broken fullscreen/enlarge layout on mobile
+
+Work Log:
+- Diagnosed from user's screenshot (portrait fullscreen): YouTube's own big play button was visible ABOVE our custom one — YT draws its big button at the IFRAME center, and the iframe was shifted up 10% (h-[110%] top-[-10%]) so the two buttons sat at 45% vs 50% of the box → "التوقيف بتظهر مرتين"
+- Fixed by making the crop SYMMETRIC (normal: h-[120%] top-[-10%] → iframe center = box center exactly; fullscreen: h-[132%] top-[-14%] → center at 52%) and pinning our play button to that same computed center (style top 50%/52%) — our big OPAQUE white button (80px, 96px fullscreen) now sits EXACTLY on YouTube's button and covers it completely → ONE button ever visible (paused + poster states)
+- Fullscreen "الشاشة مش مظبوطه" fixes:
+  - screen.orientation.lock('landscape') on fullscreen enter (phone auto-rotates, 16:9 video FILLS the screen instead of a tiny letterboxed strip), unlock on exit; listener also covers Android back-gesture exit (fullscreenchange + webkit variant)
+  - stronger fullscreen crop (top -14% / bottom -18% equivalent) kills YouTube's native fullscreen UI bar (share/save/quality/YouTube-logo, ~48-56px) on any phone height; side crop 6% eats only pillarbox black
+  - normal state now crops bottom 10% too → pause watermark ("YouTube" logo bottom-right) can no longer peek
+  - iPhone (no element-fullscreen): CSS fake fullscreen fallback (fixed inset-0 z-[150]) with Minimize button to exit
+- Fixed YouTube-written-mark rendering "iTube" (clipped): page dir="rtl" inherits into SVG → text-anchor start flows LEFTWARD, "YouTube" drew under the red badge and clipped; fixed with direction:'ltr' on the svg + text, viewBox widened 110→122 (no more clipping)
+- CRITICAL pre-play fix found during browser verification: before first play (and after end) YouTube paints its chrome (title bar, "Watch on YouTube", 4K badge, control strip) and our old translucent bg-black/30 overlay let it all bleed through on the videos page (no autoplay there) → overlay is now FULLY OPAQUE (bg-black when no poster, bg-black/30 over an opaque bg-black-backed poster image)
+- Verified end-to-end with agent-browser on a seeded free test video (mobile viewport 390x844): poster state = pure black + ONE button + zero YT chrome; playback starts via trusted click; paused = ONE button, no watermark; fullscreen enters/exits cleanly with no YT native UI; exit fullscreen OK; console clean; test video deleted afterwards
+- tsc: 90 errors = exact pre-existing baseline, zero new; ProtectedYouTubePlayer.tsx clean
+
+Stage Summary:
+- Single play button guaranteed in every state (ours covers YouTube's, same center by construction)
+- Enlarging on mobile now locks landscape and fills the screen; YouTube's native fullscreen bar physically cropped out
+- Pre-play/end states fully opaque — YouTube chrome impossible to see before playback starts
+- RTL SVG text bug fixed — written "YouTube" mark renders complete
