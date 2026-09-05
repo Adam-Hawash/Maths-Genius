@@ -52,6 +52,21 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
       { label: '±', insert: '±', hint: 'Plus or minus' },
       { label: '(', insert: '(', hint: 'Open parenthesis' },
       { label: ')', insert: ')', hint: 'Close parenthesis' },
+      { label: '½', insert: '½', hint: 'One half' },
+      { label: '⅓', insert: '⅓', hint: 'One third' },
+      { label: '¼', insert: '¼', hint: 'One quarter' },
+      { label: '⅔', insert: '⅔', hint: 'Two thirds' },
+      { label: '¾', insert: '¾', hint: 'Three quarters' },
+      { label: '⅕', insert: '⅕', hint: 'One fifth' },
+      { label: '⅖', insert: '⅖', hint: 'Two fifths' },
+      { label: '⅗', insert: '⅗', hint: 'Three fifths' },
+      { label: '⅘', insert: '⅘', hint: 'Four fifths' },
+      { label: '⅙', insert: '⅙', hint: 'One sixth' },
+      { label: '⅚', insert: '⅚', hint: 'Five sixths' },
+      { label: '⅛', insert: '⅛', hint: 'One eighth' },
+      { label: '⅜', insert: '⅜', hint: 'Three eighths' },
+      { label: '⅝', insert: '⅝', hint: 'Five eighths' },
+      { label: '⅞', insert: '⅞', hint: 'Seven eighths' },
     ],
   },
   {
@@ -314,12 +329,12 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
     try {
       const data = await chunkedUpload(file, 'homework-answers', undefined, undefined)
       setUploadedImage(data.filePath)
-      if (onImageUpload) {
-        onImageUpload(data.filePath)
-      }
       // Append the image marker WITH the path so AI grader can find and read it
       const marker = '\n[📷 صورة مرفقة: ' + data.filePath + ']\n'
       onChange(value + marker)
+      if (onImageUpload) {
+        onImageUpload(data.filePath)
+      }
     } catch (err: any) {
       alert('فشل رفع الصورة: ' + (err.message || 'حاول مرة أخرى'))
     } finally {
@@ -403,35 +418,19 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
       </div>
 
       {uploadedImage && (
-        <div className="mt-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/40 space-y-2">
-          <div className="flex items-center gap-2">
-            <ImageIcon className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span className="text-xs text-emerald-700 dark:text-emerald-300">تم رفع الصورة - الـ AI هيمر عليها ويستخرج إجابتك</span>
-            <button
-              type="button"
-              onClick={() => {
-                setUploadedImage('')
-                if (onImageUpload) onImageUpload('')
-              }}
-              className="mr-auto text-xs text-red-500 hover:underline"
-            >
-              حذف
-            </button>
-          </div>
-          {/* Image preview */}
-          <div className="relative w-full max-w-[200px] max-h-[150px] rounded-md overflow-hidden border border-emerald-200 dark:border-emerald-900/40">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={uploadedImage}
-              alt="Uploaded answer"
-              className="w-full h-auto max-h-[150px] object-contain"
-              onError={function(e) {
-                // Hide on error
-                var target = e.target as HTMLImageElement
-                if (target.parentElement) target.parentElement.style.display = 'none'
-              }}
-            />
-          </div>
+        <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/40">
+          <ImageIcon className="h-4 w-4 text-emerald-600" />
+          <span className="text-xs text-emerald-700 dark:text-emerald-300">تم رفع الصورة بنجاح - هتظهر للأستاذ في التصحيح</span>
+          <button
+            type="button"
+            onClick={() => {
+              setUploadedImage('')
+              if (onImageUpload) onImageUpload('')
+            }}
+            className="mr-auto text-xs text-red-500 hover:underline"
+          >
+            حذف
+          </button>
         </div>
       )}
 
