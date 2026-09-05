@@ -9,6 +9,7 @@
 //          Returns merged questions/answers JSON
 
 import { NextResponse } from 'next/server'
+import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
 
 export const runtime = 'nodejs'
 export const maxDuration = 180
@@ -28,42 +29,19 @@ function getMimeType(file: File): string {
 }
 
 async function callGemini(apiKey: string, parts: any[]): Promise<any> {
-  // Primary: Gemini 3.6 (as requested), fallback to working models
-  var models = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
-  var lastError = ''
-  for (var mi = 0; mi < models.length; mi++) {
-    try {
-      console.log('[AI Extract] Trying model:', models[mi])
-      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[mi] + ':generateContent?key=' + apiKey
-      // Timeout to prevent infinite hanging
-      var controller = new AbortController()
-      var timeout = setTimeout(function() { controller.abort() }, 30000)
-      var geminiRes = await fetch(modelUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: parts }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 16384 }
-        }),
-        signal: controller.signal,
-      })
-      clearTimeout(timeout)
-      if (geminiRes.ok) {
-        console.log('[AI Extract] Model', models[mi], 'succeeded')
-        var data = await geminiRes.json()
-        var text = ''
-        try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
-        return { ok: true, text: text }
-      }
-      var errBody = ''
-      try { errBody = await geminiRes.text() } catch (e) {}
-      lastError = models[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 200)
-      console.error('[AI Extract] Model', models[mi], 'failed:', geminiRes.status, errBody.substring(0, 200))
-    } catch (e) {
-      lastError = models[mi] + ': ' + (e.message || '')
-    }
+  // Central helper: Gemini 3.6 first + automatic key rotation on quota (429)
+  console.log('[AI Extract] Calling Gemini (3.6 first, keys rotate on 429)')
+  var result = await callGeminiCentral({
+    parts: parts,
+    generationConfig: { temperature: 0.1, maxOutputTokens: 16384 },
+    timeoutMs: 30000,
+  })
+  if (result.ok) {
+    console.log('[AI Extract] Model', result.model, 'succeeded')
+    return { ok: true, text: result.text }
   }
-  return { ok: false, error: lastError }
+  console.error('[AI Extract] All models failed:', result.error)
+  return { ok: false, error: result.error || 'unknown' }
 }
 
 function parseAIJson(text: string): any | null {
@@ -152,7 +130,7 @@ export async function POST(request) {
     }
 
     var apiKey = process.env.GEMINI_API_KEY || ''
-    if (!apiKey) {
+    if (!hasGeminiKey()) {
       console.error('[AI Extract] GEMINI_API_KEY not found in environment')
       return NextResponse.json({ error: 'GEMINI_API_KEY not found — أضف المفتاح في Vercel Environment Variables أو ملف .env.local' }, { status: 500 })
     }

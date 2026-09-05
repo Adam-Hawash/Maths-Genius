@@ -18,6 +18,7 @@ import Image from 'next/image'
 import { toast } from 'sonner'
 import type { Video as VideoType, Homework, Exam, Announcement, Discussion, ExamResult } from '@/stores/app-store'
 import { MathKeyboard } from '@/components/student/MathKeyboard'
+import { ProtectedYouTubeModal } from '@/components/student/ProtectedYouTubePlayer'
 
 export function StudentPortal() {
   const { currentStudent, logout } = useAppStore()
@@ -325,6 +326,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
   const [localWatched, setLocalWatched] = useState(watchedIds)
   const [videoSchedules, setVideoSchedules] = useState<Record<string, any>>({})
   const [hiddenVideoIds, setHiddenVideoIds] = useState<Set<string>>(new Set())
+  const [activeLessonVideo, setActiveLessonVideo] = useState<VideoType | null>(null)
 
   // Load video schedules for this student
   useEffect(() => {
@@ -380,7 +382,8 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
   if (videos.length === 0) return <EmptyState message="لا توجد دروس حالياً" />
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <>
+      <div className="grid gap-4 md:grid-cols-2">
       {videos.map((video) => {
         // Skip hidden videos entirely
         if (hiddenVideoIds.has(video.id)) return null
@@ -450,15 +453,26 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                   </div>
                 </div>
               ) : ytId ? (
-                <div className="w-full h-full relative bg-black" onClick={() => trackVideoWatch(video.id)}>
-                  <iframe
-                    src={'https://www.youtube-nocookie.com/embed/' + ytId + '?modestbranding=1&rel=0&playsinline=1&controls=1&showinfo=0&iv_load_policy=3&fs=1'}
-                    title={video.title}
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    style={{ border: 'none' }}
-                  />
+                // Protected lesson card — gallery style thumbnail (no YouTube branding)
+                // The actual video opens in a protected modal player on click
+                <div
+                  className="w-full h-full relative cursor-pointer group/vid"
+                  onClick={function () { setActiveLessonVideo(video) }}
+                  role="button"
+                  aria-label={'تشغيل ' + video.title}
+                >
+                  {thumbSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={thumbSrc} alt={video.title} className="w-full h-full object-cover transition-transform duration-500 group-hover/vid:scale-105" draggable={false} />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-black/80 to-black" />
+                  )}
+                  <div className="absolute inset-0 bg-black/25 group-hover/vid:bg-black/40 transition-colors" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-2xl transition-transform group-hover/vid:scale-110">
+                      <PlayCircle className="h-8 w-8 text-primary ml-0.5" />
+                    </div>
+                  </div>
                 </div>
               ) : isVideoFile ? (
                 <CustomVideoPlayer
@@ -520,7 +534,24 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
           </Card>
         )
       })}
-    </div>
+      </div>
+
+      {/* Protected lesson video modal — gallery style, no YouTube branding */}
+      {activeLessonVideo && getYouTubeId(activeLessonVideo.url) && (
+        <ProtectedYouTubeModal
+          ytId={getYouTubeId(activeLessonVideo.url) as string}
+          title={activeLessonVideo.title}
+          poster={activeLessonVideo.thumbnail || getYouTubeThumbnail(activeLessonVideo.url) || undefined}
+          videoId={activeLessonVideo.id}
+          studentId={studentId}
+          onWatch={function () {
+            trackVideoWatch(activeLessonVideo.id)
+            setLocalWatched(function (prev) { return new Set([...prev, activeLessonVideo.id]) })
+          }}
+          onClose={function () { setActiveLessonVideo(null) }}
+        />
+      )}
+    </>
   )
 }
 

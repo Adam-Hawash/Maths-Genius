@@ -5,6 +5,7 @@
 // Output: { graded: [{ question, answer, modelAnswer, awardedPoints, maxPoints, isCorrect, feedback }] }
 
 import { NextResponse } from 'next/server'
+import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
 
 export const runtime = 'nodejs'
 export const maxDuration = 180
@@ -171,33 +172,16 @@ export async function POST(request) {
     var prompt = lines.join('\n')
     var parts = [{ text: prompt }]
 
-    // Try multiple models
-    var models = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
-    var geminiRes = null
-    var lastError = ''
+    // Central helper: Gemini 3.6 first + automatic key rotation on quota (429)
+    console.log('[Grade Writing] Calling Gemini (3.6 first, keys rotate on 429)')
+    var result = await callGeminiCentral({
+      parts: parts,
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+      timeoutMs: 60000,
+    })
 
-    for (var mi = 0; mi < models.length; mi++) {
-      try {
-        var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[mi] + ':generateContent?key=' + apiKey
-        geminiRes = await fetch(modelUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: parts }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
-          })
-        })
-        if (geminiRes.ok) { break }
-        var errBody = ''
-        try { errBody = await geminiRes.text() } catch (e) {}
-        lastError = models[mi] + ': ' + geminiRes.status
-      } catch (e) {
-        lastError = models[mi] + ': ' + (e.message || '')
-        geminiRes = null
-      }
-    }
-
-    if (!geminiRes || !geminiRes.ok) {
+    if (!result.ok) {
+      var lastError = result.error || 'unknown'
       // AI failed - return quick-graded results with note
       var quickTotal = 0
       for (var j = 0; j < graded.length; j++) { quickTotal += graded[j].awardedPoints }
@@ -211,9 +195,7 @@ export async function POST(request) {
       })
     }
 
-    var geminiData = await geminiRes.json()
-    var text = ''
-    try { text = geminiData.candidates[0].content.parts[0].text || '' } catch (e) {}
+    var text = result.text || ''
 
     // Parse JSON array from response
     var jsonMatch = text.match(/\[[\s\S]*\]/)

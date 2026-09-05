@@ -3,6 +3,12 @@
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { Lock, CreditCard, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ProtectedYouTubePlayer } from "@/components/student/ProtectedYouTubePlayer";
+
+function getYouTubeId(url: string): string | null {
+  const match = url?.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([\w-]{11})/);
+  return match ? match[1] : null;
+}
 
 export default function VideoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -97,17 +103,23 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         ) : (
           <div className="aspect-video bg-black flex items-center justify-center">
-            <iframe
-              src={
-                video.url?.includes("embed")
-                  ? video.url
-                  : `https://www.youtube.com/embed/${video.url?.split("v=")[1]?.split("&")[0] || video.url?.split("/").pop()}`
-              }
-              title={video.title}
-              className="w-full h-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
+            {getYouTubeId(video.url || "") ? (
+              <ProtectedYouTubePlayer
+                ytId={getYouTubeId(video.url || "") as string}
+                poster={video.thumbnail || undefined}
+                videoId={video.id}
+              />
+            ) : video.filePath && /\.(mp4|webm|mov|avi)$/i.test(video.filePath || "") ? (
+              <video
+                src={video.filePath}
+                controls
+                playsInline
+                className="w-full h-full"
+                style={{ border: "none" }}
+              />
+            ) : (
+              <div className="text-slate-500 text-sm">لا يوجد فيديو</div>
+            )}
           </div>
         )}
       </div>

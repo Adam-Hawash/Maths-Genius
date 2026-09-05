@@ -4,6 +4,7 @@
 // PURPOSE: Extract questions from YouTube video safely with Gemini models
 
 import { NextResponse } from 'next/server'
+import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -51,8 +52,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid YouTube URL' }, { status: 400 })
     }
 
-    var apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) {
+    if (!hasGeminiKey()) {
       return NextResponse.json({ error: 'GEMINI_API_KEY not found' }, { status: 500 })
     }
 
@@ -69,41 +69,20 @@ export async function POST(request) {
       generationConfig: { temperature: 0.2, maxOutputTokens: 8192 }
     }
 
-    var models = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
-    var geminiRes = null
-    var lastError = ''
+    // Central helper: Gemini 3.6 first + automatic key rotation on quota (429)
+    console.log('[AI Extract YouTube] Calling Gemini (3.6 first, keys rotate on 429)')
+    var result = await callGeminiCentral({
+      parts: requestBody.contents[0].parts,
+      generationConfig: requestBody.generationConfig,
+      timeoutMs: 60000,
+    })
 
-    for (var mi = 0; mi < models.length; mi++) {
-      try {
-        var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + models[mi] + ':generateContent?key=' + apiKey
-        console.log('Trying model:', models[mi])
-        geminiRes = await fetch(modelUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
-        })
-        if (geminiRes.ok) {
-          console.log('Model', models[mi], 'succeeded')
-          break
-        }
-        var errBody = ''
-        try { errBody = await geminiRes.text() } catch (e) {}
-        lastError = models[mi] + ': ' + geminiRes.status + ' ' + errBody.substring(0, 150)
-        console.error('Model failed:', lastError)
-      } catch (e) {
-        lastError = models[mi] + ': ' + (e.message || '')
-        console.error('Model error:', lastError)
-        geminiRes = null
-      }
+    if (!result.ok) {
+      console.error('[AI Extract YouTube] All models failed:', result.error)
+      return NextResponse.json({ error: 'AI error: ' + (result.error || 'unknown') }, { status: 500 })
     }
 
-    if (!geminiRes || !geminiRes.ok) {
-      return NextResponse.json({ error: 'AI error: ' + lastError }, { status: 500 })
-    }
-
-    var geminiData = await geminiRes.json()
-    var text = ''
-    try { text = geminiData.candidates[0].content.parts[0].text || '' } catch (e) {}
+    var text = result.text || ''
 
     if (!text.trim()) {
       return NextResponse.json({ error: 'No response from AI' }, { status: 500 })
