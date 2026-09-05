@@ -219,9 +219,10 @@ export async function GET(request: NextRequest) {
         var needsGrading = false
 
         // Skip if empty
-        if (!studentText || studentText === '[📷 صورة مرفقة]') {
+        if (!studentText || studentText === '[📷 صورة مرفقة]' || studentText.trim() === '') {
           needsGrading = false
           aiFeedback = 'لم يجب الطالب'
+          aiExtracted = '(فارغ)'
         } else if (!modelAnswer) {
           // No model answer — admin will grade manually
           needsGrading = true
@@ -247,6 +248,7 @@ export async function GET(request: NextRequest) {
             } catch (e) {
               console.error('[Exam Results] AI grade image error:', e)
               aiFeedback = 'فشل التصحيح'
+              aiExtracted = '(فشل الـ AI)'
             }
           } else {
             // TEXT GRADING - quick match first
@@ -305,18 +307,23 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        // IMPORTANT: If AI grading didn't run (needsGrading), keep needsGrading=true
+        // Otherwise mark as graded (imageGraded || textGraded)
+        var isGraded = imageGraded || textGraded
+
         allQuestions.push({
           type: 'writing',
           question: qText,
           studentAnswer: studentText,
           correctAnswer: modelAnswer,
-          isCorrect: (imageGraded || textGraded) ? aiIsCorrect : false,
+          isCorrect: isGraded ? aiIsCorrect : false,
           aiExtractedAnswer: aiExtracted,
           aiIsCorrect: aiIsCorrect,
           aiFeedback: aiFeedback,
           imageGraded: imageGraded,
           textGraded: textGraded,
           needsGrading: needsGrading,
+          isGraded: isGraded,
         })
 
         writingAnswers.push({

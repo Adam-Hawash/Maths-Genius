@@ -1198,15 +1198,19 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                                           <div className="flex items-start gap-1.5">
                                             <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${
                                               aq.type === 'writing'
-                                                ? (aq.imageGraded
-                                                    ? (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')
-                                                    : 'bg-amber-500/10 text-amber-600')
+                                                ? (aq.needsGrading
+                                                    ? 'bg-gray-500/10 text-gray-600'
+                                                    : (aq.isGraded
+                                                        ? (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')
+                                                        : (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')))
                                                 : aq.isCorrect
                                                   ? 'bg-emerald-500/10 text-emerald-600'
                                                   : 'bg-red-500/10 text-red-600'
                                             }`}>
                                               {aq.type === 'writing'
-                                                ? (aq.imageGraded ? (aq.aiIsCorrect ? 'AI: Correct' : 'AI: Wrong') : 'Writing')
+                                                ? (aq.needsGrading
+                                                    ? 'يحتاج تصحيح يدوي'
+                                                    : (aq.aiIsCorrect === true ? 'AI: صح' : 'AI: غلط'))
                                                 : aq.isCorrect ? 'Correct' : 'Wrong'}
                                             </span>
                                             <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
@@ -1794,15 +1798,19 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                   <div className="flex items-start gap-1.5">
                                     <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${
                                       aq.type === 'writing'
-                                        ? (aq.imageGraded
-                                            ? (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')
-                                            : 'bg-amber-500/10 text-amber-600')
+                                        ? (aq.needsGrading
+                                            ? 'bg-gray-500/10 text-gray-600'
+                                            : (aq.isGraded
+                                                ? (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')
+                                                : (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')))
                                         : aq.isCorrect
                                           ? 'bg-emerald-500/10 text-emerald-600'
                                           : 'bg-red-500/10 text-red-600'
                                     }`}>
                                       {aq.type === 'writing'
-                                        ? (aq.imageGraded ? (aq.aiIsCorrect ? 'AI: Correct' : 'AI: Wrong') : 'Writing')
+                                        ? (aq.needsGrading
+                                            ? 'يحتاج تصحيح يدوي'
+                                            : (aq.aiIsCorrect === true ? 'AI: صح' : 'AI: غلط'))
                                         : aq.isCorrect ? 'Correct' : 'Wrong'}
                                     </span>
                                     <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
@@ -1903,15 +1911,19 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                   <div className="flex items-start gap-1.5">
                                     <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${
                                       aq.type === 'writing'
-                                        ? (aq.imageGraded
-                                            ? (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')
-                                            : 'bg-amber-500/10 text-amber-600')
+                                        ? (aq.needsGrading
+                                            ? 'bg-gray-500/10 text-gray-600'
+                                            : (aq.isGraded
+                                                ? (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')
+                                                : (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')))
                                         : aq.isCorrect
                                           ? 'bg-emerald-500/10 text-emerald-600'
                                           : 'bg-red-500/10 text-red-600'
                                     }`}>
                                       {aq.type === 'writing'
-                                        ? (aq.imageGraded ? (aq.aiIsCorrect ? 'AI: Correct' : 'AI: Wrong') : 'Writing')
+                                        ? (aq.needsGrading
+                                            ? 'يحتاج تصحيح يدوي'
+                                            : (aq.aiIsCorrect === true ? 'AI: صح' : 'AI: غلط'))
                                         : aq.isCorrect ? 'Correct' : 'Wrong'}
                                     </span>
                                     <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. {aq.question}</p>
