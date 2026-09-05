@@ -57,3 +57,24 @@ Stage Summary:
 - Assistant empty-response root cause fixed (token budget + thinking level + timeout)
 - Video player now shows ZERO YouTube UI in any state (poster/play/pause/end) + new quality control button
 - NOTE for owner: user plans to rotate GEMINI_API_KEY — no code change needed; new key is auto-discovered. Supports GEMINI_API_KEYS (comma separated) for rotation
+
+---
+Task ID: 3
+Agent: Main Agent (Z.ai Code)
+Task: Round 2 — gallery modal raw YouTube iframe (the REAL leak), captions block, assistant naming/terminology
+
+Work Log:
+- Found the actual source of visible YouTube UI: GallerySection.tsx (landing) GalleryVideoModal embedded a RAW YouTube iframe (no click-catch) → user click/pause surfaced native YouTube UI (channel name, link, settings)
+- GallerySection.tsx: YouTube URLs now render ProtectedYouTubeModal (protected player + quality gear); early return placed after all hooks (rules of hooks)
+- ProtectedYouTubePlayer.tsx:
+  - iframe scaled 110% / shifted up 10% / sides 5% → YouTube's title/channel bar permanently outside the visible box (percentage-based, works fullscreen)
+  - Captions force-off: cc_load_policy:0 + unloadModule('captions') on ready/play + sticky in 500ms poll
+  - Last 15s of playback: stronger bottom masks (end-screen phase)
+- assistant/route.ts: system prompt → name always "Maths Genius" (English), Arabic school math terms only (واجب الأسس not powers)
+- AIAssistant.tsx: welcome message mentions منصة Maths Genius
+- tsc clean for all changed files; committed 8a84d61 and pushed
+
+Stage Summary:
+- Every YouTube playback surface in the site (portal modal, lesson page, landing gallery) now uses the single protected player
+- YouTube branding impossible to surface: crop + masks + pause overlay + poster reset + captions disabled
+- Assistant branding/terminology locked to Maths Genius + Arabic math terms
