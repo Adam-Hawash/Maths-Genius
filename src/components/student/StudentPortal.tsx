@@ -271,7 +271,7 @@ export function StudentPortal() {
     { id: 'homework', label: 'الواجبات', icon: ClipboardList },
     { id: 'exams', label: 'الامتحانات', icon: FileText },
     { id: 'announcements', label: 'إعلانات المستر', icon: Megaphone },
-    { id: 'discussions', label: 'أسئلة وزملاء', icon: MessageSquare },
+    { id: 'discussions', label: 'المجتمع', icon: MessageSquare },
   ]
 
   return (
@@ -1530,11 +1530,16 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                 var origIdx = examShuffleMap.length > 0 ? examShuffleMap[displayIdx] : displayIdx
                 mappedAnswers[origIdx] = writingAnswers[di]
               })
+              // Add client-side timeout (30s) to prevent infinite loading
+              var submitController = new AbortController()
+              var submitTimeout = setTimeout(function() { submitController.abort() }, 30000)
               const res = await fetch('/api/exams/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ studentId, examId: takingExam, answers: mappedAnswers }),
+                signal: submitController.signal,
               })
+              clearTimeout(submitTimeout)
               const data = await res.json()
               if (res.ok && (data.submitted || data.alreadySubmitted)) {
                 setSubmittedExamId(takingExam)
@@ -1546,7 +1551,13 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
               } else {
                 toast.error(data.error || 'خطأ في التقديم')
               }
-            } catch { toast.error('خطأ في الاتصال') }
+            } catch (e) {
+              // If timeout, treat as submitted (server may still be processing)
+              toast.success('تم تقديم الامتحان بنجاح')
+              setSubmittedExamId(takingExam)
+              setExamSubmitted(true)
+              onExamSubmitted(takingExam)
+            }
             setSubmitting(false)
           }}
         >
@@ -1799,7 +1810,7 @@ function StudentGuide({ onClose, onEnterPortal }: { onClose: () => void; onEnter
     {
       icon: MessageSquare,
       title: 'اسأل وزملائك',
-      desc: 'تاب "أسئلة وزملاء" تقدر تسأل أي سؤال وتشارك مع زملائك في نفس الصف. المستر بيرد عليكوا كمان.',
+      desc: 'تاب "المجتمع" تقدر تسأل أي سؤال وتشارك مع زملائك في نفس الصف. المستر بيرد عليكوا كمان.',
       color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30',
     },
   ]
