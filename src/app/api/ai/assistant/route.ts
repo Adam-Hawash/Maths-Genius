@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { callGemini, hasGeminiKey } from '@/lib/gemini'
 
 export const runtime = 'nodejs'
-export const maxDuration = 30
+export const maxDuration = 60
 
 export async function POST(request: Request) {
   try {
@@ -31,11 +31,13 @@ export async function POST(request: Request) {
 
     var prompt = contextStr + '\n\nسؤال: ' + message + '\n\nالرد:'
 
-    // Gemini 3.6 first (with automatic key rotation on quota)
+    // Gemini 3.6 first (auto model discovery + key rotation on quota)
+    // thinking:'low' → reasoning models stay fast and don't burn the token budget
     var result = await callGemini({
       parts: [{ text: prompt }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
-      timeoutMs: 9000,
+      generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
+      timeoutMs: 25000,
+      thinking: 'low',
     })
 
     if (result.ok && result.text) {
@@ -43,7 +45,9 @@ export async function POST(request: Request) {
     }
 
     console.error('[AI Assistant] failed:', result.error)
-    return NextResponse.json({ reply: 'المساعد مشغول دلوقتي جداً، جرب تاني بعد شوية 🙏' })
+    var busyMsg = 'المساعد مشغول دلوقتي جداً، جرب تاني بعد شوية 🙏'
+    if (result.status === 429) busyMsg = 'الحصة اليومية للمساعد الذكي خلصت، جرب بكرة أو بعدين بشوية 🙏'
+    return NextResponse.json({ reply: busyMsg })
   } catch (error) {
     return NextResponse.json({ reply: 'المساعد مشغول دلوقتي جداً، جرب تاني بعد شوية 🙏' })
   }

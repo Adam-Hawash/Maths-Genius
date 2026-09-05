@@ -5,17 +5,23 @@
 // PURPOSE: Protected custom YouTube player — same style as the
 //          photo gallery (معرض الصور) modal player.
 //
-//          - NO YouTube branding (no logo, no share, no "Watch on YouTube")
-//          - NO native controls, NO keyboard shortcuts, NO right-click menu
-//          - Custom play/pause + seek bar + time + fullscreen (like gallery)
-//          - Click-catch overlay: NO clicks reach the YouTube iframe,
-//            so nobody can open/share the original URL from the player
-//          - Corner masks hide any YouTube watermark
-//          - Reports watch progress to /api/video-progress (same as file player)
+//          - NO YouTube branding at ANY state:
+//              • Before play → our own poster
+//              • While playing → corner masks + click-catch overlay
+//              • While PAUSED → full dark+blur overlay (hides the
+//                YouTube title / channel / logo that appear on pause)
+//              • When ENDED → back to our poster (hides YouTube's
+//                related-videos end screen)
+//          - NO native controls, NO keyboard shortcuts, NO right-click
+//          - Settings (gear) button → video quality control
+//            (تلقائي / 1080p / 720p / 480p / 360p / 240p / 144p)
+//            The chosen quality is re-applied automatically if YouTube
+//            tries to change it (sticky quality).
+//          - Reports watch progress to /api/video-progress
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
-import { Maximize, Minimize, X } from 'lucide-react'
+import { Maximize, Minimize, X, Settings, Check } from 'lucide-react'
 
 /* ---------- YouTube IFrame API loader (cached) ---------- */
 var ytApiPromise: Promise<any> | null = null
@@ -42,6 +48,14 @@ function formatTime(sec: number) {
   var m = Math.floor(sec / 60)
   var s = Math.floor(sec % 60)
   return m + ':' + String(s).padStart(2, '0')
+}
+
+/* ---------- Quality helpers ---------- */
+var STANDARD_QUALITIES = ['hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny']
+function qualityLabel(q: string): string {
+  if (q === 'auto' || q === 'default') return 'تلقائي'
+  var map: any = { highres: '2160p+', hd2160: '2160p', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p', medium: '360p', small: '240p', tiny: '144p' }
+  return map[q] || q
 }
 
 /* ============================================================
@@ -80,6 +94,14 @@ export function ProtectedYouTubePlayer({
   const pendingPlayRef = useRef(!!autoplay)
   const onWatchRef = useRef(onWatch)
 
+  /* quality settings state */
+  const [qualityLevels, setQualityLevels] = useState<string[]>([])
+  const [selectedQuality, setSelectedQuality] = useState<string>('auto')
+  const [showQualityMenu, setShowQualityMenu] = useState(false)
+  const selectedQualityRef = useRef('auto')
+  const lastQualityApplyRef = useRef(0)
+
+  useEffect(function () { selectedQualityRef.current = selectedQuality }, [selectedQuality])
   useEffect(function () { onWatchRef.current = onWatch }, [onWatch])
 
   /* fullscreen listener */
@@ -93,16 +115,31 @@ export function ProtectedYouTubePlayer({
     }
   }, [])
 
-  /* auto-hide controls */
+  /* auto-hide controls (stay visible while the quality menu is open) */
   useEffect(function () {
-    if (playing) {
+    if (playing && !showQualityMenu) {
       hideTimerRef.current = setTimeout(function () { setShowControls(false) }, 3000)
     } else {
       setShowControls(true)
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
     }
     return function () { if (hideTimerRef.current) clearTimeout(hideTimerRef.current) }
-  }, [playing, showControls])
+  }, [playing, showControls, showQualityMenu])
+
+  function applyQuality(q: string) {
+    var p = playerRef.current
+    if (!p) return
+    try {
+      if (p.setPlaybackQualityRange) {
+        if (q === 'auto') p.setPlaybackQualityRange('auto', 'auto')
+        else p.setPlaybackQualityRange(q, q)
+      }
+    } catch (e) {}
+    try {
+      if (p.setPlaybackQuality) p.setPlaybackQuality(q === 'auto' ? 'auto' : q)
+    } catch (e) {}
+    lastQualityApplyRef.current = Date.now()
+  }
 
   /* create player */
   useEffect(function () {
@@ -129,6 +166,16 @@ export function ProtectedYouTubePlayer({
               if (cancelled) return
               setReady(true)
               try { setDuration(e.target.getDuration() || 0) } catch (err) {}
+              /* available quality levels for the settings menu */
+              try {
+                var levels = e.target.getAvailableQualityLevels ? e.target.getAvailableQualityLevels() : []
+                var clean: string[] = []
+                for (var i = 0; i < levels.length; i++) {
+                  if (levels[i] && levels[i] !== 'auto' && levels[i] !== 'default' && STANDARD_QUALITIES.indexOf(levels[i]) >= 0) clean.push(levels[i])
+                }
+                if (clean.length === 0) clean = ['hd1080', 'hd720', 'large', 'medium', 'small', 'tiny']
+                setQualityLevels(clean)
+              } catch (err) { setQualityLevels(['hd1080', 'hd720', 'large', 'medium', 'small', 'tiny']) }
               if (pendingPlayRef.current) {
                 pendingPlayRef.current = false
                 try {
@@ -142,7 +189,14 @@ export function ProtectedYouTubePlayer({
               // -1 unstarted | 0 ended | 1 playing | 2 paused | 3 buffering | 5 cued
               if (e.data === 1) { setStarted(true); setPlaying(true); setShowControls(true) }
               else if (e.data === 2) setPlaying(false)
-              else if (e.data === 0) { setPlaying(false); setShowControls(true); reportWatched(999999) }
+              else if (e.data === 0) {
+                // Ended → back to our poster so YouTube's end screen
+                // (related videos / links / logos) is NEVER visible
+                setPlaying(false)
+                setStarted(false)
+                setShowControls(true)
+                reportWatched(999999)
+              }
             },
           },
         })
@@ -156,7 +210,7 @@ export function ProtectedYouTubePlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ytId])
 
-  /* time + buffered polling + progress report every 5s */
+  /* time + buffered polling + progress report every 5s + sticky quality */
   useEffect(function () {
     var timer = setInterval(function () {
       var p = playerRef.current
@@ -167,6 +221,14 @@ export function ProtectedYouTubePlayer({
         setCurrentTime(t)
         if (d) setDuration(d)
         if (p.getVideoLoadedFraction) setBuffered((p.getVideoLoadedFraction() || 0) * 100)
+        /* sticky quality: re-apply the user's choice if YouTube drifted */
+        var wanted = selectedQualityRef.current
+        if (wanted !== 'auto' && p.getPlaybackQuality) {
+          var cur = p.getPlaybackQuality()
+          if (cur && cur !== wanted && Date.now() - lastQualityApplyRef.current > 3000) {
+            applyQuality(wanted)
+          }
+        }
         if (studentId && videoId && t > 0) {
           var bucket = Math.floor(t / 5)
           if (bucket !== lastReportRef.current) {
@@ -201,6 +263,12 @@ export function ProtectedYouTubePlayer({
     } catch (e) {}
   }
 
+  function handleVideoAreaClick() {
+    /* first tap just closes the quality menu (if open) */
+    if (showQualityMenu) { setShowQualityMenu(false); return }
+    togglePlay()
+  }
+
   function handleSeek(e: React.MouseEvent | React.TouchEvent) {
     var bar = progressRef.current
     var p = playerRef.current
@@ -221,7 +289,14 @@ export function ProtectedYouTubePlayer({
     else if (c && (c as any).webkitRequestFullscreen) (c as any).webkitRequestFullscreen()
   }
 
+  function handleQualitySelect(q: string) {
+    setSelectedQuality(q)
+    applyQuality(q)
+    setShowQualityMenu(false)
+  }
+
   var progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
+  var menuLevels = qualityLevels.length > 0 ? qualityLevels : STANDARD_QUALITIES
 
   return (
     <div
@@ -232,23 +307,36 @@ export function ProtectedYouTubePlayer({
       {/* YouTube player (created by IFrame API, replaces this div) */}
       <div ref={playerHostRef} className="absolute inset-0 w-full h-full" />
 
-      {/* Corner masks — hide any YouTube watermark/branding remnants */}
-      {started && (
+      {/* Corner masks — hide any YouTube watermark/branding remnants while playing */}
+      {started && playing && (
         <>
-          <div className="absolute bottom-0 right-0 w-32 h-10 z-10 pointer-events-none bg-gradient-to-t from-black/90 to-transparent" />
-          <div className="absolute bottom-0 left-0 w-32 h-10 z-10 pointer-events-none bg-gradient-to-t from-black/90 to-transparent" />
+          <div className="absolute bottom-0 right-0 w-40 h-12 z-10 pointer-events-none bg-gradient-to-t from-black/90 to-transparent" />
+          <div className="absolute bottom-0 left-0 w-40 h-12 z-10 pointer-events-none bg-gradient-to-t from-black/90 to-transparent" />
           <div className="absolute top-0 right-0 w-24 h-8 z-10 pointer-events-none bg-gradient-to-b from-black/80 to-transparent" />
+          <div className="absolute top-0 left-0 w-24 h-8 z-10 pointer-events-none bg-gradient-to-b from-black/80 to-transparent" />
         </>
       )}
 
       {/* Click-catch overlay — blocks ALL interaction with the YouTube iframe */}
       <div
         className="absolute inset-0 z-20"
-        onClick={function (e) { e.preventDefault(); e.stopPropagation(); togglePlay() }}
-        onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation(); togglePlay() }}
+        onClick={function (e) { e.preventDefault(); e.stopPropagation(); handleVideoAreaClick() }}
+        onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation(); handleVideoAreaClick() }}
       />
 
-      {/* Poster before first play — custom look, like gallery cards */}
+      {/* PAUSED overlay — dark + blur so YouTube's pause UI (title, channel,
+          logo) is never readable. Styled like the gallery modal. */}
+      {started && !playing && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-md pointer-events-none">
+          <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-2xl">
+            <svg className="h-8 w-8 text-gray-800" style={{ marginLeft: '3px' }} fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+      )}
+
+      {/* Poster before first play AND after the video ends — our own look */}
       {!started && (
         <div className="absolute inset-0 z-30 pointer-events-none">
           {poster && (
@@ -272,17 +360,6 @@ export function ProtectedYouTubePlayer({
         </div>
       )}
 
-      {/* Big center play button when paused (custom, not YouTube) */}
-      {started && !playing && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-          <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-2xl">
-            <svg className="h-8 w-8 text-gray-800" style={{ marginLeft: '3px' }} fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </div>
-        </div>
-      )}
-
       {/* Custom controls bar — same style as the gallery modal player */}
       <div
         className={
@@ -292,6 +369,41 @@ export function ProtectedYouTubePlayer({
         onClick={function (e) { e.stopPropagation() }}
         onTouchEnd={function (e) { e.stopPropagation() }}
       >
+        {/* Quality menu (opens above the gear button) */}
+        {showQualityMenu && (
+          <div
+            className="absolute bottom-full right-2 mb-3 min-w-[130px] rounded-xl bg-black/90 backdrop-blur-sm border border-white/10 py-1.5 shadow-2xl"
+            role="menu"
+            aria-label="جودة الفيديو"
+          >
+            <p className="px-3 py-1 text-[10px] text-white/50 font-bold">جودة الفيديو</p>
+            <button
+              type="button"
+              role="menuitem"
+              className={'w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors min-h-[36px] ' + (selectedQuality === 'auto' ? 'text-primary font-bold' : '')}
+              onClick={function (e) { e.preventDefault(); e.stopPropagation(); handleQualitySelect('auto') }}
+            >
+              <span>تلقائي</span>
+              {selectedQuality === 'auto' && <Check className="w-4 h-4" />}
+            </button>
+            {menuLevels.map(function (q) {
+              var active = selectedQuality === q
+              return (
+                <button
+                  key={q}
+                  type="button"
+                  role="menuitem"
+                  className={'w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors min-h-[36px] ' + (active ? 'text-primary font-bold' : '')}
+                  onClick={function (e) { e.preventDefault(); e.stopPropagation(); handleQualitySelect(q) }}
+                >
+                  <span dir="ltr">{qualityLabel(q)}</span>
+                  {active && <Check className="w-4 h-4" />}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         <div
           ref={progressRef}
           className="w-full h-1.5 bg-white/30 cursor-pointer relative"
@@ -316,15 +428,34 @@ export function ProtectedYouTubePlayer({
             )}
           </button>
           <span className="text-white text-sm tabular-nums" dir="ltr">{formatTime(currentTime)} / {formatTime(duration)}</span>
-          <button
-            type="button"
-            aria-label={isFullscreen ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
-            className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0 ml-auto"
-            onClick={function (e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}
-            onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}
-          >
-            {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
-          </button>
+          <div className="ml-auto flex items-center gap-1">
+            {/* Settings — video quality */}
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="إعدادات جودة الفيديو"
+                aria-haspopup="menu"
+                aria-expanded={showQualityMenu}
+                className={'h-10 min-w-[44px] px-1 flex items-center justify-center gap-1 text-white hover:text-primary transition-colors shrink-0 ' + (selectedQuality !== 'auto' || showQualityMenu ? 'text-primary' : '')}
+                onClick={function (e) { e.preventDefault(); e.stopPropagation(); setShowQualityMenu(function (v) { return !v }) }}
+                onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation(); setShowQualityMenu(function (v) { return !v }) }}
+              >
+                <Settings className={'w-5 h-5 transition-transform ' + (showQualityMenu ? 'rotate-90' : '')} />
+                {selectedQuality !== 'auto' && (
+                  <span className="text-[10px] font-bold" dir="ltr">{qualityLabel(selectedQuality)}</span>
+                )}
+              </button>
+            </div>
+            <button
+              type="button"
+              aria-label={isFullscreen ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
+              className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
+              onClick={function (e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}
+              onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}
+            >
+              {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
       </div>
     </div>
