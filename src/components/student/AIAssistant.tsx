@@ -14,7 +14,7 @@ export function AIAssistant() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'أهلاً بك 👋 أنا المساعد الذكي بتاع المنصة. اسألني عن أي حاجة - الواجبات، الامتحانات، الدروس، أو أي مشكلة تقنية!',
+      content: 'أهلاً بك 👋 أنا المساعد الذكي بتاع منصة Maths Genius. اسألني عن أي حاجة - الواجبات، الامتحانات، الدروس، أو أي مشكلة تقنية!',
     },
   ])
   const [input, setInput] = useState('')

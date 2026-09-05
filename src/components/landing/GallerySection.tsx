@@ -4,6 +4,7 @@ import { useAppStore } from '@/stores/app-store'
 import { Badge } from '@/components/ui/badge'
 import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X, Loader2, Maximize, Minimize } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
+import { ProtectedYouTubeModal } from '@/components/student/ProtectedYouTubePlayer'
 import Image from 'next/image'
 import type { GalleryImage } from '@/stores/app-store'
 
@@ -336,6 +337,18 @@ function GalleryVideoModal({ url, onClose }: { url: string; onClose: () => void 
     }
     return function() { if (hideTimerRef.current) clearTimeout(hideTimerRef.current) }
   }, [playing, showControls])
+
+  /* YouTube → protected player (no branding, no captions, quality gear,
+     click-catch overlay) — same component used in the student portal.
+     Placed AFTER all hooks to respect the rules of hooks. */
+  if (isYouTube && ytId) {
+    return (
+      <ProtectedYouTubeModal
+        ytId={ytId[1]}
+        onClose={onClose}
+      />
+    )
+  }
 
   var togglePlay = function(e?: React.MouseEvent | React.TouchEvent) {
     if (e) { e.preventDefault(); e.stopPropagation() }
