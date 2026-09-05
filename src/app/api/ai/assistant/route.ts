@@ -29,38 +29,30 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
     var model = allModels[mi]
     // Short timeout for 3.6 (will fail fast with 404), longer for working models
     var modelTimeout = mi === 0 ? 5000 : 20000
-    for (var attempt = 0; attempt < 2; attempt++) {
-      try {
-        var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
-        var controller = new AbortController()
-        var timeout = setTimeout(function() { controller.abort() }, modelTimeout)
-        var geminiRes = await fetch(modelUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: parts }],
-            generationConfig: { temperature: 0.5, maxOutputTokens: 1200 }
-          }),
-          signal: controller.signal,
-        })
-        clearTimeout(timeout)
-        if (geminiRes.ok) {
-          var data = await geminiRes.json()
-          var text = ''
-          try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
-          if (text) return { ok: true, text: text }
-        } else {
-          lastError = model + ': HTTP ' + geminiRes.status
-          // If 429 or 503, wait 2s and retry (only for working models)
-          if ((geminiRes.status === 429 || geminiRes.status === 503) && attempt === 0 && mi > 0) {
-            await new Promise(function(r) { setTimeout(r, 2000) })
-            continue
-          }
-        }
-        break
-      } catch (e: any) {
-        lastError = model + ': ' + (e.message || '')
+    try {
+      var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
+      var controller = new AbortController()
+      var timeout = setTimeout(function() { controller.abort() }, modelTimeout)
+      var geminiRes = await fetch(modelUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: parts }],
+          generationConfig: { temperature: 0.5, maxOutputTokens: 1200 }
+        }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeout)
+      if (geminiRes.ok) {
+        var data = await geminiRes.json()
+        var text = ''
+        try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
+        if (text) return { ok: true, text: text }
+      } else {
+        lastError = model + ': HTTP ' + geminiRes.status
       }
+    } catch (e: any) {
+      lastError = model + ': ' + (e.message || '')
     }
   }
   return { ok: false, error: lastError }
