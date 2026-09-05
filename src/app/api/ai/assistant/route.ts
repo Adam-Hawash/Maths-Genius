@@ -2,12 +2,6 @@
 // POST /api/ai/assistant
 // Body: { message: string, context?: { page?: string, studentId?: string } }
 // Returns: { reply: string }
-//
-// AI assistant that knows about the platform - can help students with:
-// - Navigation issues
-// - How to submit homework/exams
-// - How to upload images
-// - General questions about the platform
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -15,23 +9,24 @@ import { db } from '@/lib/db'
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
-// (unused - models list is in callGemini below)
-
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  // Gemini 3.6 FIRST as requested, then fallbacks
+  // تم تحديث الموديلات لتشمل أحدث إصدارات Gemini الذكية والسريعة
   var allModels = [
-    'gemini-3.6-flash',
-    'gemini-flash-latest',
+    'gemini-2.5-flash',
+    'gemini-1.5-flash',
+    'gemini-flash-latest'
   ]
   var lastError = ''
-  var allErrors = []  // collect ALL errors for debugging
+  var allErrors = [] 
+  
   for (var mi = 0; mi < allModels.length; mi++) {
     var model = allModels[mi]
-    var modelTimeout = 20000  // same for all
+    var modelTimeout = 25000 
     try {
       var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
       var controller = new AbortController()
       var timeout = setTimeout(function() { controller.abort() }, modelTimeout)
+      
       var geminiRes = await fetch(modelUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -41,15 +36,20 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
         }),
         signal: controller.signal,
       })
+      
       clearTimeout(timeout)
+      
       if (geminiRes.ok) {
         var data = await geminiRes.json()
         var text = ''
-        try { text = data.candidates[0].content.parts[0].text || '' } catch (e) {}
+        try { 
+          text = data.candidates[0].content.parts[0].text || '' 
+        } catch (e) {}
         if (text) return { ok: true, text: text }
       } else {
         var status = geminiRes.status
-        allErrors.push(model + ': ' + status)
+        var errBody = await geminiRes.text().catch(() => '')
+        allErrors.push(model + ': ' + status + ' ' + errBody)
         lastError = model + ': HTTP ' + status
       }
     } catch (e: any) {
@@ -97,25 +97,29 @@ export async function POST(request: Request) {
     var apiKey = process.env.GEMINI_API_KEY || ''
     if (!apiKey) {
       return NextResponse.json({
-        reply: 'الـ AI مش متاح دلوقتي. حاول تاني بعدين أو تواصل مع المستر 👨‍🏫',
+        reply: 'الـ AI مش متاح دلوقتي. تأكد من ضبط المفتاح يا مستر 👨‍🏫',
       })
     }
 
-    // Build context for the AI
     var contextStr = PLATFORM_CONTEXT
     if (context.page) {
       contextStr += '\n\nالطالب دلوقتي في صفحة: ' + context.page
     }
+    
     if (context.studentId) {
       try {
-        var student = await db.$queryRawUnsafe(
-          'SELECT name, grade, status FROM Student WHERE id = ? LIMIT 1',
-          context.studentId
-        )
-        if (student && student.length > 0) {
-          contextStr += '\n\nبيانات الطالب:\n- الاسم: ' + (student[0].name || 'مش معروف') + '\n- الصف: ' + (student[0].grade || 'مش معروف') + '\n- الحالة: ' + (student[0].status || 'مش معروف')
+        // متوافق مع قاعدة بيانات Torso / SQLite عبر Prisma ORM
+        var student = await db.student.findUnique({
+          where: { id: context.studentId },
+          select: { name: true, grade: true, status: true }
+        })
+        
+        if (student) {
+          contextStr += '\n\nبيانات الطالب:\n- الاسم: ' + (student.name || 'مش معروف') + '\n- الصف: ' + (student.grade || 'مش معروف') + '\n- الحالة: ' + (student.status || 'مش معروف')
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Error fetching student context from Torso DB:', e)
+      }
     }
 
     var parts = [
@@ -125,11 +129,10 @@ export async function POST(request: Request) {
     var result = await callGemini(apiKey, parts)
 
     if (!result.ok || !result.text) {
-      var debugInfo = result.error || 'no text'
-      // Don't say "server busy" - just retry-friendly message
+      console.error('Gemini API Error details:', result.error)
       return NextResponse.json({
-        reply: 'استنى ثانية 🙏 بجهز الرد...',
-        debug: debugInfo,
+        reply: 'معلش يا بطل، حصل ضغط، اكتب سؤالك تاني وهرد عليك فوراً 🚀',
+        debug: result.error,
       })
     }
 
@@ -137,7 +140,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('[AI Assistant] Error:', error)
     return NextResponse.json({
-      reply: 'حصلت مشكلة. حاول تاني 🙏',
+      reply: 'حصلت مشكلة بسيطة، جرب تبعث تاني 🙏',
       error: error.message,
     })
   }
