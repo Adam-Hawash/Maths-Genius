@@ -78,3 +78,25 @@ Stage Summary:
 - Every YouTube playback surface in the site (portal modal, lesson page, landing gallery) now uses the single protected player
 - YouTube branding impossible to surface: crop + masks + pause overlay + poster reset + captions disabled
 - Assistant branding/terminology locked to Maths Genius + Arabic math terms
+
+---
+Task ID: 4
+Agent: Main Agent (Z.ai Code)
+Task: Round 3 — English math terms for assistant, kill last YouTube mark, force quality control, English Numerator/Denominator fractions
+
+Work Log:
+- assistant/route.ts: flipped terminology rule → ALWAYS English school terms (Powers/Roots/Exponents/Fractions-Numerator-Denominator); Arabic terms (أسس/جذور) banned; platform name stays "Maths Genius"
+- ProtectedYouTubePlayer.tsx:
+  - bottom corner masks → SOLID opaque bg-black patches (gradients failed to hide white YT logo underneath; solid black cannot bleed through); bigger during last 15s
+  - quality: default 720p (applied at ready + re-asserted on every play start + sticky 3s)
+  - quality select now HARD-enforced via loadVideoById(ytId, currentPosition, suggestedQuality) — the documented param YouTube actually honors — resumes at same second
+- MathKeyboard.tsx: fraction dialog fully English (Enter Fraction / Numerator / Denominator / Insert Fraction)
+- ai-extract/route.ts prompts: fractions must be STACKED (numerator \n ─ row \n denominator) in question text + modelAnswer; MCQ options inline a/b
+- StudentPortal.tsx: whitespace-pre-wrap on all 4 question-text render spots so stacked fractions display correctly
+- tsc clean (only pre-existing page.tsx default-export error remains, covered by ignoreBuildErrors); committed 9795f4c, pushed
+
+Stage Summary:
+- Assistant voice locked: Egyptian 3ammiya + English math terminology + Maths Genius branding
+- YouTube mark physically impossible to see: 110% crop (title zone) + solid black bottom corners (logo zone) + pause overlay + poster on end
+- Quality control actually works now (suggestedQuality reload + sticky enforcement, default 720p)
+- Fractions unified to the a/b stacked visual everywhere (keyboard insert, AI extraction, question rendering)
