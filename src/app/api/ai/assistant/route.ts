@@ -18,13 +18,14 @@ export const maxDuration = 30
 // (unused - models list is in callGemini below)
 
 async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  // gemini-2.0-flash FIRST (verified working), 3.6 last
+  // gemini-2.0-flash FIRST, then 3.6, then latest
   var allModels = [
     'gemini-2.0-flash',
     'gemini-3.6-flash',
     'gemini-flash-latest',
   ]
   var lastError = ''
+  var allErrors = []  // collect ALL errors for debugging
   for (var mi = 0; mi < allModels.length; mi++) {
     var model = allModels[mi]
     var modelTimeout = mi === 1 ? 5000 : 20000  // short timeout for 3.6
@@ -49,16 +50,15 @@ async function callGemini(apiKey: string, parts: any[]): Promise<{ ok: boolean; 
         if (text) return { ok: true, text: text }
       } else {
         var status = geminiRes.status
+        allErrors.push(model + ': ' + status)
         lastError = model + ': HTTP ' + status
-        // 404 or 400 = model doesn't exist, try next
-        // 429 = quota exceeded, try next model (might work with different model quota)
-        // 503 = overloaded, try next
       }
     } catch (e: any) {
+      allErrors.push(model + ': ' + (e.message || ''))
       lastError = model + ': ' + (e.message || '')
     }
   }
-  return { ok: false, error: lastError }
+  return { ok: false, error: allErrors.join(' | ') }
 }
 
 const PLATFORM_CONTEXT = `
