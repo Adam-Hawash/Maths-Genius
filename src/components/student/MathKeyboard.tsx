@@ -296,7 +296,9 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
     var top = fractionTop.trim()
     var bottom = fractionBottom.trim()
     if (top && bottom) {
-      insertSymbol('(' + top + '/' + bottom + ')')
+      // Insert as vertical fraction: numerator on first line, ----, denominator on second line
+      var fraction = '\n' + top + '\n' + '─'.repeat(Math.max(top.length, bottom.length)) + '\n' + bottom + '\n'
+      insertSymbol(fraction)
     }
     setFractionTop('')
     setFractionBottom('')
