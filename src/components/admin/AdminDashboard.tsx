@@ -1635,7 +1635,10 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
     setDetail(null)
     setLoadingDetail(true)
     try {
-      const res = await fetch(`/api/students/${studentId}/progress`)
+      const res = await Promise.race([
+        fetch(`/api/students/${studentId}/progress`),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 30000)),
+      ])
       if (!res.ok) {
         console.error('Progress API error:', res.status, res.statusText)
         toast.error('خطأ في تحميل التفاصيل (HTTP ' + res.status + ')')
@@ -1648,7 +1651,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
       }
     } catch (err) {
       console.error('loadDetail error:', err)
-      toast.error('خطأ في تحميل التفاصيل')
+      toast.error('بطء في تحميل التفاصيل - حاول تاني')
     }
     setLoadingDetail(false)
   }
