@@ -450,16 +450,16 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                   </div>
                 </div>
               ) : ytId ? (
-                <CustomVideoPlayer
-                  videoId={video.id}
-                  src={'https://www.youtube.com/embed/' + ytId + '?modestbranding=1&rel=0&playsinline=1&controls=1&showinfo=0&iv_load_policy=3'}
-                  poster={thumbSrc || undefined}
-                  studentId={studentId}
-                  onWatch={() => {
-                    trackVideoWatch(video.id)
-                    setLocalWatched(prev => new Set([...prev, video.id]))
-                  }}
-                />
+                <div className="w-full h-full relative bg-black" onClick={() => trackVideoWatch(video.id)}>
+                  <iframe
+                    src={'https://www.youtube-nocookie.com/embed/' + ytId + '?modestbranding=1&rel=0&playsinline=1&controls=1&showinfo=0&iv_load_policy=3&fs=1'}
+                    title={video.title}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    style={{ border: 'none' }}
+                  />
+                </div>
               ) : isVideoFile ? (
                 <CustomVideoPlayer
                   videoId={video.id}
