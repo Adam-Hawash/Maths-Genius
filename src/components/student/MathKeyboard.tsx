@@ -490,7 +490,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
               <button
                 type="button"
                 onClick={() => setShowFraction(true)}
-                title="كسر - اكتب البسط والمقام"
+                title="Fraction - Numerator / Denominator"
                 className="aspect-square flex flex-col items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-md transition-colors border border-amber-500/20 select-none"
               >
                 <span className="text-[10px] font-bold leading-none">a</span>
@@ -527,7 +527,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowFraction(false)}>
           <div className="bg-card border border-border rounded-xl p-4 shadow-2xl w-full max-w-xs" onClick={function(e) { e.stopPropagation() }}>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-bold">إدخال الكسر</p>
+              <p className="text-sm font-bold">Enter Fraction</p>
               <button type="button" onClick={() => setShowFraction(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
@@ -539,7 +539,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
                 value={fractionTop}
                 onChange={function(e) { setFractionTop(e.target.value) }}
                 onKeyDown={function(e) { if (e.key === 'Enter') { var b = document.getElementById('frac-bottom'); if (b) b.focus() } }}
-                placeholder="البسط"
+                placeholder="Numerator"
                 dir="ltr"
                 className="w-24 text-center text-lg font-bold px-2 py-1.5 rounded-md border-2 border-amber-500/40 bg-amber-50 dark:bg-amber-900/10 focus:outline-none focus:border-amber-500"
                 autoFocus
@@ -551,7 +551,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
                 value={fractionBottom}
                 onChange={function(e) { setFractionBottom(e.target.value) }}
                 onKeyDown={function(e) { if (e.key === 'Enter') handleFractionInsert() }}
-                placeholder="المقام"
+                placeholder="Denominator"
                 dir="ltr"
                 className="w-24 text-center text-lg font-bold px-2 py-1.5 rounded-md border-2 border-amber-500/40 bg-amber-50 dark:bg-amber-900/10 focus:outline-none focus:border-amber-500"
               />
@@ -562,7 +562,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
               disabled={!fractionTop.trim() || !fractionBottom.trim()}
               className="w-full py-2 text-sm font-bold rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              إدراج الكسر
+              Insert Fraction
             </button>
           </div>
         </div>

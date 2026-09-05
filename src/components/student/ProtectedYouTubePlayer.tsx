@@ -94,11 +94,11 @@ export function ProtectedYouTubePlayer({
   const pendingPlayRef = useRef(!!autoplay)
   const onWatchRef = useRef(onWatch)
 
-  /* quality settings state */
+  /* quality settings state — default 720p so it never starts blurry */
   const [qualityLevels, setQualityLevels] = useState<string[]>([])
-  const [selectedQuality, setSelectedQuality] = useState<string>('auto')
+  const [selectedQuality, setSelectedQuality] = useState<string>('hd720')
   const [showQualityMenu, setShowQualityMenu] = useState(false)
-  const selectedQualityRef = useRef('auto')
+  const selectedQualityRef = useRef('hd720')
   const lastQualityApplyRef = useRef(0)
 
   useEffect(function () { selectedQualityRef.current = selectedQuality }, [selectedQuality])
@@ -170,6 +170,8 @@ export function ProtectedYouTubePlayer({
               try { e.target.unloadModule && e.target.unloadModule('captions') } catch (err) {}
               try { e.target.setOption && e.target.setOption('captions', 'track', {}) } catch (err) {}
               try { setDuration(e.target.getDuration() || 0) } catch (err) {}
+              /* push the default quality BEFORE playback starts */
+              applyQuality(selectedQualityRef.current)
               /* available quality levels for the settings menu */
               try {
                 var levels = e.target.getAvailableQualityLevels ? e.target.getAvailableQualityLevels() : []
@@ -193,8 +195,9 @@ export function ProtectedYouTubePlayer({
               // -1 unstarted | 0 ended | 1 playing | 2 paused | 3 buffering | 5 cued
               if (e.data === 1) {
                 setStarted(true); setPlaying(true); setShowControls(true)
-                /* keep captions OFF while playing */
+                /* keep captions OFF + re-assert quality every time playback starts */
                 try { e.target.unloadModule && e.target.unloadModule('captions') } catch (err) {}
+                applyQuality(selectedQualityRef.current)
               }
               else if (e.data === 2) setPlaying(false)
               else if (e.data === 0) {
@@ -300,7 +303,21 @@ export function ProtectedYouTubePlayer({
 
   function handleQualitySelect(q: string) {
     setSelectedQuality(q)
+    selectedQualityRef.current = q
     applyQuality(q)
+    /* HARD enforcement: YouTube mostly ignores soft quality hints, so we
+       reload the same video at the same position with the chosen quality
+       as the documented suggestedQuality — this actually switches streams */
+    var p = playerRef.current
+    try {
+      var pos = 0
+      try { pos = (p && p.getCurrentTime ? p.getCurrentTime() : 0) || 0 } catch (err) {}
+      if (p && p.loadVideoById) {
+        p.loadVideoById(ytId, Math.max(0, Math.floor(pos)), q === 'auto' ? 'default' : q)
+        try { p.playVideo && p.playVideo() } catch (err) {}
+      }
+    } catch (e) {}
+    lastQualityApplyRef.current = Date.now()
     setShowQualityMenu(false)
   }
 
@@ -323,13 +340,15 @@ export function ProtectedYouTubePlayer({
         </div>
       </div>
 
-      {/* Corner masks — hide any YouTube watermark/branding remnants while playing.
+      {/* Corner covers — SOLID black patches over the two bottom corners so
+          ANY YouTube watermark / "Watch on YouTube" logo can never be seen
+          (gradients only darken — white logos stay readable through them).
           Near the end of the video YouTube starts showing end-screen logos →
-          stronger bottom masks during the last 15 seconds. */}
+          bigger covers during the last 15 seconds. */}
       {started && playing && (
         <>
-          <div className={'absolute bottom-0 right-0 z-10 pointer-events-none bg-gradient-to-t from-black/95 to-transparent ' + (nearEnd ? 'w-64 h-16' : 'w-40 h-12')} />
-          <div className={'absolute bottom-0 left-0 z-10 pointer-events-none bg-gradient-to-t from-black/95 to-transparent ' + (nearEnd ? 'w-64 h-16' : 'w-40 h-12')} />
+          <div className={'absolute bottom-0 right-0 z-10 pointer-events-none bg-black ' + (nearEnd ? 'w-64 h-16' : 'w-44 h-14')} />
+          <div className={'absolute bottom-0 left-0 z-10 pointer-events-none bg-black ' + (nearEnd ? 'w-64 h-16' : 'w-32 h-12')} />
           <div className="absolute top-0 right-0 w-24 h-8 z-10 pointer-events-none bg-gradient-to-b from-black/80 to-transparent" />
           <div className="absolute top-0 left-0 w-24 h-8 z-10 pointer-events-none bg-gradient-to-b from-black/80 to-transparent" />
         </>
