@@ -296,8 +296,10 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
     var top = fractionTop.trim()
     var bottom = fractionBottom.trim()
     if (top && bottom) {
-      // Insert as vertical fraction: numerator on first line, ----, denominator on second line
-      var fraction = '\n' + top + '\n' + '─'.repeat(Math.max(top.length, bottom.length)) + '\n' + bottom + '\n'
+      // Insert the machine marker — the UI renders it as a REAL stacked
+      // fraction (numerator above the bar, denominator below) via
+      // FractionText everywhere question text is displayed.
+      var fraction = ' \\frac{' + top + '}{' + bottom + '} '
       insertSymbol(fraction)
     }
     setFractionTop('')

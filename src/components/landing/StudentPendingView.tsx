@@ -17,9 +17,9 @@ export function StudentPendingView() {
           </div>
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-bold">انتظر موافقة الأدمن</h1>
+          <h1 className="text-2xl font-bold">طلبك قيد المراجعة</h1>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            تم استلام طلبك بنجاح وجاري مراجعته من قبل الأدمن. ستحصل على إشعار فور الموافقة على طلبك.
+            تم استلام طلبك بنجاح وجاري مراجعته من قبل الأدمن. اعمل تسجيل دخول في أي وقت وشوف حالة طلبك — لو اتمقبولت هتدخل المنصة على طول.
           </p>
         </div>
         <Button variant="ghost" onClick={logout}>

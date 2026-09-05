@@ -1,12 +1,57 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, X, Sparkles, Loader2 } from 'lucide-react'
+import { Send, X, Sparkles, Loader2, ImagePlus } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
+  images?: string[]
+}
+
+interface PendingImage {
+  id: string
+  dataUrl: string
+}
+
+var MAX_IMAGES = 3 // per message (client side)
+
+/* Read an image file and downscale it to max 1280px JPEG so the
+   request payload stays small — IMAGES ONLY. */
+async function fileToDataUrl(file: File): Promise<string> {
+  var dataUrl = await new Promise<string>(function (resolve, reject) {
+    var reader = new FileReader()
+    reader.onload = function () { resolve(String(reader.result)) }
+    reader.onerror = function () { reject(new Error('read')) }
+    reader.readAsDataURL(file)
+  })
+  try {
+    var img = await new Promise<HTMLImageElement>(function (resolve, reject) {
+      var im = document.createElement('img')
+      im.onload = function () { resolve(im) }
+      im.onerror = function () { reject(new Error('decode')) }
+      im.src = dataUrl
+    })
+    var maxDim = 1280
+    var w = img.naturalWidth || img.width
+    var h = img.naturalHeight || img.height
+    if (!w || !h) return dataUrl
+    if (w > maxDim || h > maxDim) {
+      var k = Math.min(maxDim / w, maxDim / h)
+      w = Math.round(w * k)
+      h = Math.round(h * k)
+    }
+    var canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    var ctx = canvas.getContext('2d')
+    if (!ctx) return dataUrl
+    ctx.drawImage(img, 0, 0, w, h)
+    return canvas.toDataURL('image/jpeg', 0.85)
+  } catch (e) {
+    return dataUrl
+  }
 }
 
 export function AIAssistant() {
@@ -14,19 +59,21 @@ export function AIAssistant() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'أهلاً بك 👋 أنا المساعد الذكي بتاع منصة Maths Genius. اسألني عن أي حاجة - الواجبات، الامتحانات، الدروس، أو أي مشكلة تقنية!',
+      content: 'أهلاً بك 👋 أنا المساعد الذكي بتاع منصة Maths Genius. اسألني عن أي حاجة - الواجبات، الامتحانات، الدروس، أو أي مشكلة تقنية! وتقدر كمان تبعتلي صورة مسألة وأحلها لك 📸',
     },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, open])
+  }, [messages, open, loading])
 
   useEffect(() => {
     if (open && inputRef.current) {
@@ -34,13 +81,48 @@ export function AIAssistant() {
     }
   }, [open])
 
+  const handlePickImages = async function (e: React.ChangeEvent<HTMLInputElement>) {
+    var files = e.target.files
+    if (!files || files.length === 0) return
+    var room = MAX_IMAGES - pendingImages.length
+    var list: File[] = []
+    for (var i = 0; i < files.length && list.length < Math.max(0, room); i++) list.push(files[i])
+    if (files.length > list.length) toast.error('أقصى عدد صور في الرسالة الواحدة هو ' + MAX_IMAGES)
+    var added: PendingImage[] = []
+    for (var j = 0; j < list.length; j++) {
+      var f = list[j]
+      if (!f.type || f.type.indexOf('image/') !== 0) {
+        toast.error('مسموح بالصور فقط: ' + f.name)
+        continue
+      }
+      if (f.size > 10 * 1024 * 1024) {
+        toast.error('الصورة كبيرة جداً (الحد الأقصى 10MB): ' + f.name)
+        continue
+      }
+      try {
+        var dataUrl = await fileToDataUrl(f)
+        added.push({ id: Date.now() + '-' + j, dataUrl: dataUrl })
+      } catch (err) {
+        toast.error('مش قادر أفتح الصورة: ' + f.name)
+      }
+    }
+    if (added.length > 0) setPendingImages(function (prev) { return prev.concat(added) })
+    e.target.value = ''
+  }
+
+  const removePendingImage = function (id: string) {
+    setPendingImages(function (prev) { return prev.filter(function (p) { return p.id !== id }) })
+  }
+
   const sendMessage = async () => {
     var msg = input.trim()
-    if (!msg || loading) return
+    var imgs = pendingImages.map(function (p) { return p.dataUrl })
+    if ((!msg && imgs.length === 0) || loading) return
 
     setInput('')
-    setMessages(function(prev) {
-      return [...prev, { role: 'user', content: msg }]
+    setPendingImages([])
+    setMessages(function (prev) {
+      return [...prev, { role: 'user', content: msg, images: imgs.length > 0 ? imgs : undefined }]
     })
     setLoading(true)
 
@@ -62,17 +144,21 @@ export function AIAssistant() {
         fetch('/api/ai/assistant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: msg, context: { page: page, studentId: studentId } }),
+          body: JSON.stringify({
+            message: msg || 'شوف الصور دي وساعدني فيها.',
+            images: imgs.length > 0 ? imgs : undefined,
+            context: { page: page, studentId: studentId },
+          }),
         }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 45000)),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), imgs.length > 0 ? 60000 : 45000)),
       ])
       var data = await res.json()
       var reply = data.reply || 'مش قادر أرد دلوقتي. حاول تاني 🙏'
-      setMessages(function(prev) {
+      setMessages(function (prev) {
         return [...prev, { role: 'assistant', content: reply }]
       })
     } catch (e) {
-      setMessages(function(prev) {
+      setMessages(function (prev) {
         return [...prev, { role: 'assistant', content: 'حصلت مشكلة في الاتصال. حاول تاني 🙏' }]
       })
     }
@@ -103,7 +189,7 @@ export function AIAssistant() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-sm">المساعد الذكي</p>
-              <p className="text-[10px] opacity-90">اسألني عن أي حاجة في المنصة</p>
+              <p className="text-[10px] opacity-90">اسألني عن أي حاجة أو ابعتلي صورة مسألة</p>
             </div>
             <button
               type="button"
@@ -116,7 +202,7 @@ export function AIAssistant() {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar" style={{ minHeight: '250px', maxHeight: '350px' }}>
-            {messages.map(function(msg, i) {
+            {messages.map(function (msg, i) {
               var isUser = msg.role === 'user'
               return (
                 <div key={i} className={'flex ' + (isUser ? 'justify-start' : 'justify-end')}>
@@ -129,6 +215,22 @@ export function AIAssistant() {
                     }
                     dir="auto"
                   >
+                    {msg.images && msg.images.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-1.5">
+                        {msg.images.map(function (src, ii) {
+                          return (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              key={ii}
+                              src={src}
+                              alt="صورة مرفقة"
+                              className="w-24 h-24 object-cover rounded-lg border border-white/20 cursor-default"
+                              draggable={false}
+                            />
+                          )
+                        })}
+                      </div>
+                    )}
                     {msg.content}
                   </div>
                 </div>
@@ -145,21 +247,69 @@ export function AIAssistant() {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Pending images preview */}
+          {pendingImages.length > 0 && (
+            <div className="px-3 pt-2 bg-card shrink-0">
+              <div className="flex flex-wrap gap-2">
+                {pendingImages.map(function (img) {
+                  return (
+                    <div key={img.id} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={img.dataUrl}
+                        alt="صورة جاهزة للإرسال"
+                        className="w-16 h-16 object-cover rounded-lg border border-border"
+                        draggable={false}
+                      />
+                      <button
+                        type="button"
+                        aria-label="حذف الصورة"
+                        onClick={function () { removePendingImage(img.id) }}
+                        className="absolute -top-1.5 -left-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Input */}
           <div className="p-3 border-t border-border bg-card shrink-0">
             <div className="flex items-center gap-2">
+              {/* Attach image (images only) */}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handlePickImages}
+              />
+              <button
+                type="button"
+                aria-label="إرفاق صورة"
+                title="ابعت صورة مسألة"
+                disabled={loading || pendingImages.length >= MAX_IMAGES}
+                onClick={function () { if (fileRef.current) fileRef.current.click() }}
+                className="h-10 w-10 rounded-full border border-input bg-background text-muted-foreground hover:text-primary hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors shrink-0"
+              >
+                <ImagePlus className="h-5 w-5" />
+              </button>
               <input
                 ref={inputRef}
                 type="text"
                 value={input}
-                onChange={function(e) { setInput(e.target.value) }}
-                onKeyDown={function(e) {
+                onChange={function (e) { setInput(e.target.value) }}
+                onKeyDown={function (e) {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
                     sendMessage()
                   }
                 }}
-                placeholder="اكتب سؤالك..."
+                placeholder="اكتب سؤالك أو ابعت صورة..."
                 disabled={loading}
                 className="flex-1 h-10 px-3 rounded-full bg-background border border-input text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 maxLength={500}
@@ -167,7 +317,7 @@ export function AIAssistant() {
               <button
                 type="button"
                 onClick={sendMessage}
-                disabled={loading || !input.trim()}
+                disabled={loading || (!input.trim() && pendingImages.length === 0)}
                 className="h-10 w-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors shrink-0"
               >
                 <Send className="h-4 w-4" />

@@ -7,9 +7,9 @@
 //
 //          - NO YouTube branding at ANY state:
 //              • Before play → our own poster
-//              • While playing → corner masks + click-catch overlay
-//              • While PAUSED → full dark+blur overlay (hides the
-//                YouTube title / channel / logo that appear on pause)
+//              • While playing/paused → NO black covers anymore: just a
+//                static WRITTEN YouTube mark (decorative only — tapping it
+//                does NOTHING) + click-catch overlay blocks the iframe
 //              • When ENDED → back to our poster (hides YouTube's
 //                related-videos end screen)
 //          - NO native controls, NO keyboard shortcuts, NO right-click
@@ -322,7 +322,6 @@ export function ProtectedYouTubePlayer({
   }
 
   var progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
-  var nearEnd = playing && duration > 0 && duration - currentTime <= 15
   var menuLevels = qualityLevels.length > 0 ? qualityLevels : STANDARD_QUALITIES
 
   return (
@@ -340,18 +339,24 @@ export function ProtectedYouTubePlayer({
         </div>
       </div>
 
-      {/* Corner covers — SOLID black patches over the two bottom corners so
-          ANY YouTube watermark / "Watch on YouTube" logo can never be seen
-          (gradients only darken — white logos stay readable through them).
-          Near the end of the video YouTube starts showing end-screen logos →
-          bigger covers during the last 15 seconds. */}
-      {started && playing && (
-        <>
-          <div className={'absolute bottom-0 right-0 z-10 pointer-events-none bg-black ' + (nearEnd ? 'w-64 h-16' : 'w-44 h-14')} />
-          <div className={'absolute bottom-0 left-0 z-10 pointer-events-none bg-black ' + (nearEnd ? 'w-64 h-16' : 'w-32 h-12')} />
-          <div className="absolute top-0 right-0 w-24 h-8 z-10 pointer-events-none bg-gradient-to-b from-black/80 to-transparent" />
-          <div className="absolute top-0 left-0 w-24 h-8 z-10 pointer-events-none bg-gradient-to-b from-black/80 to-transparent" />
-        </>
+      {/* Static WRITTEN YouTube mark — decorative only, replaces the old
+          solid black corner covers (removed by request). It is just text:
+          tapping it does NOTHING (clicks are swallowed here, it never
+          links to YouTube and the iframe below stays fully blocked by the
+          click-catch layer). */}
+      {started && (
+        <div
+          className="absolute top-2.5 left-3 z-[25] select-none"
+          aria-hidden="true"
+          onClick={function (e) { e.preventDefault(); e.stopPropagation() }}
+          onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation() }}
+        >
+          <svg width="84" height="19" viewBox="0 0 110 24" fill="none" style={{ opacity: 0.85, display: 'block', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.6))' }}>
+            <rect x="0" y="0" width="34" height="24" rx="6" fill="#FF0000" />
+            <path d="M13.5 6.5 L24.5 12 L13.5 17.5 Z" fill="#FFFFFF" />
+            <text x="40" y="18" fill="#FFFFFF" fontSize="16" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif">YouTube</text>
+          </svg>
+        </div>
       )}
 
       {/* Click-catch overlay — blocks ALL interaction with the YouTube iframe */}
@@ -361,10 +366,11 @@ export function ProtectedYouTubePlayer({
         onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation(); handleVideoAreaClick() }}
       />
 
-      {/* PAUSED overlay — dark + blur so YouTube's pause UI (title, channel,
-          logo) is never readable. Styled like the gallery modal. */}
+      {/* PAUSED indicator — NO dark/blur cover anymore (removed by request):
+          the paused frame stays visible, we only float a small play button
+          so students know it's paused. */}
       {started && !playing && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-md pointer-events-none">
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
           <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-2xl">
             <svg className="h-8 w-8 text-gray-800" style={{ marginLeft: '3px' }} fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
