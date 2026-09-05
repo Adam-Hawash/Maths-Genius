@@ -17,6 +17,15 @@
 //            (تلقائي / 1080p / 720p / 480p / 360p / 240p / 144p)
 //            The chosen quality is re-applied automatically if YouTube
 //            tries to change it (sticky quality).
+//          - FULLSCREEN on mobile: locks the phone into LANDSCAPE so the
+//            16:9 video fills the screen (no tiny letterboxed strip), and
+//            the iframe crop gets stronger so YouTube's native fullscreen
+//            UI (share/save bar + logos) stays outside the visible box.
+//            If the device has no element-fullscreen (iPhone) → CSS fake
+//            fullscreen instead.
+//          - SINGLE play indicator: our big opaque play button sits EXACTLY
+//            on top of YouTube's own big play button (same center point)
+//            and covers it completely — students only ever see ONE button.
 //          - Reports watch progress to /api/video-progress
 // ============================================================
 
@@ -90,6 +99,7 @@ export function ProtectedYouTubePlayer({
   const [buffered, setBuffered] = useState(0)
   const [showControls, setShowControls] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fakeFs, setFakeFs] = useState(false)
   const hideTimerRef = useRef<any>(null)
   const pendingPlayRef = useRef(!!autoplay)
   const onWatchRef = useRef(onWatch)
@@ -104,14 +114,38 @@ export function ProtectedYouTubePlayer({
   useEffect(function () { selectedQualityRef.current = selectedQuality }, [selectedQuality])
   useEffect(function () { onWatchRef.current = onWatch }, [onWatch])
 
-  /* fullscreen listener */
+  /* orientation helpers — rotate the phone to landscape while fullscreen so
+     the 16:9 video FILLS the screen instead of a tiny letterboxed strip in
+     portrait. Silently ignored on devices that don't support it. */
+  function tryLockLandscape() {
+    try {
+      var so = (screen as any).orientation
+      if (so && so.lock) {
+        var pr = so.lock('landscape')
+        if (pr && pr.catch) pr.catch(function () {})
+      }
+    } catch (e) {}
+  }
+  function tryUnlockOrientation() {
+    try { var so = (screen as any).orientation; if (so && so.unlock) so.unlock() } catch (e) {}
+  }
+
+  /* fullscreen listener (native + webkit) — locks landscape on enter and
+     releases it on exit (also covers Android's back-gesture exit) */
   useEffect(function () {
-    var onFsChange = function () { setIsFullscreen(!!document.fullscreenElement) }
+    var onFsChange = function () {
+      var d = document as any
+      var fs = !!(d.fullscreenElement || d.webkitFullscreenElement)
+      setIsFullscreen(fs)
+      if (fs) tryLockLandscape()
+      else tryUnlockOrientation()
+    }
     document.addEventListener('fullscreenchange', onFsChange)
     document.addEventListener('webkitfullscreenchange', onFsChange)
     return function () {
       document.removeEventListener('fullscreenchange', onFsChange)
       document.removeEventListener('webkitfullscreenchange', onFsChange)
+      tryUnlockOrientation()
     }
   }, [])
 
@@ -294,11 +328,27 @@ export function ProtectedYouTubePlayer({
 
   function handleFullscreen(e: React.MouseEvent | React.TouchEvent) {
     if (e) { e.preventDefault(); e.stopPropagation() }
-    if (document.fullscreenElement) { document.exitFullscreen().catch(function () {}); return }
-    if ((document as any).webkitFullscreenElement) { (document as any).webkitExitFullscreen(); return }
+    var d = document as any
+    if (d.fullscreenElement || d.webkitFullscreenElement) {
+      if (d.exitFullscreen) d.exitFullscreen().catch(function () {})
+      else if (d.webkitExitFullscreen) d.webkitExitFullscreen()
+      tryUnlockOrientation()
+      return
+    }
+    if (fakeFs) { setFakeFs(false); tryUnlockOrientation(); return }
     var c = containerRef.current
-    if (c && c.requestFullscreen) c.requestFullscreen().catch(function () {})
-    else if (c && (c as any).webkitRequestFullscreen) (c as any).webkitRequestFullscreen()
+    if (c && c.requestFullscreen) {
+      var pr = c.requestFullscreen()
+      if (pr && pr.then) pr.then(function () { tryLockLandscape() }).catch(function () {})
+      else tryLockLandscape()
+    } else if (c && (c as any).webkitRequestFullscreen) {
+      ;(c as any).webkitRequestFullscreen()
+      tryLockLandscape()
+    } else {
+      /* iPhone Safari has no element-fullscreen → CSS fake fullscreen */
+      setFakeFs(true)
+      tryLockLandscape()
+    }
   }
 
   function handleQualitySelect(q: string) {
@@ -321,20 +371,37 @@ export function ProtectedYouTubePlayer({
     setShowQualityMenu(false)
   }
 
+  var fsActive = isFullscreen || fakeFs
   var progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
   var menuLevels = qualityLevels.length > 0 ? qualityLevels : STANDARD_QUALITIES
 
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full select-none bg-black overflow-hidden"
+      className={
+        'select-none bg-black overflow-hidden ' +
+        (fsActive ? 'fixed inset-0 z-[150]' : 'relative w-full h-full')
+      }
       onContextMenu={function (e) { e.preventDefault() }}
     >
-      {/* YouTube player — SCALED & CROPPED: the iframe is 110% and shifted up
-          10% so YouTube's top title/channel bar falls OUTSIDE the visible box
-          permanently (works in fullscreen too). Sides cropped 5% to keep it 16:9 */}
+      {/* YouTube player — SCALED & CROPPED so NO native YouTube UI can ever
+          be seen. The iframe is oversized and shifted so the crops are
+          SYMMETRIC top/bottom — that keeps the iframe's center exactly on
+          the container's center (±52% in fullscreen), which is where we pin
+          our big play button to cover YouTube's own big play button.
+          • Normal:  10% cropped top + bottom (title bar & pause watermark
+            zones), 5% each side.
+          • Fullscreen: 14% top + 18% bottom (kills YouTube's native
+            fullscreen share/save/quality bar, ~48-56px on any phone),
+            6% each side (mostly eats the pillarbox black bars). */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute w-[110%] h-[110%] top-[-10%] left-[-5%]">
+        <div
+          className={
+            fsActive
+              ? 'absolute w-[112%] h-[132%] top-[-14%] left-[-6%]'
+              : 'absolute w-[110%] h-[120%] top-[-10%] left-[-5%]'
+          }
+        >
           <div ref={playerHostRef} className="w-full h-full" />
         </div>
       </div>
@@ -351,10 +418,10 @@ export function ProtectedYouTubePlayer({
           onClick={function (e) { e.preventDefault(); e.stopPropagation() }}
           onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation() }}
         >
-          <svg width="84" height="19" viewBox="0 0 110 24" fill="none" style={{ opacity: 0.85, display: 'block', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.6))' }}>
+          <svg width="90" height="18" viewBox="0 0 122 24" fill="none" style={{ opacity: 0.85, display: 'block', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.6))', direction: 'ltr' }}>
             <rect x="0" y="0" width="34" height="24" rx="6" fill="#FF0000" />
             <path d="M13.5 6.5 L24.5 12 L13.5 17.5 Z" fill="#FFFFFF" />
-            <text x="40" y="18" fill="#FFFFFF" fontSize="16" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif">YouTube</text>
+            <text x="40" y="18" fill="#FFFFFF" fontSize="16" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif" style={{ direction: 'ltr' }}>YouTube</text>
           </svg>
         </div>
       )}
@@ -366,38 +433,53 @@ export function ProtectedYouTubePlayer({
         onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation(); handleVideoAreaClick() }}
       />
 
-      {/* PAUSED indicator — NO dark/blur cover anymore (removed by request):
-          the paused frame stays visible, we only float a small play button
-          so students know it's paused. */}
+      {/* PAUSED indicator — NO dark/blur cover (removed by request): the
+          paused frame stays visible. Our big OPAQUE play button is pinned
+          EXACTLY on the iframe's center — the same spot where YouTube draws
+          its own big play button when paused — and is sized to fully cover
+          it, so students see only ONE button, never two. */}
       {started && !playing && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-          <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-2xl">
-            <svg className="h-8 w-8 text-gray-800" style={{ marginLeft: '3px' }} fill="currentColor" viewBox="0 0 24 24">
+        <div
+          className="absolute left-0 right-0 z-30 flex justify-center -translate-y-1/2 pointer-events-none"
+          style={{ top: fsActive ? '52%' : '50%' }}
+        >
+          <div className={'rounded-full bg-white flex items-center justify-center shadow-2xl ' + (fsActive ? 'w-24 h-24' : 'w-20 h-20')}>
+            <svg className={fsActive ? 'h-10 w-10 text-gray-800' : 'h-9 w-9 text-gray-800'} style={{ marginLeft: '4px' }} fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
             </svg>
           </div>
         </div>
       )}
 
-      {/* Poster before first play AND after the video ends — our own look */}
+      {/* Poster before first play AND after the video ends — our own look.
+          IMPORTANT: this layer must be FULLY OPAQUE — before playback starts
+          (and after it ends) YouTube paints its own chrome on the iframe
+          (title bar, "Watch on YouTube", quality badge, control strip) and a
+          translucent layer lets it bleed through. When a poster image exists
+          we keep a 30% dim on top of it for play-button contrast. */}
       {!started && (
         <div className="absolute inset-0 z-30 pointer-events-none">
           {poster && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={poster} alt="فيديو الدرس" className="w-full h-full object-cover" draggable={false} />
+            <img src={poster} alt="فيديو الدرس" className="w-full h-full object-cover bg-black" draggable={false} />
           )}
-          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-            <div className={'w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-2xl transition-transform ' + (ready ? 'group-hover:scale-110' : '')}>
-              {!ready ? (
-                <svg className="h-7 w-7 animate-spin text-gray-800" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                </svg>
-              ) : (
-                <svg className="h-8 w-8 text-gray-800" style={{ marginLeft: '3px' }} fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
+          <div className={'absolute inset-0 ' + (poster ? 'bg-black/30' : 'bg-black')}>
+            <div
+              className="absolute left-0 right-0 flex justify-center -translate-y-1/2"
+              style={{ top: fsActive ? '52%' : '50%' }}
+            >
+              <div className={'rounded-full bg-white flex items-center justify-center shadow-2xl ' + (fsActive ? 'w-24 h-24' : 'w-20 h-20')}>
+                {!ready ? (
+                  <svg className={fsActive ? 'h-9 w-9 animate-spin text-gray-800' : 'h-8 w-8 animate-spin text-gray-800'} viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                ) : (
+                  <svg className={fsActive ? 'h-10 w-10 text-gray-800' : 'h-9 w-9 text-gray-800'} style={{ marginLeft: '4px' }} fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -491,12 +573,12 @@ export function ProtectedYouTubePlayer({
             </div>
             <button
               type="button"
-              aria-label={isFullscreen ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
+              aria-label={fsActive ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
               className="w-10 h-10 flex items-center justify-center text-white hover:text-primary transition-colors shrink-0"
               onClick={function (e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}
               onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation(); handleFullscreen(e) }}
             >
-              {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+              {fsActive ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
             </button>
           </div>
         </div>
