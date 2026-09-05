@@ -52,7 +52,23 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
       { label: '±', insert: '±', hint: 'Plus or minus' },
       { label: '(', insert: '(', hint: 'Open parenthesis' },
       { label: ')', insert: ')', hint: 'Close parenthesis' },
-      { label: '⁄', insert: '/', hint: 'Fraction bar (use / for fractions like 1/2)' },
+    ],
+  },
+  {
+    title: 'Fractions',
+    symbols: [
+      { label: '¹⁄₂', insert: '1/2', hint: 'One half' },
+      { label: '¹⁄₃', insert: '1/3', hint: 'One third' },
+      { label: '¹⁄₄', insert: '1/4', hint: 'One quarter' },
+      { label: '²⁄₃', insert: '2/3', hint: 'Two thirds' },
+      { label: '³⁄₄', insert: '3/4', hint: 'Three quarters' },
+      { label: '¹⁄₅', insert: '1/5', hint: 'One fifth' },
+      { label: '²⁄₅', insert: '2/5', hint: 'Two fifths' },
+      { label: '³⁄₅', insert: '3/5', hint: 'Three fifths' },
+      { label: '¹⁄₆', insert: '1/6', hint: 'One sixth' },
+      { label: '¹⁄₈', insert: '1/8', hint: 'One eighth' },
+      { label: '³⁄₈', insert: '3/8', hint: 'Three eighths' },
+      { label: '⁵⁄₈', insert: '5/8', hint: 'Five eighths' },
     ],
   },
   {
@@ -321,7 +337,8 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
         }
       }
       if (newMarkers) {
-        setUploadedImage(uploadedPaths[0] || '')
+        setUploadedImage(uploadedPaths[uploadedPaths.length - 1] || '')
+        // Append ALL uploaded markers to the existing value
         onChange(value + newMarkers)
         if (onImageUpload) {
           onImageUpload(uploadedPaths[0] || '')
