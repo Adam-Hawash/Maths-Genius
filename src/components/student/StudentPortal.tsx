@@ -1495,6 +1495,13 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                         }}
                         placeholder="Write your answer here or upload an image..."
                         rows={4}
+                        onImageUpload={function(filePath: string) {
+                          if (filePath) {
+                            // MathKeyboard already adds [📷 صورة مرفقة: PATH] to value,
+                            // so we just need to ensure the parent state is synced
+                            // (no extra marker needed - prevents duplicates)
+                          }
+                        }}
                       />
                     </div>
                   </CardContent>
