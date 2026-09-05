@@ -159,12 +159,16 @@ export function ProtectedYouTubePlayer({
             iv_load_policy: 3,
             fs: 0,
             playsinline: 1,
+            cc_load_policy: 0,
             autoplay: autoplay ? 1 : 0,
           },
           events: {
             onReady: function (e: any) {
               if (cancelled) return
               setReady(true)
+              /* captions OFF — always */
+              try { e.target.unloadModule && e.target.unloadModule('captions') } catch (err) {}
+              try { e.target.setOption && e.target.setOption('captions', 'track', {}) } catch (err) {}
               try { setDuration(e.target.getDuration() || 0) } catch (err) {}
               /* available quality levels for the settings menu */
               try {
@@ -187,7 +191,11 @@ export function ProtectedYouTubePlayer({
             onStateChange: function (e: any) {
               if (cancelled) return
               // -1 unstarted | 0 ended | 1 playing | 2 paused | 3 buffering | 5 cued
-              if (e.data === 1) { setStarted(true); setPlaying(true); setShowControls(true) }
+              if (e.data === 1) {
+                setStarted(true); setPlaying(true); setShowControls(true)
+                /* keep captions OFF while playing */
+                try { e.target.unloadModule && e.target.unloadModule('captions') } catch (err) {}
+              }
               else if (e.data === 2) setPlaying(false)
               else if (e.data === 0) {
                 // Ended → back to our poster so YouTube's end screen
@@ -221,7 +229,7 @@ export function ProtectedYouTubePlayer({
         setCurrentTime(t)
         if (d) setDuration(d)
         if (p.getVideoLoadedFraction) setBuffered((p.getVideoLoadedFraction() || 0) * 100)
-        /* sticky quality: re-apply the user's choice if YouTube drifted */
+        /* sticky quality + captions stay OFF */
         var wanted = selectedQualityRef.current
         if (wanted !== 'auto' && p.getPlaybackQuality) {
           var cur = p.getPlaybackQuality()
@@ -229,6 +237,7 @@ export function ProtectedYouTubePlayer({
             applyQuality(wanted)
           }
         }
+        try { if (p.unloadModule) p.unloadModule('captions') } catch (e) {}
         if (studentId && videoId && t > 0) {
           var bucket = Math.floor(t / 5)
           if (bucket !== lastReportRef.current) {
@@ -296,6 +305,7 @@ export function ProtectedYouTubePlayer({
   }
 
   var progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
+  var nearEnd = playing && duration > 0 && duration - currentTime <= 15
   var menuLevels = qualityLevels.length > 0 ? qualityLevels : STANDARD_QUALITIES
 
   return (
@@ -304,14 +314,22 @@ export function ProtectedYouTubePlayer({
       className="relative w-full h-full select-none bg-black overflow-hidden"
       onContextMenu={function (e) { e.preventDefault() }}
     >
-      {/* YouTube player (created by IFrame API, replaces this div) */}
-      <div ref={playerHostRef} className="absolute inset-0 w-full h-full" />
+      {/* YouTube player — SCALED & CROPPED: the iframe is 110% and shifted up
+          10% so YouTube's top title/channel bar falls OUTSIDE the visible box
+          permanently (works in fullscreen too). Sides cropped 5% to keep it 16:9 */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute w-[110%] h-[110%] top-[-10%] left-[-5%]">
+          <div ref={playerHostRef} className="w-full h-full" />
+        </div>
+      </div>
 
-      {/* Corner masks — hide any YouTube watermark/branding remnants while playing */}
+      {/* Corner masks — hide any YouTube watermark/branding remnants while playing.
+          Near the end of the video YouTube starts showing end-screen logos →
+          stronger bottom masks during the last 15 seconds. */}
       {started && playing && (
         <>
-          <div className="absolute bottom-0 right-0 w-40 h-12 z-10 pointer-events-none bg-gradient-to-t from-black/90 to-transparent" />
-          <div className="absolute bottom-0 left-0 w-40 h-12 z-10 pointer-events-none bg-gradient-to-t from-black/90 to-transparent" />
+          <div className={'absolute bottom-0 right-0 z-10 pointer-events-none bg-gradient-to-t from-black/95 to-transparent ' + (nearEnd ? 'w-64 h-16' : 'w-40 h-12')} />
+          <div className={'absolute bottom-0 left-0 z-10 pointer-events-none bg-gradient-to-t from-black/95 to-transparent ' + (nearEnd ? 'w-64 h-16' : 'w-40 h-12')} />
           <div className="absolute top-0 right-0 w-24 h-8 z-10 pointer-events-none bg-gradient-to-b from-black/80 to-transparent" />
           <div className="absolute top-0 left-0 w-24 h-8 z-10 pointer-events-none bg-gradient-to-b from-black/80 to-transparent" />
         </>
