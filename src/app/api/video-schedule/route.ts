@@ -17,9 +17,11 @@ async function ensureTable() {
         videoId TEXT NOT NULL,
         studentIds TEXT DEFAULT '',
         unlockAt DATETIME,
+        hiddenStudentIds TEXT DEFAULT '',
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `)
+    try { await db.$executeRawUnsafe('ALTER TABLE VideoSchedule ADD COLUMN hiddenStudentIds TEXT DEFAULT ""') } catch(e) {}
   } catch (e) {
     console.error('Ensure VideoSchedule table error:', e)
   }
@@ -39,27 +41,33 @@ export async function GET(request: NextRequest) {
         'SELECT * FROM VideoSchedule WHERE videoId = ? ORDER BY createdAt DESC',
         videoId
       )
-      // Parse studentIds
       var schedules = (rows || []).map(function(r) {
         var ids = []
+        var hiddenIds = []
         try { ids = JSON.parse(r.studentIds || '[]') } catch(e) {}
-        return { ...r, studentIds: ids }
+        try { hiddenIds = JSON.parse(r.hiddenStudentIds || '[]') } catch(e) {}
+        return { ...r, studentIds: ids, hiddenStudentIds: hiddenIds }
       })
       return NextResponse.json({ schedules })
     }
 
     if (studentId) {
-      // Get all schedules, filter by studentId
       var allRows = await db.$queryRawUnsafe('SELECT * FROM VideoSchedule ORDER BY createdAt DESC')
       var studentSchedules = []
+      var hiddenVideoIds = []
       for (var s of (allRows || [])) {
         var ids = []
+        var hiddenIds = []
         try { ids = JSON.parse(s.studentIds || '[]') } catch(e) {}
+        try { hiddenIds = JSON.parse(s.hiddenStudentIds || '[]') } catch(e) {}
         if (ids.includes(studentId)) {
-          studentSchedules.push({ ...s, studentIds: ids })
+          studentSchedules.push({ ...s, studentIds: ids, hiddenStudentIds: hiddenIds })
+        }
+        if (hiddenIds.includes(studentId)) {
+          hiddenVideoIds.push(s.videoId)
         }
       }
-      return NextResponse.json({ schedules: studentSchedules })
+      return NextResponse.json({ schedules: studentSchedules, hiddenVideoIds: hiddenVideoIds })
     }
 
     return NextResponse.json({ schedules: [] })
@@ -70,7 +78,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/video-schedule
-// Body: { videoId, studentIds: [id1, id2, ...], unlockAt: ISO string }
+// Body: { videoId, studentIds: [], unlockAt, hiddenStudentIds: [] }
 export async function POST(request: NextRequest) {
   try {
     await ensureTable()
@@ -78,13 +86,15 @@ export async function POST(request: NextRequest) {
     var videoId = body.videoId
     var studentIds = body.studentIds || []
     var unlockAt = body.unlockAt
+    var hiddenStudentIds = body.hiddenStudentIds || []
 
-    if (!videoId || !unlockAt) {
-      return NextResponse.json({ error: 'videoId و unlockAt مطلوبين' }, { status: 400 })
+    if (!videoId) {
+      return NextResponse.json({ error: 'videoId مطلوب' }, { status: 400 })
     }
 
     var id = 'vs_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
     var studentIdsJson = JSON.stringify(studentIds)
+    var hiddenStudentIdsJson = JSON.stringify(hiddenStudentIds)
 
     // Delete existing schedule for this video first
     try {
@@ -92,8 +102,8 @@ export async function POST(request: NextRequest) {
     } catch (e) {}
 
     await db.$executeRawUnsafe(
-      'INSERT INTO VideoSchedule (id, videoId, studentIds, unlockAt) VALUES (?, ?, ?, ?)',
-      id, videoId, studentIdsJson, unlockAt
+      'INSERT INTO VideoSchedule (id, videoId, studentIds, unlockAt, hiddenStudentIds) VALUES (?, ?, ?, ?, ?)',
+      id, videoId, studentIdsJson, unlockAt || null, hiddenStudentIdsJson
     )
 
     return NextResponse.json({ success: true, id: id })

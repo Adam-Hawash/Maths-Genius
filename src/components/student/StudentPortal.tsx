@@ -324,6 +324,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
   const { setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
   const [videoSchedules, setVideoSchedules] = useState<Record<string, any>>({})
+  const [hiddenVideoIds, setHiddenVideoIds] = useState<Set<string>>(new Set())
 
   // Load video schedules for this student
   useEffect(() => {
@@ -336,6 +337,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
           map[s.videoId] = s
         })
         setVideoSchedules(map)
+        setHiddenVideoIds(new Set(data.hiddenVideoIds || []))
       })
       .catch(function() {})
   }, [studentId])
@@ -380,6 +382,8 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {videos.map((video) => {
+        // Skip hidden videos entirely
+        if (hiddenVideoIds.has(video.id)) return null
         const ytId = getYouTubeId(video.url)
         const isVideoFile = video.filePath && (video.fileType?.startsWith('video/') || video.filePath.match(/\.(mp4|webm|mov|avi)$/i))
         const isWatched = localWatched.has(video.id)
@@ -401,7 +405,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                   <Lock className="h-7 w-7 text-amber-400" />
                 </div>
                 <div className="text-center">
-                  <p className="text-white font-bold text-sm mb-1">هذا الفيديو سيُفتح قريباً</p>
+                  <p className="text-white font-bold text-sm mb-1">الفيديو هيفتح بعد ما تحضر الحصة بتاعتك</p>
                   <CountdownTimer unlockAt={scheduleInfo.unlockAt} />
                 </div>
               </div>

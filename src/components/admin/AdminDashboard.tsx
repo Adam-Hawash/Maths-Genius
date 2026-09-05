@@ -589,6 +589,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [selectedVideoForSchedule, setSelectedVideoForSchedule] = useState<Video | null>(null)
   const [scheduleStudents, setScheduleStudents] = useState<string[]>([])
+  const [hiddenStudents, setHiddenStudents] = useState<string[]>([])
   const [scheduleUnlockAt, setScheduleUnlockAt] = useState('')
   const [scheduleSaving, setScheduleSaving] = useState(false)
   const [allStudents, setAllStudents] = useState<any[]>([])
@@ -701,18 +702,28 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
       if (data.schedules && data.schedules.length > 0) {
         var sch = data.schedules[0]
         setScheduleStudents(sch.studentIds || [])
+        setHiddenStudents(sch.hiddenStudentIds || [])
         if (sch.unlockAt) {
           var d = new Date(sch.unlockAt)
           var local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
           setScheduleUnlockAt(local.toISOString().slice(0, 16))
+        } else {
+          setScheduleUnlockAt('')
         }
+      } else {
+        setScheduleStudents([])
+        setHiddenStudents([])
+        setScheduleUnlockAt('')
       }
     } catch {}
   }
 
   const handleScheduleSave = async () => {
     if (!selectedVideoForSchedule) return
-    if (!scheduleUnlockAt) { toast.error('حدد وقت فتح الفيديو'); return }
+    if (!scheduleUnlockAt && scheduleStudents.length === 0 && hiddenStudents.length === 0) {
+      toast.error('حدد وقت أو طلاب للجدولة أو الإخفاء')
+      return
+    }
     setScheduleSaving(true)
     try {
       var res = await fetch('/api/video-schedule', {
@@ -721,13 +732,15 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
         body: JSON.stringify({
           videoId: selectedVideoForSchedule.id,
           studentIds: scheduleStudents,
-          unlockAt: new Date(scheduleUnlockAt).toISOString(),
+          unlockAt: scheduleUnlockAt ? new Date(scheduleUnlockAt).toISOString() : null,
+          hiddenStudentIds: hiddenStudents,
         }),
       })
       if (res.ok) {
-        toast.success('تم حفظ الجدولة - الطلاب المحددين هيشوفوا عداد تنازلي')
+        toast.success('تم الحفظ - الجدولة والإخفاء')
         setScheduleOpen(false)
         setScheduleStudents([])
+        setHiddenStudents([])
         setScheduleUnlockAt('')
       } else {
         toast.error('فشل الحفظ')
@@ -921,17 +934,17 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
               <p className="text-[10px] text-muted-foreground mt-1">الطلاب المحددين هيشوفوا عداد تنازلي لحد الوقت ده</p>
             </div>
 
-            {/* Select students */}
+            {/* Select students for scheduling */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-2">
-                <Label className="text-xs font-semibold">الطلاب المحددين ({scheduleStudents.length})</Label>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { loadStudentsForSchedule(selectedVideoForSchedule.grade) }}>
-                  تحميل طلاب الصف
+                <Label className="text-xs font-semibold">جدولة: الطلاب اللي هيشوفوا عداد ({scheduleStudents.length})</Label>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { loadStudentsForSchedule(selectedVideoForSchedule.grade); loadExistingSchedule(selectedVideoForSchedule.id) }}>
+                  تحميل + عرض الموجود
                 </Button>
               </div>
-              <div className="max-h-[200px] overflow-y-auto border rounded-md p-2 space-y-1">
+              <div className="max-h-[150px] overflow-y-auto border rounded-md p-2 space-y-1">
                 {allStudents.length === 0 ? (
-                  <p className="text-[10px] text-muted-foreground text-center py-4">اضغط "تحميل طلاب الصف" لعرض الطلاب</p>
+                  <p className="text-[10px] text-muted-foreground text-center py-4">اضغط "تحميل" لعرض الطلاب</p>
                 ) : (
                   allStudents.map(function(s) {
                     var isSelected = scheduleStudents.includes(s.id)
@@ -940,11 +953,8 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                         key={s.id}
                         type="button"
                         onClick={function() {
-                          if (isSelected) {
-                            setScheduleStudents(scheduleStudents.filter(function(id) { return id !== s.id }))
-                          } else {
-                            setScheduleStudents([...scheduleStudents, s.id])
-                          }
+                          if (isSelected) { setScheduleStudents(scheduleStudents.filter(function(id) { return id !== s.id })) }
+                          else { setScheduleStudents([...scheduleStudents, s.id]) }
                         }}
                         className={"w-full flex items-center gap-2 p-2 rounded-md text-xs transition-colors " + (isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-500/30' : 'bg-muted/30 hover:bg-muted/50')}
                       >
@@ -952,7 +962,37 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                           {isSelected && <Check className="h-3 w-3 text-white" />}
                         </div>
                         <span className="font-medium">{s.name}</span>
-                        <span className="text-[9px] text-muted-foreground" dir="ltr">{s.phone}</span>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Hide video from students */}
+            <div className="mb-3">
+              <Label className="text-xs font-semibold text-red-600">إخفاء الفيديو عن طلاب ({hiddenStudents.length})</Label>
+              <p className="text-[10px] text-muted-foreground mb-2">الطلاب دول مش هيشوفوا الفيديو خالص</p>
+              <div className="max-h-[150px] overflow-y-auto border rounded-md p-2 space-y-1">
+                {allStudents.length === 0 ? (
+                  <p className="text-[10px] text-muted-foreground text-center py-4">اضغط "تحميل" فوق</p>
+                ) : (
+                  allStudents.map(function(s) {
+                    var isHidden = hiddenStudents.includes(s.id)
+                    return (
+                      <button
+                        key={'hide-' + s.id}
+                        type="button"
+                        onClick={function() {
+                          if (isHidden) { setHiddenStudents(hiddenStudents.filter(function(id) { return id !== s.id })) }
+                          else { setHiddenStudents([...hiddenStudents, s.id]) }
+                        }}
+                        className={"w-full flex items-center gap-2 p-2 rounded-md text-xs transition-colors " + (isHidden ? 'bg-red-50 dark:bg-red-900/20 border border-red-500/30' : 'bg-muted/30 hover:bg-muted/50')}
+                      >
+                        <div className={"h-4 w-4 rounded border-2 flex items-center justify-center " + (isHidden ? 'border-red-500 bg-red-500' : 'border-muted-foreground/30')}>
+                          {isHidden && <Check className="h-3 w-3 text-white" />}
+                        </div>
+                        <span className="font-medium">{s.name}</span>
                       </button>
                     )
                   })
@@ -961,7 +1001,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={handleScheduleSave} disabled={scheduleSaving || !scheduleUnlockAt} className="flex-1">
+              <Button onClick={handleScheduleSave} disabled={scheduleSaving} className="flex-1">
                 {scheduleSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ الجدولة'}
               </Button>
               <Button variant="outline" onClick={() => setScheduleOpen(false)}>إلغاء</Button>
