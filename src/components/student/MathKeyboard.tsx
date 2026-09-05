@@ -52,7 +52,7 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
       { label: '±', insert: '±', hint: 'Plus or minus' },
       { label: '(', insert: '(', hint: 'Open parenthesis' },
       { label: ')', insert: ')', hint: 'Close parenthesis' },
-      { label: '/', insert: '/', hint: 'Fraction / divide' },
+      { label: '⁄', insert: '/', hint: 'Fraction bar (use / for fractions like 1/2)' },
     ],
   },
   {
@@ -291,33 +291,42 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    // Validate it's an image
-    if (!file.type.startsWith('image/')) {
-      alert('برجاء اختيار صورة فقط')
-      return
-    }
-
-    // Check size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('حجم الصورة كبير جداً (الحد الأقصى 10MB)')
-      return
-    }
+    // Allow multiple files to be selected
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
     setUploading(true)
     try {
-      const data = await chunkedUpload(file, 'homework-answers', undefined, undefined)
-      setUploadedImage(data.filePath)
-      // Append the image marker WITH the path so AI grader can find and read it
-      const marker = '\n[📷 صورة مرفقة: ' + data.filePath + ']\n'
-      onChange(value + marker)
-      if (onImageUpload) {
-        onImageUpload(data.filePath)
+      // Upload each file and append markers
+      var newMarkers = ''
+      var uploadedPaths: string[] = []
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        // Validate it's an image
+        if (!file.type.startsWith('image/')) {
+          alert('برجاء اختيار صور فقط: ' + file.name)
+          continue
+        }
+        // Check size (max 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          alert('حجم الصورة ' + file.name + ' كبير جداً (الحد الأقصى 10MB)')
+          continue
+        }
+        try {
+          const data = await chunkedUpload(file, 'homework-answers', undefined, undefined)
+          uploadedPaths.push(data.filePath)
+          newMarkers += '\n[📷 صورة مرفقة: ' + data.filePath + ']\n'
+        } catch (err: any) {
+          alert('فشل رفع ' + file.name + ': ' + (err.message || 'حاول مرة أخرى'))
+        }
       }
-    } catch (err: any) {
-      alert('فشل رفع الصورة: ' + (err.message || 'حاول مرة أخرى'))
+      if (newMarkers) {
+        setUploadedImage(uploadedPaths[0] || '')
+        onChange(value + newMarkers)
+        if (onImageUpload) {
+          onImageUpload(uploadedPaths[0] || '')
+        }
+      }
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -360,6 +369,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
         onChange={handleImageUpload}
       />

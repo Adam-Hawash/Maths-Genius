@@ -338,8 +338,9 @@ export async function GET(request: NextRequest) {
           aiFeedback: aiFeedback,
           imageGraded: imageGraded,
           textGraded: textGraded,
-          isCorrect: (imageGraded || textGraded) ? aiIsCorrect : false,
-          awardedPoints: imageGraded ? (aiIsCorrect ? pts : 0) : 0,
+          isGraded: isGraded,
+          isCorrect: isGraded ? aiIsCorrect : false,
+          awardedPoints: isGraded ? (aiIsCorrect ? pts : 0) : 0,
         })
       }
 
