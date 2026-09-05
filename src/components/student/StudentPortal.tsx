@@ -860,7 +860,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                   return (
                     <Card key={wi} className="border-red-200 dark:border-red-900/40">
                       <CardContent className="p-3 space-y-2">
-                        <p className="text-sm font-medium" dir="ltr" style={{ textAlign: 'left' }}>{wi + 1}. {wq.question}</p>
+                        <p className="text-sm font-medium whitespace-pre-wrap break-words" dir="ltr" style={{ textAlign: 'left' }}>{wi + 1}. {wq.question}</p>
                         <div className="space-y-1">
                           <p className="text-xs text-red-600">إجابتك: <span dir="ltr">{wq.studentAnswer}</span></p>
                           <p className="text-xs text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
@@ -1009,7 +1009,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                           ? (writingIsCorrect ? 'Correct' : writingIsWrong ? 'Wrong' : (!writingAns || !writingAns.answer || !writingAns.answer.trim() ? 'Empty' : 'Pending'))
                           : isWrong ? (wrongQ && wrongQ.studentAnswer === 'لم يتم الإجابة' ? 'Empty' : 'Wrong') : 'Correct'}
                       </span>
-                      <p className="text-sm font-medium flex-1" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q}</p>
+                      <p className="text-sm font-medium flex-1 whitespace-pre-wrap break-words" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q}</p>
                     </div>
                     {qType === 'mcq' ? (
                       <div className="space-y-1 pl-8" dir="ltr">
@@ -1303,7 +1303,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                         var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
                         return (
                           <div key={'mcq-' + di} className="space-y-2 rounded-lg p-2" dir="ltr">
-                            <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
+                            <p className="font-medium text-sm whitespace-pre-wrap break-words" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
                             <div className="space-y-1.5">
                               {(q.options || []).map(function(opt: string, oi: number) {
                                 var isSelected = myAnswers[di] === oi
@@ -1337,7 +1337,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                         var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 5
                         return (
                           <div key={'writing-' + wi} className="space-y-2 rounded-lg p-2 border border-amber-500/20 bg-amber-50 dark:bg-amber-900/10" dir="ltr">
-                            <p className="font-medium text-sm" style={{ textAlign: 'left' }}>
+                            <p className="font-medium text-sm whitespace-pre-wrap break-words" style={{ textAlign: 'left' }}>
                               {hasMCQ ? displayMcq.length + wi + 1 : wi + 1}. {q.question || q.q}
                               <span className="text-muted-foreground text-xs ml-2">({pts} pts)</span>
                               <Badge variant="outline" className="text-[9px] ml-2 border-amber-500/40 text-amber-600">Writing</Badge>
