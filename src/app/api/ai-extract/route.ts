@@ -29,12 +29,12 @@ function getMimeType(file: File): string {
 }
 
 async function callGemini(apiKey: string, parts: any[]): Promise<any> {
-  // Central helper: Gemini 3.6 first + automatic key rotation on quota (429)
+  // Central helper: Gemini 3.6 first + auto model discovery + key rotation on quota (429)
   console.log('[AI Extract] Calling Gemini (3.6 first, keys rotate on 429)')
   var result = await callGeminiCentral({
     parts: parts,
     generationConfig: { temperature: 0.1, maxOutputTokens: 16384 },
-    timeoutMs: 30000,
+    timeoutMs: 90000,
   })
   if (result.ok) {
     console.log('[AI Extract] Model', result.model, 'succeeded')
