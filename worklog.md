@@ -100,3 +100,33 @@ Stage Summary:
 - YouTube mark physically impossible to see: 110% crop (title zone) + solid black bottom corners (logo zone) + pause overlay + poster on end
 - Quality control actually works now (suggestedQuality reload + sticky enforcement, default 720p)
 - Fractions unified to the a/b stacked visual everywhere (keyboard insert, AI extraction, question rendering)
+
+---
+Task ID: 5
+Agent: Main Agent (Z.ai Code)
+Task: Round 4 — remove black video covers (static written YouTube mark instead), AI assistant image upload, REAL stacked fractions, friendlier pending-registration message
+
+Work Log:
+- ProtectedYouTubePlayer.tsx:
+  - REMOVED the solid black bottom-corner patches + top gradient patches + the dark/blur paused overlay (user: "شيل اللي هي البتاع السوداء المعتمة")
+  - PAUSED state now shows the actual paused frame with only a small floating play indicator
+  - ADDED static WRITTEN YouTube mark (SVG: red play badge + "YouTube" wordmark, top-left, drop-shadow) — decorative only: taps are swallowed (stopPropagation), never links to YouTube; iframe stays fully blocked by the z-20 click-catch
+  - Removed now-unused nearEnd variable
+- AI Assistant image upload (IMAGES ONLY):
+  - api/ai/assistant/route.ts: accepts body.images (data URLs) → Gemini inlineData parts (max 4, ~5MB each, dataURL regex validation), images placed FIRST in parts, friendly error if all images invalid, timeout 45s for image requests, prompt rule #6 added (read & solve problems from images)
+  - AIAssistant.tsx: ImagePlus attach button (max 3 per message, images-only validation, 10MB cap), client-side canvas downscale to max 1280px JPEG q0.85, pending-image chips with remove, images rendered inside user bubbles, send enabled with image-only messages, timeout 60s for image messages, welcome text mentions photo support
+- REAL stacked fractions ("حاجة فوق وحاجة تحت"):
+  - NEW src/components/FractionText.tsx: renders \frac{a}{b} markers (and legacy a/b digits + old "3\n─\n4" stacked text) as true CSS stacked fractions (numerator / bar / denominator), boundary-safe slash matching (1/2/3, 3.5/2 stay plain)
+  - MathKeyboard.tsx fraction button now inserts the \frac{num}{den} marker (no more ─ text rows)
+  - ai-extract/route.ts: all 3 prompts (full / questions-only / answers-only) now REQUIRE \frac{numerator}{denominator} for every fraction; banned a/b, ¾, ÷ in question text & model answers (MCQ options still inline, rendered stacked by FractionText anyway)
+  - FractionText applied to ALL render spots: StudentPortal (wrong-answers card, questions list, your-answer/modelAnswer/aiExtractedAnswer, active homework MCQ+writing questions & options ×2), AdminDashboard extracted modelAnswer preview
+- Pending-registration wording (no more "notification" promise):
+  - StudentPendingView.tsx: "انتظر موافقة الأدمن / ستحصل على إشعار" → "طلبك قيد المراجعة — اعمل تسجيل دخول في أي وقت وشوف حالة طلبك"
+  - AuthPages.tsx: register toast → "تم تسجيل طلبك بنجاح! خش اعمل تسجيل دخول وشوف اتمقبلت ولا لسه"; pending-login toast → "حسابك لسه في المراجعة — جرب تعمل تسجيل دخول تاني بعدين"
+- Verified: FractionText parse logic smoke-tested (9 cases pass: \frac, legacy stacked text, plain a/b, boundary safety); tsc error count identical to baseline (90 = 90 pre-existing, zero new — only +1 line-number shift from the new import); ESLint not runnable in this env (eslint-config-next missing from node_modules)
+
+Stage Summary:
+- Video player: zero black covers in any state; the only YouTube element is a dead written mark that does nothing when tapped
+- Assistant: photo-based problem solving live (Gemini vision via inlineData, same model-chain + key rotation)
+- Fractions everywhere render as real stacked fractions; extraction prompt emits the \frac marker; keyboard inserts it too; legacy formats auto-convert
+- Registration flow speaks the user's language: log in anytime and check your acceptance status instead of waiting for a notification

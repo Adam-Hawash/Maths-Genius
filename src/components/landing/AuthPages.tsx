@@ -123,7 +123,7 @@ export function LoginView() {
         toast.error('رقم الهاتف أو كلمة المرور غير صحيحة')
       } else if (student.status === 'pending') {
         setCurrentStudent(student); setView('student-pending')
-        toast.info('حسابك قيد المراجعة، انتظر موافقة المستر')
+        toast.info('حسابك لسه في المراجعة — جرب تعمل تسجيل دخول تاني بعدين وشوف اتمقبلت ولا لسه')
       } else if (student.status === 'approved' || student.status === 'paid') {
         setCurrentStudent(student); setView('student-portal')
         toast.success('مرحباً ' + student.name + '!')
@@ -224,7 +224,7 @@ export function RegisterView() {
     try {
       var res = await fetch('/api/students', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fullName, phone: phone.trim(), grade: grade, parentName: fullParentName, parentPhone: parentPhone.trim(), password: password.trim() }) })
       var data = await res.json()
-      if (res.ok) { setCurrentStudent(data.student); setView('student-pending'); toast.success('تم تسجيل طلبك بنجاح! انتظر موافقة المسؤول') }
+      if (res.ok) { setCurrentStudent(data.student); setView('student-pending'); toast.success('تم تسجيل طلبك بنجاح! خش اعمل تسجيل دخول وشوف اتمقبلت ولا لسه') }
       else { toast.error(data.error || 'حدث خطأ في التسجيل') }
     } catch (e) { toast.error('حدث خطأ في الاتصال') }
     setLoading(false)

@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import type { Video as VideoType, Homework, Exam, Announcement, Discussion, ExamResult } from '@/stores/app-store'
 import { MathKeyboard } from '@/components/student/MathKeyboard'
 import { ProtectedYouTubeModal } from '@/components/student/ProtectedYouTubePlayer'
+import { FractionText } from '@/components/FractionText'
 
 export function StudentPortal() {
   const { currentStudent, logout } = useAppStore()
@@ -860,10 +861,10 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                   return (
                     <Card key={wi} className="border-red-200 dark:border-red-900/40">
                       <CardContent className="p-3 space-y-2">
-                        <p className="text-sm font-medium whitespace-pre-wrap break-words" dir="ltr" style={{ textAlign: 'left' }}>{wi + 1}. {wq.question}</p>
+                        <p className="text-sm font-medium whitespace-pre-wrap break-words" dir="ltr" style={{ textAlign: 'left' }}>{wi + 1}. <FractionText text={wq.question} /></p>
                         <div className="space-y-1">
-                          <p className="text-xs text-red-600">إجابتك: <span dir="ltr">{wq.studentAnswer}</span></p>
-                          <p className="text-xs text-emerald-600">الإجابة الصحيحة: <span dir="ltr">{wq.correctAnswer}</span></p>
+                          <p className="text-xs text-red-600">إجابتك: <span dir="ltr"><FractionText text={wq.studentAnswer} /></span></p>
+                          <p className="text-xs text-emerald-600">الإجابة الصحيحة: <span dir="ltr"><FractionText text={wq.correctAnswer} /></span></p>
                         </div>
                       </CardContent>
                     </Card>
@@ -1009,7 +1010,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                           ? (writingIsCorrect ? 'Correct' : writingIsWrong ? 'Wrong' : (!writingAns || !writingAns.answer || !writingAns.answer.trim() ? 'Empty' : 'Pending'))
                           : isWrong ? (wrongQ && wrongQ.studentAnswer === 'لم يتم الإجابة' ? 'Empty' : 'Wrong') : 'Correct'}
                       </span>
-                      <p className="text-sm font-medium flex-1 whitespace-pre-wrap break-words" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q}</p>
+                      <p className="text-sm font-medium flex-1 whitespace-pre-wrap break-words" style={{ textAlign: 'left' }}>{di + 1}. <FractionText text={q.question || q.q} /></p>
                     </div>
                     {qType === 'mcq' ? (
                       <div className="space-y-1 pl-8" dir="ltr">
@@ -1035,7 +1036,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                       <div className="space-y-1 pl-8" dir="ltr">
                         {writingAns && (
                           <div className="space-y-1 p-2 rounded-md bg-muted/30 border border-border/30">
-                            <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="ltr">Your answer: {writingAns.answer || '(empty)'}</p>
+                            <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="ltr">Your answer: <FractionText text={writingAns.answer || '(empty)'} /></p>
                             {/* Image preview */}
                             {(function() {
                               var m = (writingAns.answer || '').match(/\[📷\s*صورة\s*مرفقة:\s*([^\]]+?)\]/)
@@ -1060,14 +1061,14 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                             {writingAns.aiExtractedAnswer && (
                               <div className="mt-2 p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
                                 <p className="text-[10px] font-bold text-blue-700 dark:text-blue-400 mb-1">🤖 AI قرأ إجابتك من الصورة:</p>
-                                <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="ltr">{writingAns.aiExtractedAnswer}</p>
+                                <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="ltr"><FractionText text={writingAns.aiExtractedAnswer} /></p>
                                 {writingAns.aiFeedback && (
                                   <p className="text-[10px] text-muted-foreground mt-1">{writingAns.aiFeedback}</p>
                                 )}
                               </div>
                             )}
                             {writingAns.modelAnswer && (
-                              <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="ltr">Correct answer: {writingAns.modelAnswer}</p>
+                              <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="ltr">Correct answer: <FractionText text={writingAns.modelAnswer} /></p>
                             )}
                             {writingAns.feedback && !writingAns.aiExtractedAnswer && (
                               <p className="text-[10px] text-muted-foreground" dir="ltr">{writingAns.feedback}</p>
@@ -1081,7 +1082,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                           <>
                             <p className="text-xs text-gray-500">Your answer: (empty - not answered)</p>
                             {q.modelAnswer && (
-                              <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="ltr">Correct answer: {q.modelAnswer}</p>
+                              <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="ltr">Correct answer: <FractionText text={q.modelAnswer} /></p>
                             )}
                           </>
                         )}
@@ -1303,7 +1304,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                         var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
                         return (
                           <div key={'mcq-' + di} className="space-y-2 rounded-lg p-2" dir="ltr">
-                            <p className="font-medium text-sm whitespace-pre-wrap break-words" style={{ textAlign: 'left' }}>{di + 1}. {q.question || q.q} <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
+                            <p className="font-medium text-sm whitespace-pre-wrap break-words" style={{ textAlign: 'left' }}>{di + 1}. <FractionText text={q.question || q.q} /> <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
                             <div className="space-y-1.5">
                               {(q.options || []).map(function(opt: string, oi: number) {
                                 var isSelected = myAnswers[di] === oi
@@ -1317,7 +1318,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                                     )}
                                     style={{ textAlign: 'left' }}
                                   >
-                                    <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
+                                    <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span><FractionText text={opt} />
                                   </button>
                                 )
                               })}
@@ -1338,7 +1339,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                         return (
                           <div key={'writing-' + wi} className="space-y-2 rounded-lg p-2 border border-amber-500/20 bg-amber-50 dark:bg-amber-900/10" dir="ltr">
                             <p className="font-medium text-sm whitespace-pre-wrap break-words" style={{ textAlign: 'left' }}>
-                              {hasMCQ ? displayMcq.length + wi + 1 : wi + 1}. {q.question || q.q}
+                              {hasMCQ ? displayMcq.length + wi + 1 : wi + 1}. <FractionText text={q.question || q.q} />
                               <span className="text-muted-foreground text-xs ml-2">({pts} pts)</span>
                               <Badge variant="outline" className="text-[9px] ml-2 border-amber-500/40 text-amber-600">Writing</Badge>
                             </p>
@@ -1585,7 +1586,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                           }`}
                           style={{ textAlign: 'left' }}
                         >
-                          <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{opt}
+                          <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span><FractionText text={opt} />
                         </button>
                       ))}
                     </div>

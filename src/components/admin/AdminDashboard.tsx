@@ -19,6 +19,7 @@ import {
   ChevronLeft, CheckCircle2
 } from 'lucide-react'
 import { CMSPanel } from './CMSPanel'
+import { FractionText } from '@/components/FractionText'
 import { SocialLinksPanel } from './SocialLinksPanel'
 import { CommunityPanel } from './CommunityPanel'
 import { ActivityPanel } from './ActivityPanel'
@@ -2944,7 +2945,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
                     {q.modelAnswer && (
                       <div className="mt-1 p-2 rounded-md bg-muted/40 border border-border/30">
                         <p className="text-[10px] font-semibold text-muted-foreground mb-0.5">الإجابة النموذجية:</p>
-                        <p className="text-xs text-foreground whitespace-pre-wrap" dir="auto">{q.modelAnswer}</p>
+                        <p className="text-xs text-foreground whitespace-pre-wrap" dir="auto"><FractionText text={q.modelAnswer} /></p>
                       </div>
                     )}
                   </>
