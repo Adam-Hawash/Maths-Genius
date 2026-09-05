@@ -168,6 +168,17 @@ export async function GET(
             studentAnswers = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
           }
 
+          // Helper for lookup by origIdx
+          function lookupExamAnswer(ans: any, idx: number): any {
+            try {
+              if (Array.isArray(ans)) return ans[idx]
+              if (ans !== null && typeof ans === 'object') {
+                return ans[idx] !== undefined ? ans[idx] : ans[String(idx)]
+              }
+            } catch (e) {}
+            return undefined
+          }
+
           if (mcq.length > 0 && (Array.isArray(studentAnswers) ? studentAnswers.length > 0 : Object.keys(studentAnswers).length > 0)) {
             mcq.forEach(function(q, qi) {
               var qText = q.question || q.q || ''
@@ -175,12 +186,7 @@ export async function GET(
               var correctIdx = typeof q.correct === 'number' ? q.correct : 0
               if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
 
-              var ans = undefined
-              if (Array.isArray(studentAnswers)) {
-                ans = studentAnswers[qi]
-              } else if (studentAnswers !== null && typeof studentAnswers === 'object') {
-                ans = studentAnswers[qi] !== undefined ? studentAnswers[qi] : studentAnswers[String(qi)]
-              }
+              var ans = lookupExamAnswer(studentAnswers, qi)
 
               if (ans === undefined || ans === null || Number(ans) !== correctIdx) {
                 wrongQuestions.push({
@@ -203,20 +209,20 @@ export async function GET(
         // Build all questions review (correct + wrong)
         var allExamQuestions: any[] = []
         try {
-          var mcqAll = []
-          var writingAllExam = []
+          var mcqAll: any[] = []
+          var writingAllExam: any[] = []
           if (row.questions) {
             var rawAll = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
             if (Array.isArray(rawAll)) {
-              rawAll.forEach(function(q) {
+              rawAll.forEach(function(q, idx) {
                 var isW = q.type === 'writing' || q.type === 'essay'
                 if (!isW && Array.isArray(q.options)) {
                   var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
                   if (allNA) isW = true
                 }
                 if (!isW && (!q.options || q.options.length === 0)) isW = true
-                if (isW) writingAllExam.push(q)
-                else mcqAll.push(q)
+                if (isW) writingAllExam.push({ q: q, origIdx: idx })
+                else mcqAll.push({ q: q, origIdx: idx })
               })
             }
           }
@@ -224,20 +230,26 @@ export async function GET(
           if (row.answers) {
             studentAnsAll = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
           }
-          // MCQ all questions
-          mcqAll.forEach(function(q, qi) {
+          // Helper to lookup by origIdx
+          function lookupExamAns(ans: any, idx: number): any {
+            try {
+              if (Array.isArray(ans)) return ans[idx]
+              if (ans !== null && typeof ans === 'object') {
+                return ans[idx] !== undefined ? ans[idx] : ans[String(idx)]
+              }
+            } catch (e) {}
+            return undefined
+          }
+          // MCQ all questions - lookup by origIdx
+          mcqAll.forEach(function(item) {
+            var q = item.q
+            var origIdx = item.origIdx
             var qText = q.question || q.q || ''
             var opts = Array.isArray(q.options) ? q.options : []
-            // Filter out N/A options for display
             var realOpts = opts.filter(function(o) { return o && o !== 'N/A' && o !== 'لا يوجد' && String(o).trim() !== '' })
             var correctIdx = typeof q.correct === 'number' ? q.correct : 0
             if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
-            var ans = undefined
-            if (Array.isArray(studentAnsAll)) {
-              ans = studentAnsAll[qi]
-            } else if (studentAnsAll !== null && typeof studentAnsAll === 'object') {
-              ans = studentAnsAll[qi] !== undefined ? studentAnsAll[qi] : studentAnsAll[String(qi)]
-            }
+            var ans = lookupExamAns(studentAnsAll, origIdx)
             var isCorrect = ans !== undefined && ans !== null && Number(ans) === correctIdx
             var studentAnswerText = (typeof ans === 'number' && opts[ans] && opts[ans] !== 'N/A')
               ? String.fromCharCode(65 + ans) + ') ' + opts[ans]
@@ -253,19 +265,15 @@ export async function GET(
               isCorrect: isCorrect,
             })
           })
-          // Writing all questions
+          // Writing all questions - lookup by origIdx
           for (var ewi = 0; ewi < writingAllExam.length; ewi++) {
-            var ewq = writingAllExam[ewi]
+            var eItem = writingAllExam[ewi]
+            var ewq = eItem.q
+            var eOrigIdx = eItem.origIdx
             var eqText = ewq.question || ewq.q || ''
             var estudentText = ''
-            var eoffset = mcqAll.length
-            try {
-              if (Array.isArray(studentAnsAll)) {
-                estudentText = studentAnsAll[eoffset + ewi] || ''
-              } else if (studentAnsAll && typeof studentAnsAll === 'object') {
-                estudentText = studentAnsAll[eoffset + ewi] || studentAnsAll[String(eoffset + ewi)] || ''
-              }
-            } catch (e) {}
+            var lookedUp = lookupExamAns(studentAnsAll, eOrigIdx)
+            estudentText = lookedUp !== undefined && lookedUp !== null ? String(lookedUp) : ''
             estudentText = typeof estudentText === 'string' ? estudentText : String(estudentText || '')
 
             // AI image grading for exam writing answer
