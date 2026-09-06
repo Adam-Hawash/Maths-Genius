@@ -59,11 +59,12 @@ export function AIAssistant() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'أهلاً بك 👋 أنا المساعد الذكي بتاع منصة Maths Genius. اسألني عن أي حاجة - الواجبات، الامتحانات، الدروس، أو أي مشكلة تقنية! وتقدر كمان تبعتلي صورة مسألة وأحلها لك 📸',
+      content: 'أهلاً بك 👋 أنا المساعد الذكي بتاع منصة Maths Genius. اسألني عن أي حاجة في الماث، ولو عندك واجب: جرب تحل الأول وصوّر حلك وابعتلي الصورة — هوريك إجابتك زي ما كتبتها وأقارنها بالإجابة الصحيحة سؤال بسؤال 📸',
     },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [waiting, setWaiting] = useState(false) // sent, no first token yet
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -121,47 +122,140 @@ export function AIAssistant() {
 
     setInput('')
     setPendingImages([])
+    // user message + empty assistant placeholder (the streaming target)
     setMessages(function (prev) {
-      return [...prev, { role: 'user', content: msg, images: imgs.length > 0 ? imgs : undefined }]
+      return [...prev, { role: 'user', content: msg, images: imgs.length > 0 ? imgs : undefined }, { role: 'assistant', content: '' }]
     })
     setLoading(true)
+    setWaiting(true)
 
+    // Get current page context
+    var page = typeof window !== 'undefined' ? window.location.pathname : ''
+    var studentId = ''
     try {
-      // Get current page context
-      var page = typeof window !== 'undefined' ? window.location.pathname : ''
-      var studentId = ''
-      try {
-        var stored = localStorage.getItem('current-student')
-        if (stored) {
-          var parsed = JSON.parse(stored)
-          if (parsed && parsed.state && parsed.state.currentStudent) {
-            studentId = parsed.state.currentStudent.id || ''
-          }
+      var stored = localStorage.getItem('current-student')
+      if (stored) {
+        var parsed = JSON.parse(stored)
+        if (parsed && parsed.state && parsed.state.currentStudent) {
+          studentId = parsed.state.currentStudent.id || ''
         }
-      } catch (e) {}
+      }
+    } catch (e) {}
 
-      var res = await Promise.race([
-        fetch('/api/ai/assistant', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: msg || 'شوف الصور دي وساعدني فيها.',
-            images: imgs.length > 0 ? imgs : undefined,
-            context: { page: page, studentId: studentId },
-          }),
-        }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), imgs.length > 0 ? 60000 : 45000)),
-      ])
-      var data = await res.json()
-      var reply = data.reply || 'مش قادر أرد دلوقتي. حاول تاني 🙏'
+    // Inactivity timeout: abort only when NO new token arrives for a while
+    // (tokens keep resetting it, so a long answer is never cut off)
+    var controller = new AbortController()
+    var inactivityMs = imgs.length > 0 ? 60000 : 45000
+    var inactivityTimer: any = null
+    var armInactivity = function () {
+      if (inactivityTimer) clearTimeout(inactivityTimer)
+      inactivityTimer = setTimeout(function () { try { controller.abort() } catch (e) {} }, inactivityMs)
+    }
+    armInactivity()
+
+    var gotFirst = false
+    var fillAssistant = function (text: string) {
       setMessages(function (prev) {
-        return [...prev, { role: 'assistant', content: reply }]
-      })
-    } catch (e) {
-      setMessages(function (prev) {
-        return [...prev, { role: 'assistant', content: 'حصلت مشكلة في الاتصال. حاول تاني 🙏' }]
+        var copy = prev.slice()
+        for (var i = copy.length - 1; i >= 0; i--) {
+          if (copy[i].role === 'assistant') { copy[i] = { role: 'assistant', content: text }; break }
+        }
+        return copy
       })
     }
+    var appendDelta = function (d: string) {
+      if (!gotFirst) { gotFirst = true; setWaiting(false) }
+      armInactivity()
+      setMessages(function (prev) {
+        var copy = prev.slice()
+        for (var i = copy.length - 1; i >= 0; i--) {
+          if (copy[i].role === 'assistant') { copy[i] = { role: 'assistant', content: copy[i].content + d }; break }
+        }
+        return copy
+      })
+    }
+
+    try {
+      var res = await fetch('/api/ai/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msg || 'شوف الصور دي وساعدني فيها.',
+          images: imgs.length > 0 ? imgs : undefined,
+          context: { page: page, studentId: studentId },
+          stream: true,
+        }),
+        signal: controller.signal,
+      })
+
+      var ctype = res.headers.get('content-type') || ''
+      if (!res.ok || ctype.indexOf('text/event-stream') < 0) {
+        // legacy JSON / error response
+        var jdata: any = null
+        try { jdata = await res.json() } catch (e) {}
+        var reply = (jdata && (jdata.reply || jdata.error)) || 'مش قادر أرد دلوقتي. حاول تاني 🙏'
+        fillAssistant(reply)
+      } else {
+        // ---- SSE stream: append tokens as they arrive ----
+        var reader = res.body ? res.body.getReader() : null
+        if (!reader) throw new Error('no stream body')
+        var decoder = new TextDecoder()
+        var buf = ''
+        var errMsg = ''
+        while (true) {
+          var chunk = await reader.read()
+          if (chunk.done) break
+          buf += decoder.decode(chunk.value, { stream: true })
+          var lines = buf.split('\n')
+          buf = lines.pop() || ''
+          for (var li = 0; li < lines.length; li++) {
+            var line = lines[li].trim()
+            if (!line || line.indexOf('data:') !== 0) continue
+            var payload = line.slice(5).trim()
+            if (!payload) continue
+            if (payload === '[DONE]') continue
+            try {
+              var ev = JSON.parse(payload)
+              if (ev.delta) appendDelta(ev.delta)
+              else if (ev.error) errMsg = String(ev.error)
+            } catch (e) {}
+          }
+        }
+        if (errMsg) {
+          setMessages(function (prev) {
+            var copy = prev.slice()
+            for (var i = copy.length - 1; i >= 0; i--) {
+              if (copy[i].role === 'assistant') {
+                var base = copy[i].content
+                copy[i] = { role: 'assistant', content: base ? base + '\n\n' + errMsg : errMsg }
+                break
+              }
+            }
+            return copy
+          })
+        }
+      }
+    } catch (e) {
+      var aborted = (e as any) && (e as any).name === 'AbortError'
+      setMessages(function (prev) {
+        var copy = prev.slice()
+        for (var i = copy.length - 1; i >= 0; i--) {
+          if (copy[i].role === 'assistant') {
+            var base = copy[i].content
+            if (base) {
+              // partial answer already streamed — keep it, just note the cut
+              if (aborted) copy[i] = { role: 'assistant', content: base + '\n\n(الرد اتقطع — ابعت أي سؤال عشان نكمل 🙏)' }
+            } else {
+              copy[i] = { role: 'assistant', content: aborted ? 'الرد اتأخر جداً فاتقطع. جرب تاني 🙏' : 'حصلت مشكلة في الاتصال. حاول تاني 🙏' }
+            }
+            break
+          }
+        }
+        return copy
+      })
+    }
+    if (inactivityTimer) clearTimeout(inactivityTimer)
+    setWaiting(false)
     setLoading(false)
   }
 
@@ -189,7 +283,7 @@ export function AIAssistant() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-sm">المساعد الذكي</p>
-              <p className="text-[10px] opacity-90">اسألني عن أي حاجة أو ابعتلي صورة مسألة</p>
+              <p className="text-[10px] opacity-90">اسألني أي حاجة أو ابعت صورة حلك للمقارنة 📸</p>
             </div>
             <button
               type="button"
@@ -204,6 +298,7 @@ export function AIAssistant() {
           <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar" style={{ minHeight: '250px', maxHeight: '350px' }}>
             {messages.map(function (msg, i) {
               var isUser = msg.role === 'user'
+              var showCursor = !isUser && loading && !waiting && i === messages.length - 1
               return (
                 <div key={i} className={'flex ' + (isUser ? 'justify-start' : 'justify-end')}>
                   <div
@@ -232,15 +327,16 @@ export function AIAssistant() {
                       </div>
                     )}
                     {msg.content}
+                    {showCursor && <span className="inline-block w-2 h-3.5 bg-muted-foreground/50 animate-pulse rounded-sm align-middle" aria-hidden="true" />}
                   </div>
                 </div>
               )
             })}
-            {loading && (
+            {loading && waiting && (
               <div className="flex justify-end">
                 <div className="bg-muted text-foreground p-2.5 rounded-2xl rounded-tr-none flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-xs">كاتب...</span>
+                  <span className="text-xs">بيفكر...</span>
                 </div>
               </div>
             )}
@@ -309,7 +405,7 @@ export function AIAssistant() {
                     sendMessage()
                   }
                 }}
-                placeholder="اكتب سؤالك أو ابعت صورة..."
+                placeholder="اكتب سؤالك أو ابعت صورة حلك..."
                 disabled={loading}
                 className="flex-1 h-10 px-3 rounded-full bg-background border border-input text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 maxLength={500}
