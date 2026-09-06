@@ -23,14 +23,18 @@ export async function POST(request) {
     return NextResponse.json({ error: 'البريد وكلمة المرور مطلوبين' }, { status: 400 })
   }
 
-  var cleanEmail = email.trim().toLowerCase()
-  var cleanPassword = String(password || '').trim()
+  // squash = strip ALL whitespace from both sides before comparing — the DB
+  // may hold values like "sherif math@2026" / "mr sherif2026#" and the admin
+  // may type them without (or with different) spaces. Never fail on spaces.
+  var squash = function (v: any) { return String(v || '').replace(/\s+/g, '').toLowerCase() }
+  var cleanEmail = squash(email)
+  var cleanPassword = squash(password)
 
   try {
     var admin = await db.admin.findFirst()
 
     if (!admin) {
-      if (cleanEmail !== DEFAULT_EMAIL || cleanPassword !== DEFAULT_PASSWORD) {
+      if (cleanEmail !== squash(DEFAULT_EMAIL) || cleanPassword !== squash(DEFAULT_PASSWORD)) {
         return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
       }
       admin = await safeWrite(function() {
@@ -39,7 +43,7 @@ export async function POST(request) {
         })
       })
     } else {
-      if (cleanEmail !== admin.email || cleanPassword !== admin.password) {
+      if (cleanEmail !== squash(admin.email) || cleanPassword !== squash(admin.password)) {
         return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
       }
     }
