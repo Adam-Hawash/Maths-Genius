@@ -232,3 +232,39 @@ Work Log:
 
 Stage Summary:
 - Praise is now honest: only a perfect final score earns "أحسنت يا بطل 🎉"; pending grading shows a live status note; partial scores show the score only
+
+---
+Task ID: 10
+Agent: Main Agent (Z.ai Code)
+Task: Round 10 — faster AI assistant (SSE token streaming + zero cold-start latency) + tutor-mode for image submissions (student's own answer first, then the correct answer for comparison — no more handing out answers)
+
+Work Log:
+- User report: "AI assistant is a bit slow" + "when the student submits an image, the AI is currently providing the correct answer to each question. We want the student to see their own answer and then compare it to the correct answer. If the correct answer is available, please provide it without modifying any files."
+- SPEED FIX 1 — killed the cold-start discovery tax in src/lib/gemini.ts:
+  * OLD getModelChain() AWAITED ListModels before the first Gemini attempt (up to 8s dead air on a cold server for EVERY first message after restart)
+  * NEW getStaticChain(): static preferred models (gemini-3.6-flash, gemini-flash-latest) + already-cached discoveries — ZERO network before the first attempt; discovery runs fire-and-forget in the background to keep the cache fresh, and is only AWAITED when every static attempt already failed (self-healing for retired model names preserved)
+  * Applied to BOTH callGemini (all AI features benefit) and the new callGeminiStream
+- SPEED FIX 2 — real token streaming (the perceived-speed game changer):
+  * NEW streamAttempt() + callGeminiStream() in gemini.ts using :streamGenerateContent?alt=sse — every text delta forwarded via onDelta AS IT ARRIVES; thought parts skipped
+  * Same chain/key-rotation/429-pause/404-skip/401-403-continue rules as non-stream; 400 self-heal (retry without thinkingConfig) replicated
+  * SAFETY: once a delta reached the client a retry on another model would duplicate text — so a stream that emitted text and then died returns ok:true with the partial text (client keeps what it saw)
+  * assistant/route.ts: default response is now SSE (ReadableStream, data:{"delta"} / data:{"done"} / data:{"error"} events, X-Accel-Buffering:no); body.stream===false keeps the legacy JSON path for backward compat
+  * AIAssistant.tsx: reads the stream with getReader(), appends deltas live into the assistant bubble, blinking cursor while streaming, "بيفكر..." spinner only until the FIRST token (was: full-answer spinner), inactivity timeout 45s/60s that RESETS on every token (long answers never cut; stalled streams abort) — replaces the old fixed Promise.race timeout that killed whole answers at 45s
+- TUTOR MODE — image submissions no longer hand out answers (assistant/route.ts prompt rule 4):
+  * Image contains the STUDENT'S OWN work → fixed order per question: "إجابتك:" the student's text EXACTLY as written (no modification) → "الإجابة الصحيحة:" the correct answer in full → one short line why right/wrong
+  * Image contains ONLY questions (no student work) → FORBIDDEN to solve/hand answers; replies "جرب تحل الأول وابعتلي إجاباتك (نص أو صورة) وأنا هقارن إجابتك بالإجابة الصحيحة سؤال بسؤال 📝"; if stuck → ONE small hint (💡) without the final answer, then asks them to try
+  * Fixed order always: student's answer FIRST, correct answer SECOND for comparison; correct answer written in full when known (per the teacher's request)
+  * Welcome message + header subtitle + input placeholder updated to the new behavior (صوّر حلك وقارن)
+- Homework grading results were verified to ALREADY match the teacher's wish (StudentPortal: Your answer → AI قرأ إجابتك من الصورة → Correct answer) — no changes needed there; grader files untouched ("without modifying any files")
+- Added optional GEMINI_BASE_URL env override in gemini.ts (defaults to Google's official endpoint — Vercel behavior unchanged) — enables local mock-Gemini E2E testing
+- VERIFICATION (local mock Gemini SSE server on :9099 + dev server on :3100):
+  * Unit: chunked-SSE parser tests — awkward network cuts mid-line, thought-skip, route envelope delta/error parsing, buffer reassembly → ALL PASS (an early fixture typo was fixed; production parser was correct)
+  * API E2E: stream happy path (first token 520ms, 3 deltas in exact order, done event, no thought leak), legacy JSON path, empty-message 400 → ALL PASS
+  * BROWSER E2E (agent-browser, 390x844): landing boot → opened المساعد الذكي → sent "2^5 كام؟" → reply STREAMED live → final bubble exactly "إجابتك: x = 5\nالإجابة الصحيحة: x = 5 ✅" → zero console/page errors (screenshots verified)
+  * Debug note for future sessions: browsing the local dev server via http://127.0.0.1:<port> gets ALL /_next chunks blocked by Next 16's allowedDevOrigins security (page SSRs but never hydrates — looks like a hang). Use http://localhost:<port>
+- tsc: 90 errors = exact pre-existing baseline, zero new
+
+Stage Summary:
+- Assistant first token now lands in ~1-2s and the answer builds live on screen; cold-start discovery tax (up to 8s) eliminated for ALL AI features; stalled streams fail fast without killing long answers
+- Students can no longer get answers by just sending a photo of the questions: the assistant asks for THEIR attempt first; once they send it, it shows their answer verbatim, then the correct answer, then a one-line verdict — comparison-first tutoring, exactly as the teacher asked
+- Homework photo-grading flow already showed student answer → correct answer; untouched

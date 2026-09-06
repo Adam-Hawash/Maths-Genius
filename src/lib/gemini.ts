@@ -18,6 +18,10 @@
 
 export var GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest']
 
+// Optional API base override (proxy/self-host testing). Defaults to Google's
+// official endpoint — production/Vercel behavior is unchanged.
+var GEMINI_BASE = (process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/$/, '')
+
 const QUOTA_HINT = 'الحصة اليومية لمفتاح Gemini خلصت (429). الحل: ضيف مفتاح/مفاتيح تانية في Vercel → Settings → Environment Variables باسم GEMINI_API_KEYS (مفصولة بفواصل) أو فعّل الفاتورة من Google AI Studio.'
 
 // Collect all configured keys, in order
@@ -110,7 +114,7 @@ async function discoverModels(): Promise<string[]> {
       try {
         var controller = new AbortController()
         var to = setTimeout(function () { controller.abort() }, 8000)
-        var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=' + keys[i], {
+        var res = await fetch(GEMINI_BASE + '/v1beta/models?pageSize=200&key=' + keys[i], {
           method: 'GET',
           signal: controller.signal,
         })
@@ -140,12 +144,19 @@ async function discoverModels(): Promise<string[]> {
   try { return await discovering } finally { discovering = null }
 }
 
-// Build the full model chain: discovered first, static fallback after
-async function getModelChain(): Promise<string[]> {
+// ============================================================
+// SPEED FIX: the OLD getModelChain() AWAITED ListModels before the
+// first attempt — on a cold server the very first message paid up
+// to 8 extra seconds of discovery latency.
+// NEW: static preferred models first (+ anything already cached),
+// ZERO network before the first attempt. Discovery runs in the
+// BACKGROUND to keep the cache fresh, and is only AWAITED when
+// every static attempt already failed (self-healing preserved).
+// ============================================================
+function getStaticChain(): string[] {
   var chain: string[] = []
-  var discovered = await discoverModels()
-  for (var i = 0; i < discovered.length; i++) if (chain.indexOf(discovered[i]) < 0) chain.push(discovered[i])
-  for (var j = 0; j < GEMINI_MODELS.length; j++) if (chain.indexOf(GEMINI_MODELS[j]) < 0) chain.push(GEMINI_MODELS[j])
+  for (var i = 0; i < GEMINI_MODELS.length; i++) if (chain.indexOf(GEMINI_MODELS[i]) < 0) chain.push(GEMINI_MODELS[i])
+  for (var j = 0; j < discoveredModels.length; j++) if (chain.indexOf(discoveredModels[j]) < 0) chain.push(discoveredModels[j])
   return chain
 }
 
@@ -192,7 +203,7 @@ async function attempt(model: string, apiKey: string, parts: any[], generationCo
   var controller = new AbortController()
   var timeoutHandle = setTimeout(function () { controller.abort() }, timeoutMs)
   try {
-    var modelUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey
+    var modelUrl = GEMINI_BASE + '/v1beta/models/' + model + ':generateContent?key=' + apiKey
     var withThinking = mergeConfig(generationConfig, buildThinkingConfig(model, thinkingMode))
     var res = await fetch(modelUrl, {
       method: 'POST',
@@ -263,9 +274,9 @@ async function attempt(model: string, apiKey: string, parts: any[], generationCo
 }
 
 // ============================================================
-// Main entry — discover models for this key, try Gemini 3.6 first
-// across ALL configured keys, then fall back through the chain.
-// Rotates keys on 429 (quota).
+// Main entry — try the STATIC chain immediately (no discovery
+// latency), rotate keys on 429 (quota), and only fall back to a
+// full discovery await when everything static failed.
 //   opts.thinking: 'low' (fast chat) | 'off' | 'default' (deep tasks)
 // ============================================================
 export async function callGemini(opts: {
@@ -287,41 +298,202 @@ export async function callGemini(opts: {
   var sawQuota = false
   var attemptIndex = 0
 
-  var models = await getModelChain()
-  if (models.length === 0) models = GEMINI_MODELS.slice()
+  // background refresh (cached 10 min) — never awaited on the fast path
+  var discoveryPromise = discoverModels()
+  var staticModels = getStaticChain()
 
-  // Outer: passes (2nd pass clears short RPM blips) — then models — then keys
-  for (var pass = 0; pass < 2; pass++) {
-    if (pass > 0) {
-      if (!sawQuota) break
-      await new Promise(function (r) { setTimeout(r, 2500) })
-    }
-    for (var mi = 0; mi < models.length; mi++) {
-      for (var ki = 0; ki < keys.length; ki++) {
-        attemptIndex++
-        var t = timeoutMs
-        if (attemptIndex === 1 && opts.fastFailFirstMs) t = opts.fastFailFirstMs
-        var result = await attempt(models[mi], keys[ki], opts.parts, generationConfig, t, thinkingMode)
-        if (result.ok) return result
-        lastError = result.error || ''
-        if (result.status === 429) {
-          sawQuota = true
-          // small pause before switching key/model so we don't burn RPM
-          await new Promise(function (r) { setTimeout(r, 400) })
-        } else if (result.status === 404) {
-          // model retired — skip its remaining keys
-          break
-        } else if (result.status === 401 || result.status === 403) {
-          // key invalid / API not enabled for this key — move to next key
-          continue
+  var tryModels = async function (models: string[]): Promise<GeminiResult | null> {
+    // Outer: passes (2nd pass clears short RPM blips) — then models — then keys
+    for (var pass = 0; pass < 2; pass++) {
+      if (pass > 0) {
+        if (!sawQuota) break
+        await new Promise(function (r) { setTimeout(r, 2500) })
+      }
+      for (var mi = 0; mi < models.length; mi++) {
+        for (var ki = 0; ki < keys.length; ki++) {
+          attemptIndex++
+          var t = timeoutMs
+          if (attemptIndex === 1 && opts.fastFailFirstMs) t = opts.fastFailFirstMs
+          var result = await attempt(models[mi], keys[ki], opts.parts, generationConfig, t, thinkingMode)
+          if (result.ok) return result
+          lastError = result.error || ''
+          if (result.status === 429) {
+            sawQuota = true
+            // small pause before switching key/model so we don't burn RPM
+            await new Promise(function (r) { setTimeout(r, 400) })
+          } else if (result.status === 404) {
+            // model retired — skip its remaining keys
+            break
+          } else if (result.status === 401 || result.status === 403) {
+            // key invalid / API not enabled for this key — move to next key
+            continue
+          }
         }
       }
     }
+    return null
   }
+
+  var win = await tryModels(staticModels)
+  if (win) return win
+
+  // Everything static failed → NOW pay the discovery cost and try any
+  // newly discovered models we have not tried yet (self-healing when
+  // Google renames/retires models).
+  try {
+    var fresh = await discoveryPromise
+    var extra: string[] = []
+    for (var fi = 0; fi < fresh.length; fi++) if (staticModels.indexOf(fresh[fi]) < 0) extra.push(fresh[fi])
+    if (extra.length > 0) {
+      win = await tryModels(extra)
+      if (win) return win
+    }
+  } catch (e) {}
 
   if (sawQuota) {
     lastError = QUOTA_HINT + ' [' + lastError + ']'
   }
+  return { ok: false, error: lastError, status: sawQuota ? 429 : undefined }
+}
+
+/* ============================================================
+ * STREAMING entry (token-by-token, huge perceived speed win for
+ * the assistant chat). Uses :streamGenerateContent?alt=sse and
+ * forwards every text delta to opts.onDelta AS IT ARRIVES.
+ *
+ * Retry safety: once a delta reached the client we can NOT retry
+ * another model (the client would see a duplicated answer), so a
+ * stream that emitted text and then died returns ok:true with the
+ * partial text — the client gracefully keeps what it saw.
+ * ============================================================ */
+async function streamAttempt(model: string, apiKey: string, parts: any[], generationConfig: any, timeoutMs: number, thinkingMode: 'low' | 'off' | 'default', onDelta?: (d: string) => void): Promise<GeminiResult> {
+  var emitted = 0
+
+  var runStream = async function (cfg: any): Promise<GeminiResult> {
+    var controller = new AbortController()
+    var timeoutHandle = setTimeout(function () { controller.abort() }, timeoutMs)
+    try {
+      var modelUrl = GEMINI_BASE + '/v1beta/models/' + model + ':streamGenerateContent?alt=sse&key=' + apiKey
+      var res = await fetch(modelUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: cfg }),
+        signal: controller.signal,
+      })
+      if (!res.ok || !res.body) {
+        var errBody = ''
+        try { errBody = await res.text() } catch (e) {}
+        return { ok: false, error: model + ': ' + res.status + ' ' + (errBody || '').substring(0, 300), status: res.status }
+      }
+      var reader = res.body.getReader()
+      var decoder = new TextDecoder()
+      var buf = ''
+      var full = ''
+      while (true) {
+        var chunk = await reader.read()
+        if (chunk.done) break
+        buf += decoder.decode(chunk.value, { stream: true })
+        var lines = buf.split('\n')
+        buf = lines.pop() || ''
+        for (var li = 0; li < lines.length; li++) {
+          var line = lines[li].trim()
+          if (!line || line.indexOf('data:') !== 0) continue
+          var payload = line.slice(5).trim()
+          if (!payload || payload === '[DONE]') continue
+          try {
+            var j = JSON.parse(payload)
+            var cps = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || []
+            for (var pi = 0; pi < cps.length; pi++) {
+              if (cps[pi].thought) continue
+              if (cps[pi].text) {
+                full += cps[pi].text
+                emitted++
+                if (onDelta) onDelta(cps[pi].text)
+              }
+            }
+          } catch (e) {}
+        }
+      }
+      if (full.trim()) return { ok: true, text: full.trim(), model: model }
+      return { ok: false, error: model + ': stream had no text', status: 200 }
+    } catch (e) {
+      // Already emitted text (timeout/network cut mid-stream)? The client
+      // has the partial answer — return it as success instead of restarting
+      // on another model (which would duplicate text).
+      if (emitted > 0) return { ok: true, text: full.trim(), model: model }
+      var msg = (e && e.name === 'AbortError') ? 'timeout after ' + timeoutMs + 'ms' : ((e && e.message) || 'network error')
+      return { ok: false, error: model + ': ' + msg }
+    } finally {
+      clearTimeout(timeoutHandle)
+    }
+  }
+
+  var withThinking = mergeConfig(generationConfig, buildThinkingConfig(model, thinkingMode))
+  var first = await runStream(withThinking)
+  if (first.ok) return first
+  // 400 possibly caused by thinkingConfig on an unsupported model →
+  // retry once WITHOUT thinking fields (same self-healing as non-stream).
+  if (first.status === 400 && withThinking !== generationConfig) {
+    var second = await runStream(generationConfig)
+    if (second.ok) return second
+    return second
+  }
+  return first
+}
+
+export async function callGeminiStream(opts: {
+  parts: any[]
+  generationConfig?: any
+  timeoutMs?: number
+  thinking?: 'low' | 'off' | 'default'
+  onDelta?: (delta: string) => void
+}): Promise<GeminiResult> {
+  var keys = getGeminiApiKeys()
+  if (keys.length === 0) {
+    return { ok: false, error: 'GEMINI_API_KEY not found — أضف المفتاح في Vercel Environment Variables أو ملف .env.local' }
+  }
+  var generationConfig = opts.generationConfig || { temperature: 0.3, maxOutputTokens: 2048 }
+  var timeoutMs = opts.timeoutMs || 30000
+  var thinkingMode = opts.thinking || 'low'
+  var lastError = ''
+  var sawQuota = false
+
+  var discoveryPromise = discoverModels()
+  var staticModels = getStaticChain()
+
+  var tryList = async function (models: string[]): Promise<GeminiResult | null> {
+    for (var mi = 0; mi < models.length; mi++) {
+      for (var ki = 0; ki < keys.length; ki++) {
+        var result = await streamAttempt(models[mi], keys[ki], opts.parts, generationConfig, timeoutMs, thinkingMode, opts.onDelta)
+        if (result.ok) return result
+        lastError = result.error || ''
+        if (result.status === 429) {
+          sawQuota = true
+          await new Promise(function (r) { setTimeout(r, 400) })
+        } else if (result.status === 404) {
+          break
+        } else if (result.status === 401 || result.status === 403) {
+          continue
+        }
+      }
+    }
+    return null
+  }
+
+  var win = await tryList(staticModels)
+  if (win) return win
+
+  try {
+    var fresh = await discoveryPromise
+    var extra: string[] = []
+    for (var fi = 0; fi < fresh.length; fi++) if (staticModels.indexOf(fresh[fi]) < 0) extra.push(fresh[fi])
+    if (extra.length > 0) {
+      win = await tryList(extra)
+      if (win) return win
+    }
+  } catch (e) {}
+
+  if (sawQuota) lastError = QUOTA_HINT + ' [' + lastError + ']'
   return { ok: false, error: lastError, status: sawQuota ? 429 : undefined }
 }
 
