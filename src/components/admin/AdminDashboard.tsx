@@ -573,6 +573,7 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
 
 /* ========== VIDEO MANAGER (with REAL XHR upload progress) ========== */
 function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+  const currentAdminId = useAppStore(function (s) { return s.currentAdmin?.id || '' })
   const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -602,6 +603,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
     if (showLoader) setLoading(true)
     try {
       const params = new URLSearchParams({ pageSize: '100' })
+      if (currentAdminId) params.set('adminId', currentAdminId)
       if (filterGrade) params.set('grade', filterGrade)
       const res = await fetch(`/api/videos?${params}`)
       if (!res.ok) {
@@ -654,6 +656,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
       if (videoPath) { body.filePath = videoPath; body.fileType = videoType }
       if (thumbnailPath) { body.thumbnail = thumbnailPath }
       else if (formThumbnailUrl.trim()) { body.thumbnail = formThumbnailUrl.trim() }
+      body.adminId = currentAdminId
 
       const res = await fetch('/api/videos', {
         method: 'POST',
@@ -682,7 +685,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`/api/videos/${id}`, { method: 'DELETE' })
+      await fetch(`/api/videos/${id}?adminId=${encodeURIComponent(currentAdminId)}`, { method: 'DELETE' })
       toast.success('تم حذف الفيديو')
       loadVideos(false)
       onStatsRefresh()

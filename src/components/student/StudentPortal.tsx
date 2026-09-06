@@ -20,6 +20,7 @@ import type { Video as VideoType, Homework, Exam, Announcement, Discussion, Exam
 import { MathKeyboard } from '@/components/student/MathKeyboard'
 import { ProtectedYouTubeModal } from '@/components/student/ProtectedYouTubePlayer'
 import { FractionText } from '@/components/FractionText'
+import { VideoWatermark } from '@/components/student/VideoWatermark'
 
 export function StudentPortal() {
   const { currentStudent, logout } = useAppStore()
@@ -255,7 +256,7 @@ export function StudentPortal() {
                 بص على الكل
               </Button>
             </div>
-            <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={initialData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} />
+            <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={initialData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} />
           </div>
 
           {/* Guide modal */}
@@ -312,7 +313,7 @@ export function StudentPortal() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} />}
+        {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} />}
         {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} studentId={studentId} completedHwIds={completedHwIds} onHwSubmitted={(id) => setCompletedHwIds(prev => new Set([...prev, id]))} />}
         {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} completedExamIds={completedExamIds} onExamSubmitted={(id) => setCompletedExamIds(prev => new Set([...prev, id]))} studentId={studentId} />}
         {activeTab === 'announcements' && <AnnouncementsTab announcements={dashboardData.announcements} />}
@@ -322,7 +323,7 @@ export function StudentPortal() {
   )
 }
 
-function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, videoProgress, studentStatus, isPaidAccess }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string; videoProgress: Record<string, number>; studentStatus?: string; isPaidAccess?: boolean }) {
+function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, videoProgress, studentStatus, isPaidAccess, studentName, studentPhone }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string; videoProgress: Record<string, number>; studentStatus?: string; isPaidAccess?: boolean; studentName?: string; studentPhone?: string }) {
   const { setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
   const [videoSchedules, setVideoSchedules] = useState<Record<string, any>>({})
@@ -380,6 +381,32 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
     return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null
   }
 
+  // حماية الفيديو: السيرفر مبيرسلش url/filePath خلاص — بنعرف النوع من kind
+  // والتشغيل بيتم عبر /api/video-play بس (توكن موقّع للملفات المرفوعة)
+  const videoKind = (v: any): 'youtube' | 'file' | 'link' | 'none' => {
+    if (v.kind) return v.kind
+    if (getYouTubeId(v.url || '')) return 'youtube'
+    if (v.filePath && /\.(mp4|webm|mov|avi)$/i.test(v.filePath)) return 'file'
+    if (v.url) return 'link'
+    return 'none'
+  }
+
+  // فتح فيديو يوتيوب: بنجيب الـ ytId من بوابة التشغيل المحمية لحظة الفتح
+  const openPlayModal = (video: VideoType) => {
+    fetch('/api/video-play?videoId=' + video.id + '&studentId=' + encodeURIComponent(studentId || ''))
+      .then(function (r) {
+        return r.json().then(function (d) { return { ok: r.ok, d: d } })
+      })
+      .then(function (res) {
+        if (res.ok && res.d.isYouTube && res.d.ytId) {
+          setActiveLessonVideo({ ...video, playYtId: res.d.ytId } as any)
+        } else {
+          toast.error(res.d.error || 'الفيديو مش متاح — لو دفعت تواصل مع الإدارة', { duration: 6000 })
+        }
+      })
+      .catch(function () { toast.error('حصل خطأ في تشغيل الفيديو') })
+  }
+
   if (videos.length === 0) return <EmptyState message="لا توجد دروس حالياً" />
 
   return (
@@ -388,10 +415,10 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
       {videos.map((video) => {
         // Skip hidden videos entirely
         if (hiddenVideoIds.has(video.id)) return null
-        const ytId = getYouTubeId(video.url)
-        const isVideoFile = video.filePath && (video.fileType?.startsWith('video/') || video.filePath.match(/\.(mp4|webm|mov|avi)$/i))
+        const kind = videoKind(video)
+        const isVideoFile = kind === 'file'
         const isWatched = localWatched.has(video.id)
-        const thumbSrc = video.thumbnail || getYouTubeThumbnail(video.url) || null
+        const thumbSrc = video.thumbnail || (video as any).thumb || null
         const hasPrice = (video.price || 0) > 0
         const hasApprovedPayment = approvedVideoIds.has(video.id)
         // A paid account is not a purchase grant. Every priced video stays locked
@@ -453,12 +480,12 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                     </Button>
                   </div>
                 </div>
-              ) : ytId ? (
+              ) : kind === 'youtube' ? (
                 // Protected lesson card — gallery style thumbnail (no YouTube branding)
                 // The actual video opens in a protected modal player on click
                 <div
                   className="w-full h-full relative cursor-pointer group/vid"
-                  onClick={function () { setActiveLessonVideo(video) }}
+                  onClick={function () { openPlayModal(video) }}
                   role="button"
                   aria-label={'تشغيل ' + video.title}
                 >
@@ -476,11 +503,12 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                   </div>
                 </div>
               ) : isVideoFile ? (
-                <CustomVideoPlayer
+                <GatedVideoPlayer
                   videoId={video.id}
-                  src={video.filePath}
-                  poster={thumbSrc || undefined}
                   studentId={studentId}
+                  poster={thumbSrc || undefined}
+                  studentName={studentName}
+                  studentPhone={studentPhone}
                   onWatch={() => {
                     trackVideoWatch(video.id)
                     setLocalWatched(prev => new Set([...prev, video.id]))
@@ -538,13 +566,15 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
       </div>
 
       {/* Protected lesson video modal — gallery style, no YouTube branding */}
-      {activeLessonVideo && getYouTubeId(activeLessonVideo.url) && (
+      {activeLessonVideo && (activeLessonVideo as any).playYtId && (
         <ProtectedYouTubeModal
-          ytId={getYouTubeId(activeLessonVideo.url) as string}
+          ytId={(activeLessonVideo as any).playYtId}
           title={activeLessonVideo.title}
-          poster={activeLessonVideo.thumbnail || getYouTubeThumbnail(activeLessonVideo.url) || undefined}
+          poster={activeLessonVideo.thumbnail || (activeLessonVideo as any).thumb || undefined}
           videoId={activeLessonVideo.id}
           studentId={studentId}
+          studentName={studentName}
+          studentPhone={studentPhone}
           onWatch={function () {
             trackVideoWatch(activeLessonVideo.id)
             setLocalWatched(function (prev) { return new Set([...prev, activeLessonVideo.id]) })
@@ -553,6 +583,63 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         />
       )}
     </>
+  )
+}
+
+/* ========== GATED VIDEO PLAYER — حماية الملفات المرفوعة ==========
+ * بيجيب رابط التشغيل الموقّع من /api/video-play (توكن HMAC صالح ساعتين
+ * مرتبط بالطالب والملف) — من غير توكن السيرفر بيرفضخدمة الملف خالص.
+ * ========================================================================= */
+function GatedVideoPlayer({ videoId, studentId, poster, studentName, studentPhone, onWatch }: {
+  videoId: string
+  studentId: string
+  poster?: string
+  studentName?: string
+  studentPhone?: string
+  onWatch: () => void
+}) {
+  const [src, setSrc] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(function () {
+    var alive = true
+    setSrc(''); setError('')
+    fetch('/api/video-play?videoId=' + videoId + '&studentId=' + encodeURIComponent(studentId || ''))
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d } }) })
+      .then(function (res) {
+        if (!alive) return
+        if (res.ok && res.d.isVideoFile && res.d.fileUrl) setSrc(res.d.fileUrl)
+        else setError(res.d.error || 'الفيديو مش متاح')
+      })
+      .catch(function () { if (alive) setError('حصل خطأ في تحميل الفيديو') })
+    return function () { alive = false }
+  }, [videoId, studentId])
+
+  if (error) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-black/70 text-white/80 text-xs p-4 text-center">
+        <Lock className="h-7 w-7 text-white/50" />
+        <span>{error}</span>
+      </div>
+    )
+  }
+  if (!src) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-black/70">
+        <Loader2 className="h-7 w-7 text-white/60 animate-spin" />
+      </div>
+    )
+  }
+  return (
+    <CustomVideoPlayer
+      videoId={videoId}
+      src={src}
+      poster={poster}
+      studentId={studentId}
+      studentName={studentName}
+      studentPhone={studentPhone}
+      onWatch={onWatch}
+    />
   )
 }
 
@@ -597,11 +684,13 @@ function YouTubePlayer({ videoId, ytId, poster, onWatch }: { videoId: string; yt
   )
 }
 
-function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
+function CustomVideoPlayer({ videoId, src, poster, studentId, studentName, studentPhone, onWatch }: {
   videoId: string
   src: string
   poster?: string
   studentId: string
+  studentName?: string
+  studentPhone?: string
   onWatch: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -715,6 +804,7 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
       onClick={togglePlay}
       onTouchStart={function() { setShowControls(true) }}
       onContextMenu={function(e) { e.preventDefault() }}
+      onDragStart={function(e) { e.preventDefault() }}
     >
       <video
         ref={videoRef}
@@ -725,12 +815,16 @@ function CustomVideoPlayer({ videoId, src, poster, studentId, onWatch }: {
         playsInline
         disablePictureInPicture
         disableRemotePlayback
+        controlsList="nodownload noremoteplayback noplaybackrate"
         onPlay={function() { setPlaying(true) }}
         onPause={function() { setPlaying(false) }}
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
         onLoadedMetadata={function() { if (videoRef.current) setDuration(videoRef.current.duration) }}
       />
+
+      {/* ووترمارك الطالب — أي تسجيل للشاشة يطلع فيه اسمه ورقمه */}
+      <VideoWatermark name={studentName} phone={studentPhone} />
 
       {!playing && (
         <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
