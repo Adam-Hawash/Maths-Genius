@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server'
 import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
+import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -106,7 +107,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Could not parse AI response' }, { status: 500 })
     }
 
-    var parsed = JSON.parse(jsonMatch[0])
+    var parsed = JSON.parse(repairModelJson(jsonMatch[0]))
     var questions = (parsed.questions || []).map(function(q) {
       var opts = Array.isArray(q.options) ? q.options.slice() : ['N/A', 'N/A', 'N/A', 'N/A']
       while (opts.length < 4) { opts.push('N/A') }
