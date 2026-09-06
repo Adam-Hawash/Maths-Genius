@@ -181,3 +181,38 @@ Stage Summary:
 - No more \frac / ^ / $ / \left junk visible anywhere — admin preview + student views + grading views all render real math
 - Existing DB data is fixed too (renderer handles old formats, no migration needed)
 - New extractions are normalized server-side and prompted to emit the canonical format, so storage is clean going forward
+
+---
+Task ID: 8
+Agent: Main Agent (Z.ai Code)
+Task: Round 8 — AI grading speed + accuracy: instant homework submission (background parallel grading) + strict smart grading (no more random verdicts)
+
+Work Log:
+- Root causes found for "AI slow + correcting randomly":
+  1) /api/homework/submit made ONE SEQUENTIAL Gemini call per writing question BEFORE responding (3 questions ≈ 45-75s spinner)
+  2) /api/homework-results?homeworkId= and /api/students/[id]/progress RE-RAN the AI grader on every photo answer at EVERY page load → verdicts changed between visits (the "random" grading) + huge latency + token cost
+  3) ai-image-grader had dangerous local overrides: substring-includes on extracted text → flipped verdicts to correct (the screenshot case: AI misread the PRINTED question from the photo, text happened to contain the model's final answer substring → 5/5)
+  4) Vision prompt told the AI to "read everything in the photo" with no student-work-vs-printed-question distinction → it graded the question text as the student's answer
+
+- Rewrote src/lib/ai-image-grader.ts (fast + strict + honest):
+  * thinking:'low' + 2048 tokens; removed 6s fastFail on vision calls (big photo uploads need the full 25s — premature rotation made grading SLOWER)
+  * New English structured prompt: STEP 2 explicitly ignores pre-printed question text / choice lists / headers; STEP 3 onTopic check — "does the photo contain the STUDENT'S OWN solution to THIS question?"
+  * JSON contract: {onTopic, extractedAnswer, finalAnswer, isCorrect, awardedPoints 0..max, confidence high/medium/low, feedback بالعامية}
+  * GUARD 1: !onTopic → 0 points + needsGrading (admin reviews, no random zero)
+  * GUARD 2: extracted-text ≈ question text (word similarity ≥ 0.8) → needsGrading — exactly the screenshot bug
+  * GUARD 3: false-negative fix via EXACT normalized equivalence only (normalizeFinalAnswer: unicode superscripts→^digits, \frac{a}{b}→a/b, strips spaces/{}$/labels; exactEquivalent replaces ALL substring-includes overrides; "25" ≠ "2^5" collision avoided)
+  * GUARD 4: confidence=low → needsGrading instead of a random verdict; AI failure/parse failure → manual review, never auto-wrong
+  * Same strict contract for gradeTextAnswer
+  * 17/17 functional tests passed (brace/caret/unicode powers, frac marker, label stripping, question-text rejection)
+
+- Rewrote /api/homework/submit: MCQ graded locally (instant) → result row saved IMMEDIATELY with writing entries marked gradingStatus:'pending' → responds in <1s → after() from 'next/server' grades ALL writing questions IN PARALLEL (Promise.all) → updates score + writingResults column in DB. New HomeworkResult.writingResults column = single source of truth for AI verdicts (computed ONCE at submit, never re-rolled)
+- New GET /api/homework/result/[id] polling endpoint: returns stored verdicts + gradingDone flag (zero AI calls)
+- /api/homework-results (admin view): reads STORED writingResults; legacy rows without stored verdicts get quick deterministic local match only — NO live AI in any view anymore
+- /api/students/[id]/progress: same treatment — stored verdicts for homework writing answers; exam section untouched (exams grade on-demand by design)
+- StudentPortal: submit now shows "تم التسليم في ثانية ✅ المصحح الذكي بيصحح الأسئلة المقالية دلوقتي" + polls /api/homework/result/[id] every 4s (max 3 min) → score + verdict cards update LIVE + toast when grading completes; pending cards show "⏳ جاري التصحيح بالذكاء الاصطناعي..." spinner badge; timers cleaned up on unmount
+- Net effect: submission ~90s → <1s for the student; grading wall-time = one parallel call (~8-20s) regardless of question count; verdicts are computed once and stay stable everywhere
+
+Stage Summary:
+- Submission is instant; AI grading happens in the background in parallel and results appear automatically
+- Grading is now strict AND fair: photo must contain the student's own solution (onTopic), printed question text is ignored, exact-equivalence only, low-confidence/failures go to manual review instead of random verdicts
+- One source of truth: verdicts stored at submit time — admin views, student views and progress views all read the same stored result, zero re-grading

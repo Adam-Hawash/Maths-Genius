@@ -805,6 +805,39 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
   const [hwDisplayQuestions, setHwDisplayQuestions] = useState<Record<string, any[]>>({})
   const [hwDisplayMap, setHwDisplayMap] = useState<Record<string, number[]>>({})
   const hwShuffleMaps = useRef<Record<string, number[]>>({})
+  const hwPollTimers = useRef<Record<string, any>>({})
+
+  /* Poll the background AI grading until it finishes — then update score + verdicts live */
+  const startGradingPoll = (resultId: string, hwId: string) => {
+    if (hwPollTimers.current[hwId]) clearInterval(hwPollTimers.current[hwId])
+    var tries = 0
+    hwPollTimers.current[hwId] = setInterval(async function() {
+      tries++
+      if (tries > 45) { clearInterval(hwPollTimers.current[hwId]); delete hwPollTimers.current[hwId]; return }
+      try {
+        var r = await fetch('/api/homework/result/' + resultId)
+        var d = await r.json()
+        if (d && d.ok && d.result && d.result.gradingDone) {
+          clearInterval(hwPollTimers.current[hwId])
+          delete hwPollTimers.current[hwId]
+          setHwResults(function(prev) { return { ...prev, [hwId]: { score: d.result.score, maxScore: d.result.maxScore } } })
+          if (d.result.writingAnswers && d.result.writingAnswers.length > 0) {
+            setHwWritingAnswers(function(prev) { return { ...prev, [hwId]: d.result.writingAnswers } })
+          }
+          toast.success('خلص تصحيح الأسئلة المقالية بالذكاء الاصطناعي ✅')
+        }
+      } catch (e) {}
+    }, 4000)
+  }
+
+  useEffect(function() {
+    return function cleanup() {
+      Object.keys(hwPollTimers.current).forEach(function(k) {
+        clearInterval(hwPollTimers.current[k])
+        delete hwPollTimers.current[k]
+      })
+    }
+  }, [])
 
   useEffect(() => {
     if (!studentId) return
@@ -1057,6 +1090,13 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                               }
                               return null
                             })()}
+                            {/* PENDING: background AI grading in progress */}
+                            {writingAns.gradingStatus === 'pending' && (
+                              <div className="mt-2 p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 flex items-center gap-2">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600 shrink-0" />
+                                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">جاري التصحيح بالذكاء الاصطناعي... النتيجة هتظهر هنا تلقائياً</p>
+                              </div>
+                            )}
                             {/* AI extracted answer from image */}
                             {writingAns.aiExtractedAnswer && (
                               <div className="mt-2 p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
@@ -1389,7 +1429,13 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                       })
                       var data = await res.json()
                       if (res.ok || data.alreadySubmitted) {
-                        toast.success('تم تقديم الواجب بنجاح')
+                        if (data.pendingGrading && data.result && data.result.id) {
+                          // Submission saved instantly — AI grades writing questions in the background
+                          toast.success('تم التسليم في ثانية ✅ المصحح الذكي بيصحح الأسئلة المقالية دلوقتي والنتيجة هتظهر تلقائياً')
+                          startGradingPoll(data.result.id, hw.id)
+                        } else {
+                          toast.success('تم تقديم الواجب بنجاح')
+                        }
                         if (data.result) {
                           setHwResults(function(prev) { return { ...prev, [hw.id]: { score: data.result.score, maxScore: data.result.maxScore } } })
                           if (data.result.wrongQuestions && data.result.wrongQuestions.length > 0) {
