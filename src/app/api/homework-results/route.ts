@@ -1,10 +1,14 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { gradeImageAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 
 // GET /api/homework-results?studentId=xxx - Student: own results (basic info)
 // GET /api/homework-results?homeworkId=xxx - Admin: all results for a homework with per-student details
+//
+// NOTE: this view used to RE-RUN the AI grader on every photo answer at every
+// page load — slow, expensive, and the verdicts CHANGED between visits
+// (the "تصحيح عشوائي" complaint). Now it reads the verdicts STORED at submit
+// time (HomeworkResult.writingResults) — instant, stable, one source of truth.
 export async function GET(request: NextRequest) {
   try {
     var url = new URL(request.url)
@@ -13,12 +17,13 @@ export async function GET(request: NextRequest) {
 
     // Admin mode: results for a specific homework with full per-student answer review
     if (homeworkId) {
-      // Ensure HomeworkResult table has answers column
+      // Ensure HomeworkResult table has answers + writingResults columns
       try {
         await db.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS HomeworkResult (id TEXT PRIMARY KEY, homeworkId TEXT NOT NULL, studentId TEXT NOT NULL, score REAL DEFAULT 0, maxScore REAL DEFAULT 100, answers TEXT DEFAULT "", submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP)')
       } catch (e) {}
       try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN answers TEXT DEFAULT ""') } catch (e) {}
       try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP') } catch (e) {}
+      try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN writingResults TEXT DEFAULT ""') } catch (e) {}
 
       // Get homework info first (title, questions)
       var hwInfo: any = null
@@ -39,22 +44,29 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Homework not found' }, { status: 404 })
       }
 
-      // Get all results for this homework using RAW SQL with answers
+      // Get all results for this homework using RAW SQL with answers + stored writing verdicts
       var rawResults: any[] = []
       try {
         rawResults = await db.$queryRawUnsafe(
-          'SELECT id, homeworkId, studentId, score, maxScore, submittedAt, answers FROM HomeworkResult WHERE homeworkId = ? ORDER BY submittedAt DESC',
+          'SELECT id, homeworkId, studentId, score, maxScore, submittedAt, answers, writingResults FROM HomeworkResult WHERE homeworkId = ? ORDER BY submittedAt DESC',
           homeworkId
         ) || []
       } catch (e) {
         console.error('Homework results fetch error:', e)
         try {
-          var prismaResults = await db.homeworkResult.findMany({
-            where: { homeworkId },
-            orderBy: { submittedAt: 'desc' },
-          })
-          rawResults = prismaResults.map((r: any) => ({ ...r, answers: '' }))
-        } catch (e2) { rawResults = [] }
+          rawResults = await db.$queryRawUnsafe(
+            'SELECT id, homeworkId, studentId, score, maxScore, submittedAt, answers FROM HomeworkResult WHERE homeworkId = ? ORDER BY submittedAt DESC',
+            homeworkId
+          ) || []
+        } catch (e3) {
+          try {
+            var prismaResults = await db.homeworkResult.findMany({
+              where: { homeworkId },
+              orderBy: { submittedAt: 'desc' },
+            })
+            rawResults = prismaResults.map((r: any) => ({ ...r, answers: '' }))
+          } catch (e2) { rawResults = [] }
+        }
       }
 
       // Get student info for each result
@@ -113,6 +125,15 @@ export async function GET(request: NextRequest) {
         var wrongQuestions: any[] = []
         var writingAnswers: any[] = []
 
+        // Stored AI verdicts (written by /api/homework/submit background grading)
+        var storedWriting: any[] = []
+        try {
+          if (r.writingResults) {
+            var parsedStored = typeof r.writingResults === 'string' ? JSON.parse(r.writingResults) : r.writingResults
+            if (Array.isArray(parsedStored)) storedWriting = parsedStored
+          }
+        } catch (e) {}
+
         // MCQ all questions
         mcqQs.forEach(function(q, qi) {
           var qText = q.question || q.q || ''
@@ -154,7 +175,7 @@ export async function GET(request: NextRequest) {
           }
         })
 
-        // Writing all questions (offset by mcq length)
+        // Writing all questions (offset by mcq length) — from STORED verdicts only
         for (var wi = 0; wi < writingQs.length; wi++) {
           var wq = writingQs[wi]
           var qText = wq.question || wq.q || ''
@@ -173,42 +194,27 @@ export async function GET(request: NextRequest) {
           var acceptedAnswers = Array.isArray(wq.acceptedAnswers) ? wq.acceptedAnswers : []
           var pts = (typeof wq.points === 'number' && wq.points > 0) ? wq.points : 5
 
-          // AI image grading
-          var aiExtracted = ''
-          var aiIsCorrect = false
-          var aiFeedback = ''
-          var imageGraded = false
-          var mediaIds = extractImageMediaIds(studentText)
-          if (mediaIds.length > 0) {
-            try {
-              var gradeData = await gradeImageAnswer({
-                mediaId: mediaIds[0],
-                question: qText,
-                modelAnswer: modelAnswer,
-                acceptedAnswers: acceptedAnswers,
-                maxPoints: pts,
-              })
-              if (gradeData.error === undefined || gradeData.extractedAnswer) {
-                aiExtracted = gradeData.extractedAnswer
-                aiIsCorrect = gradeData.isCorrect === true
-                aiFeedback = gradeData.feedback || ''
-                imageGraded = true
-              }
-            } catch (e) {
-              console.error('[HW Results] AI grade image error:', e)
-            }
-          }
+          // Stored verdict for this writing question (match by question text, then by index)
+          var stored = storedWriting.find(function(sw: any) { return (sw.question || '') === qText })
+            || storedWriting[wi]
+            || null
+
+          var isGradedNow = !!stored && stored.gradingStatus !== 'pending'
+          var aiExtracted = stored ? (stored.aiExtractedAnswer || '') : ''
+          var aiIsCorrect = stored ? (stored.aiIsCorrect === true || stored.isCorrect === true) : false
+          var aiFeedback = stored ? (stored.aiFeedback || stored.feedback || '') : ''
+          var awardedNow = stored ? (stored.awardedPoints || 0) : 0
 
           allQuestions.push({
             type: 'writing',
             question: qText,
             studentAnswer: studentText,
             correctAnswer: modelAnswer,
-            isCorrect: imageGraded ? aiIsCorrect : false,
+            isCorrect: isGradedNow ? aiIsCorrect : false,
             aiExtractedAnswer: aiExtracted,
             aiIsCorrect: aiIsCorrect,
             aiFeedback: aiFeedback,
-            imageGraded: imageGraded,
+            imageGraded: isGradedNow && !!aiExtracted,
           })
 
           writingAnswers.push({
@@ -217,13 +223,14 @@ export async function GET(request: NextRequest) {
             points: pts,
             modelAnswer: modelAnswer,
             acceptedAnswers: acceptedAnswers,
-            needsGrading: !imageGraded,
+            needsGrading: !isGradedNow,
+            gradingStatus: stored ? (stored.gradingStatus || (isGradedNow ? 'graded' : 'pending')) : 'legacy',
             aiExtractedAnswer: aiExtracted,
             aiIsCorrect: aiIsCorrect,
             aiFeedback: aiFeedback,
-            imageGraded: imageGraded,
-            isCorrect: imageGraded ? aiIsCorrect : false,
-            awardedPoints: imageGraded ? (aiIsCorrect ? pts : 0) : 0,
+            imageGraded: isGradedNow && !!aiExtracted,
+            isCorrect: isGradedNow ? aiIsCorrect : false,
+            awardedPoints: isGradedNow ? awardedNow : 0,
           })
         }
 
