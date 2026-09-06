@@ -75,7 +75,7 @@ export async function POST(request) {
     lines.push('- Use Unicode math symbols: x\u00b2 x\u00b3 \u221a \u221b \u00d7 \u00f7. Do NOT use ^ or * symbols.')
     lines.push('- Grade: ' + grade + ' | Type: ' + type)
     lines.push('')
-    lines.push('JSON only:')
+    lines.push('Return ONE single valid JSON object — no text before or after, no markdown fences, no fields outside the object:')
     lines.push('{"questions":[{"question":"...","options":["A","B","C","D"],"correct":0}]}')
     var prompt = lines.join('\n')
 

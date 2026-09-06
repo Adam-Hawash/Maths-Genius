@@ -227,13 +227,23 @@ export default function HeroSection() {
 
             {/* Hero Developer / Adam Hawash branding */}
             <div className="pt-4 flex flex-col items-center lg:items-start gap-1">
-              <span className="text-sm font-semibold text-white/60">
+              <a
+                href={cfg.hero_developer_url || 'https://prime-developer-portfolio-11.vercel.app'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold text-white/60 hover:text-primary transition-colors"
+              >
                 {cfg.hero_developer_label || 'Hero Developer'}
-              </span>
+              </a>
               <div className="h-px w-16 bg-white/10" />
-              <span className="text-xs text-white/40 font-light tracking-wider">
+              <a
+                href={cfg.hero_developer_url || 'https://prime-developer-portfolio-11.vercel.app'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-white/40 font-light tracking-wider hover:text-primary transition-colors"
+              >
                 {cfg.footer_made_by_label || 'Made by Adam Hawash'}
-              </span>
+              </a>
             </div>
 
             {/* Stats Row */}
