@@ -18,9 +18,10 @@ var DEFAULTS = {
   hero_stat2_label: 'Video Lessons',
   hero_stat3_value: '24/7',
   hero_stat3_label: 'Progress Tracking',
-  hero_developer_url: 'https://hero-developer-portfolio-11.vercel.app',
+  hero_developer_url: 'https://prime-developer-portfolio-11.vercel.app',
   hero_developer_label: 'Hero Developer',
   footer_made_by_label: 'Made by Adam Hawash',
+  prime_developer_url: 'https://prime-developer-portfolio-11.vercel.app',
 
   // === Schedule Page ===
   schedule_title: 'مواعيد السنتر',
