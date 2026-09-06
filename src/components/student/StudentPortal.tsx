@@ -1646,6 +1646,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   const [submittedExamId, setSubmittedExamId] = useState<string | null>(null)
   const [checkingServer, setCheckingServer] = useState(false)
   const [blockedExamId, setBlockedExamId] = useState<string | null>(null)
+  // نتيجة آخر تسليم (الدرجة + تصحيح المقالية بالذكاء الاصطناعي)
+  const [lastResult, setLastResult] = useState<any>(null)
+  const [showGradesFor, setShowGradesFor] = useState<string | null>(null)
 
   if (exams.length === 0) return <EmptyState message="لا توجد امتحانات حالياً" />
 
@@ -1676,17 +1679,51 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
     )
   }
 
-  // EXAM SUBMITTED SUCCESS SCREEN — NO score shown
+  // EXAM SUBMITTED SUCCESS SCREEN — with the AI-graded score + writing feedback
   if (examSubmitted) {
+    var lrGrades: any[] = (lastResult && lastResult.writingGrades) || []
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-6 space-y-6">
+      <div className="flex flex-col items-center justify-center py-12 px-6 space-y-5">
         <div className="h-24 w-24 rounded-full bg-emerald-500/10 flex items-center justify-center">
           <CheckCircle2 className="h-14 w-14 text-emerald-500" />
         </div>
         <div className="text-center space-y-2">
           <h2 className="text-xl font-bold text-emerald-600">تم تقديم الامتحان بنجاح</h2>
-          <p className="text-sm text-muted-foreground">انتظر نتيجتك من مستر وائل خضير</p>
+          {lastResult && typeof lastResult.score === 'number' ? (
+            <div className="mt-2 inline-flex flex-col items-center gap-1.5">
+              <div className="px-6 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
+                <p className="text-3xl font-bold text-emerald-600" dir="ltr">{lastResult.score} / {lastResult.maxScore}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">درجتك في الامتحان</p>
+              </div>
+              {lrGrades.length > 0 && <p className="text-xs text-emerald-600 font-medium">✅ الأسئلة المقالية اتصححت بالذكاء الاصطناعي من الإجابة النموذجية</p>}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">المصحح الذكي بيصحح الأسئلة المقالية دلوقتي — النتيجة هتظهر في قائمة الامتحانات خلال شوية</p>
+          )}
         </div>
+        {lrGrades.length > 0 && (
+          <div className="w-full max-w-xl space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground">تفاصيل تصحيح الأسئلة المقالية:</p>
+            {lrGrades.map(function(g: any, i: number) {
+              var gOk = g.isCorrect === true
+              var gHalf = !gOk && (Number(g.awardedPoints) || 0) > 0
+              return (
+                <Card key={'wg-' + i} className={gOk ? 'border-emerald-200 dark:border-emerald-900/40' : gHalf ? 'border-amber-200 dark:border-amber-900/40' : 'border-red-200 dark:border-red-900/40'}>
+                  <CardContent className="p-3 space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-medium min-w-0" style={{ textAlign: 'left' }}><FractionText text={g.question || ''} /></p>
+                      <Badge className={'text-[10px] shrink-0 ' + (gOk ? 'bg-emerald-500 text-white' : gHalf ? 'bg-amber-500 text-white' : 'bg-red-500 text-white')} dir="ltr">{g.awardedPoints}/{g.maxPoints}</Badge>
+                    </div>
+                    {g.feedback && <p className="text-[10px] text-muted-foreground">{g.feedback}</p>}
+                    {g.modelAnswer && (
+                      <p className="text-[10px] text-emerald-600" style={{ textAlign: 'left' }}>الإجابة النموذجية: <FractionText text={g.modelAnswer} /></p>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
         <Button
           onClick={() => {
             if (submittedExamId) onExamSubmitted(submittedExamId)
@@ -1698,7 +1735,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
             setExamQuestions([])
             setExamShuffleMap([])
           }}
-          className="mt-4"
+          className="mt-2"
         >
           العودة إلى صفحتك الرئيسية
         </Button>
@@ -1820,9 +1857,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                 if (origIdx === undefined) origIdx = displayIdx
                 mappedAnswers[origIdx] = writingAnswers[di]
               })
-              // Add client-side timeout (60s - give server time to save)
+              // Add client-side timeout (120s — AI grades the writing questions during submit)
               var submitController = new AbortController()
-              var submitTimeout = setTimeout(function() { submitController.abort() }, 60000)
+              var submitTimeout = setTimeout(function() { submitController.abort() }, 120000)
               const res = await fetch('/api/exams/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1832,6 +1869,10 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
               clearTimeout(submitTimeout)
               const data = await res.json()
               if (res.ok && (data.submitted || data.alreadySubmitted)) {
+                // الدرجة وتصحيح المقالية رجعوا من السيرفر (تصحيح فوري بالذكاء الاصطناعي)
+                if (typeof data.score === 'number') {
+                  setLastResult({ examId: takingExam, score: data.score, maxScore: data.maxScore, writingGrades: data.writingGrades || [] })
+                }
                 setSubmittedExamId(takingExam)
                 setExamSubmitted(true)
                 onExamSubmitted(takingExam)
@@ -1861,8 +1902,11 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   return (
     <div className="space-y-3">
       {exams.map((exam) => {
-        const examResult = results.find(r => r.examId === exam.id)
+        const examResult: any = results.find(r => r.examId === exam.id)
         const isCompleted = examResult || completedExamIds.has(exam.id)
+        // نتيجة لحظية من آخر تسليم (لو لسه متحدثش في اللستة)
+        const liveResult = (lastResult && lastResult.examId === exam.id) ? lastResult : examResult
+        const liveGrades: any[] = (liveResult && liveResult.writingGrades) || []
         let hasQuestions = false
         let parsedQuestions: any[] = []
         try { if ((exam as any).questions) { parsedQuestions = JSON.parse((exam as any).questions); hasQuestions = parsedQuestions.length > 0 } } catch {}
@@ -1877,9 +1921,19 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                   <div className="min-w-0 space-y-1.5">
                     <h3 className="font-semibold text-sm">{exam.title}</h3>
                     {isCompleted ? (
-                      <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                        تم تقديم الامتحان
-                      </Badge>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                          تم تقديم الامتحان
+                        </Badge>
+                        {liveResult && typeof liveResult.score === 'number' && (
+                          <Badge className="text-xs bg-primary text-primary-foreground" dir="ltr">{liveResult.score}/{liveResult.maxScore}</Badge>
+                        )}
+                        {liveGrades.length > 0 && (
+                          <button type="button" onClick={function() { setShowGradesFor(showGradesFor === exam.id ? null : exam.id) }} className="text-[11px] font-medium text-primary hover:underline cursor-pointer">
+                            {showGradesFor === exam.id ? 'اقفل التصحيح' : 'شوف تصحيح المقالية 👁'}
+                          </button>
+                        )}
+                      </div>
                     ) : hasQuestions ? (
                       <Button size="sm" disabled={checkingServer} onClick={async () => {
                         setCheckingServer(true)
@@ -1916,6 +1970,30 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                 </div>
                 {exam.filePath && <FileAttachment filePath={exam.filePath} fileType={exam.fileType} />}
               </div>
+              {/* تفاصيل تصحيح المقالية بالذكاء الاصطناعي */}
+              {isCompleted && showGradesFor === exam.id && liveGrades.length > 0 && (
+                <div className="mt-3 pt-3 border-t space-y-2">
+                  {liveGrades.map(function(g: any, gi: number) {
+                    var gOk = g.isCorrect === true
+                    var gHalf = !gOk && (Number(g.awardedPoints) || 0) > 0
+                    return (
+                      <div key={'g-' + gi} className={'p-2.5 rounded-lg border space-y-1 ' + (gOk ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-900/10' : gHalf ? 'border-amber-200 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-900/10' : 'border-red-200 bg-red-50/50 dark:border-red-900/40 dark:bg-red-900/10')}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-xs font-medium min-w-0" style={{ textAlign: 'left' }}><FractionText text={g.question || ''} /></p>
+                          <Badge className={'text-[10px] shrink-0 ' + (gOk ? 'bg-emerald-500 text-white' : gHalf ? 'bg-amber-500 text-white' : 'bg-red-500 text-white')} dir="ltr">{g.awardedPoints}/{g.maxPoints}</Badge>
+                        </div>
+                        {g.answer && (
+                          <p className="text-[10px] text-muted-foreground" style={{ textAlign: 'left' }}>إجابتك: <FractionText text={g.answer} /></p>
+                        )}
+                        {g.modelAnswer && (
+                          <p className="text-[10px] text-emerald-600" style={{ textAlign: 'left' }}>الإجابة النموذجية: <FractionText text={g.modelAnswer} /></p>
+                        )}
+                        {g.feedback && <p className="text-[10px] text-muted-foreground">🤖 {g.feedback}</p>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         )
