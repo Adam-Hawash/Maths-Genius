@@ -905,8 +905,24 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                 })}
               </div>
             )}
-            {bWrong.length === 0 && (
-              <p className="mt-3 text-sm text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
+            {/* أحسنت ONLY when the student got the FULL final grade (score === maxScore) */}
+            {(function() {
+              var bWriting = hwWritingAnswers[blockedHwId] || []
+              var bWritingBad = bWriting.some(function(wa) { return wa.isCorrect === false && wa.answer && String(wa.answer).trim() })
+              var bPending = bWriting.some(function(wa) { return wa.gradingStatus === 'pending' })
+              var bFull = !!bScore && bScore.score === bScore.maxScore
+              return bWrong.length === 0 && !bWritingBad && !bPending && bFull
+            })() && (
+              <p className="mt-3 text-sm text-emerald-600 font-medium">أحسنت يا بطل! 🎉 جميع الإجابات صحيحة والدرجة النهائية كاملة</p>
+            )}
+            {bWrong.length === 0 && (function() {
+              var bWriting = hwWritingAnswers[blockedHwId] || []
+              var bWritingBad = bWriting.some(function(wa) { return wa.isCorrect === false && wa.answer && String(wa.answer).trim() })
+              var bPending = bWriting.some(function(wa) { return wa.gradingStatus === 'pending' })
+              var bFull = !!bScore && bScore.score === bScore.maxScore
+              return !bWritingBad && !bFull && bPending
+            })() && (
+              <p className="mt-3 text-sm text-amber-600 font-medium flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> لسه في أسئلة مقالية بتتصحح بالذكاء الاصطناعي — النتيجة النهائية هتتحدث تلقائياً</p>
             )}
           </div>
         )}
@@ -1134,8 +1150,17 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
             })}
           </div>
         )}
-        {sDisplayQuestions.length === 0 && sWrong.length === 0 && (
-          <p className="mx-4 text-sm text-emerald-600 font-medium">أحسنت! جميع الإجابات صحيحة</p>
+        {/* أحسنت ONLY when the student got the FULL final grade (score === maxScore) */}
+        {(function() {
+          var sWritingBad = sWritingAnswers.some(function(wa) { return wa.isCorrect === false && wa.answer && String(wa.answer).trim() })
+          var sPending = sWritingAnswers.some(function(wa) { return wa.gradingStatus === 'pending' })
+          var sFull = !!sScore && sScore.score === sScore.maxScore
+          return sDisplayQuestions.length === 0 && sWrong.length === 0 && !sWritingBad && !sPending && sFull
+        })() && (
+          <p className="mx-4 text-sm text-emerald-600 font-medium">أحسنت يا بطل! 🎉 جميع الإجابات صحيحة والدرجة النهائية كاملة</p>
+        )}
+        {sDisplayQuestions.length === 0 && sWrong.length === 0 && sWritingAnswers.some(function(wa) { return wa.gradingStatus === 'pending' }) && (
+          <p className="mx-4 text-sm text-amber-600 font-medium flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> لسه في أسئلة مقالية بتتصحح بالذكاء الاصطناعي — النتيجة النهائية هتتحدث تلقائياً</p>
         )}
 
         {/* OTHER HOMEWORKS — quick navigation after submission */}

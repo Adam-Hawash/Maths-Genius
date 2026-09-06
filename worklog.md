@@ -216,3 +216,19 @@ Stage Summary:
 - Submission is instant; AI grading happens in the background in parallel and results appear automatically
 - Grading is now strict AND fair: photo must contain the student's own solution (onTopic), printed question text is ignored, exact-equivalence only, low-confidence/failures go to manual review instead of random verdicts
 - One source of truth: verdicts stored at submit time — admin views, student views and progress views all read the same stored result, zero re-grading
+
+---
+Task ID: 9
+Agent: Main Agent (Z.ai Code)
+Task: Round 9 — "أحسنت! جميع الإجابات صحيحة" must appear ONLY when the student earned the FULL final grade (not when MCQ happens to be all-correct while writing questions are pending/ungraded)
+
+Work Log:
+- Bug from user screenshot: student scored 5/52 yet saw "أحسنت! جميع الإجابات صحيحة" — the message was gated on "no wrong MCQ answers" only, ignoring writing questions (pending or scored 0) and the actual final score
+- Fixed BOTH places in StudentPortal (submitted screen + blocked/review screen):
+  * Praise now requires ALL of: no wrong MCQ, no wrong writing answers, no writing answers still grading (pending), AND score === maxScore (full final grade) → "أحسنت يا بطل! 🎉 جميع الإجابات صحيحة والدرجة النهائية كاملة"
+  * While background grading is still running → amber note instead: "لسه في أسئلة مقالية بتتصحح بالذكاء الاصطناعي — النتيجة النهائية هتتحدث تلقائياً"
+  * Partial grades (e.g. 5/52 with graded writing) → NO praise, just the honest score badge
+- tsc: zero new errors
+
+Stage Summary:
+- Praise is now honest: only a perfect final score earns "أحسنت يا بطل 🎉"; pending grading shows a live status note; partial scores show the score only
