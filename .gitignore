@@ -3,3 +3,6 @@ node_modules/
 next-env.d.ts
 tsconfig.tsbuildinfo
 prisma/db/
+.env
+db/
+dev.log
