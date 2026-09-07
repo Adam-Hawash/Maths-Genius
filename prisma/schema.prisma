@@ -29,10 +29,16 @@ model Student {
   lastLogin    DateTime?
   isPaidAccess Boolean           @default(false)
   // ربط الجهاز: الطالب بيسجل دخول من جهازه بس — المستر يقدر يسمح بكل الأجهزة
-  // deviceId = هوية فريدة عشوائية (dev_) لجهاز إنشاء الحساب
+  // deviceId = هوية فريدة عشوائية (dev_) — عمود عادي بيتحدث (تشخيص/سجل)
   // deviceFp = بصمة "ناتج الجهاز" (dv3_) احتياطي لو بيانات المتصفح اتمسحت
-  deviceId        String  @default("")
-  deviceFp        String  @default("")
+  // creationDeviceId/creationDeviceFp = جهاز إنشاء الحساب — **ثابت لا يتغير أبدًا**
+  //   بيتكتبوا مرة واحدة وقت التسجيل فقط، والدخول بيتحقق ضدهم حصريًا.
+  //   ده اللي بيمنع أي إعادة ربط بالغلط على جهاز غريب.
+  deviceId          String  @default("")
+  deviceFp          String  @default("")
+  creationDeviceId  String  @default("")
+  creationDeviceFp  String  @default("")
+  deviceType        String  @default("")
   allowAllDevices Boolean @default(false)
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
