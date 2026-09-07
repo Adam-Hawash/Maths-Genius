@@ -36,6 +36,7 @@ model Student {
   //   ده اللي بيمنع أي إعادة ربط بالغلط على جهاز غريب.
   deviceId          String  @default("")
   deviceFp          String  @default("")
+  deviceTraits      String  @default("")
   creationDeviceId  String  @default("")
   creationDeviceFp  String  @default("")
   deviceType        String  @default("")

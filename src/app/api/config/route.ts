@@ -4,12 +4,12 @@ import { db, safeWrite } from '@/lib/db'
 
 var DEFAULTS = {
   // === Navbar ===
-  navbar_brand: 'Maths Genius',
+  navbar_brand: 'Math Genius',
   navbar_subtitle: 'Mr Wael Khodier',
 
   // === Hero Section ===
   hero_badge: 'منصة تعليمية متكاملة | Comprehensive Learning Platform',
-  hero_title_line1: 'Maths Genius',
+  hero_title_line1: 'Math Genius',
   hero_title_line2: 'Mr Wael Khodier',
   hero_subtitle: 'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.',
   hero_stat1_value: '8+',
@@ -72,7 +72,7 @@ var DEFAULTS = {
   // === Guide Section ===
   guide_badge: 'دليلك التعليمي | Learning Guide',
   guide_title: 'كيف تستخدم المنصة؟ | How to Use the Platform',
-  guide_subtitle: 'ست خطوات بسيطة لتبدأ رحلتك التعليمية في Maths Genius — Six simple steps to begin your learning journey',
+  guide_subtitle: 'ست خطوات بسيطة لتبدأ رحلتك التعليمية في Math Genius — Six simple steps to begin your learning journey',
   guide_card1_title: 'تسجيل حسابك',
   guide_card1_title_en: 'Register',
   guide_card1_desc: 'أنشئ حسابك في المنصة بسرعة وسهولة. اختر صفّك الدراسي وابدأ رحلتك التعليمية فوراً. Create your account quickly and start learning.',
@@ -106,7 +106,7 @@ var DEFAULTS = {
   whatsapp_number: '201017201680',
 
   // === Footer ===
-  footer_brand: 'Maths Genius',
+  footer_brand: 'Math Genius',
   footer_copyright: 'جميع الحقوق محفوظة لـ أدهم حواش',
 
   // === Favicon ===
@@ -134,6 +134,15 @@ export async function GET() {
     for (var i = 0; i < configs.length; i++) {
       var c = configs[i]
       map[c.key] = c.value
+    }
+    // اسم المنصة الصحيح: Math Genius (من غير s) — لو قاعدة البيانات لسه فيها
+    // الاسم القديم من نسخة قديمة بنصلحه على القراءة، والترحيل في ensure-schema
+    // بصلحه نهائيًا في قاعدة البيانات
+    var brandKeys = ['navbar_brand', 'hero_title_line1', 'footer_brand', 'footer_copyright', 'guide_subtitle']
+    for (var b = 0; b < brandKeys.length; b++) {
+      if (typeof map[brandKeys[b]] === 'string' && map[brandKeys[b]].indexOf('Maths Genius') !== -1) {
+        map[brandKeys[b]] = map[brandKeys[b]].split('Maths Genius').join('Math Genius')
+      }
     }
     return NextResponse.json(map)
   } catch (error) {

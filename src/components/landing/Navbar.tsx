@@ -51,7 +51,7 @@ export function Navbar() {
   const cfg = siteConfig
   const instructorPhoto = cfg.instructor_photo || ''
   const youtubeLink = cfg.social_youtube || ''
-  const navBrand = cfg.navbar_brand || 'Maths Genius'
+  const navBrand = cfg.navbar_brand || 'Math Genius'
   const navSubtitle = cfg.navbar_subtitle || 'Mr Wael Khodier'
 
   const isAuthenticated = !!currentStudent || isAdminLoggedIn
