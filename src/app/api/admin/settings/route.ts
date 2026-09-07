@@ -4,7 +4,7 @@ import { db, safeWrite } from '@/lib/db'
 
 var DEFAULT_EMAIL = 'math genius'
 var DEFAULT_PASSWORD = 'wael2026#'
-var DEFAULT_NAME = 'Mr Wael Khodier'
+var DEFAULT_NAME = 'Mr. Sherif ElSayed'
 
 export async function GET() {
   try {
