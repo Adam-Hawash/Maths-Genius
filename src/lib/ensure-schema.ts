@@ -14,7 +14,7 @@ export function makeLibsqlClient() {
 
 export var SCHEMA_TABLES = [
   'CREATE TABLE IF NOT EXISTS Admin (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password TEXT NOT NULL, name TEXT NOT NULL DEFAULT "Admin", createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
-  'CREATE TABLE IF NOT EXISTS Student (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT NOT NULL UNIQUE, password TEXT NOT NULL DEFAULT "", grade TEXT NOT NULL, status TEXT NOT NULL DEFAULT "pending", parentName TEXT NOT NULL DEFAULT "", parentPhone TEXT NOT NULL DEFAULT "", loginCount INTEGER NOT NULL DEFAULT 0, lastLogin DATETIME, isPaidAccess INTEGER NOT NULL DEFAULT 0, deviceId TEXT NOT NULL DEFAULT "", deviceFp TEXT NOT NULL DEFAULT "", creationDeviceId TEXT NOT NULL DEFAULT "", creationDeviceFp TEXT NOT NULL DEFAULT "", deviceType TEXT NOT NULL DEFAULT "", allowAllDevices INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  'CREATE TABLE IF NOT EXISTS Student (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT NOT NULL UNIQUE, password TEXT NOT NULL DEFAULT "", grade TEXT NOT NULL, status TEXT NOT NULL DEFAULT "pending", parentName TEXT NOT NULL DEFAULT "", parentPhone TEXT NOT NULL DEFAULT "", loginCount INTEGER NOT NULL DEFAULT 0, lastLogin DATETIME, isPaidAccess INTEGER NOT NULL DEFAULT 0, deviceId TEXT NOT NULL DEFAULT "", deviceFp TEXT NOT NULL DEFAULT "", deviceTraits TEXT NOT NULL DEFAULT "", creationDeviceId TEXT NOT NULL DEFAULT "", creationDeviceFp TEXT NOT NULL DEFAULT "", deviceType TEXT NOT NULL DEFAULT "", allowAllDevices INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   'CREATE TABLE IF NOT EXISTS StudentActivity (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, action TEXT NOT NULL, details TEXT DEFAULT "", createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE)',
   'CREATE TABLE IF NOT EXISTS Video (id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT DEFAULT "", filePath TEXT DEFAULT "", fileType TEXT DEFAULT "", thumbnail TEXT DEFAULT "", grade TEXT NOT NULL, price REAL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   'CREATE TABLE IF NOT EXISTS Homework (id TEXT PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL DEFAULT "", filePath TEXT DEFAULT "", fileType TEXT DEFAULT "", thumbnail TEXT DEFAULT "", answerKeyPath TEXT DEFAULT "", answerKeyType TEXT DEFAULT "", grade TEXT NOT NULL, questions TEXT DEFAULT "", createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
@@ -39,6 +39,8 @@ var SCHEMA_COLUMNS = [
   ['Student', 'parentPhone', 'TEXT', "NOT NULL DEFAULT ''"],
   ['Student', 'deviceId', 'TEXT', "NOT NULL DEFAULT ''"],
   ['Student', 'deviceFp', 'TEXT', "NOT NULL DEFAULT ''"],
+  // مكوّنات الجهاز الخام (JSON) — للمطابقة الذكية عند تعرّف نفس الجهاز
+  ['Student', 'deviceTraits', 'TEXT', "NOT NULL DEFAULT ''"],
   // جهاز إنشاء الحساب — ثابت: بيتكتب وقت التسجيل بس والدخول بيتحقق ضده حصريًا
   ['Student', 'creationDeviceId', 'TEXT', "NOT NULL DEFAULT ''"],
   ['Student', 'creationDeviceFp', 'TEXT', "NOT NULL DEFAULT ''"],
@@ -89,7 +91,11 @@ var SCHEMA_FIXES = [
   'UPDATE Student SET deviceFp = \'\' WHERE deviceFp IS NULL',
   'UPDATE Student SET creationDeviceId = \'\' WHERE creationDeviceId IS NULL',
   'UPDATE Student SET creationDeviceFp = \'\' WHERE creationDeviceFp IS NULL',
+  'UPDATE Student SET deviceTraits = \'\' WHERE deviceTraits IS NULL',
   'UPDATE Student SET deviceType = \'\' WHERE deviceType IS NULL',
+  // ===== تصحيح اسم المنصة (Maths Genius → Math Genius) لمرة واحدة =====
+  // القيم المخزنة في قاعدة البيانات من نسخ قديمة — بنصححها مرة واحدة (idempotent)
+  "UPDATE SiteConfig SET value = REPLACE(value, 'Maths Genius', 'Math Genius') WHERE key IN ('navbar_brand', 'hero_title_line1', 'footer_brand', 'footer_copyright', 'guide_subtitle') AND value LIKE '%Maths Genius%'",
   // ===== ترحيل لمرة واحدة (idempotent) =====
   // الحسابات الموجودة اللي ملهاش ربط إنشاء: نثبّت الربط الحالي كـ"جهاز إنشاء"
   // عشان مفيش حساب يتحجب فجأة بعد الترقية. الربط ده بعدها **ثابت** — أي جهاز

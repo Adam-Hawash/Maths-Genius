@@ -138,7 +138,7 @@ export default function HeroSection() {
         <div className="relative w-full">
           <img
             src={heroBg}
-            alt="Maths Genius Banner"
+            alt="Math Genius Banner"
             className="w-full h-auto max-h-[360px] object-cover object-center"
           />
         </div>
@@ -180,7 +180,7 @@ export default function HeroSection() {
             {/* Title */}
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-white">
               <span className="block text-[#E5BE5A]">
-                {cfg.hero_title_line1 || 'Maths Genius'}
+                {cfg.hero_title_line1 || 'Math Genius'}
               </span>
               <span className="block mt-1 text-2xl sm:text-3xl lg:text-4xl font-semibold text-white/80">
                 {cfg.hero_title_line2 || 'Mr Wael Khodier'}
