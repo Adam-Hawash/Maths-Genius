@@ -212,3 +212,20 @@ model VideoAccess {
 
   @@unique([videoId, studentId])
 }
+
+// ============================================================
+// PlayTicket — تذكرة تشغيل فيديو تُستخدم مرة واحدة ولمدة قصيرة
+// الهدف: معرف اليوتيوب أو مسار الملف لا يُرسل للطالب إطلاقاً —
+// الطالب ياخد ticket عشوائي opaque، ومشغل الصفحة (api/player/[ticket])
+// هو الوحيد اللي بيفتح الفيديو الحقيقي من على السيرفر.
+// ============================================================
+model PlayTicket {
+  id        String   @id
+  videoId   String
+  studentId String   @default("")
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+
+  @@index([expiresAt])
+}
