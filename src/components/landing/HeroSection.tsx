@@ -47,7 +47,7 @@ export default function HeroSection() {
       var img2 = new Image()
       img2.onload = function () { setFallbackPhotoExists(true) }
       img2.onerror = function () { setFallbackPhotoExists(false) }
-      img2.src = '/images/instructor.jpg'
+      img2.src = '/images/instructor.webp'
     } else {
       setFallbackPhotoExists(false)
     }
@@ -55,7 +55,7 @@ export default function HeroSection() {
 
   const dbPhoto = cfg.instructor_photo || ''
   const dbBg = cfg.hero_bg_image || ''
-  const heroPhoto = dbPhoto || '/images/instructor.jpg'
+  const heroPhoto = dbPhoto || '/images/instructor.webp'
   const heroBg = dbBg || '/images/hero-bg.jpg'
 
   const showBg = !!dbBg || fallbackBgExists
@@ -183,7 +183,7 @@ export default function HeroSection() {
                 {cfg.hero_title_line1 || 'Math Genius'}
               </span>
               <span className="block mt-1 text-2xl sm:text-3xl lg:text-4xl font-semibold text-white/80">
-                {cfg.hero_title_line2 || 'Mr Wael Khodier'}
+                {cfg.hero_title_line2 || 'Mr. Sherif ElSayed'}
               </span>
             </h1>
 
@@ -306,14 +306,14 @@ export default function HeroSection() {
               <svg className="absolute -bottom-6 -right-6 w-16 h-16 opacity-40 pointer-events-none" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="42" fill="none" stroke="#C49A38" strokeWidth="2.5" strokeDasharray="3 7" />
               </svg>
-              {/* Square photo container with gold frame */}
-              <div className="relative w-56 h-56 sm:w-64 sm:h-64 lg:w-72 lg:h-72 rounded-3xl overflow-hidden border-2 border-[#C49A38]/40 gold-glow bg-[#1A1714] shadow-2xl">
+              {/* Circular photo container with gold frame — الصورة بتاع المستر دائرية فالإطار دائري عشان تظهر كاملة ومظبوطة الأبعاد */}
+              <div className="relative w-56 h-56 sm:w-64 sm:h-64 lg:w-72 lg:h-72 rounded-full overflow-hidden border-2 border-[#C49A38]/40 gold-glow bg-transparent shadow-2xl">
                 {showPhoto ? (
                   <img
                     src={heroPhoto}
-                    alt={cfg.instructor_name || 'Mr Wael Khodier'}
+                    alt={cfg.instructor_name || 'Mr. Sherif ElSayed'}
                     className="w-full h-full object-cover"
-                    style={{ objectPosition: '50% 25%' }}
+                    style={{ objectPosition: '50% 50%' }}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[#C49A38]/30">
@@ -326,7 +326,7 @@ export default function HeroSection() {
               {/* Badge overlay */}
               <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#0F0D0A] border border-[#C49A38]/40 rounded-full px-5 py-2 shadow-lg">
                 <p className="text-[#E5BE5A] font-bold text-sm tracking-wider whitespace-nowrap">
-                  {cfg.instructor_name || 'مستر وائل خضير'}
+                  {cfg.instructor_name || 'مستر شريف السيد'}
                 </p>
               </div>
             </div>

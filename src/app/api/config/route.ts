@@ -5,12 +5,12 @@ import { db, safeWrite } from '@/lib/db'
 var DEFAULTS = {
   // === Navbar ===
   navbar_brand: 'Math Genius',
-  navbar_subtitle: 'Mr Wael Khodier',
+  navbar_subtitle: 'Mr. Sherif ElSayed',
 
   // === Hero Section ===
   hero_badge: 'منصة تعليمية متكاملة | Comprehensive Learning Platform',
   hero_title_line1: 'Math Genius',
-  hero_title_line2: 'Mr Wael Khodier',
+  hero_title_line2: 'Mr. Sherif ElSayed',
   hero_subtitle: 'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.',
   hero_stat1_value: '8+',
   hero_stat1_label: 'Grade Levels',
@@ -28,11 +28,11 @@ var DEFAULTS = {
   schedule_subtitle: 'جدول مواعيد الحصص الأسبوعية لكل الصفوف الدراسية — اختر اليوم المناسب لك وتابع موعد حصتك',
   schedule_badge: 'جدول الحصص الأسبوعي',
   schedule_footer_note: 'جميع المواعيد بتوقيت القاهرة. لو عندك أي استفسار عن موعد حصتك تواصل معنا عبر واتساب.',
-  schedule_brand: 'Math Genius — Mr/ Wael Khodier',
+  schedule_brand: 'Math Genius — Mr. Sherif ElSayed',
   schedule_data: '',
 
   // === Instructor ===
-  instructor_name: 'Mr Wael Khodier',
+  instructor_name: 'Mr. Sherif ElSayed',
   instructor_title: 'Mathematics Specialist | معلم الرياضيات المتخصص',
   instructor_photo: '',
 
@@ -54,8 +54,8 @@ var DEFAULTS = {
 
   // === Tips Section ===
   tips_badge: 'نصائح للتفوّق | Tips for Excellence',
-  tips_title: 'نصائح الأستاذ وائل | Mr. Wael\'s Tips',
-  tips_subtitle: 'نصائح ذهبية من الأستاذ وائل خضير للتفوّق في الرياضيات — Golden advice from Mr. Wael Khodier',
+  tips_title: 'نصائح المستر | Tips',
+  tips_subtitle: 'نصائح ذهبية من مستر شريف السيد للتفوّق في الرياضيات — Golden advice from Mr. Sherif ElSayed',
   tips_card1_title: 'حدد وقت يومي للمراجعة',
   tips_card1_title_en: 'Set Daily Review Time',
   tips_card1_desc: 'خصص 20-30 دقيقة كل يوم لمراجعة ما تعلمته. الاستمرارية هي مفتاح التفوّق في الرياضيات. Dedicate 20-30 minutes daily for review.',
