@@ -131,7 +131,7 @@ export default function HomePage() {
         </div>
         <div className="text-center space-y-3">
           <h1 className="text-2xl font-bold text-foreground tracking-wide">
-            <span className="text-[#8B6914] dark:text-[#E5BE5A]">Maths</span> Genius
+            <span className="text-[#8B6914] dark:text-[#E5BE5A]">Math</span> Genius
           </h1>
           <div className="flex items-center gap-3 justify-center">
             <Loader2 className="h-4 w-4 animate-spin text-[#C49A38]" />
