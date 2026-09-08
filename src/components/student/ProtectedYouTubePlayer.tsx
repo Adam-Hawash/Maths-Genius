@@ -76,9 +76,34 @@ function qualityLabel(q: string): string {
   var map: any = { highres: '2160p+', hd2160: '2160p', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p', medium: '360p', small: '240p', tiny: '144p' }
   return map[q] || q
 }
+/* الجودة (أهم حاجة للمستر — 2026-ز): **الإصلاح الجذري لمشكلة "الجودة مش
+   بتعلى" على الموبايل**. يوتيوب بيحدد سقف الجودة بمقاس الـ iframe نفسه:
+   مقاس 1280×720 = أقصى تيار 720p حتى لو الفيديو الأصلي 1080p (ده كان
+   بيحصل على الموبايل لأن الصندوق أصغر من 640 فكان بيرندر 1280×720).
+   **الحل: الـ iframe بيرندر دايمًا 1920×1080 على أي جهاز** (حتى لو الصندوق
+   صغير) — يوتيوب يسمح بتيار 1080p فعلًا، والتصغير بـ CSS scale (contain)
+   بيحافظ على الحدة 100% (supersampling) ومفيش أي قص للفيديو. */
+
+/* ===== الجودة — قاعدة 480p تلقائية (طلب المستر الحرفي 2026-ح) =====
+   "الجودة بتتغير كتابيا بس في الحقيقة لأ — لو مالهاش حل ثبتها على 480
+   تلقائيًا عشان تشتغل".
+   1) **الافتراضي = 480p مقفولة تلقائيًا** على كل فيديو (زي اختيار يدوي
+      ثابت — الاتنين اتجاهين: لو يوتيوب نزّل تحت 480 نرفع، ولو طلع فوق 480
+      ننزّل — كده الجودة الفعلية = 480p فعلًا مش على الورق بس).
+   2) سلم التصعيد لو يوتيوب تجاهل الأمر:
+      a) setPlaybackQualityRange + setPlaybackQuality كل 2.5 ثانية
+      b) بعد 8 ثواني عدم مطابقة → nudge (سيك صغير بنفس الثانية بيطلب تيار
+         جديد جوه النطاق المفروض من غير reload)
+      c) بعد 25 ثانية → **تبديل تيار حقيقي واحد** loadVideoById بالمستوى
+         المطلوب (سقف 3 مرات + كولداون 30 ثانية عشان مفيش لوب).
+   3) **الرقم المعروض = الجودة الحقيقية الحية** من getPlaybackQuality —
+      مش الاختيار الورقي (ده كان سبب "بتتغير كتابيا").
+   ملاحظة صادقة زي ما وقّفنا عليها من قبل: لو الفيديو نفسه مرفوع على
+   يوتيوب أقل من 480 (مثلاً 360p بس) مفيش مشغل يقدر يخترع بكسلات — بنقفل
+   أعلى حاجة موجودة في الملف الأصلي. */
+var Q_RANK: any = { highres: 10, hd2160: 10, hd1440: 9, hd1080: 8, hd720: 7, large: 6, medium: 5, small: 4, tiny: 3 }
 /* أعلى جودة متاحة فعلًا في الفيديو — يوتيوب بيرجّع القائمة مرتبة من الأعلى
-   للأقل (وآخر عنصر 'auto'). لو الملف الأصلي مرفوع بجودة ضعيفة، دي أعلى
-   حاجة هتظهر — وده حدود المصدر مش حدود المشغل. */
+   للأقل (وآخر عنصر 'auto'). */
 function highestAvailable(p: any): string {
   try {
     var levels = p && p.getAvailableQualityLevels ? p.getAvailableQualityLevels() : []
@@ -88,17 +113,29 @@ function highestAvailable(p: any): string {
   } catch (e) {}
   return 'hd720'
 }
-/* الجودة (أهم حاجة للمستر — 2026-ز): **الإصلاح الجذري لمشكلة "الجودة مش
-   بتعلى" على الموبايل**. يوتيوب بيحدد سقف الجودة بمقاس الـ iframe نفسه:
-   مقاس 1280×720 = أقصى تيار 720p حتى لو الفيديو الأصلي 1080p (ده كان
-   بيحصل على الموبايل لأن الصندوق أصغر من 640 فكان بيرندر 1280×720).
-   **الحل: الـ iframe بيرندر دايمًا 1920×1080 على أي جهاز** (حتى لو الصندوق
-   صغير) — يوتيوب يسمح بتيار 1080p فعلًا، والتصغير بـ CSS scale (contain)
-   بيحافظ على الحدة 100% (supersampling) ومفيش أي قص للفيديو. */
-
-/* ============================================================
- * ProtectedYouTubePlayer — the player box (aspect-video parent)
- * ============================================================ */
+/* المستوى الفعلي المفروض: لو المستوى المطلوب موجود في الفيديو → هو؛
+   لو مش موجود → أقرب مستوى متاح له (نفضّل الأقرب من تحت عشان "تشتغل") */
+function resolveLockLevel(p: any, wanted: string): string {
+  try {
+    var levels = p && p.getAvailableQualityLevels ? p.getAvailableQualityLevels() : []
+    var clean: string[] = []
+    for (var i = 0; i < levels.length; i++) {
+      if (levels[i] && levels[i] !== 'auto' && levels[i] !== 'default' && STANDARD_QUALITIES.indexOf(levels[i]) >= 0) clean.push(levels[i])
+    }
+    if (clean.indexOf(wanted) >= 0) return wanted
+    if (clean.length === 0) return wanted
+    var wr = Q_RANK[wanted] || 0
+    var best = clean[0]
+    var bestDist = 999
+    for (var j = 0; j < clean.length; j++) {
+      var r = Q_RANK[clean[j]] || 0
+      var dist = Math.abs(r - wr)
+      /* تعادل → الأقل (أخف على النت — "عشان تشتغل") */
+      if (dist < bestDist || (dist === bestDist && r < (Q_RANK[best] || 0))) { best = clean[j]; bestDist = dist }
+    }
+    return best
+  } catch (e) { return wanted }
+}
 export function ProtectedYouTubePlayer({
   ytId,
   poster,
@@ -169,6 +206,12 @@ export function ProtectedYouTubePlayer({
         e.preventDefault()
         warnRecording('🚫 التسجيل ممنوع')
       }
+      /* Ctrl + Shift + R / S (طلب المستر حرفيًا 2026-ح — إعادة تحميل عنيدة /
+         حفظ الصفحة / أداة القص في متصفحات كتير) */
+      if (e.ctrlKey && e.shiftKey && (k === 'r' || k === 's')) {
+        e.preventDefault()
+        warnRecording('🚫 العملية دي ممنوعة')
+      }
       if (k === 'printscreen' || e.keyCode === 44) {
         warnRecording('🚫 التسجيل ممنوع')
         try {
@@ -232,16 +275,17 @@ export function ProtectedYouTubePlayer({
   const savedSecondsRef = useRef(0)
   const maxSeenRef = useRef(0)
 
-  /* quality settings state — DEFAULT: 'top' = أعلى جودة متاحة فعلًا في المصدر
-     (طلب المستر: الجودة تبقى عالية). الطالب يقدر يختار من القائمة واختياره
-     بيتنفذ فعلًا (إعادة تحميل التيار بالمستوى). */
+  /* quality settings state — DEFAULT: **480p مقفولة تلقائيًا** (طلب المستر
+     الحرفي: "لو مالهاش حل ثبت لي الجودة على 480 تلقائيًا عشان تشتغل").
+     الطالب يقدر يختار من القائمة واختياره بيتنفذ فعلًا بنفس آلية القفل. */
   const [qualityLevels, setQualityLevels] = useState<string[]>([])
-  const [selectedQuality, setSelectedQuality] = useState<string>('top')
+  const [selectedQuality, setSelectedQuality] = useState<string>('large')
   const [showQualityMenu, setShowQualityMenu] = useState(false)
-  /* الجودة الفعلية الشغالة دلوقتي — عشان زرار الجودة يعرض الحقيقة
-     (مثلاً "1080p" تظهر بس لما التيار يكون 1080p فعلًا) */
+  /* الجودة الفعلية الشغالة دلوقتي — عشان زرار الجودة يعرض **الحقيقة**
+     من getPlaybackQuality (مش الاختيار الورقي — ده كان سبب
+     "الجودة بتتغير كتابيا بس") */
   const [actualQuality, setActualQuality] = useState<string>('')
-  const selectedQualityRef = useRef('top')
+  const selectedQualityRef = useRef('large')
   const lastQualityApplyRef = useRef(0)
   const mismatchSinceRef = useRef(0)
   const lastHardReloadRef = useRef(0)
@@ -340,6 +384,19 @@ export function ProtectedYouTubePlayer({
         if (p.setPlaybackQualityRange) p.setPlaybackQualityRange(q, q)
         if (p.setPlaybackQuality) p.setPlaybackQuality(q)
       }
+    } catch (e) {}
+    lastQualityApplyRef.current = Date.now()
+  }
+
+  /* (2026-ح) آخر سلاح في سلم الجودة: **تبديل تيار حقيقي واحد** —
+     loadVideoById بنفس الثانية والمستوى المطلوب (suggestedQuality بيطلب
+     التيار بالمستوى ده من أول لحظة). مش بنكرره (سقف 3 + كولداون من الحارس) */
+  function hardReloadStream(target: string) {
+    var p = playerRef.current
+    if (!p || !ytId) return
+    try {
+      var t = (p.getCurrentTime ? p.getCurrentTime() : 0) || 0
+      if (p.loadVideoById) p.loadVideoById({ videoId: ytId, startSeconds: Math.max(0, t), suggestedQuality: target })
     } catch (e) {}
     lastQualityApplyRef.current = Date.now()
   }
@@ -451,17 +508,16 @@ export function ProtectedYouTubePlayer({
               }
             },
             onPlaybackQualityChange: function (e: any) {
-              /* لو يوتيوب نزّل الجودة لوحده بعد ما فرضناها → نعيد الأمر فورًا
-                 (soft) — الحارس الدوري في الأسفل بيتولّي إعادة التحميل القسرية،
-                 وبيتدخل بس لو الجودة نزلت **تحت** المطلوب (الترقية بس) */
+              /* لو يوتيوب نزّل أو طلّع الجودة لوحده بعد ما قفلناها → نعيد الأمر
+                 فورًا (soft) — القفل الاتنين اتجاهين (480 ثابتة فوق وتحت)،
+                 والسلم التصعيدي في الأسفل بيتولّي الحالات العنيدة */
               if (cancelled) return
               var wanted = selectedQualityRef.current
               if (wanted === 'auto') return
               try {
-                var qRank: any = { highres: 10, hd2160: 10, hd1440: 9, hd1080: 8, hd720: 7, large: 6, medium: 5, small: 4, tiny: 3 }
-                var effQ = wanted === 'top' ? highestAvailable(e.target) : wanted
+                var effQ = wanted === 'top' ? highestAvailable(e.target) : resolveLockLevel(e.target, wanted)
                 var curQ = e.target.getPlaybackQuality ? e.target.getPlaybackQuality() : ''
-                if (effQ && curQ && curQ !== 'unknown' && (qRank[curQ] || 0) < (qRank[effQ] || 0) && Date.now() - lastQualityApplyRef.current > 3000) {
+                if (effQ && curQ && curQ !== 'unknown' && curQ !== 'auto' && (Q_RANK[curQ] || 0) !== (Q_RANK[effQ] || 0) && Date.now() - lastQualityApplyRef.current > 2500) {
                   applyQuality(wanted)
                 }
               } catch (err) {}
@@ -529,45 +585,46 @@ export function ProtectedYouTubePlayer({
         setCurrentTime(t)
         if (d) setDuration(d)
         if (p.getVideoLoadedFraction) setBuffered((p.getVideoLoadedFraction() || 0) * 100)
-        /* sticky quality + captions stay OFF — الحارس بيفضّل اختيار الطالب
-           (أو 'top' = الأعلى المتاح) شغال، والـ HARD enforcement بيستخدم نفس
-           المستوى المطلوب */
+        /* sticky quality + captions stay OFF — القفل الاتنين اتجاهين:
+           الجودة الفعلية لازم تطابق اختيار الطالب (الافتراضي 480p) —
+           لو نزلت تحت المطلوب نرفعها، ولو طلعت فوقه ننزّلها */
         var wanted = selectedQualityRef.current
-        /* عرض الجودة: تلقائي/عالية → الفعلية الحية؛ اختيار محدد → **يثبت على
-           اختيار الطالب** زي قائمة يوتيوب نفسها (مش بيرقص كل نص ثانية) */
+        /* عرض الجودة: **الحقيقة الحية** من getPlaybackQuality في كل الأوضاع
+           (ده اللي خلى المستر يقول "بتتغير كتابيا" — لأن الرقم كان بيعرض
+           الاختيار مش التيار الفعلي) */
         if (p.getPlaybackQuality) {
           try {
             var aq = p.getPlaybackQuality()
-            if (aq && aq !== 'unknown' && aq !== 'auto' && (wanted === 'auto' || wanted === 'top')) {
+            if (aq && aq !== 'unknown') {
               setActualQuality(function (prev) { return prev === aq ? prev : aq })
             }
           } catch (e) {}
         }
         if (wanted !== 'auto' && p.getPlaybackQuality) {
-          var eff = wanted === 'top' ? highestAvailable(p) : wanted
+          var eff = wanted === 'top' ? highestAvailable(p) : resolveLockLevel(p, wanted)
           var cur = p.getPlaybackQuality()
-          /* الحارس بيفرض **الترقية بس**: لو الجودة الحالية أقل من المطلوب → فرض؛
-             ولو أعلى من اختيار الطالب → تقبل من غير إعادات تحميل بلا لزوم */
-          var qRank: any = { highres: 10, hd2160: 10, hd1440: 9, hd1080: 8, hd720: 7, large: 6, medium: 5, small: 4, tiny: 3 }
-          var curRank = qRank[cur] || 0
-          var effRank = qRank[eff] || 0
-          if (eff && cur && cur !== 'unknown' && curRank < effRank) {
-            /* (2026-ي) HARD enforcement **بدون reload**: لو يوتيوب استمر في
-               تجاهل الأوامر 8 ثواني → نطاق + سيك صغير بيطلب تيار جديد من غير
-               ما نكسر جلسة التشغيل (الـ reload نفسه كان بيرجع الجودة 360p)
-               — سقف 4 مرات + كولداون 20 ثانية */
+          var curRank = Q_RANK[cur] || 0
+          var effRank = Q_RANK[eff] || 0
+          if (eff && cur && cur !== 'unknown' && cur !== 'auto' && curRank !== effRank) {
+            /* سلم التصعيد (بدون لوب — كل مرحلة ليها كولداون):
+               1) أوامر API كل 2.5 ثانية
+               2) بعد 8 ثواني → nudge (سيك صغير بيطلب تيار جديد جوه النطاق)
+               3) بعد 25 ثانية → تبديل تيار حقيقي loadVideoById بالمستوى المطلوب
+                  (سقف 3 مرات + كولداون 30 ثانية) */
             if (mismatchSinceRef.current === 0) mismatchSinceRef.current = Date.now()
-            if (Date.now() - mismatchSinceRef.current > 8000 && Date.now() - lastHardReloadRef.current > 20000 && hardReloadCountRef.current < 4) {
+            var misFor = Date.now() - mismatchSinceRef.current
+            if (misFor > 25000 && Date.now() - lastHardReloadRef.current > 30000 && hardReloadCountRef.current < 3) {
               lastHardReloadRef.current = Date.now()
               mismatchSinceRef.current = 0
               hardReloadCountRef.current++
-              forceQuality(eff)
-            } else {
+              hardReloadStream(eff)
+            } else if (misFor > 8000) {
+              if (Date.now() - lastQualityApplyRef.current > 10000) forceQuality(eff)
+            } else if (Date.now() - lastQualityApplyRef.current > 2500) {
               applyQuality(wanted)
             }
           } else {
             mismatchSinceRef.current = 0
-            hardReloadCountRef.current = 0
           }
         }
         try { if (p.unloadModule) p.unloadModule('captions') } catch (e) {}
@@ -979,9 +1036,9 @@ export function ProtectedYouTubePlayer({
                 onTouchEnd={function (e) { e.preventDefault(); e.stopPropagation(); setShowQualityMenu(function (v) { return !v }) }}
               >
                 <Settings className={'w-5 h-5 transition-transform ' + (showQualityMenu ? 'rotate-90' : '')} />
-                {/* عرض الجودة: تلقائي/عالية → الفعلية الحية؛ اختيار محدد →
-                    **يثبت على اختيار الطالب** زي قائمة يوتيوب نفسها (2026-ي) */}
-                <span className="text-[10px] font-bold" dir="ltr">{qualityLabel((selectedQuality === 'auto' || selectedQuality === 'top') ? (actualQuality || selectedQuality) : selectedQuality)}</span>
+                {/* عرض الجودة: **الرقم الحقيقي الحي** من getPlaybackQuality —
+                    مفيش أي رقم ورقي (طلب المستر: "بتتغير كتابيا بس") */}
+                <span className="text-[10px] font-bold" dir="ltr">{qualityLabel(actualQuality || selectedQuality)}</span>
               </button>
             </div>
             <button

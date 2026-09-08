@@ -51,8 +51,9 @@ export function Navbar() {
   const cfg = siteConfig
   const instructorPhoto = cfg.instructor_photo || ''
   const youtubeLink = cfg.social_youtube || ''
-  // الاسم بس من غير أي علامة نصه (طلب المستر: شيل العصاية واكتب بس مستر وائل خضير)
-  const navName = cfg.navbar_subtitle || 'مستر وائل خضير'
+  // اسم المنصة جنب صورة المستر — "Math Genius" بالإنجليزي (طلب المستر حرفيًا:
+  // "انت كتبلي مستر بالعربي — لا، عايزك تكتبلي ماث جينيس بالانجليزي زي المكتوب في المنصة")
+  const navName = cfg.navbar_brand || 'Math Genius'
 
   const isAuthenticated = !!currentStudent || isAdminLoggedIn
   const isAuthPage = currentView === 'auth-login' || currentView === 'auth-register'
@@ -102,8 +103,8 @@ export function Navbar() {
               </div>
             )}
             <div className="hidden sm:block">
-              {/* الاسم بس — من غير علامة العصاية (|) ومن غير أي كلام زيادة (طلب المستر) */}
-              <h1 className="text-sm font-bold leading-tight text-foreground whitespace-nowrap">
+              {/* Math Genius — بالإنجليزي زي اسم المنصة (طلب المستر) */}
+              <h1 dir="ltr" className="text-sm font-bold leading-tight text-foreground whitespace-nowrap">
                 {navName}
               </h1>
             </div>
