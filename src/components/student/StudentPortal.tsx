@@ -650,6 +650,52 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
   const hwShuffleMaps = useRef<Record<string, number[]>>({})
   const hwPollTimers = useRef<Record<string, any>>({})
 
+  // ===== الترتيب التسلسلي للواجبات (زي الفيديوهات بالظبط — طلب المستر) =====
+  // الواجب ميفتحش غير لما الواجب اللي قبله يتسلّم. الترتيب: من الأقدم للأحدث
+  // (ترتيب نزول الواجبات نفسه). الواجبات اللي ملهاش أسئلة (ملف بس) بتتخطى
+  // عشان التسلسل ميقلعش على حاجة مش قابلة للتسليم.
+  var orderedHw = useMemo(function() {
+    return homework.slice().sort(function(a, b) {
+      var ta = new Date((a as any).createdAt || 0).getTime()
+      var tb = new Date((b as any).createdAt || 0).getTime()
+      return ta - tb
+    })
+  }, [homework])
+
+  var hwTrackable = function(h: any) {
+    try {
+      var qs = JSON.parse((h as any).questions || '[]')
+      return Array.isArray(qs) && qs.length > 0
+    } catch (e) { return false }
+  }
+
+  var hwLockMap = useMemo(function() {
+    var map: Record<string, boolean> = {}
+    var prevTrackable: string | null = null
+    orderedHw.forEach(function(h) {
+      var track = hwTrackable(h)
+      if (track && prevTrackable) {
+        map[h.id] = !completedHwIds.has(prevTrackable)
+      } else {
+        map[h.id] = false
+      }
+      if (track) prevTrackable = h.id
+    })
+    return map
+  }, [orderedHw, completedHwIds])
+
+  // الواجب اللي قبل كل واجب (عشان نعرض اسمه على كارت المقفول)
+  var hwPrevMap = useMemo(function() {
+    var map: Record<string, string> = {}
+    var prevTrackable: string | null = null
+    orderedHw.forEach(function(h) {
+      var track = hwTrackable(h)
+      if (track && prevTrackable) map[h.id] = prevTrackable
+      if (track) prevTrackable = h.id
+    })
+    return map
+  }, [orderedHw])
+
   /* Poll the background AI grading until it finishes — then update score + verdicts live */
   const startGradingPoll = (resultId: string, hwId: string) => {
     if (hwPollTimers.current[hwId]) clearInterval(hwPollTimers.current[hwId])
@@ -1106,6 +1152,10 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         var hasWriting = writingQuestions.length > 0
         var isExpanded = expandedHw === hw.id
         var isSubmitted = completedHwIds.has(hw.id)
+        // مقفول بالتسلسل؟ الواجب اللي قبله لسه متسلمش (زي الفيديوهات — طلب المستر)
+        var isHwSeqLocked = hwLockMap[hw.id] === true
+        var prevHwId = hwPrevMap[hw.id]
+        var prevHwTitle = prevHwId ? ((homework.find(function(x) { return x.id === prevHwId }) || ({} as any)).title || '') : ''
         var myAnswers = hwAnswers[hw.id] || {}
         var existingResult = hwResults[hw.id]
 
@@ -1174,35 +1224,42 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         var shuffleMap = hwShuffleMaps.current[hw.id] || allQuestions.map(function(_: any, i: number) { return i })
 
         return (
-          <Card key={hw.id} className={isSubmitted ? 'border-emerald-500/30' : hasQuestions ? 'cursor-pointer' : ''}>
+          <Card key={hw.id} className={isHwSeqLocked ? 'border-red-500/30 opacity-90' : isSubmitted ? 'border-emerald-500/30' : hasQuestions ? 'cursor-pointer' : ''}>
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-3" onClick={hasQuestions ? function() {
+                if (isHwSeqLocked) { toast.error('الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله — سلّم الواجب اللي قبله الأول', { duration: 6000 }); return }
                 if (isSubmitted) { setBlockedHwId(hw.id); return }
                 setExpandedHw(isExpanded ? null : hw.id)
               } : undefined}>
                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (isSubmitted ? 'bg-emerald-500/10' : hasQuestions ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
-                    <ClipboardList className={"h-4 w-4 " + (isSubmitted ? 'text-emerald-500' : hasQuestions ? 'text-emerald-500' : 'text-blue-500')} />
+                  <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (isHwSeqLocked ? 'bg-red-500/10' : isSubmitted ? 'bg-emerald-500/10' : hasQuestions ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
+                    {isHwSeqLocked ? <Lock className="h-4 w-4 text-red-500" /> : <ClipboardList className={"h-4 w-4 " + (isSubmitted ? 'text-emerald-500' : hasQuestions ? 'text-emerald-500' : 'text-blue-500')} />}
                   </div>
                   <div className="min-w-0 space-y-1">
                     <h3 className="font-semibold text-sm">{hw.title}</h3>
+                    {isHwSeqLocked && (
+                      <p className="text-[11px] text-red-500 font-bold leading-relaxed">
+                        🔒 الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله{prevHwTitle ? ' — "' + prevHwTitle + '"' : ''}
+                      </p>
+                    )}
                     {hw.content && <p className="text-xs text-muted-foreground line-clamp-2">{hw.content}</p>}
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-[10px] text-muted-foreground">{new Date(hw.createdAt).toLocaleDateString('ar-EG')}</p>
                       {hasMCQ && <Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-600">{mcqQuestions.length} اختيارات</Badge>}
                       {hasWriting && <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">{writingQuestions.length} مقالي</Badge>}
                       {!hasMCQ && !hasWriting && hasQuestions && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">{allQuestions.length} سؤال</Badge>}
+                      {isHwSeqLocked && <Badge className="text-[10px] bg-red-500 text-white gap-0.5"><Lock className="h-2.5 w-2.5" /> مقفول</Badge>}
                       {isSubmitted && existingResult && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {existingResult.score}/{existingResult.maxScore}</Badge>}
                       {isSubmitted && !existingResult && <Badge className="text-[10px] bg-emerald-500 text-white">تم التسليم</Badge>}
                     </div>
                   </div>
                 </div>
                 {hw.filePath && !hasQuestions && <FileAttachment filePath={hw.filePath} fileType={hw.fileType} />}
-                {hasQuestions && <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform shrink-0 mt-1 " + (isExpanded ? 'rotate-90' : '')} />}
+                {hasQuestions && !isHwSeqLocked && <ChevronLeft className={"h-4 w-4 text-muted-foreground transition-transform shrink-0 mt-1 " + (isExpanded ? 'rotate-90' : '')} />}
               </div>
 
               {/* ACTIVE HOMEWORK - not yet submitted */}
-              {isExpanded && hasQuestions && !isSubmitted && (
+              {isExpanded && hasQuestions && !isSubmitted && !isHwSeqLocked && (
                 <div className="mt-4 pt-4 border-t space-y-4">
                   {/* MCQ Section */}
                   {hasMCQ && (
@@ -1398,6 +1455,51 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   // نتيجة آخر تسليم (الدرجة + تصحيح المقالية بالذكاء الاصطناعي)
   const [lastResult, setLastResult] = useState<any>(null)
   const [showGradesFor, setShowGradesFor] = useState<string | null>(null)
+
+  // ===== الترتيب التسلسلي للامتحانات (زي الفيديوهات بالظبط — طلب المستر) =====
+  // الامتحان ميفتحش غير لما الامتحان اللي قبله يتقدّم. الترتيب: من الأقدم للأحدث.
+  var orderedExams = useMemo(function() {
+    return exams.slice().sort(function(a, b) {
+      var ta = new Date((a as any).createdAt || 0).getTime()
+      var tb = new Date((b as any).createdAt || 0).getTime()
+      return ta - tb
+    })
+  }, [exams])
+
+  var examLockMap = useMemo(function() {
+    var map: Record<string, boolean> = {}
+    var prevTrackable: string | null = null
+    orderedExams.forEach(function(e) {
+      var track = false
+      try {
+        var qs = JSON.parse((e as any).questions || '[]')
+        track = Array.isArray(qs) && qs.length > 0
+      } catch (err) { track = false }
+      if (track && prevTrackable) {
+        var prevDone = completedExamIds.has(prevTrackable) || (results || []).some(function(r) { return r.examId === prevTrackable })
+        map[e.id] = !prevDone
+      } else {
+        map[e.id] = false
+      }
+      if (track) prevTrackable = e.id
+    })
+    return map
+  }, [orderedExams, completedExamIds, results])
+
+  var examPrevMap = useMemo(function() {
+    var map: Record<string, string> = {}
+    var prevTrackable: string | null = null
+    orderedExams.forEach(function(e) {
+      var track = false
+      try {
+        var qs = JSON.parse((e as any).questions || '[]')
+        track = Array.isArray(qs) && qs.length > 0
+      } catch (err) { track = false }
+      if (track && prevTrackable) map[e.id] = prevTrackable
+      if (track) prevTrackable = e.id
+    })
+    return map
+  }, [orderedExams])
 
   if (exams.length === 0) return <EmptyState message="لا توجد امتحانات حالياً" />
 
@@ -1653,6 +1755,10 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       {exams.map((exam) => {
         const examResult: any = results.find(r => r.examId === exam.id)
         const isCompleted = examResult || completedExamIds.has(exam.id)
+        // مقفول بالتسلسل؟ الامتحان اللي قبله لسه متقدمش (زي الفيديوهات — طلب المستر)
+        const isExamSeqLocked = examLockMap[exam.id] === true
+        const prevExamId = examPrevMap[exam.id]
+        const prevExamTitle = prevExamId ? ((exams.find(function(x) { return x.id === prevExamId }) || ({} as any)).title || '') : ''
         // نتيجة لحظية من آخر تسليم (لو لسه متحدثش في اللستة)
         const liveResult = (lastResult && lastResult.examId === exam.id) ? lastResult : examResult
         const liveGrades: any[] = (liveResult && liveResult.writingGrades) || []
@@ -1660,15 +1766,20 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         let parsedQuestions: any[] = []
         try { if ((exam as any).questions) { parsedQuestions = JSON.parse((exam as any).questions); hasQuestions = parsedQuestions.length > 0 } } catch {}
         return (
-          <Card key={exam.id} className={isCompleted ? 'border-emerald-500/30' : ''}>
+          <Card key={exam.id} className={isExamSeqLocked ? 'border-red-500/30 opacity-90' : isCompleted ? 'border-emerald-500/30' : ''}>
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <div className="h-9 w-9 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <FileText className="h-4 w-4 text-orange-500" />
+                  <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (isExamSeqLocked ? 'bg-red-500/10' : 'bg-orange-500/10')}>
+                    {isExamSeqLocked ? <Lock className="h-4 w-4 text-red-500" /> : <FileText className="h-4 w-4 text-orange-500" />}
                   </div>
                   <div className="min-w-0 space-y-1.5">
                     <h3 className="font-semibold text-sm">{exam.title}</h3>
+                    {isExamSeqLocked && (
+                      <p className="text-[11px] text-red-500 font-bold leading-relaxed">
+                        🔒 الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله{prevExamTitle ? ' — "' + prevExamTitle + '"' : ''}
+                      </p>
+                    )}
                     {isCompleted ? (
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
@@ -1683,6 +1794,16 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                           </button>
                         )}
                       </div>
+                    ) : isExamSeqLocked ? (
+                      <button
+                        type="button"
+                        onClick={function() { toast.error('الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — امتحان " ' + (prevExamTitle || 'اللي قبله') + ' " الأول', { duration: 6000 }) }}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-red-500 hover:text-red-600 cursor-not-allowed"
+                        aria-label="الامتحان مقفول — هيتفتح أول ما تاخد الامتحان اللي قبله"
+                      >
+                        <Lock className="h-3.5 w-3.5" />
+                        مقفول — سلّم اللي قبله الأول
+                      </button>
                     ) : hasQuestions ? (
                       <Button size="sm" disabled={checkingServer} onClick={async () => {
                         setCheckingServer(true)

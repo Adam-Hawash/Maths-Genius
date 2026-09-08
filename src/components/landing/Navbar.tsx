@@ -51,8 +51,8 @@ export function Navbar() {
   const cfg = siteConfig
   const instructorPhoto = cfg.instructor_photo || ''
   const youtubeLink = cfg.social_youtube || ''
-  const navBrand = cfg.navbar_brand || 'Math Genius'
-  const navSubtitle = cfg.navbar_subtitle || 'Mr.Wael Khodair'
+  // الاسم بس من غير أي علامة نصه (طلب المستر: شيل العصاية واكتب بس مستر وائل خضير)
+  const navName = cfg.navbar_subtitle || 'مستر وائل خضير'
 
   const isAuthenticated = !!currentStudent || isAdminLoggedIn
   const isAuthPage = currentView === 'auth-login' || currentView === 'auth-register'
@@ -102,9 +102,9 @@ export function Navbar() {
               </div>
             )}
             <div className="hidden sm:block">
-              {/* سطر واحد بالظبط زي ما المستر طلب: Math Genius| Mr.Wael Khodair */}
+              {/* الاسم بس — من غير علامة العصاية (|) ومن غير أي كلام زيادة (طلب المستر) */}
               <h1 className="text-sm font-bold leading-tight text-foreground whitespace-nowrap">
-                {navBrand}| {navSubtitle}
+                {navName}
               </h1>
             </div>
           </button>

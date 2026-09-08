@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 import { gradeWritingSmart } from '@/lib/smart-grader'
+import { checkExamSequential } from '@/lib/sequential-guard'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -64,6 +65,15 @@ export async function POST(request) {
     } catch (e) {
       console.error('Check existing exam result error:', e)
     }
+
+    // الترتيب التسلسلي (نفس نظام الفيديوهات — طلب المستر):
+    // الامتحان مينفعش يتقدّم غير لما الامتحان اللي قبله يكون اتقدّم
+    try {
+      var seqCheck = await checkExamSequential(examId, studentId)
+      if (!seqCheck.ok) {
+        return NextResponse.json({ error: seqCheck.reason, sequentialLocked: true }, { status: seqCheck.code || 423 })
+      }
+    } catch (e) {}
 
     // Fetch exam
     var exam = null

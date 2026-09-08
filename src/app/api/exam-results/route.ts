@@ -3,7 +3,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 import { regradeExamResult, gradesLookPending, questionsHaveWriting } from '@/lib/regrade-core'
-import { gradeFallbackDecisive } from '@/lib/smart-grader'
+import { gradeFallbackDecisive, quickSmartMatch } from '@/lib/smart-grader'
 
 // GET /api/exam-results?studentId=xxx&examId=yyy - Student pre-submit check (raw SQL)
 // GET /api/exam-results?studentId=xxx - Student: all exam results
@@ -358,57 +358,36 @@ export async function GET(request: NextRequest) {
               aiExtracted = '(فشل الـ AI)'
             }
           } else {
-            // TEXT GRADING - quick match first
-            var cleanStud = (studentText || '').toLowerCase().replace(/\s+/g, ' ').trim()
-            var cleanMod = (modelAnswer || '').toLowerCase().replace(/\s+/g, ' ').trim()
-            var quickMatch = false
-
-            if (acceptedAnswers && acceptedAnswers.length > 0) {
-              for (var eai = 0; eai < acceptedAnswers.length; eai++) {
-                var eAcc = (acceptedAnswers[eai] || '').trim().toLowerCase().replace(/\s+/g, ' ')
-                if (eAcc && (cleanStud === eAcc || cleanStud.includes(eAcc) || eAcc.includes(cleanStud))) {
-                  quickMatch = true
-                  break
-                }
-              }
-            }
-
-            if (quickMatch) {
+            // TEXT GRADING — **القاعدة الذهبية (طلب المستر): الحكم على الإجابة
+            // النهائية بفهم قيمتها الرياضية — ممنوع أي مطابقة حرفية/contains**
+            // (الـ contains كان بديّ "15" صح لما الصح "5"). نفس منطق
+            // quickSmartMatch المستخدم وقت التسليم: تكافؤ القيمة النهائية
+            // ← صح فورًا، غير كده الـ AI يفهم الإجابة ويحكم.
+            var qm = quickSmartMatch(studentText, modelAnswer, acceptedAnswers || [])
+            if (qm === true) {
               aiExtracted = studentText
               aiIsCorrect = true
-              aiFeedback = 'صح (تطابق نصي)'
+              aiFeedback = 'صح — الإجابة النهائية مطابقة بالقيمة'
               textGraded = true
-            } else if (cleanMod) {
-              // Match final answer
-              var eMParts = cleanMod.split('=')
-              var eSParts = cleanStud.split('=')
-              var eMFinal = (eMParts[eMParts.length - 1] || '').trim()
-              var eSFinal = (eSParts[eSParts.length - 1] || '').trim()
-              if (eMFinal && eSFinal && (eMFinal === eSFinal || eMFinal.includes(eSFinal) || eSFinal.includes(eMFinal))) {
-                aiExtracted = studentText
-                aiIsCorrect = true
-                aiFeedback = 'صح (الإجابة النهائية مطابقة)'
-                textGraded = true
-              } else {
-                // AI text grading
-                try {
-                  var eTextGrade = await gradeTextAnswer({
-                    question: qText,
-                    studentAnswer: studentText,
-                    modelAnswer: modelAnswer,
-                    acceptedAnswers: acceptedAnswers,
-                    maxPoints: pts,
-                  })
-                  if (eTextGrade) {
-                    aiExtracted = studentText
-                    aiIsCorrect = eTextGrade.isCorrect === true
-                    aiFeedback = eTextGrade.feedback || (eTextGrade.isCorrect ? 'صح' : 'غلط')
-                    textGraded = true
-                  }
-                } catch (e) {
-                  console.error('[Exam Results] AI text grading error:', e)
-                  aiFeedback = 'فشل التصحيح'
+            } else {
+              // AI text grading (يفهم الإجابة النهائية مش بالحرف)
+              try {
+                var eTextGrade = await gradeTextAnswer({
+                  question: qText,
+                  studentAnswer: studentText,
+                  modelAnswer: modelAnswer,
+                  acceptedAnswers: acceptedAnswers,
+                  maxPoints: pts,
+                })
+                if (eTextGrade) {
+                  aiExtracted = studentText
+                  aiIsCorrect = eTextGrade.isCorrect === true
+                  aiFeedback = eTextGrade.feedback || (eTextGrade.isCorrect ? 'صح' : 'غلط')
+                  textGraded = true
                 }
+              } catch (e) {
+                console.error('[Exam Results] AI text grading error:', e)
+                aiFeedback = 'فشل التصحيح'
               }
             }
           }
