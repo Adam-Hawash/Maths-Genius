@@ -848,9 +848,9 @@ export function ProtectedYouTubePlayer({
           (and after it ends) YouTube paints its own chrome on the iframe
           (title bar, "Watch on YouTube", quality badge, control strip) and a
           translucent layer lets it bleed through.
-          لو الفيديو ملهوش بوستر من الأدمن → **صورة الفيديو الحقيقية من يوتيوب**
-          (طلب المستر 2026-و: صورة البرواز الدهبي ملهاش علاقة بالمنصة — اتشالت
-          خالص وبقت favicon لمنصة مستر شريف). */}
+          صورة الغلاف في النص: لو الفيديو ملهوش بوستر من الأدمن → **صورة المستر
+          بالبرواز الدهبي** (رجّعناها بطلب المستر — كانت اتشالت بالغلط)
+          بتظهر في نص الغطاء بدل الشاشة السودة. */}
       {!started && (
         <div className="absolute inset-0 z-30 pointer-events-none">
           {poster ? (
@@ -858,22 +858,9 @@ export function ProtectedYouTubePlayer({
             <img src={poster} alt="فيديو الدرس" className="w-full h-full object-cover bg-black" draggable={false} />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={'https://i.ytimg.com/vi/' + ytId + '/maxresdefault.jpg'}
-              alt="فيديو الدرس"
-              className="w-full h-full object-cover bg-black"
-              draggable={false}
-              onError={function (e) {
-                var el = e.currentTarget
-                if (el.src.indexOf('maxresdefault') >= 0) {
-                  el.src = 'https://i.ytimg.com/vi/' + ytId + '/hqdefault.jpg'
-                } else {
-                  el.style.visibility = 'hidden'
-                }
-              }}
-            />
+            <img src="/images/mr-wael-cover.png" alt="Mr.Wael Khodair" className="w-full h-full object-contain bg-black" draggable={false} />
           )}
-          <div className="absolute inset-0 bg-black/30">
+          <div className={'absolute inset-0 ' + (poster ? 'bg-black/30' : 'bg-black/45')}>
             <div
               className="absolute left-0 right-0 flex justify-center -translate-y-1/2"
               style={{ top: fsActive ? '52%' : '50%' }}

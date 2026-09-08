@@ -10,7 +10,7 @@ var DEFAULTS = {
   // === Hero Section ===
   hero_badge: 'منصة تعليمية متكاملة | Comprehensive Learning Platform',
   hero_title_line1: 'Math Genius',
-  hero_title_line2: 'مستر وائل الخضيري',
+  hero_title_line2: 'مستر وائل خضير',
   hero_subtitle: 'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.',
   hero_stat1_value: '8+',
   hero_stat1_label: 'Grade Levels',
@@ -32,7 +32,7 @@ var DEFAULTS = {
   schedule_data: '',
 
   // === Instructor ===
-  instructor_name: 'مستر وائل الخضيري',
+  instructor_name: 'مستر وائل خضير',
   instructor_title: 'Mathematics Specialist | معلم الرياضيات المتخصص',
   instructor_photo: '',
 
@@ -55,7 +55,7 @@ var DEFAULTS = {
   // === Tips Section ===
   tips_badge: 'نصائح للتفوّق | Tips for Excellence',
   tips_title: 'نصائح المستر | Tips',
-  tips_subtitle: 'نصائح ذهبية من مستر وائل الخضيري للتفوّق في الرياضيات — Golden advice from Mr.Wael Khodair',
+  tips_subtitle: 'نصائح ذهبية من مستر وائل خضير للتفوّق في الرياضيات — Golden advice from Mr.Wael Khodair',
   tips_card1_title: 'حدد وقت يومي للمراجعة',
   tips_card1_title_en: 'Set Daily Review Time',
   tips_card1_desc: 'خصص 20-30 دقيقة كل يوم لمراجعة ما تعلمته. الاستمرارية هي مفتاح التفوّق في الرياضيات. Dedicate 20-30 minutes daily for review.',
@@ -151,22 +151,23 @@ export async function GET() {
     if (typeof navSub === 'string' && (navSub.indexOf('خضير') !== -1 || navSub.indexOf('Khadir') !== -1 || navSub.indexOf('Khudair') !== -1 || navSub.indexOf('Khodier') !== -1 || navSub.indexOf('El-Kh') !== -1 || navSub.indexOf('Sherif') !== -1 || navSub.indexOf('شريف') !== -1)) {
       map['navbar_subtitle'] = 'Mr.Wael Khodair'
     }
-    // اسم المستر العربي الصحيح للمنصة دي: مستر وائل الخضيري — قيم قديمة مخزنة
-    // (من ترحيل غلط سابق كتب اسم مستر شريف) بتتصحح على القراءة هنا،
-    // والترحيل في ensure-schema بصلحه نهائيًا في قاعدة البيانات
+    // اسم المستر العربي الصحيح للمنصة دي: **مستر وائل خضير** (الاسم الرسمي
+    // بطلب المستر حرفيًا) — أي قيمة قديمة مخزنة (مستر شريف أو تهجئة غلط
+    // 'الخضيري') بتتصحح على القراءة هنا، والترحيل في ensure-schema
+    // بصلحه نهائيًا في قاعدة البيانات
     var arabicNameKeys = ['hero_title_line2', 'instructor_name']
     for (var a = 0; a < arabicNameKeys.length; a++) {
       var av = map[arabicNameKeys[a]]
-      if (typeof av === 'string' && (av.indexOf('Sherif') !== -1 || av.indexOf('شريف') !== -1)) {
-        map[arabicNameKeys[a]] = 'مستر وائل الخضيري'
+      if (typeof av === 'string' && (av.indexOf('Sherif') !== -1 || av.indexOf('شريف') !== -1 || av.indexOf('الخضيري') !== -1)) {
+        map[arabicNameKeys[a]] = 'مستر وائل خضير'
       }
     }
     var cfgKeys = Object.keys(map)
     for (var k = 0; k < cfgKeys.length; k++) {
       var v = map[cfgKeys[k]]
       if (typeof v !== 'string') continue
-      if (v.indexOf('Mr. Sherif ElSayed') !== -1 || v.indexOf('مستر شريف السيد') !== -1 || v.indexOf('نصائح مستر شريف') !== -1 || v.indexOf('Mr. Wael El-Khadiry') !== -1) {
-        map[cfgKeys[k]] = v.split('Mr. Sherif ElSayed').join('Wael Khodair').split('مستر شريف السيد').join('مستر وائل الخضيري').split('نصائح مستر شريف').join('نصائح مستر وائل الخضيري').split('Mr. Wael El-Khadiry').join('Wael Khodair')
+      if (v.indexOf('Mr. Sherif ElSayed') !== -1 || v.indexOf('مستر شريف السيد') !== -1 || v.indexOf('نصائح مستر شريف') !== -1 || v.indexOf('Mr. Wael El-Khadiry') !== -1 || v.indexOf('مستر وائل الخضيري') !== -1) {
+        map[cfgKeys[k]] = v.split('Mr. Sherif ElSayed').join('Wael Khodair').split('مستر شريف السيد').join('مستر وائل خضير').split('نصائح مستر شريف').join('نصائح مستر وائل خضير').split('Mr. Wael El-Khadiry').join('Wael Khodair').split('مستر وائل الخضيري').join('مستر وائل خضير')
       }
     }
     return NextResponse.json(map)
