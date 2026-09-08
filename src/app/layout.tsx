@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AIAssistant } from "@/components/student/AIAssistant";
+import { RecordingGuard } from "@/components/RecordingGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -80,6 +81,8 @@ export default async function RootLayout({
       >
         <ThemeProvider>{children}</ThemeProvider>
         <AIAssistant />
+        {/* حماية عامة من التسجيل/التصوير + أدوات المطوّر في كل الصفحات */}
+        <RecordingGuard />
         <Toaster />
         {/* Toaster بتاع sonner — كل رسائل التنبيه في المنصة بتستخدمه (toast من sonner) */}
         <SonnerToaster position="top-center" richColors closeButton expand={false} />
