@@ -52,7 +52,7 @@ export function Navbar() {
   const instructorPhoto = cfg.instructor_photo || ''
   const youtubeLink = cfg.social_youtube || ''
   const navBrand = cfg.navbar_brand || 'Math Genius'
-  const navSubtitle = cfg.navbar_subtitle || 'Wael Khudair'
+  const navSubtitle = cfg.navbar_subtitle || 'Mr.Wael Khodair'
 
   const isAuthenticated = !!currentStudent || isAdminLoggedIn
   const isAuthPage = currentView === 'auth-login' || currentView === 'auth-register'
@@ -91,7 +91,7 @@ export function Navbar() {
             {instructorPhoto ? (
               <img
                 src={instructorPhoto}
-                alt="Wael Khudair"
+                alt="Mr.Wael Khodair"
                 width={36}
                 height={36}
                 className="h-9 w-9 rounded-lg object-cover border border-primary/30"
@@ -102,12 +102,10 @@ export function Navbar() {
               </div>
             )}
             <div className="hidden sm:block">
-              <h1 className="text-sm font-bold leading-tight text-foreground">
-                {navBrand}
+              {/* سطر واحد بالظبط زي ما المستر طلب: Math Genius| Mr.Wael Khodair */}
+              <h1 className="text-sm font-bold leading-tight text-foreground whitespace-nowrap">
+                {navBrand}| {navSubtitle}
               </h1>
-              <p className="text-[11px] text-muted-foreground leading-tight">
-                {navSubtitle}
-              </p>
             </div>
           </button>
 
