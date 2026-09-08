@@ -168,7 +168,7 @@ export default function TipsSection() {
                 )}
                 <img
                   src={tipsSectionImage}
-                  alt="نصائح مستر وائل الخضيري"
+                  alt="نصائح مستر وائل خضير"
                   className={"w-full aspect-[3/4] object-cover transition-opacity duration-500 " + (sectionImgLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0')}
                   loading="eager"
                   onLoad={function() { setSectionImgLoaded(true) }}

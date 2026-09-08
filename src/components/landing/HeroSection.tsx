@@ -183,7 +183,7 @@ export default function HeroSection() {
                 {cfg.hero_title_line1 || 'Math Genius'}
               </span>
               <span className="block mt-1 text-2xl sm:text-3xl lg:text-4xl font-semibold text-white/80">
-                {cfg.hero_title_line2 || 'مستر وائل الخضيري'}
+                {cfg.hero_title_line2 || 'مستر وائل خضير'}
               </span>
             </h1>
 
@@ -324,10 +324,13 @@ export default function HeroSection() {
                 {/* Subtle gradient overlay for depth */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
               </div>
-              {/* Badge overlay */}
-              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#0F0D0A] border border-[#C49A38]/40 rounded-full px-5 py-2 shadow-lg">
+              {/* Badge overlay — الاسم بالعربي وتحته الاسم بالإنجليزي (طلب المستر حرفيًا) */}
+              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-[#0F0D0A] border border-[#C49A38]/40 rounded-xl px-5 py-2 shadow-lg text-center">
                 <p className="text-[#E5BE5A] font-bold text-sm tracking-wider whitespace-nowrap">
-                  {cfg.instructor_name || 'مستر وائل الخضيري'}
+                  {cfg.instructor_name || 'مستر وائل خضير'}
+                </p>
+                <p className="text-[#E5BE5A]/60 text-[11px] font-medium tracking-wide whitespace-nowrap mt-0.5" dir="ltr">
+                  Mr. Wael Khodair
                 </p>
               </div>
             </div>
