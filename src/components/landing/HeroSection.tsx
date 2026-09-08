@@ -312,7 +312,7 @@ export default function HeroSection() {
                 {showPhoto ? (
                   <img
                     src={heroPhoto}
-                    alt={cfg.instructor_name || 'Wael Khudair'}
+                    alt={cfg.instructor_name || 'Mr.Wael Khodair'}
                     className="w-full h-full object-cover"
                     style={{ objectPosition: '50% 50%' }}
                   />

@@ -5,7 +5,7 @@ import { db, safeWrite } from '@/lib/db'
 var DEFAULTS = {
   // === Navbar ===
   navbar_brand: 'Math Genius',
-  navbar_subtitle: 'Wael Khudair',
+  navbar_subtitle: 'Mr.Wael Khodair',
 
   // === Hero Section ===
   hero_badge: 'منصة تعليمية متكاملة | Comprehensive Learning Platform',
@@ -28,7 +28,7 @@ var DEFAULTS = {
   schedule_subtitle: 'جدول مواعيد الحصص الأسبوعية لكل الصفوف الدراسية — اختر اليوم المناسب لك وتابع موعد حصتك',
   schedule_badge: 'جدول الحصص الأسبوعي',
   schedule_footer_note: 'جميع المواعيد بتوقيت القاهرة. لو عندك أي استفسار عن موعد حصتك تواصل معنا عبر واتساب.',
-  schedule_brand: 'Math Genius — Wael Khudair',
+  schedule_brand: 'Math Genius — Mr.Wael Khodair',
   schedule_data: '',
 
   // === Instructor ===
@@ -55,7 +55,7 @@ var DEFAULTS = {
   // === Tips Section ===
   tips_badge: 'نصائح للتفوّق | Tips for Excellence',
   tips_title: 'نصائح المستر | Tips',
-  tips_subtitle: 'نصائح ذهبية من مستر وائل الخضيري للتفوّق في الرياضيات — Golden advice from Wael Khudair',
+  tips_subtitle: 'نصائح ذهبية من مستر وائل الخضيري للتفوّق في الرياضيات — Golden advice from Mr.Wael Khodair',
   tips_card1_title: 'حدد وقت يومي للمراجعة',
   tips_card1_title_en: 'Set Daily Review Time',
   tips_card1_desc: 'خصص 20-30 دقيقة كل يوم لمراجعة ما تعلمته. الاستمرارية هي مفتاح التفوّق في الرياضيات. Dedicate 20-30 minutes daily for review.',
@@ -144,12 +144,12 @@ export async function GET() {
         map[brandKeys[b]] = map[brandKeys[b]].split('Maths Genius').join('Math Genius')
       }
     }
-    // اسم المستر في النافيبار: **Wael Khudair** بالإنجليزي (طلب المستر:
+    // اسم المستر في النافيبار: **Mr.Wael Khodair** بالإنجليزي (طلب المستر حرفيًا: Math Genius| Mr.Wael Khodair
     // "Math Genius وائل خضير بالانجليزي") — أي قيمة مخزنة قديمة (عربي أو تهجئة
     // قديمة) بتتصحح على القراءة هنا، والترحيل في ensure-schema بصلحه نهائيًا
     var navSub = map['navbar_subtitle']
-    if (typeof navSub === 'string' && (navSub.indexOf('خضير') !== -1 || navSub.indexOf('Khadir') !== -1 || navSub.indexOf('Khodier') !== -1 || navSub.indexOf('El-Kh') !== -1 || navSub.indexOf('Sherif') !== -1 || navSub.indexOf('شريف') !== -1)) {
-      map['navbar_subtitle'] = 'Wael Khudair'
+    if (typeof navSub === 'string' && (navSub.indexOf('خضير') !== -1 || navSub.indexOf('Khadir') !== -1 || navSub.indexOf('Khudair') !== -1 || navSub.indexOf('Khodier') !== -1 || navSub.indexOf('El-Kh') !== -1 || navSub.indexOf('Sherif') !== -1 || navSub.indexOf('شريف') !== -1)) {
+      map['navbar_subtitle'] = 'Mr.Wael Khodair'
     }
     // اسم المستر العربي الصحيح للمنصة دي: مستر وائل الخضيري — قيم قديمة مخزنة
     // (من ترحيل غلط سابق كتب اسم مستر شريف) بتتصحح على القراءة هنا،
@@ -166,7 +166,7 @@ export async function GET() {
       var v = map[cfgKeys[k]]
       if (typeof v !== 'string') continue
       if (v.indexOf('Mr. Sherif ElSayed') !== -1 || v.indexOf('مستر شريف السيد') !== -1 || v.indexOf('نصائح مستر شريف') !== -1 || v.indexOf('Mr. Wael El-Khadiry') !== -1) {
-        map[cfgKeys[k]] = v.split('Mr. Sherif ElSayed').join('Wael Khudair').split('مستر شريف السيد').join('مستر وائل الخضيري').split('نصائح مستر شريف').join('نصائح مستر وائل الخضيري').split('Mr. Wael El-Khadiry').join('Wael Khudair')
+        map[cfgKeys[k]] = v.split('Mr. Sherif ElSayed').join('Wael Khodair').split('مستر شريف السيد').join('مستر وائل الخضيري').split('نصائح مستر شريف').join('نصائح مستر وائل الخضيري').split('Mr. Wael El-Khadiry').join('Wael Khodair')
       }
     }
     return NextResponse.json(map)

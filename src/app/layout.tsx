@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export var metadata: Metadata = {
-  title: "Math Genius - Wael Khudair",
+  title: "Math Genius - Mr.Wael Khodair",
   description:
     "منصة Math Genius - مستر وائل الخضيري. تبسيط الرياضيات، واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة للتقدم.",
 };
