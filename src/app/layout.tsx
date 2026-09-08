@@ -44,8 +44,8 @@ export default async function RootLayout({
     /* DB not available yet — client will fetch via /api/config */
   }
 
-  // Favicon: use user's custom image or empty (no Z logo)
-  var faviconUrl = initialConfig.favicon_url || "https://imgh.in/host/4pdrhw";
+  // Favicon: لوجو المنصة (الصورة الدهبية اتشالت بطلب المستر — ملهاش علاقة بـ Math Genius)
+  var faviconUrl = initialConfig.favicon_url || "/logo.svg";
 
   return (
     <html lang="ar" dir="rtl" className="dark" suppressHydrationWarning>
