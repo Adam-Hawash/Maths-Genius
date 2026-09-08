@@ -5,7 +5,7 @@ import { db, safeWrite } from '@/lib/db'
 var DEFAULTS = {
   // === Navbar ===
   navbar_brand: 'Math Genius',
-  navbar_subtitle: 'Mr.Wael Khodair',
+  navbar_subtitle: 'مستر وائل خضير',
 
   // === Hero Section ===
   hero_badge: 'منصة تعليمية متكاملة | Comprehensive Learning Platform',
@@ -144,12 +144,13 @@ export async function GET() {
         map[brandKeys[b]] = map[brandKeys[b]].split('Maths Genius').join('Math Genius')
       }
     }
-    // اسم المستر في النافيبار: **Mr.Wael Khodair** بالإنجليزي (طلب المستر حرفيًا: Math Genius| Mr.Wael Khodair
-    // "Math Genius وائل خضير بالانجليزي") — أي قيمة مخزنة قديمة (عربي أو تهجئة
-    // قديمة) بتتصحح على القراءة هنا، والترحيل في ensure-schema بصلحه نهائيًا
+    // اسم المستر في النافيبار: **مستر وائل خضير** بالعربي — من غير علامة
+    // العصاية (|) ومن غير الإنجليزي (طلب المستر: شيل العصاية واكتب بس
+    // مستر وائل خضير) — أي قيمة مخزنة قديمة بتتصحح على القراءة هنا،
+    // والترحيل في ensure-schema بصلحه نهائيًا
     var navSub = map['navbar_subtitle']
-    if (typeof navSub === 'string' && (navSub.indexOf('خضير') !== -1 || navSub.indexOf('Khadir') !== -1 || navSub.indexOf('Khudair') !== -1 || navSub.indexOf('Khodier') !== -1 || navSub.indexOf('El-Kh') !== -1 || navSub.indexOf('Sherif') !== -1 || navSub.indexOf('شريف') !== -1)) {
-      map['navbar_subtitle'] = 'Mr.Wael Khodair'
+    if (typeof navSub === 'string' && navSub !== 'مستر وائل خضير' && (navSub.indexOf('خضير') !== -1 || navSub.indexOf('Khadir') !== -1 || navSub.indexOf('Khodair') !== -1 || navSub.indexOf('Khudair') !== -1 || navSub.indexOf('Khodier') !== -1 || navSub.indexOf('El-Kh') !== -1 || navSub.indexOf('Sherif') !== -1 || navSub.indexOf('شريف') !== -1 || navSub.indexOf('Mr') !== -1)) {
+      map['navbar_subtitle'] = 'مستر وائل خضير'
     }
     // اسم المستر العربي الصحيح للمنصة دي: **مستر وائل خضير** (الاسم الرسمي
     // بطلب المستر حرفيًا) — أي قيمة قديمة مخزنة (مستر شريف أو تهجئة غلط

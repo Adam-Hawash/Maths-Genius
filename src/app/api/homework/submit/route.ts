@@ -14,6 +14,7 @@ import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 import { gradeFallbackDecisive, quickSmartMatch } from '@/lib/smart-grader'
+import { checkHwSequential } from '@/lib/sequential-guard'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -125,6 +126,15 @@ export async function POST(request) {
     } catch (e) {
       console.error('Check existing hw error:', e)
     }
+
+    // الترتيب التسلسلي (نفس نظام الفيديوهات — طلب المستر):
+    // الواجب مينفعش يتسلّم غير لما الواجب اللي قبله يكون متسلّم
+    try {
+      var seqCheck = await checkHwSequential(homeworkId, studentId)
+      if (!seqCheck.ok) {
+        return NextResponse.json({ error: seqCheck.reason, sequentialLocked: true }, { status: seqCheck.code || 423 })
+      }
+    } catch (e) {}
 
     // Fetch homework questions
     var homework = null

@@ -100,8 +100,8 @@ var SCHEMA_FIXES = [
   // أي قيمة مخزنة فيها اسم غلط (مستر شريف / 'مستر وائل الخضيري' من ترحيل قديم)
   // بتتصحح مرة واحدة هنا (idempotent) + على القراءة في /api/config
   "UPDATE SiteConfig SET value = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(value, 'Mr. Sherif ElSayed', 'Wael Khodair'), 'مستر شريف السيد', 'مستر وائل خضير'), 'نصائح مستر شريف', 'نصائح مستر وائل خضير'), 'Mr. Wael El-Khadiry', 'Wael Khodair'), 'مستر وائل الخضيري', 'مستر وائل خضير') WHERE value LIKE '%Sherif ElSayed%' OR value LIKE '%شريف السيد%' OR (value LIKE '%مستر شريف%' AND key LIKE 'tips_%') OR value LIKE '%Mr. Wael El-Khadiry%' OR value LIKE '%الخضيري%'",
-  // النافيبار بالإنجليزي: Math Genius| Mr.Wael Khodair (طلب المستر حرفيًا)
-  "UPDATE SiteConfig SET value = 'Mr.Wael Khodair' WHERE key = 'navbar_subtitle' AND (value LIKE '%خضير%' OR value LIKE '%Khadir%' OR value LIKE '%Khodair%' OR value LIKE '%Khudair%' OR value LIKE '%Khodier%' OR value LIKE '%El-Kh%' OR value LIKE '%Sherif%' OR value LIKE '%شريف%')",
+  // النافيبار بالعربي: مستر وائل خضير — من غير العصاية (|) ومن غير الإنجليزي (طلب المستر)
+  "UPDATE SiteConfig SET value = 'مستر وائل خضير' WHERE key = 'navbar_subtitle' AND (value LIKE '%خضير%' OR value LIKE '%Khadir%' OR value LIKE '%Khodair%' OR value LIKE '%Khudair%' OR value LIKE '%Khodier%' OR value LIKE '%El-Kh%' OR value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%|%')",
   "UPDATE SiteConfig SET value = 'مستر وائل خضير' WHERE key IN ('hero_title_line2', 'instructor_name') AND (value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%الخضيري%')",
   // ===== ترحيل لمرة واحدة (idempotent) =====
   // الحسابات الموجودة اللي ملهاش ربط إنشاء: نثبّت الربط الحالي كـ"جهاز إنشاء"
