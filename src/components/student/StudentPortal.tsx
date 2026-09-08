@@ -1301,7 +1301,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         <div className="text-center space-y-2">
           <h2 className="text-xl font-bold text-red-600">تم تقديم هذا الامتحان بالفعل ولا يمكنك إعادته</h2>
           {blockedExam && <p className="text-sm text-muted-foreground">{blockedExam.title}</p>}
-          <p className="text-sm text-muted-foreground">انتظر النتيجة من مستر شريف السيد</p>
+          <p className="text-sm text-muted-foreground">انتظر النتيجة من مستر وائل الخضيري</p>
         </div>
         <Button
           onClick={() => {
