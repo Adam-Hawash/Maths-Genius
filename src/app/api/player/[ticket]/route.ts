@@ -203,18 +203,20 @@ const PLAYER_PAGE = `<!doctype html>
      • كارت الطالب (الاسم الكامل + الرقم) ثابت في **الزاوية تحت على اليمين**
      • مفيش أي شِپات على الحواف خالص (اتشالت كلها بطلب المستر) */
   .wm{position:absolute;inset:0;z-index:40;pointer-events:none;user-select:none;overflow:hidden}
-  /* الووترمارك الكبير في النص — اسم ثنائي سطر واحد — شفاف بحواف سودة — ثابت تمامًا */
+  /* الووترمارك الكبير في النص — سطرين: الاسم الثنائي + الرقم تحته — ثابت تمامًا */
   #wmBig{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:41;direction:rtl;
-    text-align:center;max-width:94%;white-space:nowrap;
+    text-align:center;max-width:94%;
     font-weight:900;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
-    font-size:clamp(20px,5.6vw,72px);line-height:1.3;
+    font-size:clamp(20px,5.6vw,72px);line-height:1.25;
     unicode-bidi:plaintext;letter-spacing:0}
-  #wmBig .b1{display:block;color:rgba(0,0,0,.13);
+  #wmBig .b1{display:block;color:rgba(0,0,0,.13);white-space:nowrap;
     -webkit-text-stroke:1.8px rgba(0,0,0,.5);paint-order:stroke fill;
     text-shadow:0 0 18px rgba(255,255,255,.22)}
-  /* الرقم جنب الاسم في نفس السطر — أصغر عشان مياكلش مساحة */
-  #wmBig .b2{font-size:.5em;direction:ltr;unicode-bidi:plaintext;vertical-align:middle;
-    margin-inline-start:.35em;-webkit-text-stroke:1.2px rgba(0,0,0,.45)}
+  /* الرقم تحت الاسم في سطر لوحده — أصغر بس واضح ومقروء (لازم الرقم يظهر) */
+  #wmBig .b2{display:block;font-size:.5em;direction:ltr;unicode-bidi:plaintext;
+    margin-top:.14em;letter-spacing:0;white-space:nowrap;color:rgba(0,0,0,.13);
+    -webkit-text-stroke:1.3px rgba(0,0,0,.48);paint-order:stroke fill;
+    text-shadow:0 0 14px rgba(255,255,255,.22)}
   /* كارت الطالب — ثابت في الزاوية تحت على اليمين (مفيش أي حاجة بتتحرك) */
   .wmCard{position:absolute;z-index:46;bottom:7.5%;right:2.2%}
   .wmCard .in{display:inline-block;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.28);
@@ -251,7 +253,7 @@ const PLAYER_PAGE = `<!doctype html>
   #tTime{color:#fff;font-size:12px;font-weight:600;direction:ltr;white-space:nowrap;font-family:system-ui,sans-serif;opacity:.95}
   #centerOv{position:absolute;inset:0;z-index:25;display:none;align-items:center;justify-content:center;pointer-events:none}
   #centerOv .big{width:72px;height:72px;border-radius:50%;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 24px rgba(0,0,0,.55)}
-  #startOv{position:absolute;inset:0;z-index:35;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(2,2,8,.92);cursor:pointer}
+  #startOv{position:absolute;inset:0;z-index:35;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(2,2,8,.96);cursor:pointer}
   #startOv .big{width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;color:#fff}
   #startOv p{color:#fff;font-size:14px;font-weight:700;margin:0;font-family:system-ui,sans-serif}
   #endOv{position:absolute;inset:0;z-index:36;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(2,2,8,.94)}
@@ -296,12 +298,13 @@ function deobfuscate(b64, key){
   }catch(e){ return ''; }
 }
 
-/* ===== الووترمارك (مواصفات المستر النهائية 2026-د) =====
-   • ووترمارك كبير واحد في نص الخلفية — **اسم ثنائي (أول كلمتين من الاسم)
-     + الرقم جنب الاسم في نفس السطر** شفاف بحواف سودة — ثابت تمامًا
-     (مفيش أي حركة) — عشان مياكلش الكلام المكتوب في الفيديو
+/* ===== الووترمارك (مواصفات المستر النهائية 2026-هـ) =====
+   • ووترمارك كبير واحد في نص الخلفية على **سطرين** — زي ما المستر طلب
+     حرفيًا: "الاسم الثنائي وتحتيه الرقم — لازم الرقم يظهر":
+     السطر الأول: الاسم الثنائي (أول كلمتين من الاسم)
+     السطر التاني: رقم الطالب تحته (أصغر — واضح ومقروء)
+     شفاف بحواف سودة — ثابت تمامًا (مفيش أي حركة)
    • كارت الطالب (الاسم الكامل + الرقم) ثابت في الزاوية تحت على اليمين
-   • مفيش أي شِپات على الحواف خالص — طلب المستر
    • الاسم من غير قص أي حرف — ممنوع letter-spacing
      وpaint-order:stroke عشان الحواف السودة متاكلش الحروف */
 var wmName = String(CFG.wm.name || '').trim();
@@ -317,13 +320,15 @@ function buildWm(){
   if(old) old.parentNode.removeChild(old);
   var layer = document.createElement('div');
   layer.id = 'wm'; layer.className = 'wm';
-  /* 1) الووترمارك الكبير — اسم ثنائي + الرقم جنب الاسم — سطر واحد — ثابت تمامًا */
+  /* 1) الووترمارك الكبير — سطرين: الاسم الثنائي فوق والرقم تحته — ثابت تمامًا */
   var big1 = wmShortName() || wmPhone;
   if(big1){
     var big = document.createElement('div');
     big.id = 'wmBig';
-    var numPart = (wmName && wmPhone) ? ' <span class="b2">' + esc(wmPhone) + '</span>' : '';
-    big.innerHTML = '<span class="b1">' + esc(big1) + numPart + '</span>';
+    var nameLine = '<span class="b1">' + esc(big1) + '</span>';
+    /* الرقم تحت الاسم في سطر لوحده — لازم يبان زي ما المستر طلب */
+    var numLine = (wmName && wmPhone) ? '<span class="b2">' + esc(wmPhone) + '</span>' : '';
+    big.innerHTML = nameLine + numLine;
     big.style.opacity = String(Math.min(1, (Number(CFG.wm.opacity) || 0.55) * 1.15));
     layer.appendChild(big);
   }
@@ -336,7 +341,8 @@ function buildWm(){
   }
   wrap.appendChild(layer);
 }
-/* درع الشريط العلوي — بيتعمل مرة واحدة بس (حتى لو الووترمارك مطفي) */
+/* درع الشريط العلوي — بتغطي عنوان يوتيوب لحظة الوقف — بديل القص:
+   الفيديو كامل 100% والواجهة متغطية (طلب المستر 2026-هـ) */
 function ensureTopShield(){
   if(document.getElementById('topShield')) return;
   var ts = document.createElement('div'); ts.id='topShield'; wrap.appendChild(ts);
@@ -369,12 +375,14 @@ function clearRot(){
   wrap.style.position=''; wrap.style.top=''; wrap.style.left=''; wrap.style.transform='';
   wrap.style.width=''; wrap.style.height='';
 }
-/* ===== قص أطراف الـ iframe — يوتيوب بيرسم أي حاجة بره المنطقة الباينة ===== */
+/* ===== عرض الفيديو **كامل 100% من غير أي قص** (طلب المستر 2026-هـ:
+   "الفيديو مش كامل إنت قاصص منه الأطراف — لازم يبان كله"). أي واجهة
+   يوتيوب بتتغطى بالدروع (الدرع العلوي + باتش اللوجو + الووترمارك)
+   مش بقص الفيديو. الدالة بتفضل موجودة عشان التوافق بس من غير قص. */
 function applyYtCrop(fs){
   var h = document.getElementById('ytCrop');
   if(!h) return;
-  if(fs){ h.style.width='112%'; h.style.height='132%'; h.style.top='-14%'; h.style.left='-6%'; }
-  else { h.style.width='110%'; h.style.height='120%'; h.style.top='-10%'; h.style.left='-5%'; }
+  h.style.width='100%'; h.style.height='100%'; h.style.top='0'; h.style.left='0';
   sizeYtHost();
 }
 /* تحجيم الـ iframe بمقاسه الحقيقي (1280×720 للـ HD و 1920×1080 للـ Full HD)
@@ -599,22 +607,26 @@ function mountYouTube(){
   var ytId = deobfuscate(CFG.blob, CFG.key);
   if(!ytId){ wrap.innerHTML = '<p style="color:#fca5a5;font-family:sans-serif;padding:24px;direction:rtl">حصل خطأ في تحميل الفيديو</p>'; return; }
   // الطبقة الداخلية: iframe بيتعمله inject بالجافاسكريبت — مش مكتوب في مصدر الصفحة
-  // الـ iframe مكبّر ومقصوص من كل الجهات (CROP على #ytCrop) — أي واجهة يوتيوب
-  // (عنوان/قناة/لوجو) بتترسم بره المنطقة اللي باينة خالص.
+  // **الفيديو كامل 100% من غير أي قص** (طلب المستر) — واجهة يوتيوب بتتغطي
+  // بالدروع (topShield/logoPatch/الوترمارك) مش بقص أطراف الفيديو.
   // + فرض الجودة: الـ iframe نفسه بمقاس ثابت 1280×720 بكسل حقيقي وبيتصغّر بالـ CSS
   // (transform scale) ليملّي الصندوق — يوتيوب بيختار الجودة من مقاس المشغل بالبكسل،
   // فالمقاس الكبير ده بيضمن تيار 720p فعلاً بدل ما يقف على 360p.
   var ytCrop = document.createElement('div');
-  ytCrop.id = 'ytCrop'; ytCrop.style.cssText = 'position:absolute;width:110%;height:120%;top:-10%;left:-5%;overflow:hidden';
+  ytCrop.id = 'ytCrop'; ytCrop.style.cssText = 'position:absolute;width:100%;height:100%;top:0;left:0;overflow:hidden';
   var host = document.createElement('div');
   host.id = 'ytHost';
   host.style.cssText = 'position:absolute;top:50%;left:50%;width:1280px;height:720px;transform:translate(-50%,-50%) scale(1);transform-origin:center center';
   ytCrop.appendChild(host);
   wrap.appendChild(ytCrop);
-  // شاشة البداية (بتغطي أي عنوان/برanding بتاع يوتيوب لحظة التحميل)
+  // شاشة البداية — صورة المستر في النص (صورة الغلاف اللي هي النص — طلب المستر)
+  // بتغطي أي عنوان/برanding بتاع يوتيوب لحظة التحميل
   var startOv = document.createElement('div');
   startOv.id='startOv';
-  startOv.innerHTML = '<div class="big"><svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></div><p>اضغط للمشاهدة</p>';
+  startOv.innerHTML = '<img src="/images/mr-wael-cover.png" alt="Mr.Wael Khodair" ' +
+    'style="max-width:min(58%,300px);max-height:52%;object-fit:contain;border-radius:18px;' +
+    'border:2px solid rgba(197,154,56,.55);box-shadow:0 12px 40px rgba(0,0,0,.6);pointer-events:none">' +
+    '<div class="big"><svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></div><p>اضغط للمشاهدة</p>';
   startOv.addEventListener('click', function(){ if(!tapOk()) return; startWithWatchdog(); showCtrl(true); });
   startOv.addEventListener('touchend', function(e){ e.preventDefault(); if(!tapOk()) return; startWithWatchdog(); showCtrl(true); });
   wrap.appendChild(startOv);
