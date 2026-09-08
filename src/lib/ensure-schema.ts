@@ -96,6 +96,11 @@ var SCHEMA_FIXES = [
   // ===== تصحيح اسم المنصة (Maths Genius → Math Genius) لمرة واحدة =====
   // القيم المخزنة في قاعدة البيانات من نسخ قديمة — بنصححها مرة واحدة (idempotent)
   "UPDATE SiteConfig SET value = REPLACE(value, 'Maths Genius', 'Math Genius') WHERE key IN ('navbar_brand', 'hero_title_line1', 'footer_brand', 'footer_copyright', 'guide_subtitle') AND value LIKE '%Maths Genius%'",
+  // ===== تصحيح اسم المستر (ترحيل غلط سابق كتب اسم مستر شريف → مستر وائل الخضيري) =====
+  // المنصة دي بتاعت مستر وائل الخضيري — أي قيمة مخزنة فيها الاسم الغلط بتتصحح
+  // مرة واحدة هنا (idempotent) + على القراءة في /api/config
+  "UPDATE SiteConfig SET value = REPLACE(REPLACE(REPLACE(value, 'Mr. Sherif ElSayed', 'Mr. Wael El-Khadiry'), 'مستر شريف السيد', 'مستر وائل الخضيري'), 'نصائح مستر شريف', 'نصائح مستر وائل الخضيري') WHERE value LIKE '%Sherif ElSayed%' OR value LIKE '%شريف السيد%' OR (value LIKE '%مستر شريف%' AND key LIKE 'tips_%')",
+  "UPDATE SiteConfig SET value = 'مستر وائل الخضيري' WHERE key IN ('navbar_subtitle', 'hero_title_line2', 'instructor_name') AND (value LIKE '%Sherif%' OR value LIKE '%شريف%')",
   // ===== ترحيل لمرة واحدة (idempotent) =====
   // الحسابات الموجودة اللي ملهاش ربط إنشاء: نثبّت الربط الحالي كـ"جهاز إنشاء"
   // عشان مفيش حساب يتحجب فجأة بعد الترقية. الربط ده بعدها **ثابت** — أي جهاز

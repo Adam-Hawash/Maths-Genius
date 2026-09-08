@@ -52,7 +52,7 @@ export function Navbar() {
   const instructorPhoto = cfg.instructor_photo || ''
   const youtubeLink = cfg.social_youtube || ''
   const navBrand = cfg.navbar_brand || 'Math Genius'
-  const navSubtitle = cfg.navbar_subtitle || 'Mr. Sherif ElSayed'
+  const navSubtitle = cfg.navbar_subtitle || 'مستر وائل الخضيري'
 
   const isAuthenticated = !!currentStudent || isAdminLoggedIn
   const isAuthPage = currentView === 'auth-login' || currentView === 'auth-register'
@@ -91,7 +91,7 @@ export function Navbar() {
             {instructorPhoto ? (
               <img
                 src={instructorPhoto}
-                alt="Mr. Sherif ElSayed"
+                alt="Mr. Wael El-Khadiry"
                 width={36}
                 height={36}
                 className="h-9 w-9 rounded-lg object-cover border border-primary/30"

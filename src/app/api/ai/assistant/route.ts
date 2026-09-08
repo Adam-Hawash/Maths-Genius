@@ -170,7 +170,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ reply: 'الصور اللي بعتها مش مقبولة 😅 جرب تبعت صورة PNG أو JPG عادية.' })
     }
 
-    var systemPrompt = buildSystemPrompt('منصة Math Genius (مستر شريف السيد)', 'مدرّب رياضيات شاطر بيساعد الطلاب في الـ Math.')
+    var systemPrompt = buildSystemPrompt('منصة Math Genius (مستر وائل الخضيري)', 'مدرّب رياضيات شاطر بيساعد الطلاب في الـ Math.')
     if (context.page) systemPrompt += '\nالصفحة اللي الطالب واقف فيها: ' + context.page
     if (context.studentId) {
       try {

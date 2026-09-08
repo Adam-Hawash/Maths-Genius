@@ -183,7 +183,7 @@ export default function HeroSection() {
                 {cfg.hero_title_line1 || 'Math Genius'}
               </span>
               <span className="block mt-1 text-2xl sm:text-3xl lg:text-4xl font-semibold text-white/80">
-                {cfg.hero_title_line2 || 'Mr. Sherif ElSayed'}
+                {cfg.hero_title_line2 || 'مستر وائل الخضيري'}
               </span>
             </h1>
 
@@ -306,12 +306,13 @@ export default function HeroSection() {
               <svg className="absolute -bottom-6 -right-6 w-16 h-16 opacity-40 pointer-events-none" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="42" fill="none" stroke="#C49A38" strokeWidth="2.5" strokeDasharray="3 7" />
               </svg>
-              {/* Circular photo container with gold frame — الصورة بتاع المستر دائرية فالإطار دائري عشان تظهر كاملة ومظبوطة الأبعاد */}
-              <div className="relative w-56 h-56 sm:w-64 sm:h-64 lg:w-72 lg:h-72 rounded-full overflow-hidden border-2 border-[#C49A38]/40 gold-glow bg-transparent shadow-2xl">
+              {/* Square photo container with gold frame — صورة المستر مربعة وبتتعرض كاملة
+                  من غير أي قص (object-cover في مربع = الصورة كلها زي ما هي) */}
+              <div className="relative w-56 h-56 sm:w-64 sm:h-64 lg:w-72 lg:h-72 rounded-2xl overflow-hidden border-2 border-[#C49A38]/40 gold-glow bg-transparent shadow-2xl">
                 {showPhoto ? (
                   <img
                     src={heroPhoto}
-                    alt={cfg.instructor_name || 'Mr. Sherif ElSayed'}
+                    alt={cfg.instructor_name || 'Mr. Wael El-Khadiry'}
                     className="w-full h-full object-cover"
                     style={{ objectPosition: '50% 50%' }}
                   />
@@ -326,7 +327,7 @@ export default function HeroSection() {
               {/* Badge overlay */}
               <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#0F0D0A] border border-[#C49A38]/40 rounded-full px-5 py-2 shadow-lg">
                 <p className="text-[#E5BE5A] font-bold text-sm tracking-wider whitespace-nowrap">
-                  {cfg.instructor_name || 'مستر شريف السيد'}
+                  {cfg.instructor_name || 'مستر وائل الخضيري'}
                 </p>
               </div>
             </div>

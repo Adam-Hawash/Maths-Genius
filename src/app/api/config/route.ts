@@ -5,12 +5,12 @@ import { db, safeWrite } from '@/lib/db'
 var DEFAULTS = {
   // === Navbar ===
   navbar_brand: 'Math Genius',
-  navbar_subtitle: 'Mr. Sherif ElSayed',
+  navbar_subtitle: 'مستر وائل الخضيري',
 
   // === Hero Section ===
   hero_badge: 'منصة تعليمية متكاملة | Comprehensive Learning Platform',
   hero_title_line1: 'Math Genius',
-  hero_title_line2: 'Mr. Sherif ElSayed',
+  hero_title_line2: 'مستر وائل الخضيري',
   hero_subtitle: 'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.',
   hero_stat1_value: '8+',
   hero_stat1_label: 'Grade Levels',
@@ -28,11 +28,11 @@ var DEFAULTS = {
   schedule_subtitle: 'جدول مواعيد الحصص الأسبوعية لكل الصفوف الدراسية — اختر اليوم المناسب لك وتابع موعد حصتك',
   schedule_badge: 'جدول الحصص الأسبوعي',
   schedule_footer_note: 'جميع المواعيد بتوقيت القاهرة. لو عندك أي استفسار عن موعد حصتك تواصل معنا عبر واتساب.',
-  schedule_brand: 'Math Genius — Mr. Sherif ElSayed',
+  schedule_brand: 'Math Genius — Mr. Wael El-Khadiry',
   schedule_data: '',
 
   // === Instructor ===
-  instructor_name: 'Mr. Sherif ElSayed',
+  instructor_name: 'مستر وائل الخضيري',
   instructor_title: 'Mathematics Specialist | معلم الرياضيات المتخصص',
   instructor_photo: '',
 
@@ -55,7 +55,7 @@ var DEFAULTS = {
   // === Tips Section ===
   tips_badge: 'نصائح للتفوّق | Tips for Excellence',
   tips_title: 'نصائح المستر | Tips',
-  tips_subtitle: 'نصائح ذهبية من مستر شريف السيد للتفوّق في الرياضيات — Golden advice from Mr. Sherif ElSayed',
+  tips_subtitle: 'نصائح ذهبية من مستر وائل الخضيري للتفوّق في الرياضيات — Golden advice from Mr. Wael El-Khadiry',
   tips_card1_title: 'حدد وقت يومي للمراجعة',
   tips_card1_title_en: 'Set Daily Review Time',
   tips_card1_desc: 'خصص 20-30 دقيقة كل يوم لمراجعة ما تعلمته. الاستمرارية هي مفتاح التفوّق في الرياضيات. Dedicate 20-30 minutes daily for review.',
@@ -142,6 +142,24 @@ export async function GET() {
     for (var b = 0; b < brandKeys.length; b++) {
       if (typeof map[brandKeys[b]] === 'string' && map[brandKeys[b]].indexOf('Maths Genius') !== -1) {
         map[brandKeys[b]] = map[brandKeys[b]].split('Maths Genius').join('Math Genius')
+      }
+    }
+    // اسم المستر الصحيح للمنصة دي: مستر وائل الخضيري — قيم قديمة مخزنة
+    // (من ترحيل غلط سابق كتب اسم مستر شريف) بتتصحح على القراءة هنا،
+    // والترحيل في ensure-schema بصلحه نهائيًا في قاعدة البيانات
+    var arabicNameKeys = ['navbar_subtitle', 'hero_title_line2', 'instructor_name']
+    for (var a = 0; a < arabicNameKeys.length; a++) {
+      var av = map[arabicNameKeys[a]]
+      if (typeof av === 'string' && (av.indexOf('Sherif') !== -1 || av.indexOf('شريف') !== -1)) {
+        map[arabicNameKeys[a]] = 'مستر وائل الخضيري'
+      }
+    }
+    var cfgKeys = Object.keys(map)
+    for (var k = 0; k < cfgKeys.length; k++) {
+      var v = map[cfgKeys[k]]
+      if (typeof v !== 'string') continue
+      if (v.indexOf('Mr. Sherif ElSayed') !== -1 || v.indexOf('مستر شريف السيد') !== -1 || v.indexOf('نصائح مستر شريف') !== -1) {
+        map[cfgKeys[k]] = v.split('Mr. Sherif ElSayed').join('Mr. Wael El-Khadiry').split('مستر شريف السيد').join('مستر وائل الخضيري').split('نصائح مستر شريف').join('نصائح مستر وائل الخضيري')
       }
     }
     return NextResponse.json(map)
