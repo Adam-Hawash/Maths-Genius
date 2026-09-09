@@ -28,9 +28,12 @@
 //     **كنترولز يوتيوب مقفولة خالص (controls=0)** — يعني لوجو يوتيوب وزرار
 //     share وزرار الوقت وقايمة ⚙ كلهم **ماتشالوا مش متغطيين بس** (الغطاء
 //     كان بيفشل لأن الواجهة RTL واللوجو بيبقى تحت الشمال مش تحت يمين).
-//     مكانهم **شريط تحكم من عندنا**: تشغيل/إيقاف + شريط تقدم بالسحب + كتم
-//     + ملء شاشة + كلمة Math Genius مكان اللوجو — الشريط Opaque فبيغطي
-//     حتة الكابشن السفلى كمان + غطاء capLid فوقه لأي سطر زايد.
+//     مكانهم **شريط تحكم من عندنا** — تمليينه (2026-و2) بطلب المستر الحرفي:
+//     «شريط اللي بجر منه وعلامة التكبير والتصغير وعلامة الجودة بس»:
+//     شريط تقدم بالسحب + زرار ملء شاشة **كبير** + ⚙ جودة — **بس كده**
+//     (التشغيل/الإيقاف بدوسة على الفيديو نفسه، ومفيش كتم ولا وقت ولا براند).
+//     **غطاء capLid السفلي اتشال نهائيًا (2026-و2)** — «من غير ما الفيديو
+//     يتقص عشان تقصص لي تحت برضه» — الفيديو دلوقتي كامل 100% لآخر بكسل.
 //  7-ب) الجودة بعد قفل الكنترولز: يوتيوب أبطلت كل دوال الجودة في الـ IFrame
 //     API (setPlaybackQualityRange/suggestedQuality بيتجاهلوها و
 //     getPlaybackQuality بيرجع رقم كذب) — فالجودة بقت **طلب أعلى دقة
@@ -47,10 +50,11 @@
 //     ASR التلقائية كمان) + **أوامر postMessage للوضع البديل المباشر كل
 //     3 ثواني** (enablejsapi — الكابشن ممنوع في الوضعين).
 //     **درع الكابشن البلور (capShield) اتشال** (2026-ط2 — «شكله مش لطيف»)
-//     واتستبدل (2026-ؤ) بغطاء capLid أسود ناعم مدموج مع شريط التحكم بتاعنا
-//     — لأن الإبادة بالـ API لوحدها مش كفاية: يوتيوب بيتجاهل unloadModule
-//     لترجمة الـ ASR أحيانًا (ظهر الكابشن في سكرين شوت المستر رغم كل الطبقات).
-//     الشريط Opaque بيغطي مكان الكابشن + الغطاء فوقه — الكابشن مستحيل يبان.
+//     **وغطاء capLid الأسود اتشال نهائيًا برضه (2026-و2 — قرار المستر:
+//     «من غير ما الفيديو يتقص عشان تقصص لي تحت برضه»)** — المنع رجع تقني
+//     بالكامل من غير أي تغطية مرئية: cc_load_policy=0 + disablekb (زرار C)
+//     + إبادة الموديول دوريًا + postMessage — الشريط السفلي بتاعنا (60px)
+//     هو التغطية الوحيدة الباقية، والفيديو كامل من فوق لتحت.
 //     زرار C اتشال من الكيبورد (كان بيفتح الترجمة — الترجمة ممنوعة نهائيًا).
 //  9) التشغيل المضمون: مراقب متدرج (playVideo → loadVideoById → صامت)
 //     + تحميل API يوتيوب بإعادة محاولة + تسجيل طلب التشغيل قبل جهوزية الـ API
@@ -342,21 +346,20 @@ const PLAYER_PAGE = `<!doctype html>
      منع الكابشن دلوقتي بـ 3 طبقات من غير أي شريط مرئي:
      cc_load_policy=0 + إبادة موديول الترجمة دوريًا (API)
      + أوامر postMessage للمشغل البديل المباشر كل 3 ثواني */
-  /* ===== شريط التحكم بتاعنا (2026-ؤ — طلب المستر الحرفي: «مش لاقي زرار
-     الإعدادات.. خبي علامة اليوتيوب.. علامة الـ share والـ time دي لغيها»):
-     كنترولز يوتيوب مقفولة خالص controls=0 — مفيش لوجو يوتيوب ولا زرار share
-     ولا زرار وقت ولا قايمة ⚙ أصلًا. ده شريطنا: تشغيل/إيقاف + تقدم + كتم
-     + ملء شاشة + Math Genius مكان اللوجو.
-     **(2026-ي — إصلاح نهائي لظهور الكابشن): الخلفية بقت SOLID معتمة 100%** —
-     كانت rgba(.97→.90) شفافة 3-10% والكابشن بينفذ منها (ظهر فعلًا في
-     سكرين شوت المستر رغم كل الطبقات) — دلوقتي معتم تمامًا فمستحيل يبين
-     تحته أي حاجة */
+  /* ===== شريط التحكم بتاعنا (تمليين 2026-و2 — طلب المستر الحرفي:
+     «شريط اللي بجر منه وعلامة التكبير والتصغير وعلامة الجودة بس») =====
+     كنترولز يوتيوب مقفولة خالص controls=0 — وشريطنا 3 عناصر بس:
+     ⚙ الجودة + شريط التقدم بالسحب + زرار ملء الشاشة (كبير وواضح).
+     التشغيل/الإيقاف بدوسة على الفيديو نفسه — مفيش كتم ولا وقت ولا براند.
+     الخلفية SOLID معتمة 100% (2026-ي) */
   #mgBar{position:absolute;bottom:0;left:0;right:0;z-index:60;height:60px;
     display:flex;align-items:center;gap:4px;direction:rtl;padding:0 10px;
     background:#050509}
   #mgBar .mBtn{flex:0 0 auto;width:44px;height:44px;border:0;border-radius:10px;
     background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
   #mgBar .mBtn:hover{background:rgba(255,255,255,.12)}
+  /* زرار ملء الشاشة **الكبير** (2026-و2 — «حطلي علامة تصغير كبيرة») */
+  #mgBar .mBtn.big{width:58px;height:48px}
   #mgTrackWrap{flex:1 1 auto;direction:ltr;height:44px;display:flex;align-items:center;cursor:pointer;padding:0 6px;min-width:80px}
   #mgTrack{position:relative;width:100%;height:5px;border-radius:4px;background:rgba(255,255,255,.22);overflow:hidden}
   #mgBuf{position:absolute;top:0;left:0;bottom:0;width:0;background:rgba(255,255,255,.35)}
@@ -388,16 +391,9 @@ const PLAYER_PAGE = `<!doctype html>
   #mgQMenu .qi.on{background:rgba(255,255,255,.08)}
   #mgQMenu .qi .ck{font-size:14px;font-weight:900}
   #mgQMenu .qNote{padding:7px 12px 5px;color:rgba(255,255,255,.55);font-size:10.5px;line-height:1.7;border-top:1px solid rgba(255,255,255,.1);margin-top:4px}
-  /* غطاء الكابشن capLid (2026-ؤ + التطوير النهائي 2026-ي):
-     الشريط بتاعنا بيغطي من 0 لـ 60px، والغطاء ده بيكمل فوقه **بعرض الشاشة
-     كلها** وبارتفاع نسبي (15% — بيكبر لوحده جوه ملء الشاشة عشان الكابشن
-     ميفوتش فوقيه زي ما حصل عند المستر أول ما يكبّر الصورة).
-     **الخلفية SOLID معتمة 100%** — الكابشن (حتى ترجمة ASR اللي يوتيوب
-     بيتجاهل معاها unloadModule) **مستحيل ينفذ منها** — نفس مشكلة الشفافية
-     اللي خلت الكابشن يبان في سكرين شوت المستر ومتصلحة هنا نهائيًا.
-     الشكل: قاعدة سودة مطفية مدموجة مع الشريط — زي letterbox سينمائي */
-  #capLid{position:absolute;bottom:60px;left:0;right:0;z-index:39;
-    height:clamp(56px,15%,150px);background:#050509;pointer-events:none}
+  /* (غطاء الكابشن capLid **اتشال نهائيًا** 2026-و2 — طلب المستر الحرفي:
+     «من غير ما الفيديو يتقص عشان تقصص لي تحت برضه» — الفيديو كامل 100%
+     لآخر بكسل، والكابشن ممنوع تقنيًا بدون أي تغطية مرئية زيادة) */
   #startOv{position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(2,2,8,.96);cursor:pointer}
   #startOv .big{width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;color:#fff}
   #startOv p{color:#fff;font-size:14px;font-weight:700;margin:0;font-family:system-ui,sans-serif}
@@ -936,12 +932,12 @@ function ytState(){ try{ return playerApi && playerApi.getPlayerState ? playerAp
    عند الإيقاف بتتوقف مؤقتًا ومتكملش (طلب المستر 2026-ل) */
 function wmRun(onoff){ try{ var w=document.getElementById('wmBig'); if(w) w.style.animationPlayState = onoff ? 'running' : 'paused'; }catch(e){} }
 
-/* ===== شريط التحكم بتاعنا (2026-ؤ — بدل كنترولز يوتيوب المحذوفة) =====
-   طلب المستر الحرفي: «مش لاقي زرار الإعدادات.. خبي علامة اليوتيوب..
-   علامة الـ share والـ time دي لغيها.. والكابشن اقفلها».
-   القرار: controls=0 → مفيش أي واجهة يوتيوب أصلًا (كلها اتشالت مش متغطية)،
-   وشريطنا إحنا: تشغيل/إيقاف + تقدم بالسحب + كتم + ملء شاشة + Math Genius.
-   الشريط Opaque دايمًا ظاهر → بيغطي مكان الكابشن السفلي بدوره + capLid. */
+/* ===== شريط التحكم بتاعنا (تمليين 2026-و2 — بدل كنترولز يوتيوب المحذوفة) =====
+   طلب المستر الحرفي: «شريط اللي بجر منه وعلامة التكبير والتصغير
+   وعلامة الجودة بس، حتى لو علامة الجودة مش شغالة».
+   القرار: controls=0 → مفيش أي واجهة يوتيوب أصلًا،
+   وشريطنا 3 عناصر بس: ⚙ الجودة + شريط التقدم بالسحب + ملء الشاشة (كبير).
+   التشغيل/الإيقاف بدوسة على الفيديو نفسه (tapLayer) — زي أي مشغل عادي. */
 var plainAssumedPlaying = true;   /* حالة الوضع البديل المباشر (autoplay=1) */
 var plainAssumedMuted = false;
 var mgSeeking = false;
@@ -1008,22 +1004,30 @@ function mgUpdateProgress(){
 function buildMgBar(){
   if(document.getElementById('mgBar')) return;
   var bar = document.createElement('div'); bar.id = 'mgBar';
-  var play = document.createElement('button'); play.id = 'mgPlay'; play.type = 'button'; play.className = 'mBtn';
-  play.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); ytTogglePlay(); });
+  /* تمليين 2026-و2 (طلب المستر الحرفي): الشريط 3 عناصر بس —
+     ⚙ الجودة + شريط التقدم + ملء الشاشة الكبير. مفيش تشغيل/كتم/براند:
+     التشغيل والإيقاف بدوسة على الفيديو نفسه زي أي مشغل عادي */
+  var gear = document.createElement('button'); gear.id = 'mgGear'; gear.type = 'button'; gear.className = 'mBtnWide';
+  gear.setAttribute('aria-label','إعدادات الجودة');
+  gear.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' +
+    '<span id="mgQLabel">…</span>';
+  gear.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); ytCollectLevels(); var m = qMenuEl(); if(m) m.classList.toggle('open'); });
   var tw = document.createElement('div'); tw.id = 'mgTrackWrap';
   tw.innerHTML = '<div id="mgTrack"><div id="mgBuf"></div><div id="mgFill"></div></div>';
-  var mute = document.createElement('button'); mute.id = 'mgMute'; mute.type = 'button'; mute.className = 'mBtn';
-  mute.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); ytToggleMute(); });
-  var fsb = document.createElement('button'); fsb.type = 'button'; fsb.className = 'mBtn';
-  fsb.setAttribute('aria-label','ملء الشاشة');
-  fsb.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+  var fsb = document.createElement('button'); fsb.type = 'button'; fsb.className = 'mBtn big';
+  fsb.setAttribute('aria-label','تكبير وتصغير');
+  fsb.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
   fsb.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); toggleFs(); });
-  var brand = document.createElement('span'); brand.id = 'mgBrand'; brand.textContent = 'Math Genius';
-  bar.appendChild(play); bar.appendChild(tw); bar.appendChild(mute); bar.appendChild(fsb); bar.appendChild(brand);
+  bar.appendChild(gear); bar.appendChild(tw); bar.appendChild(fsb);
   wrap.appendChild(bar);
-  /* غطاء الكابشن فوق الشريط — بيكمل التغطية لأي سطر كابشن يطلع لفوق */
-  var lid = document.createElement('div'); lid.id = 'capLid'; wrap.appendChild(lid);
-  setPlayIcon(false); setMuteIcon(false);
+  /* قايمة الجودة + قفلها بأي دوسة بره القايمة والزرار */
+  var qm = document.createElement('div'); qm.id = 'mgQMenu'; wrap.appendChild(qm);
+  document.addEventListener('click', function(e){
+    var m = qMenuEl(); if(!m || !m.classList.contains('open')) return;
+    var t = e.target;
+    if(t && (t.id === 'mgGear' || t.id === 'mgQLabel' || (t.closest && t.closest('#mgQMenu')))) return;
+    closeQMenu();
+  });
   /* السحب على شريط التقدم (الاتجاه LTR ثابت زي أي مشغل فيديو) */
   var trackWrap = document.getElementById('mgTrackWrap');
   var track = document.getElementById('mgTrack');
@@ -1067,6 +1071,75 @@ function nudgeQualityOnce(){
     try{ playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur)), 'hd1080'); }catch(e){}
   }catch(e){}
 }
+/* ===== ⚙ قايمة جودة يوتيوب (2026-و2 — طلب المستر الحرفي: «علامة الجودة
+   بس، حتى لو علامة الجودة مش شغالة»): بنعرض المستويات الحقيقية المتاحة
+   من يوتيوب + الرقم الحي من getPlaybackQuality على الزرار، واختيار الطالب
+   بيتطلب بأفضل مجهود (loadVideoById + suggestedQuality + Range) — يوتيوب
+   بيوزّع النهائي حسب سرعة النت وبيمكن يتجاهل الطلب، والمستر موافق صراحة.
+   **الجودة المضمونة فعليًا = لينك مباشر (مش يوتيوب)** — ساعتها المشغل
+   العادي بيبدّل المستويات بجد عبر HLS أو بيعرض جودة الملف الأصلية */
+var ytQLevels = [], ytQWanted = '';
+var YT_Q_ORDER = {tiny:1,small:2,medium:3,large:4,hd720:5,hd1080:6,hd1440:7,hd2160:8,highres:9};
+function ytQName(q){ return ({tiny:'144p',small:'240p',medium:'360p',large:'480p',hd720:'720p',hd1080:'1080p',hd1440:'1440p',hd2160:'4K',highres:'أعلى جودة'})[q] || 'تلقائي'; }
+function ytCurQuality(){ try{ if(playerApi && playerApi.getPlaybackQuality) return String(playerApi.getPlaybackQuality()||''); }catch(e){} return ''; }
+function ytUpdateQLabel(){
+  var el = document.getElementById('mgQLabel'); if(!el) return;
+  var cur = ytCurQuality();
+  el.textContent = cur ? ytQName(cur) : 'تلقائي';
+}
+function ytCollectLevels(){
+  if(!fallbackActive){
+    try{
+      if(playerApi && playerApi.getAvailableQualityLevels){
+        var ls = playerApi.getAvailableQualityLevels() || [];
+        var real = [];
+        for(var i=0;i<ls.length;i++){ if(ls[i] && ls[i] !== 'auto' && real.indexOf(ls[i]) === -1) real.push(ls[i]); }
+        if(real.length) ytQLevels = real;
+      }
+    }catch(e){}
+  }
+  ytRenderQMenu(); ytUpdateQLabel();
+}
+function ytRenderQMenu(){
+  var m = qMenuEl(); if(!m) return;
+  var cur = ytCurQuality();
+  var autoOn = (!ytQWanted || cur === 'auto');
+  var html = '<div class="qHead">إعدادات الجودة</div>';
+  html += '<div class="qi' + (autoOn ? ' on' : '') + '" data-q="auto"><span>تلقائي' + (cur && cur !== 'auto' ? ' (' + ytQName(cur) + ')' : '') + '</span><span class="ck">' + (autoOn ? '✓' : '') + '</span></div>';
+  var sorted = ytQLevels.slice().sort(function(a,b){ return (YT_Q_ORDER[b]||0) - (YT_Q_ORDER[a]||0); });
+  for(var i=0;i<sorted.length;i++){
+    var q = sorted[i];
+    html += '<div class="qi' + (ytQWanted === q ? ' on' : '') + '" data-q="' + q + '"><span>' + ytQName(q) + '</span><span class="ck">' + (ytQWanted === q ? '✓' : '') + '</span></div>';
+  }
+  html += '<div class="qNote">يوتيوب بيوزّع الجودة النهائية حسب سرعة النت — الاختيار طلب بأفضل مجهود. الجودة المضمونة 100% للينكات المباشرة (غير يوتيوب)</div>';
+  m.innerHTML = html;
+  var items = m.getElementsByClassName('qi');
+  for(var j=0;j<items.length;j++){
+    (function(item){
+      item.addEventListener('click', function(ev){
+        ev.preventDefault(); ev.stopPropagation();
+        ytSetQuality(String(item.getAttribute('data-q')||'auto'));
+      });
+    })(items[j]);
+  }
+}
+function ytSetQuality(q){
+  ytQWanted = (q === 'auto') ? '' : q;
+  try{
+    if(playerApi && playerApi.loadVideoById && ytIdCached){
+      var cur = 0; try{ cur = playerApi.getCurrentTime()||0; }catch(e){}
+      playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur)), ytQWanted || 'default');
+      try{ if(playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange(ytQWanted || 'auto', ytQWanted || 'auto'); }catch(e){}
+      try{ playerApi.playVideo(); }catch(e){}
+      toast('تم طلب جودة ' + (ytQWanted ? ytQName(ytQWanted) : 'تلقائي') + ' — يوتيوب بيأكد حسب سرعة النت');
+    } else {
+      toast('الجودة تلقائية في الوضع ده');
+    }
+  }catch(e){}
+  closeQMenu();
+  ytRenderQMenu(); ytUpdateQLabel();
+}
+
 function mountYouTube(){
   var ytId = deobfuscate(CFG.blob, CFG.key);
   if(!ytId){ wrap.innerHTML = '<p style="color:#fca5a5;font-family:sans-serif;padding:24px;direction:rtl">حصل خطأ في تحميل الفيديو</p>'; return; }
@@ -1080,9 +1153,9 @@ function mountYouTube(){
   host.id = 'ytHost';
   host.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:#000';
   wrap.appendChild(host);
-  /* الكابشن: إبادة API + postMessage + الشريط Opaque بيغطي مكانه السفلي
-     + غطاء capLid فوقه (buildMgBar) — مستحيل يبان (سكرين شوت المستر أثبت
-     إن يوتيوب بيتجاهل unloadModule لترجمة ASR أحيانًا فالتغطية البصرية لازم) */
+  /* الكابشن: إبادة API + postMessage دورية — من غير أي تغطية مرئية زيادة
+     (غطاء capLid اتشال نهائيًا 2026-و2 بطلب المستر: «الفيديو من غير قص
+     تحت») — الشريط السفلي Opaque بتاعنا هو التغطية الوحيدة الباقية */
   // شاشة البداية — **صورة الفيديو الحقيقية من يوتيوب** (بتغطي أي عنوان/
   // برanding بتاع يوتيوب لحظة التحميل) + دوسة الطالب = إذن تشغيل بالصوت
   var startOv = document.createElement('div');
@@ -1174,6 +1247,8 @@ function buildPlayer(){
             }
             /* الكابشن ممنوع خالص — إبادة فورية مع كل تشغيل (قرار 2026-ن) */
             killCaptions();
+            /* قايمة الجودة: نجمع المستويات المتاحة من يوتيوب ونحدّث الزرار */
+            ytCollectLevels();
             /* دورة الووترمارك الكبيرة بتشتغل مع التشغيل */
             wmRun(true);
             setPlayIcon(true);
@@ -1229,6 +1304,7 @@ function buildPlayer(){
         var cur = playerApi.getCurrentTime() || 0, dur = playerApi.getDuration() || 0;
         reportProgress(cur, dur);
         mgUpdateProgress();
+        ytUpdateQLabel();
         /* حارس النهاية: لو شاشة الاقتراحات هتظهر (ENDED ماتفوتش) → غطّي فورًا */
         if(ytState()===0){
           var eo3=document.getElementById('endOv');
