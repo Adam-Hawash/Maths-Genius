@@ -325,12 +325,14 @@ const PLAYER_PAGE = `<!doctype html>
      الإعدادات.. خبي علامة اليوتيوب.. علامة الـ share والـ time دي لغيها»):
      كنترولز يوتيوب مقفولة خالص controls=0 — مفيش لوجو يوتيوب ولا زرار share
      ولا زرار وقت ولا قايمة ⚙ أصلًا. ده شريطنا: تشغيل/إيقاف + تقدم + كتم
-     + ملء شاشة + Math Genius مكان اللوجو. دايمًا ظاهر و Opaque — فبيغطي
-     حتة الكابشن السفلى (المكان اللي بيترسم فيه) في نفس الوقت */
+     + ملء شاشة + Math Genius مكان اللوجو.
+     **(2026-ي — إصلاح نهائي لظهور الكابشن): الخلفية بقت SOLID معتمة 100%** —
+     كانت rgba(.97→.90) شفافة 3-10% والكابشن بينفذ منها (ظهر فعلًا في
+     سكرين شوت المستر رغم كل الطبقات) — دلوقتي معتم تمامًا فمستحيل يبين
+     تحته أي حاجة */
   #mgBar{position:absolute;bottom:0;left:0;right:0;z-index:60;height:60px;
     display:flex;align-items:center;gap:4px;direction:rtl;padding:0 10px;
-    background:linear-gradient(to top,rgba(5,5,9,.97),rgba(5,5,9,.90));
-    border-top:1px solid rgba(255,255,255,.08)}
+    background:#050509}
   #mgBar .mBtn{flex:0 0 auto;width:44px;height:44px;border:0;border-radius:10px;
     background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
   #mgBar .mBtn:hover{background:rgba(255,255,255,.12)}
@@ -341,14 +343,16 @@ const PLAYER_PAGE = `<!doctype html>
   #mgBrand{flex:0 0 auto;color:rgba(255,255,255,.92);font-weight:900;font-size:12px;letter-spacing:.6px;
     direction:ltr;font-family:system-ui,sans-serif;margin-right:8px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
   @media(max-width:420px){#mgBrand{display:none}}
-  /* غطاء الكابشن capLid (2026-ؤ): الشريط بتاعنا بيغطي من 0 لـ 60px وده
-     المكان اللي الكابشن بيترسم فيه غالبًا، والغطاء ده بيكمّل من 60 لـ 112px
-     عشان أي سطر تاني/تالت يطلع فوق. شكل مدموج مع الشريط من غير بلور
-     (البلور اتشالت بطلب المستر) — ومع طبقات الإبادة بالـ API الكابشن
-     مستحيل يبان (يوتيوب بيتجاهل unloadModule لترجمة ASR أحيانًا) */
-  #capLid{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);z-index:39;
-    width:min(86%,620px);height:52px;background:rgba(6,6,10,.9);
-    border-radius:14px 14px 0 0;pointer-events:none}
+  /* غطاء الكابشن capLid (2026-ؤ + التطوير النهائي 2026-ي):
+     الشريط بتاعنا بيغطي من 0 لـ 60px، والغطاء ده بيكمل فوقه **بعرض الشاشة
+     كلها** وبارتفاع نسبي (15% — بيكبر لوحده جوه ملء الشاشة عشان الكابشن
+     ميفوتش فوقيه زي ما حصل عند المستر أول ما يكبّر الصورة).
+     **الخلفية SOLID معتمة 100%** — الكابشن (حتى ترجمة ASR اللي يوتيوب
+     بيتجاهل معاها unloadModule) **مستحيل ينفذ منها** — نفس مشكلة الشفافية
+     اللي خلت الكابشن يبان في سكرين شوت المستر ومتصلحة هنا نهائيًا.
+     الشكل: قاعدة سودة مطفية مدموجة مع الشريط — زي letterbox سينمائي */
+  #capLid{position:absolute;bottom:60px;left:0;right:0;z-index:39;
+    height:clamp(56px,15%,150px);background:#050509;pointer-events:none}
   #startOv{position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(2,2,8,.96);cursor:pointer}
   #startOv .big{width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;color:#fff}
   #startOv p{color:#fff;font-size:14px;font-weight:700;margin:0;font-family:system-ui,sans-serif}
@@ -1213,6 +1217,9 @@ function mountFile(){
      بيتقفل لوحده — ومفيش زرار CC أصلًا ومفيش أي طريقة لتشغيلها */
   function killTracks(){
     try{ var tt = v.textTracks; for(var i=0;i<tt.length;i++){ tt[i].mode = 'disabled'; } }catch(e){}
+    /* (2026-ي) حذف عناصر track نفسها من الـ DOM — التعطيل لوحده كان بسيب
+       زرار CC في كنترولز الملف الأصلية يقدر الطالب يرجّع بيها الترجمة */
+    try{ var trs = v.getElementsByTagName('track'); while(trs.length){ trs[0].parentNode.removeChild(trs[0]); } }catch(e){}
   }
   v.addEventListener('loadedmetadata', killTracks);
   try{ if(v.textTracks && v.textTracks.addEventListener) v.textTracks.addEventListener('addtrack', killTracks); }catch(e){}
