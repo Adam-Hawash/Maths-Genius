@@ -63,7 +63,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { db } from '@/lib/db'
-import { getYouTubeId, mediaIdFromPath, signVideoToken, ensurePlayTicketTable } from '@/lib/video-guard'
+import { getYouTubeId, mediaIdFromPath, signVideoToken, ensurePlayTicketTable, ensureNativeEmbedColumn } from '@/lib/video-guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -158,6 +158,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       })
     }
 
+    await ensureNativeEmbedColumn()
     const video = await db.video.findUnique({ where: { id: row.videoId } })
     if (!video) return pageError('الفيديو غير موجود.', 404)
 
@@ -184,19 +185,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const ytId = getYouTubeId(video.url || '')
     const mediaId = mediaIdFromPath(video.filePath || '')
     const directUrl = (!ytId && !mediaId && isDirectMediaUrl(video.url || '')) ? String(video.url).trim() : ''
+    const nativeEmbed = Boolean((video as unknown as { nativeEmbed?: boolean | number }).nativeEmbed)
+    // (2026-و3 — كود HTML embed) لينك تضمين من موقع تاني (غير يوتيوب وغير ملف
+    // مباشر) — بيتشغل في iframe مع كل الحمايات، وبيشتغل بس لما الفيديو متسجل
+    // nativeEmbed (يعني الأدمن هو اللي أضافه من كود HTML — مش أي لينك عادي)
+    const embedUrl = (!ytId && !mediaId && !directUrl && nativeEmbed && /^https?:\/\//i.test(video.url || '')) ? String(video.url).trim() : ''
     const videoIdEsc = htmlEscape(video.id)
     const titleEsc = htmlEscape(video.title || '')
 
     // مفيش طريقة تشغيل معروفة → صفحة خطأ (بالشرح: اللينك المباشر لازم ينتهي
-    // بامتداد فيديو — MP4/M3U8/WebM — أو يرفع الملف من لوحة التحكم)
-    if (!ytId && !mediaId && !directUrl) {
-      return pageError('الفيديو ده مفيهوش مصدر تشغيل صالح — اللينك المباشر لازم ينتهي بـ mp4 أو m3u8 أو webm، أو ارفع ملف الفيديو نفسه من لوحة التحكم.', 415)
+    // بامتداد فيديو — MP4/M3U8/WebM — أو يرفع الملف من لوحة التحكم
+    // أو يضيف الفيديو من كود تضمين HTML)
+    if (!ytId && !mediaId && !directUrl && !embedUrl) {
+      return pageError('الفيديو ده مفيهوش مصدر تشغيل صالح — اللينك المباشر لازم ينتهي بـ mp4 أو m3u8 أو webm، أو ارفع ملف الفيديو نفسه من لوحة التحكم، أو استخدم كود تضمين HTML.', 415)
     }
 
     // إعدادات المشغل كـ JSON آمن جوه script
     const cfg: Record<string, unknown> = {
       videoId: video.id,
-      kind: ytId ? 'youtube' : 'file',
+      kind: ytId ? 'youtube' : (mediaId || directUrl) ? 'file' : 'embed',
       resume: resume,
       wm: {
         enabled: wmEnabled === '1',
@@ -211,6 +218,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // الـ ID مش موجود كنص صريح — مقسوم مشفّر XOR
       cfg.blob = ob.b
       cfg.key = ob.k
+      // (2026-و3) الفيديو متسجل من كود HTML embed → كنترولز يوتيوب الأصلية
+      // شغالة (controls=1) — وقايمة ⚙ الجودة بتاعتها شغالة بجد
+      if (nativeEmbed) cfg.nativeControls = true
     } else if (mediaId) {
       // توكن موقّع ساعتين مرتبط بالطالب — مكانش هيظهر غير جوه صفحة المشغل
       cfg.fileUrl = '/api/files/' + mediaId + '?token=' + signVideoToken(mediaId, row.studentId || 'anon') + '&req=' + encodeURIComponent(row.studentId || 'anon')
@@ -218,6 +228,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // (المشغل العادي) لينك فيديو مباشر من أي موقع — MP4/M3U8/WebM
       // بيتشغل في مشغلنا العادي من غير أي يوتيوب + إعدادات جودة ظاهرة
       cfg.fileUrl = directUrl
+    } else {
+      // (2026-و3) كود HTML من موقع تاني — iframe مباشر + الدروع والووترمارك
+      cfg.embedUrl = embedUrl
     }
     const cfgJson = JSON.stringify(cfg).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')
 
@@ -314,21 +327,24 @@ const PLAYER_PAGE = `<!doctype html>
   .wmCardMR .nm,.wmCardML .nm,.wmCardBC .nm{display:block;font-size:clamp(8px,0.95vw,11px);font-weight:700;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap;
     text-shadow:0 1px 2px rgba(0,0,0,.8)}
   .wmCardMR .ph,.wmCardML .ph,.wmCardBC .ph{display:block;font-size:clamp(7px,0.8vw,9.5px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.85;margin-top:1px}
-  /* درع فوق كامل (2026-ط2 — طلب المستر الحرفي: «اعمل blur على كل حاجة،
+  /* درع فوق كامل (2026-ط2 — طلب المستر: «اعمل blur على كل حاجة،
      وغطّي اسم القناة اللي فوق بالكامل — علامة سودة أو كلمة Math Genius —
      أي حاجة بس تكون مغطية»): شريط داكن + بلور بعرض الشاشة كلها، ثابت
      دايمًا، بيغطي عنوان يوتيوب + اسم القناة + أزرار الشير/Watch on YouTube
      تغطية 100% — مستحيل يبانوا ولا حد يقدر يدوس عليهم — ومكتوب عليه
-     Math Genius بدل أي برندنج يوتيوب */
+     Math Genius بدل أي برندنج يوتيوب.
+     **(2026-و3 — طلب المستر: «قصره شوية، ما تخليهوش نازل كده طويل»)** —
+     الشريط بقى رفيع (40–50px بدل 96px) — التغطية زي ما هي بس من غير ماياخد
+     مساحة كبيرة من الفيديو */
   #topShield{position:absolute;top:0;left:0;right:0;z-index:22;pointer-events:auto;
-    height:max(56px,min(14%,96px));
+    height:max(40px,min(7.5%,50px));
     background:rgba(0,0,0,.80);
     -webkit-backdrop-filter:blur(16px) saturate(.9);backdrop-filter:blur(16px) saturate(.9);
     display:flex;align-items:center;justify-content:flex-start;
-    padding-right:18px;
+    padding-right:14px;
     border-bottom:1px solid rgba(255,255,255,.10)}
-  #topShield::after{content:'';position:absolute;top:100%;left:0;right:0;height:26px;
-    background:linear-gradient(to bottom,rgba(0,0,0,.5),rgba(0,0,0,0))}
+  #topShield::after{content:'';position:absolute;top:100%;left:0;right:0;height:12px;
+    background:linear-gradient(to bottom,rgba(0,0,0,.45),rgba(0,0,0,0))}
   #topShield .brand{color:rgba(255,255,255,.92);font-weight:900;
     font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
     font-size:clamp(12px,1.9vw,17px);letter-spacing:.5px;direction:ltr;white-space:nowrap;
@@ -354,7 +370,12 @@ const PLAYER_PAGE = `<!doctype html>
      الخلفية SOLID معتمة 100% (2026-ي) */
   #mgBar{position:absolute;bottom:0;left:0;right:0;z-index:60;height:60px;
     display:flex;align-items:center;gap:4px;direction:rtl;padding:0 10px;
-    background:#050509}
+    background:#050509;
+    transition:opacity .3s ease;opacity:1}
+  /* إخفاء تلقائي (2026-و3 — طلب المستر: الشريط يختفي أول ما الفيديو يمشي
+     ويظهر لحظة الإيقاف — عشان ميفضلش مشتت الطالب طول المشاهدة) */
+  #mgBar.hide{opacity:0;pointer-events:none}
+  body.nocursor{cursor:none}
   #mgBar .mBtn{flex:0 0 auto;width:44px;height:44px;border:0;border-radius:10px;
     background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
   #mgBar .mBtn:hover{background:rgba(255,255,255,.12)}
@@ -812,10 +833,11 @@ function activateFallback(reason){
   /* نفس مواصفات المشغل الأصلي بالظبط: **controls=0 — مفيش أي واجهة يوتيوب**
      (لا لوجو ولا وقت ولا share ولا إعدادات — القرار 2026-ؤ) + كابشن مقفول
      + ووترمارك ودروع وشريطنا فوقه — بيتشتغل لو الـ API نفسه ماقدرش يتحمل.
+     (وضع embed 2026-و3): controls=1 — نفس كنترولز يوتيوب الأصلية بجودتها الحقيقية.
      enablejsapi=1 → بنقدر نبعت أوامر إبادة الكابشن + تشغيل/إيقاف/كتم
      لشريطنا جوه المشغل المباشر (postMessage كل 3 ثواني) — طلب المستر
      الحرفي: «اعمل للكابشن بلوك» في أي مشغل */
-  f.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&controls=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&cc_load_policy=0&cc_lang_pref=ar&hl=ar&disablekb=1&enablejsapi=1&vq=hd1080&origin=' + encodeURIComponent(location.origin || 'https://localhost') + '&start=' + startS;
+  f.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&controls=' + (CFG.nativeControls ? '1' : '0') + '&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&cc_load_policy=0&cc_lang_pref=ar&hl=ar&disablekb=1&enablejsapi=1&vq=hd1080&origin=' + encodeURIComponent(location.origin || 'https://localhost') + '&start=' + startS;
   layoutWrap();
   try{ if(plainCapTimer){ clearInterval(plainCapTimer); plainCapTimer = null; } }catch(e){}
   plainCapTimer = setInterval(killCaptionsPlain, 3000);
@@ -828,6 +850,9 @@ function activateFallback(reason){
     var twp = document.getElementById('mgTrackWrap'); if(twp) twp.style.display = 'none';
     setPlayIcon(true); setMuteIcon(false);
   }catch(e){}
+  /* (2026-و3) الوضع البديل شغال → شريطنا يتخفي هو كمان بعد لحظات
+     (نفس سلوك المشغل الأساسي — مفيش شريط واقف يشتت الطالب) */
+  barScheduleHide();
   toast('تمام — الفيديو شغّال دلوقتي ▶');
 }
 function scheduleFallbackIfStuck(){
@@ -932,6 +957,50 @@ function ytState(){ try{ return playerApi && playerApi.getPlayerState ? playerAp
    عند الإيقاف بتتوقف مؤقتًا ومتكملش (طلب المستر 2026-ل) */
 function wmRun(onoff){ try{ var w=document.getElementById('wmBig'); if(w) w.style.animationPlayState = onoff ? 'running' : 'paused'; }catch(e){} }
 
+/* ===== إخفاء شريط التحكم تلقائيًا (2026-و3 — طلب المستر الحرفي:
+   «الشريط اللي تحت عاوزها تختفي أول ما أفتح الفيديو عادي، ولما أوقفه تظهر،
+   عشان بتفضل ظاهرة طول الفيديو وده بيشتت الطالب»):
+   • الفيديو ماشي → الشريط بيختفي بعد 2.6 ثانية من آخر حركة/دوسة
+   • أي حركة موس/لمسة → بيرجع فورًا ويعيد العد
+   • إيقاف مؤقت أو نهاية → بيرجع ويفضل ظاهر
+   • قايمة الجودة ⚙ بتقفل لو الشريط اختفى + مؤشر الموس بيتخفي */
+var barHideTimer = null;
+function anyPlayingNow(){
+  try{
+    if(fallbackActive) return !!plainAssumedPlaying;
+    if(fileApi) return !fileApi.paused && !fileApi.ended;
+    var st = ytState();
+    return st === 1 || st === 3;
+  }catch(e){ return false; }
+}
+function setBarHidden(h){
+  var b = document.getElementById('mgBar');
+  if(b){
+    if(h){ b.classList.add('hide'); } else { b.classList.remove('hide'); }
+  }
+  try{ document.body.style.cursor = h ? 'none' : ''; }catch(e){}
+  if(h) closeQMenu();
+}
+function barStopHide(){
+  try{ if(barHideTimer){ clearTimeout(barHideTimer); barHideTimer = null; } }catch(e){}
+  setBarHidden(false);
+}
+function barScheduleHide(){
+  try{ if(barHideTimer){ clearTimeout(barHideTimer); barHideTimer = null; } }catch(e){}
+  if(!anyPlayingNow()){ setBarHidden(false); return; }
+  barHideTimer = setTimeout(function(){
+    barHideTimer = null;
+    if(anyPlayingNow()) setBarHidden(true);
+  }, 2600);
+}
+function barOnStateChange(){ if(anyPlayingNow()) barScheduleHide(); else barStopHide(); }
+function barPoke(){ setBarHidden(false); barScheduleHide(); }
+try{
+  wrap.addEventListener('pointermove', barPoke);
+  wrap.addEventListener('pointerdown', barPoke);
+  wrap.addEventListener('touchstart', function(){ barPoke(); }, {passive:true});
+}catch(e){}
+
 /* ===== شريط التحكم بتاعنا (تمليين 2026-و2 — بدل كنترولز يوتيوب المحذوفة) =====
    طلب المستر الحرفي: «شريط اللي بجر منه وعلامة التكبير والتصغير
    وعلامة الجودة بس، حتى لو علامة الجودة مش شغالة».
@@ -967,11 +1036,13 @@ function ytTogglePlay(){
     pmCmd(plainAssumedPlaying ? 'playVideo' : 'pauseVideo');
     setPlayIcon(plainAssumedPlaying);
     wmRun(plainAssumedPlaying);
+    barOnStateChange();
     return;
   }
   try{
     if(ytState() === 1){ playerApi.pauseVideo(); wmRun(false); }
     else { playerApi.playVideo(); wmRun(true); }
+    barOnStateChange();
   }catch(e){}
 }
 function ytToggleMute(){
@@ -1148,7 +1219,12 @@ function mountYouTube(){
      والـ time دي لغيها»): controls=0 → لوجو يوتيوب والوقت وshare والقايمة
      كلهم **ماتشالوا من الأساس** (مش متغطيين — الغطاء كان بيفشل مع RTL).
      مكانهم شريط تحكمنا (تشغيل/تقدم/كتم/ملء شاشة + Math Genius) والفيديو
-     كامل 100% من غير أي قص */
+     كامل 100% من غير أي قص.
+     **استثناء (2026-و3 — وضع كود HTML embed):** لما المستر يضيف الفيديو
+     من كود تضمين iframe → CFG.nativeControls=1 → كنترولز يوتيوب الأصلية
+     شغالة (controls=1) — ساعتها ⚙ الجودة بتاعتها يوتيوب **شغالة بجد**
+     (الطالب بيختار 360p/720p/1080p بنفسه من إعدادات يوتيوب نفسها) —
+     دي الطريقة الوحيدة اللي يوتيوب مانعش هي من 2023 */
   var host = document.createElement('div');
   host.id = 'ytHost';
   host.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:#000';
@@ -1168,15 +1244,21 @@ function mountYouTube(){
   startOv.addEventListener('click', function(){ if(!tapOk()) return; startWithWatchdog(); });
   startOv.addEventListener('touchend', function(e){ e.preventDefault(); if(!tapOk()) return; startWithWatchdog(); });
   wrap.appendChild(startOv);
-  // طبقة النقر — دوسة على الفيديو نفسه = تشغيل/إيقاف عن طريق الـ API
-  // (زي سلوك يوتيوب، بس بأمر من عندنا لأن كنترولزه مقفولة controls=0)
-  var tap = document.createElement('div');
-  tap.id = 'tapLayer';
-  tap.addEventListener('click', function(){ if(!tapOk()) return; ytTogglePlay(); });
-  wrap.appendChild(tap);
-  // شريط التحكم بتاعنا + غطاء الكابشن — ملء الشاشة الأصلي ليوتيوب مقفول
-  // (fs:0) وزراره في شريطنا عشان الووترمارك والدروع تفضل شغالة جوه ملء الشاشة
-  buildMgBar();
+  if(!CFG.nativeControls){
+    // طبقة النقر — دوسة على الفيديو نفسه = تشغيل/إيقاف عن طريق الـ API
+    // (زي سلوك يوتيوب، بس بأمر من عندنا لأن كنترولزه مقفولة controls=0)
+    var tap = document.createElement('div');
+    tap.id = 'tapLayer';
+    tap.addEventListener('click', function(){ if(!tapOk()) return; ytTogglePlay(); });
+    wrap.appendChild(tap);
+    // شريط التحكم بتاعنا + غطاء الكابشن — ملء الشاشة الأصلي ليوتيوب مقفول
+    // (fs:0) وزراره في شريطنا عشان الووترمارك والدروع تفضل شغالة جوه ملء الشاشة
+    buildMgBar();
+  } else {
+    /* وضع embed: مفيش tapLayer ولا شريط من عندنا — الطالب بيستخدم
+       كنترولز يوتيوب الأصلية نفسها (تشغيل/تقدم/⚙ جودة حقيقية/ملء شاشة)،
+       والووترمارك + الدرع العلوي فوق الـ iframe حماية زي ما هي */
+  }
   // شاشة النهاية (بتغطي شاشة يوتيوب النهائية بالعنوان والاقتراحات)
   var endOv = document.createElement('div'); endOv.id='endOv';
   endOv.innerHTML = '<p>🎉 خلصت الفيديو — برافو عليك!</p><button type="button" id="replayBtn">شوفه تاني ↺</button>';
@@ -1215,13 +1297,9 @@ function buildPlayer(){
     /* **controls:0 — مفيش أي واجهة يوتيوب خالص** (القرار النهائي 2026-ؤ):
        مفيش لوجو/وقت/share/إعدادات — كله اتمسح من الأساس. كل التحكم بيبقت
        عندنا (شريط mgBar + tapLayer عن طريق الـ JS API).
-       vq:hd1080 → طلب أعلى دقة (يوتيوب بيوزّع حسب النت — مفيش بديل لأن
-       كل دوال الجودة في الـ API بيتجاهلها يوتيوب من 2023).
-       fs:0 → ملء الشاشة الأصلي مقفول عشان الووترمارك والدروع تفضل شغالة
-       (الزرار في شريطنا).
-       disablekb:1 → بيقفل اختصارات كيبورد يوتيوب نفسها — وفيهم زرار C
-       بتاع الترجمة! فمفيش أي طريق لفتح الكابشن من الكيبورد كمان */
-    playerVars: { autoplay:1, controls:0, rel:0, modestbranding:1, playsinline:1, iv_load_policy:3, cc_load_policy:0, cc_lang_pref:'ar', hl:'ar', fs:0, disablekb:1, enablejsapi:1, vq:'hd1080', origin: location.origin },
+       **وضع embed (2026-و3): controls=1 → كنترولز يوتيوب الأصلية ظاهرة —
+       وقايمة ⚙ الجودة فيها شغالة بجد (الطالب بيغير 360p/720p/1080p بنفسه) */
+    playerVars: { autoplay:1, controls:(CFG.nativeControls ? 1 : 0), rel:0, modestbranding:1, playsinline:1, iv_load_policy:3, cc_load_policy:0, cc_lang_pref:'ar', hl:'ar', fs:(CFG.nativeControls ? 1 : 0), disablekb:1, enablejsapi:1, vq:'hd1080', origin: location.origin },
     events: {
       onReady: function(ev){
         /* تكملة المشاهدة بنأجلها لأول لحظة تشغيل فعلية — أعلى أمان على الموبايل
@@ -1252,17 +1330,24 @@ function buildPlayer(){
             /* دورة الووترمارك الكبيرة بتشتغل مع التشغيل */
             wmRun(true);
             setPlayIcon(true);
-            /* دفعة جودة واحدة بعد 4 ثواني من أول تشغيل (أفضل مجهود) */
-            if(!qNudgeDone) setTimeout(nudgeQualityOnce, 4000);
+            /* (2026-و3) الشريط يختفي لوحده أول ما الفيديو يمشي */
+            barScheduleHide();
+            /* دفعة جودة واحدة بعد 4 ثواني من أول تشغيل (أفضل مجهود) —
+               في وضع embed (كنترولز أصلية) منغيرها: الطالب بيختار الجودة
+               بنفسه من ⚙ يوتيوب وممنوع نعادي عليه بإعادة تحميل */
+            if(!qNudgeDone && !CFG.nativeControls) setTimeout(nudgeQualityOnce, 4000);
             var so=document.getElementById('startOv'); if(so) so.style.display='none';
             var eo=document.getElementById('endOv'); if(eo) eo.style.display='none';
           } else if(ev.data === YT.PlayerState.PAUSED){
             wmRun(false);
             killCaptions();
             setPlayIcon(false);
+            /* (2026-و3) الإيقاف → الشريط يرجع يظهر فورًا */
+            barStopHide();
           } else if(ev.data === YT.PlayerState.ENDED){
             wmRun(false);
             setPlayIcon(false);
+            barStopHide();
             var eo2=document.getElementById('endOv'); if(eo2) eo2.style.display='flex';
             /* رجوع للبداية + وقوف → شاشة اقتراحات يوتيوب عمرها ما بتترسم */
             try{ playerApi.seekTo(0,true); playerApi.pauseVideo(); }catch(e){}
@@ -1565,10 +1650,11 @@ function mountFile(){
   v.addEventListener('progress', fileUpdateProgress);
   v.addEventListener('durationchange', fileUpdateProgress);
   /* دورة الووترمارك الكبيرة (10 ظاهرة / 20 مخفية) بتتبع التشغيل */
-  v.addEventListener('play', function(){ wmRun(true); setPlayIcon(true); });
-  v.addEventListener('pause', function(){ wmRun(false); setPlayIcon(false); });
+  v.addEventListener('play', function(){ wmRun(true); setPlayIcon(true); barScheduleHide(); });
+  v.addEventListener('pause', function(){ wmRun(false); setPlayIcon(false); barStopHide(); });
   v.addEventListener('ended', function(){
     wmRun(false); setPlayIcon(false);
+    barStopHide();
     /* رجوع للبداية ووقوف — شكل نضيف من غير شاشة اقتراحات */
     try{ v.currentTime = 0; v.pause(); }catch(e){}
     reportEnded();
@@ -1586,11 +1672,30 @@ function mountFile(){
   else v.src = src;
 }
 
+/* ===== مشغل كود التضمين (HTML embed من موقع تاني — غير يوتيوب) =====
+   (2026-و3 — طلب المستر: «أنا أقدر أضيف فيديو من كود HTML»)
+   بيرندر لينك التضمين زي ما هو في iframe + كل الحمايات فوقه
+   (الدرع العلوي + الووترمارك + منع كليك يمين/مفاتيح).
+   ملاحظة صادقة: التقدم/الاكتمال مش بيتراقبوا هنا (مفيش API للموقع التاني) */
+function mountEmbed(){
+  var url = String(CFG.embedUrl || '');
+  /* ملحوظة: جوه القالب بنستخدم indexOf بدل regex — \\ بتتاكل في الـ template literal */
+  if(url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0){ wrap.innerHTML = '<p style="color:#fca5a5;font-family:sans-serif;padding:24px;direction:rtl">كود التضمين غير صالح — اتأكد من اللينك أو بلغ الإدارة</p>'; return; }
+  var f = document.createElement('iframe');
+  f.id = 'embedFrame';
+  f.setAttribute('allow','accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen');
+  f.setAttribute('allowfullscreen','');
+  f.setAttribute('referrerpolicy','strict-origin-when-cross-origin');
+  f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#000';
+  f.src = url;
+  wrap.appendChild(f);
+}
+
 /* ===== تشغيل ===== */
 buildWm();
 ensureTopShield();
 layoutWrap();
-if(CFG.kind === 'youtube') mountYouTube(); else if(CFG.kind === 'file') mountFile();
+if(CFG.kind === 'youtube') mountYouTube(); else if(CFG.kind === 'file') mountFile(); else if(CFG.kind === 'embed') mountEmbed();
 
 /* زرار ملء الشاشة للملفات (ليوتيوب الزرار جوه الكنترولز بتاعته) */
 if(CFG.kind === 'file'){

@@ -353,7 +353,12 @@ function isDirectMediaUrl(url: string): boolean {
 }
 
 function videoKindOf(v: any): 'youtube' | 'file' | 'link' | 'none' {
-  if (v.kind) return v.kind === 'link' && isDirectMediaUrl(v.url || '') ? 'file' : v.kind
+  if (v.kind) {
+    // (2026-و3) فيديو مضاف من كود HTML embed — بيتشغل في المشغل الآمن
+    // بتقدمة زي يوتيوب بالظبط (كنترولز الموقع الأصلي بجودة حقيقية جواه)
+    if (v.kind === 'embed') return 'youtube'
+    return v.kind === 'link' && isDirectMediaUrl(v.url || '') ? 'file' : v.kind
+  }
   if (ytIdOf(v.url || '')) return 'youtube'
   if (v.filePath && /\.(mp4|webm|mov|avi)$/i.test(v.filePath)) return 'file'
   if (v.url && isDirectMediaUrl(v.url)) return 'file'

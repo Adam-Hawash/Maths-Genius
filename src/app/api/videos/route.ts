@@ -10,7 +10,7 @@
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { isAdmin, getStudentAnyStatus, safeThumb, getYouTubeId, mediaIdFromPath } from '@/lib/video-guard'
+import { isAdmin, getStudentAnyStatus, safeThumb, getYouTubeId, mediaIdFromPath, extractEmbedSrc, ensureNativeEmbedColumn } from '@/lib/video-guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,13 +23,18 @@ function isDirectMedia(u: string): boolean {
   return /\.(mp4|webm|m3u8|mov|ogg|ogv)(\?.*)?$/i.test(s)
 }
 
-function stripVideo(v: { id: string; thumbnail: string; url: string; filePath: string; [k: string]: unknown }) {
-  const kind = getYouTubeId(v.url || '') ? 'youtube' : mediaIdFromPath(v.filePath || '') ? 'file' : isDirectMedia(v.url) ? 'file' : v.url ? 'link' : 'none'
+function stripVideo(v: { id: string; thumbnail: string; url: string; filePath: string; nativeEmbed?: boolean; [k: string]: unknown }) {
+  // (2026-و3) الفيديوهات المتضافة من كود HTML embed → kind=embed
+  // (الطالب بيشوفها كأنها درس محمي عادي — بتفتح في المشغل الآمن بتقدمة)
+  const kind = (v as unknown as { nativeEmbed?: boolean }).nativeEmbed ? 'embed' : getYouTubeId(v.url || '') ? 'youtube' : mediaIdFromPath(v.filePath || '') ? 'file' : isDirectMedia(v.url) ? 'file' : v.url ? 'link' : 'none'
   return { ...v, url: '', filePath: '', kind, thumb: safeThumb(v) }
 }
 
 export async function GET(request: NextRequest) {
   try {
+    // (2026-و3) self-heal لعمود nativeEmbed — أول استعلام بعد التحديث بيتأكد
+    // إن العمود موجود في داتابيز الإنتاج (مرة واحدة بس وبعدين بيكاش)
+    await ensureNativeEmbedColumn()
     const { searchParams } = new URL(request.url)
     const grade = searchParams.get('grade')
     const keyword = searchParams.get('keyword')
@@ -79,7 +84,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { title, url, grade, filePath, fileType, thumbnail, price, adminId } = body
+    const { title, url, grade, filePath, fileType, thumbnail, price, adminId, htmlEmbed } = body
 
     // الكتابة للأدمن بس
     if (!(await isAdmin(adminId))) {
@@ -89,19 +94,40 @@ export async function POST(request: NextRequest) {
     if (!title || !grade) {
       return NextResponse.json({ error: 'Title and grade are required' }, { status: 400 })
     }
-    if (!url && !filePath) {
+
+    // ===== (2026-و3) إضافة فيديو من كود HTML (طلب المستر) =====
+    // المستر بيلزق كود تضمين iframe (من يوتيوب أو أي موقع تاني) —
+    // بنستخرج لينك التضمين منه ونخزنه + nativeEmbed=true
+    // → المشغل بيفتحه بواجهة الموقع الأصلية (⚙ جودة يوتيوب الحقيقية)
+    // أو في iframe محمي لو الموقع تاني غير يوتيوب.
+    // بيتقبل الكود في حقل htmlEmbed المخصص، أو لو لازق الكود نفسه في حقل الرابط.
+    await ensureNativeEmbedColumn()
+    let finalUrl = String(url || '').trim()
+    let nativeEmbed = false
+    const embedRaw = String(htmlEmbed || '').trim()
+    if (embedRaw || /<\s*(iframe|embed|object)\b/i.test(finalUrl)) {
+      const src = extractEmbedSrc(embedRaw || finalUrl)
+      if (!src) {
+        return NextResponse.json({ error: 'كود الـ HTML مفيهوش لينك تضمين صالح — اتأكد إن الكود فيه iframe وفيه src يبدأ بـ https' }, { status: 400 })
+      }
+      finalUrl = src
+      nativeEmbed = true
+    }
+
+    if (!finalUrl && !filePath) {
       return NextResponse.json({ error: 'URL or file is required' }, { status: 400 })
     }
 
     const video = await db.video.create({
       data: {
         title,
-        url: url || '',
+        url: finalUrl,
         grade,
         filePath: filePath || '',
         fileType: fileType || '',
         thumbnail: thumbnail || '',
         price: Number(price) || 0,
+        nativeEmbed,
       },
     })
 
