@@ -15,22 +15,24 @@
 //     وكارتين (الاسم الكامل + الرقم): واحد فوق الناحية الشمال (جديد) وواحد
 //     ثابت في **الزاوية تحت على اليمين**.
 //  4) حماية فحص: كليك يمين مقفول + F12/Ctrl+U/Ctrl+S + Ctrl+Shift+I/J/C/K
-//     + **كل زرار F1 لـ F12 (فيهم F10 — طلب المستر الحرفي 2026-ل:
-//     "explicitly block the F10 key")** بتنبيه لطيف + لو أدوات المطور
-//     اتفتحت الفيديو بيوقف مؤقتًا.
+//     + **كل زرار F1 لـ F12 وفيهم F10 صراحةً (event.key === 'F10' — طلب
+//     المستر الحرفي 2026-م: "explicitly intercept and prevent the F10 key")**
+//     بتنبيه لطيف + لو أدوات المطور اتفتحت الفيديو بيوقف مؤقتًا.
 //  5) التقدم بيتقال للأب بـ postMessage كل 5 ثواني (مفيش أي لينك).
 //  6) حماية الفيديو من يوتيوب (طلب المستر 2026-و): اسم قناة يوتيوب/العنوان/
 //     زرار الشير/اللينك — مستحيل يبانوا ولا حد يقدر يدوس عليهم:
 //     **درع علوي دايمًا شغال** (مش بس وقت الوقف) + باتش اللوجو + طبقة التقاط
 //     النقرات (مفيش أي ضغطة توصل لليوتيوب أصلًا) — من غير أي قص للفيديو.
-//  7) الجودة (أحدث طلب للمستر 2026-ل): **قائمة جودة شغالة فعلًا** —
-//     الافتراضي 360p (قراره السابق "ثبته علي360")، وأي اختيار من القائمة
-//     بيعمل **تبديل تيار حقيقي فوري** (loadVideoById بـ suggestedQuality —
-//     الـ API الرسمي اللي بيطلب تيار بمستوى محدد من أول لحظة) + تأكيد
-//     setPlaybackQualityRange + حارس كل ثانية بيثبّت الاختيار الاتنين
-//     اتجاهين. الرقم على زرار الجودة = الجودة الفعلية الحية من
-//     getPlaybackQuality مش الورقية.
-//  8) التشغيل المضمون: مراقب متدرج (playVideo → loadVideoById → صامت)
+//  7) الجودة (أحدث قرار للمستر 2026-م): **الافتراضي أعلى جودة متاحة**
+//     (علاج "الفيديوهات بتفتح بجودة واطية رغم إنها مرفوعة عالية")، وأي
+//     اختيار من القائمة بيعمل **تبديل تيار حقيقي فوري** (loadVideoById بـ
+//     suggestedQuality + إعادة تثبيت setPlaybackQualityRange بعد التحميل)
+//     + حارس كل ثانية بيثبّت الاختيار الاتنين اتجاهين. الرقم على زرار
+//     الجودة = الجودة الفعلية الحية من getPlaybackQuality مش الورقية.
+//  8) الترجمة/الكابشن (طلب المستر الحرفي 2026-م): **متقفلة افتراضيًا تمامًا**
+//     + زرار CC جنب زرار الجودة في شريط الكنترولز + زرار C بيفتح/يقفل —
+//     ولو الفيديو مفيهوش ترجمات رسالة صادقة بتوضّح كده.
+//  9) التشغيل المضمون: مراقب متدرج (playVideo → loadVideoById → صامت)
 //     + تحميل API يوتيوب بإعادة محاولة + تسجيل طلب التشغيل قبل جهوزية الـ API
 //     + تكملة مشاهدة آمنة (من غير حلقة النهاية).
 // ============================================================
@@ -289,6 +291,14 @@ const PLAYER_PAGE = `<!doctype html>
   #qBtn{height:38px;min-width:56px;border-radius:10px;border:0;background:rgba(255,255,255,.16);color:#fff;display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;flex:0 0 auto;padding:0 9px;font-family:system-ui,sans-serif}
   #qBtn:hover{background:rgba(255,255,255,.26)}
   #qBtn .ql{font-size:11px;font-weight:800;direction:ltr;white-space:nowrap}
+  /* ===== زرار الترجمة (CC) — جنب زرار الجودة (2026-م) ===== */
+  #ccBtn{height:38px;min-width:44px;border-radius:10px;border:0;background:rgba(255,255,255,.16);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;font-weight:800;font-size:11.5px;font-family:system-ui,sans-serif;letter-spacing:.5px}
+  #ccBtn:hover{background:rgba(255,255,255,.26)}
+  #ccBtn.on{background:rgba(74,222,128,.30);color:#4ade80}
+  #fileCcBtn{position:absolute;bottom:10px;left:56px;z-index:50;height:40px;min-width:44px;border-radius:10px;border:0;cursor:pointer;
+    background:rgba(0,0,0,.55);color:#fff;display:none;align-items:center;justify-content:center;opacity:.85;font-weight:800;font-size:11.5px;font-family:system-ui,sans-serif}
+  #fileCcBtn:hover{opacity:1;background:rgba(0,0,0,.75)}
+  #fileCcBtn.on{background:rgba(74,222,128,.35);color:#4ade80}
   #ytCtrl.qopen{z-index:45}
   #qMenu{position:absolute;bottom:calc(100% + 10px);left:8px;min-width:180px;background:rgba(12,12,18,.97);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:6px 0;box-shadow:0 14px 40px rgba(0,0,0,.6);display:none;direction:rtl}
   #qMenu.open{display:block}
@@ -537,13 +547,16 @@ function reportProgress(cur, dur){
 }
 function reportEnded(){ try{ if(window.parent && window.parent !== window) window.parent.postMessage({type:'mg_ended', videoId:CFG.videoId}, '*'); }catch(e){} }
 
-/* ===== حماية الفحص + منع الحفظ (أحدث قرار للمستر 2026-ل) =====
+/* ===== حماية الفحص + منع الحفظ (أحدث قرار للمستر 2026-م) =====
    • كليك يمين → "🚫 كليك يمين ممنوع"
-   • زرار C لوحده (اختصار الكابشن في يوتيوب) → "🚫 الكابشن ممنوع"
-     — الكابشن ممنوع نهائيًا (طلب المستر: "الغي الكابشن خالص")
-   • F12 + كل زرار function من F1 لـ F12 **فيهم F10** (طلب المستر الحرفي:
-     "explicitly block the F10 key") + Ctrl+Shift+I/J/C/K + Ctrl+U/Ctrl+S
-     + Ctrl+Shift+R/S → "الخاصية دي ممنوعة" (مفاتيح متصفح فعلًا وبتنمسك بجد)
+   • زرار C لوحده = مفتاح الترجمة (CC) — بيفتح/يقفل الكابشن
+     (طلب المستر الحرفي 2026-م: "bind a keyboard event listener so pressing
+     the 'C' key toggles the captions") — والكابشن متقفل افتراضيًا تمامًا،
+     و Ctrl+Shift+C بتاعة أدوات المطور لسه ممنوعة تحت
+   • F12 + كل زرار function من F1 لـ F12 **فيهم F10 صراحةً** (طلب المستر
+     الحرفي: "explicitly intercept and prevent the F10 key (event.key === 'F10')")
+     + Ctrl+Shift+I/J/C/K + Ctrl+U/Ctrl+S + Ctrl+Shift+R/S
+     → "الخاصية دي ممنوعة" (مفاتيح متصفح فعلًا وبتنمسك بجد)
    • زرار PrintScreen → محاولة تفريغ الحافظة + رسالة
    • ملاحظة صادقة: اختصارات نظام التشغيل نفسها (Win+Shift+S/R للقص) فوق
      صلاحية أي متصفح — لكن كل اختصارات المتصفح وأدوات المطور مقفولة هنا. */
@@ -552,13 +565,19 @@ document.addEventListener('dragstart', function(e){ e.preventDefault(); });
 document.addEventListener('selectstart', function(e){ if(e.target && e.target.id !== 'toast') e.preventDefault(); });
 document.addEventListener('keydown', function(e){
   var k = (e.key || '').toLowerCase();
-  /* زرار C لوحده = اختصار الكابشن في مشغل يوتيوب — الكابشن ممنوع خالص
-     (طلب المستر: "الغي الكابشن خالص") — Ctrl+Shift+C بتاعة أدوات المطور
-     بيتمسك في فحص أدوات المطور لوحده تحت */
+  /* زرار C لوحده = مفتاح الترجمة (CC) — طلب المستر الحرفي 2026-م:
+     "pressing the 'C' key toggles the captions" — والافتراضي متقفل خالص.
+     Ctrl+Shift+C بتاعة أدوات المطور بيتمسك في فحص أدوات المطور لوحده تحت */
   if(k === 'c' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey){
-    e.preventDefault(); e.stopPropagation(); toast('🚫 الكابشن ممنوع'); return;
+    e.preventDefault(); e.stopPropagation();
+    if(CFG.kind === 'file') fileToggleCc(); else setCaptions(!ccOn);
+    return;
   }
   var blocked = false;
+  /* F10 صراحةً بـ event.key — طلب المستر الحرفي:
+     "explicitly intercept and prevent the F10 key (event.key === 'F10')
+     from triggering any browser default behavior" */
+  if(e.key === 'F10'){ e.preventDefault(); e.stopPropagation(); toast('🛡️ الخاصية دي ممنوعة'); return; }
   /* F12 + كل زرار function من F1 لـ F12 — **فيهم F10** (طلب المستر الحرفي
      2026-ل: "explicitly block the F10 key") */
   if(k === 'f12' || /^f([1-9]|1[0-2])$/.test(k)) blocked = true;
@@ -760,17 +779,21 @@ function scheduleFallbackIfStuck(){
     activateFallback('stuck');
   }, 6000);
 }
-/* ===== الجودة (أحدث طلب للمستر 2026-ل): **قائمة جودة شغالة فعلًا** =====
-   • الافتراضي 360p (قرار المستر السابق "ثبته علي360")
+/* ===== الجودة (أحدث قرار للمستر 2026-م): **قائمة جودة شغالة فعلًا +
+   الافتراضي أعلى جودة متاحة** =====
+   • المشكلة اللي بلغها المستر: "الفيديوهات بتفتح بجودة واطية رغم إنها
+     مرفوعة بجودة عالية، والدوس على الجودة مش بيعمل حاجة" — السبب كان
+     الافتراضي القديم 360p المقفول. الافتراضي دلوقتي = **top (أعلى جودة
+     موجودة فعلًا في الفيديو)** من أول لحظة (vq/cue = highres → يوتيوب
+     بيدّي أقصى تيار متاح).
    • أي اختيار من القائمة → **تبديل تيار حقيقي فوري**: loadVideoById بـ
      suggestedQuality = المستوى المطلوب (الـ API الرسمي اللي بيطلب تيار
-     بمستوى محدد من أول لحظة) + تأكيد setPlaybackQualityRange — فالجودة
-     بتتغير في الثانية فعلًا مش على الورق.
-   • الحارس كل ثانية بيثبّت الاختيار الاتنين اتجاهين (طلع فوق → ننزّل،
-     نزل تحت → نرفع) بنفس سلم التصعيد.
+     بمستوى محدد من أول لحظة) + إعادة تثبيت setPlaybackQualityRange
+     بعد التحميل — فالجودة بتتغير في الثانية فعلًا مش على الورق.
+   • الحارس كل ثانية بيثبّت الاختيار الاتنين اتجاهين بنفس سلم التصعيد.
    • الرقم على زرار الجودة = **الجودة الفعلية الحية** من getPlaybackQuality
-     مش الاختيار الورقي (ده كان سبب "بتتغير كتابيا بس"). */
-var qSel = 'medium', lastQAssert = 0;
+     مش الاختيار الورقي. */
+var qSel = 'top', lastQAssert = 0;
 /* (2026-ز) تثبيت مبكر واحد: أول تشغيل بيبدأ 144/360 (قياس النت ABR) —
    لو التيار الفعلي أقل من المطلوب والمستوى موجود فعلًا → تبديل تيار واحد
    بـ suggestedQuality في أول 2.5 ثانية بدل استنىاء الحارس 20 ثانية */
@@ -844,16 +867,88 @@ function forceQ(target){
   setTimeout(function(){ try{ playerApi.setPlaybackQualityRange(target, target); playerApi.setPlaybackQuality(target); }catch(e){} }, 3000);
   setTimeout(function(){ try{ playerApi.setPlaybackQualityRange(target, target); playerApi.setPlaybackQuality(target); }catch(e){} }, 6000);
 }
-/* آخر سلاح في سلم الجودة: **تبديل تيار حقيقي واحد** — loadVideoById بنفس
+/* آخر سلاح في سلم الجودة: **تبديل تيار حقيقي** — loadVideoById بنفس
    الثانية والمستوى المطلوب (suggestedQuality بيطلب التيار بالمستوى ده من
-   أول لحظة). مش بنكرره (سقف + كولداون من الحارس) */
+   أول لحظة) + إعادة تثبيت النطاق بعد التحميل (يوتيوب بيبدأ أي تيار جديد
+   بمقياس ABR واطي — إعادة التثبيت بتطلّعه للمستوى المطلوب فورًا).
+   بيتكرر بسقف محدود من الحارس عشان مفيش لوب */
 function hardReloadQ(target){
   try{
     if(!playerApi || !playerApi.loadVideoById || !ytIdCached) return;
     var t = playerApi.getCurrentTime() || 0;
     playerApi.loadVideoById({ videoId: ytIdCached, startSeconds: Math.max(0, Math.floor(t)), suggestedQuality: target });
   }catch(e){}
+  /* إعادة تثبيت النطاق بعد التحميل — من غير الخطوة دي يوتيوب بيرجّع يقلّل
+     التيار لوحده (ABR) وبيبان كأن الدوس على الجودة "مش بيعمل حاجة" */
+  setTimeout(function(){ try{ if(playerApi && playerApi.setPlaybackQualityRange){ playerApi.setPlaybackQualityRange(target, target); playerApi.setPlaybackQuality(target); } }catch(e){} }, 1200);
+  setTimeout(function(){ try{ if(playerApi && playerApi.setPlaybackQualityRange){ playerApi.setPlaybackQualityRange(target, target); playerApi.setPlaybackQuality(target); } }catch(e){} }, 3500);
+  setTimeout(function(){ try{ if(playerApi && playerApi.setPlaybackQualityRange){ playerApi.setPlaybackQualityRange(target, target); playerApi.setPlaybackQuality(target); } }catch(e){} }, 6500);
   lastQAssert = Date.now();
+}
+/* ===== (2026-م) الترجمة (CC) — زرار + زر C — **متقفلة افتراضيًا تمامًا** =====
+   الطلب الحرفي للمستر: "Add a dedicated caption toggle button next to the
+   settings/quality icon + bind the 'C' key to toggle captions. Captions must
+   be completely disabled by default on load."
+   • الافتراضي: cc_load_policy=0 + شيل موديول الترجمة (تحميل-ثم-شيل بيقتل
+     ترجمة يوتيوب التلقائية ASR كمان) — طالما ccOn = false
+   • الطالب يقدر يفتحها/يقفلها من زرار CC جنب زرار الجودة أو بزرار C
+   • لو الفيديو مفيهوش ترجمات خالص → رسالة صادقة والحالة بترجع متقفلة */
+var ccOn = false;
+var ccPickTimer = null;
+function ccBtnSync(){
+  var b = document.getElementById('ccBtn');
+  if(b){ b.className = ccOn ? 'on' : ''; try{ b.setAttribute('aria-pressed', ccOn ? 'true' : 'false'); }catch(e){} }
+}
+function applyCcTrack(){
+  try{
+    var tl = (playerApi && playerApi.getOption) ? (playerApi.getOption('captions','tracklist') || []) : [];
+    if(tl && tl.length){
+      var t = tl[0];
+      for(var i=0;i<tl.length;i++){ var lc = String((tl[i] && tl[i].languageCode) || '').toLowerCase(); if(lc.indexOf('ar') === 0){ t = tl[i]; break; } }
+      playerApi.setOption('captions','track', t);
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+function setCaptions(on){
+  ccOn = !!on;
+  ccBtnSync();
+  if(ccPickTimer){ clearTimeout(ccPickTimer); ccPickTimer = null; }
+  if(!playerApi){ ccOn = false; ccBtnSync(); toast('المشغل بيتجهز… جرب تاني بعد ثانية'); return; }
+  if(ccOn){
+    try{ playerApi.loadModule && playerApi.loadModule('captions'); }catch(e){}
+    ccPickTimer = setTimeout(function(){
+      ccPickTimer = null;
+      if(!ccOn) return;
+      if(!applyCcTrack()){
+        /* موديول الترجمة جهز من غير أي ترجمات متاحة → نرد الحالة متقفلة بصدق */
+        ccOn = false; ccBtnSync();
+        try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
+        toast('مفيش ترجمة متاحة للفيديو ده');
+      } else {
+        toast('الترجمة: مفعلة ✓');
+      }
+    }, 700);
+  } else {
+    try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+    try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
+    toast('الترجمة: متوقفة');
+  }
+}
+/* ترجمة ملفات الفيديو المرفوعة (textTracks) — نفس المنطق: متقفلة افتراضيًا */
+var fileCcOn = false;
+function fileToggleCc(){
+  try{
+    var v = fileApi;
+    if(!v){ toast('المشغل بيتجهز… جرب تاني بعد ثانية'); return; }
+    var n = v.textTracks ? v.textTracks.length : 0;
+    if(!n){ toast('مفيش ترجمة متاحة للفيديو ده'); return; }
+    fileCcOn = !fileCcOn;
+    for(var i=0;i<n;i++){ try{ v.textTracks[i].mode = fileCcOn ? 'showing' : 'disabled'; }catch(e){} }
+    var b = document.getElementById('fileCcBtn'); if(b) b.className = fileCcOn ? 'on' : '';
+    toast(fileCcOn ? 'الترجمة: مفعلة ✓' : 'الترجمة: متوقفة');
+  }catch(e){}
 }
 /* ===== قائمة الجودة (2026-ل) — زرار + قائمة شغالة فعلًا ===== */
 var qOpen = false;
@@ -1064,15 +1159,20 @@ function mountYouTube(){
     '<span id="tTime">0:00 / 0:00</span>' +
     '<button id="qBtn" type="button" aria-label="جودة الفيديو" aria-haspopup="menu" aria-expanded="false">' +
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.03z"/></svg>' +
-      '<span id="qLive" class="ql">360p</span>' +
+      '<span id="qLive" class="ql"></span>' +
     '</button>' +
+    '<button id="ccBtn" type="button" aria-label="الترجمة CC" aria-pressed="false">CC</button>' +
     '<button id="fsInBar" type="button" aria-label="ملء الشاشة">'+svgFs()+'</button>' +
     '<div id="qMenu" role="menu" aria-label="جودة الفيديو"></div>';
   wrap.appendChild(bar);
-  /* (2026-ل) قائمة الجودة رجعت — **شغالة فعلًا**: أي اختيار = تبديل تيار
-     حقيقي فوري. الافتراضي 360p (قرار المستر "ثبته علي360") */
+  /* (2026-ل) قائمة الجودة — **شغالة فعلًا**: أي اختيار = تبديل تيار حقيقي
+     فوري (loadVideoById بـ suggestedQuality + إعادة تثبيت النطاق).
+     الافتراضي = أعلى جودة متاحة (طلب المستر 2026-م) */
   var qBtnEl = document.getElementById('qBtn');
   qBtnEl.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); setQOpen(!qOpen); });
+  /* زرار الترجمة (CC) — جنب زرار الجودة (طلب المستر الحرفي 2026-م) */
+  var ccBtnEl = document.getElementById('ccBtn');
+  ccBtnEl.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); setCaptions(!ccOn); });
   var pp = document.getElementById('ppBtn');
   pp.addEventListener('click', function(e){ e.stopPropagation(); if(!tapOk()) return; try{ if(ytState()===1) playerApi.pauseVideo(); else startWithWatchdog(); }catch(err){} showCtrl(true); });
   document.getElementById('fsInBar').addEventListener('click', function(e){ e.stopPropagation(); toggleFs(); });
@@ -1111,22 +1211,23 @@ function buildPlayer(){
     width: '100%',
     height: '100%',
     // controls:0 → مفيش أي واجهة يوتيوب (لا عنوان لا لوجو لا حاجة) — كل الكنترولز بتاعنا
-    playerVars: (function(){ var pv = { autoplay:1, controls:0, rel:0, modestbranding:1, playsinline:1, iv_load_policy:3, cc_load_policy:0, fs:0, disablekb:1, enablejsapi:1, origin: location.origin }; try{ var vqV = qSel; if(vqV === 'auto' || vqV === 'top') vqV = wantedLevel(); if(vqV && vqV !== 'auto') pv.vq = vqV; }catch(ePV){} return pv; })(),
+    // vq=highres للـ top → يوتيوب بيطلب أقصى تيار متاح من أول تحميل
+    playerVars: (function(){ var pv = { autoplay:1, controls:0, rel:0, modestbranding:1, playsinline:1, iv_load_policy:3, cc_load_policy:0, fs:0, disablekb:1, enablejsapi:1, origin: location.origin }; try{ var vqV = qSel; if(vqV === 'top') vqV = 'highres'; else if(vqV === 'auto') vqV = ''; if(vqV) pv.vq = vqV; }catch(ePV){} return pv; })(),
     events: {
       onReady: function(ev){
         /* تكملة المشاهدة بنأجلها لأول لحظة تشغيل فعلية — أعلى أمان على الموبايل
            (الـ seek قبل التشغيل كان بعلّق المشغل في حالة cued على بعض الأجهزة) */
         try{ if(Number(CFG.resume) > 5) pendingResume = Number(CFG.resume); }catch(e){}
-        /* (تحديث 2026-ك) قفل 360p من أول لحظة: cueVideoById بـ suggestedQuality
-           بيطلب تيار 360p فعلًا — أقوى نقطة تحكم متبقية في IFrame API
-           (setPlaybackQuality اتلغت رسميًا من يوتيوب).
+        /* (تحديث 2026-م) الافتراضي أعلى جودة متاحة: cueVideoById بـ
+           suggestedQuality='highres' بيطلب أقصى تيار متاح فعلًا من أول لحظة
+           (لو الملف أقل، يوتيوب بيدي أعلى حاجة موجودة — حدود المصدر).
            cue مش load عشان مفيش تشغيل مفاجئ — لسه مستنيين دوسة الطالب */
         try{
-          var qHint = wantedLevel();
-          if(qHint === 'auto') qHint = 'medium';
+          var qHint = (qSel === 'top') ? 'highres' : wantedLevel();
+          if(qHint === 'auto') qHint = 'default';
           playerApi.cueVideoById({ videoId: ytIdCached, startSeconds: 0, suggestedQuality: qHint });
         }catch(eCue){}
-        applyQ(); /* تثبيت الاختيار (الافتراضي 360p) */
+        applyQ(); /* تثبيت الاختيار (الافتراضي: أعلى جودة متاحة) */
         availLevels(); updateQBtnLive();
         if(pendingStart){ pendingStart = false; startWithWatchdog(); }
         layoutWrap();
@@ -1164,20 +1265,25 @@ function buildPlayer(){
                 }catch(eEP){}
               }, 2500);
             }
-            /* الكابشن ممنوع خالص (طلب المستر 2026-ط: "الكابشن ده ممنوع نهائيًا") —
-               **التحميل-ثم-الشيل** هو اللي بيقتل كابشن يوتيوب التلقائي (ASR)
-               كمان: الشيل لوحده ساعات مبيشتغلش على الترجمة التلقائية */
-            try{ playerApi.loadModule && playerApi.loadModule('captions'); }catch(e){}
-            try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
-            try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+            /* الترجمة (2026-م): **متقفلة افتراضيًا** — لو الطالب مفتحهاش (ccOn=false)
+               بنعمل تحميل-ثم-شيل اللي بيقتل كابشن يوتيوب التلقائي (ASR) كمان.
+               لو الطالب فاتح الترجمة → بنعيد تطبيق المسار المختار مع كل تشغيل */
+            if(ccOn){ try{ applyCcTrack(); }catch(e){} }
+            else {
+              try{ playerApi.loadModule && playerApi.loadModule('captions'); }catch(e){}
+              try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
+              try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+            }
             var so=document.getElementById('startOv'); if(so) so.style.display='none';
             var eo=document.getElementById('endOv'); if(eo) eo.style.display='none';
             setPP(true); showCtrl(true);
           } else if(ev.data === YT.PlayerState.PAUSED){
             setPP(false); showCtrl(false);
-            /* الكابشن ممنوع — نشيل الموديول كمان وقت الوقف (احتياط) */
-            try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
-            try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+            /* الترجمة متقفلة افتراضيًا — نشيل الموديول وقت الوقف (احتياط) لو مش مفعلة */
+            if(!ccOn){
+              try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
+              try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+            }
           } else if(ev.data === YT.PlayerState.ENDED){
             setPP(false);
             var eo2=document.getElementById('endOv'); if(eo2) eo2.style.display='flex';
@@ -1188,12 +1294,16 @@ function buildPlayer(){
         }catch(e){}
       },
       onApiChange: function(){
-        /* (2026-ط) الكابشن/الترجمة ممنوعة خالص — الحدث ده بيناول أول ما
-           موديول الترجمة يتجهز فيتشال فورًا قبل ما يبان أي سطر تحت
-           (تحميل-ثم-شيل عشان يقتل الترجمة التلقائية كمان) */
-        try{ playerApi.loadModule && playerApi.loadModule('captions'); }catch(e){}
-        try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
-        try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+        /* (2026-م) الحدث ده بيناول أول ما موديول الترجمة يتجهز:
+           لو الطالب مفتحش الترجمة → بتشال فورًا قبل ما يبان أي سطر تحت
+           (تحميل-ثم-شيل عشان يقتل الترجمة التلقائية كمان)؛
+           لو الطالب فاتحها → بنطبق المسار المختار فورًا */
+        if(ccOn){ try{ applyCcTrack(); }catch(e){} }
+        else {
+          try{ playerApi.loadModule && playerApi.loadModule('captions'); }catch(e){}
+          try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
+          try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+        }
       },
       onPlaybackQualityChange: function(ev){
         /* لو يوتيوب نزّل أو طلّع الجودة لوحدها بعيدًا عن المختار → إعادة
@@ -1277,14 +1387,17 @@ function buildPlayer(){
             }
           } else { qLowSince = 0; qHardTries = 0; }
         }
-        /* الكابشن ممنوع — فحص دوري كل 5 ثواني: الشيل **غير مشروط** (2026-ط):
-           كابشن الحساب التلقائي (ASR) ساعات getOption بيرجّع مفيش track وهو
-           ظاهر على الشاشة — فالشيل بيبقى دايمًا مش مرتبط بفحص الـ track */
+        /* الترجمة (2026-م) — فحص دوري كل 5 ثواني: الشيل غير مشروط **بس لو مش مفعلة**
+           (كابشن الحساب التلقائي ASR ساعات getOption بيرجّع مفيش track وهو
+           ظاهر على الشاشة — فالشيل بيبقى دايمًا مش مرتبط بفحص الـ track).
+           لو الطالب فاتح الترجمة → الفحص الدوري مش بيلمسها خالص */
         var capNow = Math.floor(Date.now() / 5000);
         if(capNow !== lastCapCheck){
           lastCapCheck = capNow;
-          try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
-          try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+          if(!ccOn){
+            try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
+            try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+          }
         }
         if(!seekDragging){
           var se = document.getElementById('seek');
@@ -1307,10 +1420,11 @@ function mountFile(){
   v.setAttribute('disablePictureInPicture', '');
   v.setAttribute('disableRemotePlayback', '');
   v.src = CFG.fileUrl;
-  /* الكابشن ممنوع خالص (2026-ك): أي ترجمات مدمجة في الملف تتقفل —
-     ولو track اتضاف بعد كده بيتقفل لوحده */
+  /* الكابشن افتراضيًا متقفل (2026-م): أي ترجمات مدمجة في الملف بتتقفل
+     — ولو track اتضاف بعد كده بيتقفل لوحده — **إلا لو الطالب فاتح الترجمة
+     هو بنفسه من زرار CC أو زرار C */
   function killTracks(){
-    try{ var tt = v.textTracks; for(var i=0;i<tt.length;i++){ tt[i].mode = 'disabled'; } }catch(e){}
+    try{ var tt = v.textTracks; for(var i=0;i<tt.length;i++){ tt[i].mode = fileCcOn ? 'showing' : 'disabled'; } }catch(e){}
   }
   v.addEventListener('loadedmetadata', killTracks);
   try{ if(v.textTracks && v.textTracks.addEventListener) v.textTracks.addEventListener('addtrack', killTracks); }catch(e){}
@@ -1332,6 +1446,16 @@ function mountFile(){
   btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
   btn.addEventListener('click', function(e){ e.stopPropagation(); toggleFs(); });
   wrap.appendChild(btn);
+  /* زرار الترجمة (CC) للملفات — بيظهر بس لو الملف فيه ترجمات فعلًا
+     (الافتراضي متقفل — طلب المستر 2026-م: نفس سلوك مشغل يوتيوب) */
+  var ccb = document.createElement('button');
+  ccb.id = 'fileCcBtn'; ccb.type = 'button'; ccb.setAttribute('aria-label','الترجمة CC'); ccb.setAttribute('aria-pressed','false');
+  ccb.textContent = 'CC';
+  ccb.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); fileToggleCc(); });
+  wrap.appendChild(ccb);
+  v.addEventListener('loadedmetadata', function(){
+    try{ var has = v.textTracks && v.textTracks.length > 0; ccb.style.display = has ? 'flex' : 'none'; }catch(e){}
+  });
 }
 
 /* ===== تشغيل ===== */

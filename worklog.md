@@ -268,3 +268,39 @@ Stage Summary:
 - Assistant first token now lands in ~1-2s and the answer builds live on screen; cold-start discovery tax (up to 8s) eliminated for ALL AI features; stalled streams fail fast without killing long answers
 - Students can no longer get answers by just sending a photo of the questions: the assistant asks for THEIR attempt first; once they send it, it shows their answer verbatim, then the correct answer, then a one-line verdict — comparison-first tutoring, exactly as the teacher asked
 - Homework photo-grading flow already showed student answer → correct answer; untouched
+
+---
+Task ID: 11
+Agent: Main Agent (Z.ai Code)
+Task: Video player fix round 2026-م — working caption toggle (CC button + C key, default OFF), default-highest quality + real stream switching on every click, explicit F10/Ctrl+U keyboard security
+
+Work Log:
+- Traced the REAL student-facing player: SecurePlayerModal → /api/player/[ticket] server-rendered page (NOT the React components — those are secondary/unused paths)
+- Root cause of "videos load in low quality": ticket player had qSel='medium' (360p) locked two-directionally by the old instruction — every video was forced DOWN to 360p regardless of upload quality
+- QUALITY FIX (ticket player):
+  * qSel default 'medium' → 'top' (highest available); playerVars vq='highres'; onReady cueVideoById suggestedQuality='highres' (YouTube serves max available stream from the first moment)
+  * selectQuality already did real stream switch (loadVideoById + suggestedQuality); hardReloadQ now ALSO re-asserts setPlaybackQualityRange at 1.2s/3.5s/6.5s after the switch — stops YouTube ABR from silently dropping back down (the "clicking does nothing" complaint)
+  * Live quality badge (qLive) = getPlaybackQuality truth, unchanged
+- CAPTIONS FIX (reverses the old "الكابشن ممنوع نهائيًا" policy per the exact new English requirement):
+  * New CC button in the control bar RIGHT NEXT to the quality gear (green highlight when on, aria-pressed)
+  * Plain 'C' key now TOGGLES captions (was blocked with "الكابشن ممنوع" toast before); Ctrl+Shift+C (devtools) still blocked
+  * Default state: cc_load_policy=0 + load-then-unload module kill stays active ONLY while ccOn=false (kills ASR auto-captions); once student enables CC, all forced-unload paths (PLAYING/PAUSED/onApiChange/5s periodic loop) respect the choice
+  * Track picker prefers Arabic track; if the video has NO captions → honest toast "مفيش ترجمة متاحة للفيديو ده" and state reverts to off
+  * File-player path (mountFile): same CC button (only shown if textTracks exist) + C key toggling textTracks modes
+- KEYBOARD SECURITY: explicit `e.key === 'F10'` intercept added (before the F1–F12 regex) in ticket player + RecordingGuard + ProtectedYouTubePlayer; Ctrl+U/Ctrl+S + Ctrl+Shift+I/J/K/C added to ProtectedYouTubePlayer's own handler (ticket player + RecordingGuard already had them); right-click message stays "كليك يمين ممنوع"
+- ProtectedYouTubePlayer.tsx (React component, kept in sync): default 'top', real stream switch on quality click (hardReloadStream + 900ms re-assert), early-pin on first play (2.5s check → hardReloadStream if actual < wanted), CC button + C key + captionsOnRef respected in polling, hd:1 playerVar, Ctrl+U/F10/devtools blocks
+- ProtectedFilePlayer.tsx: settings button added that shows the HONEST single-file message (plays at native resolution {videoHeight}p; dynamic 360p/720p/1080p switching requires multi-bitrate HLS/DASH — not possible for a single MP4) per the requirement's single-file branch
+- VERIFIED END-TO-END with agent-browser on a seeded real ticket + a network-level mock of the YouTube IFrame API (sandbox network gets YouTube error 150 — the built-in nocookie-retry + guaranteed-fallback rescued playback as designed, which also re-confirmed the resilience path):
+  * default state: cue=highres→hd1080 stream + captions unloaded (mock log) ✓
+  * quality menu: "عالية (الأعلى المتاح)" checked by default; click 720p → loadVideoById{suggestedQuality:'hd720'} + actual stream hd720 + qLive "720p" + toast ✓; click top → back to hd1080 ✓; exactly 2 stream switches total (no guard loop, zero seek nudges) ✓
+  * CC button → Arabic track applied ({languageCode:'ar'}) + "الترجمة: مفعلة ✓" + button .on ✓; C key → off/unloadModule ✓; C again → on ✓
+  * F10 → "🛡️ الخاصية دي ممنوعة"; Ctrl+U → blocked; F12 → blocked; Ctrl+Shift+C → blocked; right-click → "🚫 كليك يمين ممنوع" ✓
+  * screenshot: CC button sits directly next to the 1080p quality gear ✓
+- tsc: zero new errors (30 total = pre-existing shadcn/ui baseline only); ESLint still not runnable in this env (eslint-config-next missing)
+- Cleaned up: seeded tickets deleted, temp scripts removed
+
+Stage Summary:
+- Students now get the video at its HIGHEST available quality by default, and every quality click performs a real stream switch with post-switch re-assertion so it actually sticks
+- Captions: fully OFF by default, toggleable via the CC button next to the quality gear OR the C key, with honest "no captions available" feedback
+- Keyboard: Right-Click / F12 / Ctrl+U / F10 (explicit) / devtools combos all intercepted with clear Arabic warnings
+- Honest limits documented in-UI: single-MP4 sources play at native resolution with an explanatory message instead of a fake quality menu
