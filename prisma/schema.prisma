@@ -66,9 +66,6 @@ model Video {
   thumbnail   String   @default("")
   grade       String
   price       Float    @default(0)
-  // كود HTML (embed) — المستر لازق كود تضمين iframe → المشغل بيشتغل
-  // بواجهة الموقع الأصلي (جودة حقيقية من ⚙ يوتيوب) بدل المشغل المقفول
-  nativeEmbed Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

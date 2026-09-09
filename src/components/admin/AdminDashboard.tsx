@@ -662,9 +662,6 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   const [formGrade, setFormGrade] = useState('')
   const [formTitle, setFormTitle] = useState('')
   const [formUrl, setFormUrl] = useState('')
-  // (2026-و3) كود HTML للتضمين — المستر بيلزق كود iframe كامل فيتشغل
-  // الفيديو بواجهة الموقع الأصلية (⚙ جودة يوتيوب الحقيقية)
-  const [formEmbed, setFormEmbed] = useState('')
   const [formPrice, setFormPrice] = useState('')
   const [formFile, setFormFile] = useState<File | null>(null)
   const [formThumbnail, setFormThumbnail] = useState<File | null>(null)
@@ -705,8 +702,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
 
   const handleSubmit = async () => {
     if (!formTitle.trim() || !formGrade) { toast.error('أدخل العنوان واختر الصف'); return }
-    // (2026-و3) كود HTML بيعتبر مصدر صالح لوحده
-    if (!formUrl && !formFile && !formEmbed.trim()) { toast.error('أدخل رابط YouTube أو رابط فيديو مباشر (mp4/m3u8) أو كود HTML أو ارفع ملف فيديو'); return }
+    if (!formUrl && !formFile) { toast.error('أدخل رابط YouTube أو رابط فيديو مباشر (mp4/m3u8) أو ارفع ملف فيديو'); return }
     setSubmitting(true)
     setUploading(true)
     try {
@@ -733,9 +729,6 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
         url: formUrl.trim(),
         price: formPrice.trim() || '0',
       }
-      // (2026-و3) كود HTML للتضمين — السيرفر بيستخرج منه لينك التضمين
-      // وبيشغل الفيديو بواجهة الموقع الأصلية بجودة حقيقية
-      if (formEmbed.trim()) { body.htmlEmbed = formEmbed.trim() }
       if (videoPath) { body.filePath = videoPath; body.fileType = videoType }
       if (thumbnailPath) { body.thumbnail = thumbnailPath }
       else if (formThumbnailUrl.trim()) { body.thumbnail = formThumbnailUrl.trim() }
@@ -750,7 +743,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
       if (res.ok) {
         toast.success('تم إضافة الفيديو بنجاح! سيظهر للصف ' + formGrade)
         setShowForm(false)
-        setFormTitle(''); setFormUrl(''); setFormGrade(''); setFormPrice(''); setFormEmbed('')
+        setFormTitle(''); setFormUrl(''); setFormGrade(''); setFormPrice('')
         setFormFile(null); setFormThumbnail(null); setFormThumbnailUrl('')
         loadVideos(false)
         onStatsRefresh()
@@ -830,23 +823,6 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
               )}
             </div>
 
-            {/* (2026-و3) كود HTML للتضمين — بجودة يوتيوب الحقيقية من ⚙ الموقع الأصلي */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">أو الصق كود HTML لتضمين الفيديو (iframe) — يشتغل بواجهة الموقع الأصلي مع ⚙ جودة حقيقية</Label>
-              <Textarea
-                value={formEmbed}
-                onChange={(e) => setFormEmbed(e.target.value)}
-                placeholder={'<iframe src="https://www.youtube.com/embed/XXXXXXXXXXX?rel=0" style="top: 0; left: 0; width: 100%; height: 100%; position: absolute; border: 0;" allowfullscreen></iframe>'}
-                dir="ltr"
-                className="font-mono text-[11px] h-24 bg-background"
-              />
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
-                الصق كود التضمين كامل زي ما هو من يوتيوب (Embed) أو أي موقع تاني — الكود بيستخرج منه لينك التضمين أوتوماتيك.
-                فيديوهات يوتيوب بكود HTML بتفتح بكارت يوتيوب الأصلي — ساعتها زرار ⚙ الجودة <span className="font-bold">شغّال بجد</span> (الطالب بيغير 360p/720p/1080p بنفسه)،
-                بس هتظهر علامات يوتيوب الصغيرة (ده حاجة يوتيوب مفروضها من 2023 ومفيش طريقة حواليها). لو عايز مشغل نضيف تمامًا من غير يوتيوب استخدم رابط مباشر mp4/m3u8.
-              </p>
-            </div>
-
             {/* Video File Upload */}
             <div className="space-y-1.5">
               <Label className="text-xs">أو ارفع ملف فيديو</Label>
@@ -903,7 +879,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
               <Button size="sm" onClick={handleSubmit} disabled={submitting || uploading}>
                 {submitting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ ونشر'}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormTitle(''); setFormUrl(''); setFormGrade(''); setFormFile(null); setFormThumbnail(null); setFormThumbnailUrl(''); setFormEmbed('') }}>إلغاء</Button>
+              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormTitle(''); setFormUrl(''); setFormGrade(''); setFormFile(null); setFormThumbnail(null); setFormThumbnailUrl('') }}>إلغاء</Button>
             </div>
           </div>
         )}
@@ -933,10 +909,8 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                     <div className="flex items-center justify-between">
                       <Badge variant="outline" className="text-[10px]">{v.grade}</Badge>
                       <div className="flex items-center gap-1">
-                        {/* (2026-و3) فيديو من كود HTML embed — كنترولز الموقع الأصلي بجودة حقيقية */}
-                        {(v as any).nativeEmbed && <Badge variant="secondary" className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400">⚙ كود HTML</Badge>}
                         {v.filePath && <Badge variant="secondary" className="text-[10px]">📎 ملف</Badge>}
-                        {v.url && !v.filePath && !(v as any).nativeEmbed && <Badge variant="secondary" className="text-[10px]">▶ YouTube</Badge>}
+                        {v.url && !v.filePath && <Badge variant="secondary" className="text-[10px]">▶ YouTube</Badge>}
                       </div>
                     </div>
                     <p className="text-[10px] text-muted-foreground">{new Date(v.createdAt).toLocaleDateString('ar-EG')}</p>

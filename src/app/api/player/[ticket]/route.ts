@@ -34,15 +34,19 @@
 //     (التشغيل/الإيقاف بدوسة على الفيديو نفسه، ومفيش كتم ولا وقت ولا براند).
 //     **غطاء capLid السفلي اتشال نهائيًا (2026-و2)** — «من غير ما الفيديو
 //     يتقص عشان تقصص لي تحت برضه» — الفيديو دلوقتي كامل 100% لآخر بكسل.
-//  7-ب) الجودة بعد قفل الكنترولز: يوتيوب أبطلت كل دوال الجودة في الـ IFrame
-//     API (setPlaybackQualityRange/suggestedQuality بيتجاهلوها و
-//     getPlaybackQuality بيرجع رقم كذب) — فالجودة بقت **طلب أعلى دقة
-//     (vq=hd1080 + دفعة loadVideoById واحدة لو التيار واقف على SD)**
-//     ويوتيوب بيوزّع حسب سرعة النت. **الحل الجذري الوحيد لجودة مضمونة =
-//     ملف فيديو مباشر (مش يوتيوب)** — زي ما المستر نفسه سأل: «لو جبت
-//     اللينك من موقع تاني غير يوتيوب؟» — أيوه: الملف المباشر بيتشغل بمشغلنا
-//     النظيف (مفيش يوتيوب أصلًا: لا لوجو ولا كابشن ولا أي هبل) والجودة =
-//     جودة الملف نفسه ثابتة.
+//  7-ب) الجودة بعد قفل الكنترولز (تحديث 2026-و4 — طلب المستر الحرفي:
+//     «أنا عاوزها أقل شيء 720... الفيديو ثابت على 360 وده شيء ضعيف جداً.
+//     لو هنعرف نتحكم بيها خليها عادية»): **أرضية جودة 720p** —
+//     setPlaybackQualityRange('hd720','highres') عند كل تشغيل وتغير جودة
+//     ودوريًا + حارس يعيد تحميل التيار بـ hd720 لو واقف تحت 720 (3 محاولات
+//     كحد أقصى) — لو النت يسمح بأعلى من 720 بياخد أعلى («خليها عادية»)،
+//     والمحصلة مش هتثبت على 360 تاني. ويوتيوب لسه بيقدر يتجاهل — ساعتها
+//     **الحل الجذري الوحيد لجودة مضمونة = ملف فيديو مباشر (مش يوتيوب)** —
+//     أي لينك مباشر بيتشغل بمشغلنا النظيف والجودة = جودة الملف نفسه.
+//     **ميزة «إضافة فيديو من كود HTML» اتلغت نهائيًا (2026-و4)** بطلب
+//     المستر نفسه: «لما باجي أضيف كود الـ HTML بلاقي جايبلي حاجات
+//     الـ YouTube، لا.. فأنا عاوزك تلغي» — راجعت الكود كله (القايمة في
+//     لوحة الأدمن + مسار embed في المشغل + عمود nativeEmbed).
 //  8) الكابشن/الترجمة (القرار النهائي — طلب المستر الحرفي: «تشيل زرار
 //     الكابشن وتشيل الكابشن أصلاً — اعمل للكابشن بلوك.. مش عايز أي كتابة
 //     تظهر تحت الفيديو»): مفيش زرار CC في أي مشغل خالص + cc_load_policy=0
@@ -63,7 +67,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { db } from '@/lib/db'
-import { getYouTubeId, mediaIdFromPath, signVideoToken, ensurePlayTicketTable, ensureNativeEmbedColumn } from '@/lib/video-guard'
+import { getYouTubeId, mediaIdFromPath, signVideoToken, ensurePlayTicketTable } from '@/lib/video-guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -158,7 +162,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       })
     }
 
-    await ensureNativeEmbedColumn()
     const video = await db.video.findUnique({ where: { id: row.videoId } })
     if (!video) return pageError('الفيديو غير موجود.', 404)
 
@@ -185,25 +188,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const ytId = getYouTubeId(video.url || '')
     const mediaId = mediaIdFromPath(video.filePath || '')
     const directUrl = (!ytId && !mediaId && isDirectMediaUrl(video.url || '')) ? String(video.url).trim() : ''
-    const nativeEmbed = Boolean((video as unknown as { nativeEmbed?: boolean | number }).nativeEmbed)
-    // (2026-و3 — كود HTML embed) لينك تضمين من موقع تاني (غير يوتيوب وغير ملف
-    // مباشر) — بيتشغل في iframe مع كل الحمايات، وبيشتغل بس لما الفيديو متسجل
-    // nativeEmbed (يعني الأدمن هو اللي أضافه من كود HTML — مش أي لينك عادي)
-    const embedUrl = (!ytId && !mediaId && !directUrl && nativeEmbed && /^https?:\/\//i.test(video.url || '')) ? String(video.url).trim() : ''
     const videoIdEsc = htmlEscape(video.id)
     const titleEsc = htmlEscape(video.title || '')
 
     // مفيش طريقة تشغيل معروفة → صفحة خطأ (بالشرح: اللينك المباشر لازم ينتهي
-    // بامتداد فيديو — MP4/M3U8/WebM — أو يرفع الملف من لوحة التحكم
-    // أو يضيف الفيديو من كود تضمين HTML)
-    if (!ytId && !mediaId && !directUrl && !embedUrl) {
-      return pageError('الفيديو ده مفيهوش مصدر تشغيل صالح — اللينك المباشر لازم ينتهي بـ mp4 أو m3u8 أو webm، أو ارفع ملف الفيديو نفسه من لوحة التحكم، أو استخدم كود تضمين HTML.', 415)
+    // بامتداد فيديو — MP4/M3U8/WebM — أو يرفع الملف من لوحة التحكم)
+    // (ملغاة 2026-و4: ميزة كود HTML embed اتنست بطلب المستر نفسه)
+    if (!ytId && !mediaId && !directUrl) {
+      return pageError('الفيديو ده مفيهوش مصدر تشغيل صالح — اللينك المباشر لازم ينتهي بـ mp4 أو m3u8 أو webm، أو ارفع ملف الفيديو نفسه من لوحة التحكم.', 415)
     }
 
     // إعدادات المشغل كـ JSON آمن جوه script
     const cfg: Record<string, unknown> = {
       videoId: video.id,
-      kind: ytId ? 'youtube' : (mediaId || directUrl) ? 'file' : 'embed',
+      kind: ytId ? 'youtube' : 'file',
       resume: resume,
       wm: {
         enabled: wmEnabled === '1',
@@ -218,9 +216,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // الـ ID مش موجود كنص صريح — مقسوم مشفّر XOR
       cfg.blob = ob.b
       cfg.key = ob.k
-      // (2026-و3) الفيديو متسجل من كود HTML embed → كنترولز يوتيوب الأصلية
-      // شغالة (controls=1) — وقايمة ⚙ الجودة بتاعتها شغالة بجد
-      if (nativeEmbed) cfg.nativeControls = true
     } else if (mediaId) {
       // توكن موقّع ساعتين مرتبط بالطالب — مكانش هيظهر غير جوه صفحة المشغل
       cfg.fileUrl = '/api/files/' + mediaId + '?token=' + signVideoToken(mediaId, row.studentId || 'anon') + '&req=' + encodeURIComponent(row.studentId || 'anon')
@@ -228,9 +223,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // (المشغل العادي) لينك فيديو مباشر من أي موقع — MP4/M3U8/WebM
       // بيتشغل في مشغلنا العادي من غير أي يوتيوب + إعدادات جودة ظاهرة
       cfg.fileUrl = directUrl
-    } else {
-      // (2026-و3) كود HTML من موقع تاني — iframe مباشر + الدروع والووترمارك
-      cfg.embedUrl = embedUrl
     }
     const cfgJson = JSON.stringify(cfg).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')
 
@@ -833,11 +825,10 @@ function activateFallback(reason){
   /* نفس مواصفات المشغل الأصلي بالظبط: **controls=0 — مفيش أي واجهة يوتيوب**
      (لا لوجو ولا وقت ولا share ولا إعدادات — القرار 2026-ؤ) + كابشن مقفول
      + ووترمارك ودروع وشريطنا فوقه — بيتشتغل لو الـ API نفسه ماقدرش يتحمل.
-     (وضع embed 2026-و3): controls=1 — نفس كنترولز يوتيوب الأصلية بجودتها الحقيقية.
      enablejsapi=1 → بنقدر نبعت أوامر إبادة الكابشن + تشغيل/إيقاف/كتم
      لشريطنا جوه المشغل المباشر (postMessage كل 3 ثواني) — طلب المستر
      الحرفي: «اعمل للكابشن بلوك» في أي مشغل */
-  f.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&controls=' + (CFG.nativeControls ? '1' : '0') + '&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&cc_load_policy=0&cc_lang_pref=ar&hl=ar&disablekb=1&enablejsapi=1&vq=hd1080&origin=' + encodeURIComponent(location.origin || 'https://localhost') + '&start=' + startS;
+  f.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&controls=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&cc_load_policy=0&cc_lang_pref=ar&hl=ar&disablekb=1&enablejsapi=1&vq=hd1080&origin=' + encodeURIComponent(location.origin || 'https://localhost') + '&start=' + startS;
   layoutWrap();
   try{ if(plainCapTimer){ clearInterval(plainCapTimer); plainCapTimer = null; } }catch(e){}
   plainCapTimer = setInterval(killCaptionsPlain, 3000);
@@ -893,6 +884,7 @@ function killCaptionsPlain(){
   }catch(e){}
 }
 var lastCapCheck = 0;
+var lastFloorCheck = 0;
 function tapOk(){ var n = Date.now(); if(n - lastTap < 350) return false; lastTap = n; return true; }
 function showUnmuteBtn(){
   var b = document.getElementById('unmuteBtn');
@@ -1126,20 +1118,37 @@ function buildMgBar(){
     trackWrap.addEventListener('pointercancel', function(){ mgSeeking = false; });
   }
 }
-/* دفعة جودة واحدة (أفضل مجهود — يوتيوب بيوزّع حسب سرعة النت في الآخر):
-   أول تشغيل + 4 ثواني لو التيار لسه SD بنعيد تحميله بطلب 1080 مرة واحدة
-   بس من غير مضايقة. والحل الجذري الحقيقي المضمون للجودة = ملف مباشر
-   (مش يوتيوب) زي ما المستر نفسه سأل — ساعتها الجودة = جودة الملف نفسه */
-var qNudgeDone = false;
-function nudgeQualityOnce(){
-  if(qNudgeDone || fallbackActive) return;
-  qNudgeDone = true;
+/* ===== أرضية الجودة 720p (2026-و4 — طلب المستر الحرفي: «أنا عاوزها أقل
+   شيء 720... الفيديو ثابت على 360 وده شيء ضعيف جداً... لو هنعرف نتحكم
+   بيها خليها عادية») — نظام من طبقتين:
+   1) أرضية دائمة: setPlaybackQualityRange('hd720','highres') عند كل تشغيل
+      وكل تغير جودة ودوريًا — دي أقرب باب سبه يوتيوب مفتوح لرفع أقل حد
+      للتيار (يعني لو النت يسمح بأعلى من 720 ياخد أعلى — لو مش يسمح
+      بـ 720 نفسها بيرجع لأقرب مستوى ممكن فوق 360).
+   2) حارس دوري: لو التيار مع كده واقف تحت 720 (tiny/small/medium/large)
+      → إعادة تحميل التيار من نفس الثانية بـ hd720 — محاولة محدودة
+      (3 مرات بفاصل 12 ثانية) عشان ميقعدش يعيد التحميل على طول.
+   لو الطالب اختار مستوى بنفسه من قايمة ⚙ → احترام اختياره ومفيش
+   أرضية (اختياره صريح). لو يوتيوب تجاهل كل ده — مفيش أي باب رسمي
+   تاني: دي أقصى اللي الـ API بيسمح بيه من 2023 */
+var qFloorTries = 0, qFloorLast = 0;
+function ytApplyFloor(){
+  if(fallbackActive || ytQWanted) return;
+  try{ if(playerApi && playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange('hd720','highres'); }catch(e){}
+}
+function ytFloorGuard(){
+  if(fallbackActive || ytQWanted || !playerApi || !ytIdCached) return;
+  if(qFloorTries >= 3) return;
+  var now = Date.now();
+  if(now - qFloorLast < 12000) return;
+  var q = '';
+  try{ q = String(playerApi.getPlaybackQuality() || ''); }catch(e){}
+  if(q !== 'tiny' && q !== 'small' && q !== 'medium' && q !== 'large') return;
+  qFloorTries++; qFloorLast = now;
   try{
-    if(!playerApi || !playerApi.getPlaybackQuality) return;
-    var q = ''; try{ q = String(playerApi.getPlaybackQuality() || ''); }catch(e){}
-    if(q === 'hd1080' || q === 'hd720' || q === 'highres') return;
-    var cur = 0; try{ cur = playerApi.getCurrentTime() || 0; }catch(e){}
-    try{ playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur)), 'hd1080'); }catch(e){}
+    var cur = 0; try{ cur = playerApi.getCurrentTime()||0; }catch(e){}
+    playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur)), 'hd720');
+    try{ if(playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange('hd720','highres'); }catch(e){}
   }catch(e){}
 }
 /* ===== ⚙ قايمة جودة يوتيوب (2026-و2 — طلب المستر الحرفي: «علامة الجودة
@@ -1182,7 +1191,7 @@ function ytRenderQMenu(){
     var q = sorted[i];
     html += '<div class="qi' + (ytQWanted === q ? ' on' : '') + '" data-q="' + q + '"><span>' + ytQName(q) + '</span><span class="ck">' + (ytQWanted === q ? '✓' : '') + '</span></div>';
   }
-  html += '<div class="qNote">يوتيوب بيوزّع الجودة النهائية حسب سرعة النت — الاختيار طلب بأفضل مجهود. الجودة المضمونة 100% للينكات المباشرة (غير يوتيوب)</div>';
+  html += '<div class="qNote">الجودة بتُطلب تلقائيًا بـ 720p على الأقل — ويوتيوب بيرفعها أعلى لو النت يسمح. لو اخترت مستوى بنفسك هنطلبه برضه ويوتيوب بيأكد حسب سرعة النت</div>';
   m.innerHTML = html;
   var items = m.getElementsByClassName('qi');
   for(var j=0;j<items.length;j++){
@@ -1218,13 +1227,10 @@ function mountYouTube(){
      الحرفي: «مش لاقي زرار الإعدادات.. خبي علامة اليوتيوب.. علامة الـ share
      والـ time دي لغيها»): controls=0 → لوجو يوتيوب والوقت وshare والقايمة
      كلهم **ماتشالوا من الأساس** (مش متغطيين — الغطاء كان بيفشل مع RTL).
-     مكانهم شريط تحكمنا (تشغيل/تقدم/كتم/ملء شاشة + Math Genius) والفيديو
+     مكانهم شريط تحكمنا (تشغيل/تقدم/ملء شاشة + الجودة) والفيديو
      كامل 100% من غير أي قص.
-     **استثناء (2026-و3 — وضع كود HTML embed):** لما المستر يضيف الفيديو
-     من كود تضمين iframe → CFG.nativeControls=1 → كنترولز يوتيوب الأصلية
-     شغالة (controls=1) — ساعتها ⚙ الجودة بتاعتها يوتيوب **شغالة بجد**
-     (الطالب بيختار 360p/720p/1080p بنفسه من إعدادات يوتيوب نفسها) —
-     دي الطريقة الوحيدة اللي يوتيوب مانعش هي من 2023 */
+     (ملغاة 2026-و4: استثناء وضع كود HTML embed اتنست — المستر شال الميزة
+     نفسها لأنها كانت بتجيب واجهة يوتيوب) */
   var host = document.createElement('div');
   host.id = 'ytHost';
   host.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:#000';
@@ -1244,21 +1250,15 @@ function mountYouTube(){
   startOv.addEventListener('click', function(){ if(!tapOk()) return; startWithWatchdog(); });
   startOv.addEventListener('touchend', function(e){ e.preventDefault(); if(!tapOk()) return; startWithWatchdog(); });
   wrap.appendChild(startOv);
-  if(!CFG.nativeControls){
-    // طبقة النقر — دوسة على الفيديو نفسه = تشغيل/إيقاف عن طريق الـ API
-    // (زي سلوك يوتيوب، بس بأمر من عندنا لأن كنترولزه مقفولة controls=0)
-    var tap = document.createElement('div');
-    tap.id = 'tapLayer';
-    tap.addEventListener('click', function(){ if(!tapOk()) return; ytTogglePlay(); });
-    wrap.appendChild(tap);
-    // شريط التحكم بتاعنا + غطاء الكابشن — ملء الشاشة الأصلي ليوتيوب مقفول
-    // (fs:0) وزراره في شريطنا عشان الووترمارك والدروع تفضل شغالة جوه ملء الشاشة
-    buildMgBar();
-  } else {
-    /* وضع embed: مفيش tapLayer ولا شريط من عندنا — الطالب بيستخدم
-       كنترولز يوتيوب الأصلية نفسها (تشغيل/تقدم/⚙ جودة حقيقية/ملء شاشة)،
-       والووترمارك + الدرع العلوي فوق الـ iframe حماية زي ما هي */
-  }
+  // طبقة النقر — دوسة على الفيديو نفسه = تشغيل/إيقاف عن طريق الـ API
+  // (زي سلوك يوتيوب، بس بأمر من عندنا لأن كنترولزه مقفولة controls=0)
+  var tap = document.createElement('div');
+  tap.id = 'tapLayer';
+  tap.addEventListener('click', function(){ if(!tapOk()) return; ytTogglePlay(); });
+  wrap.appendChild(tap);
+  // شريط التحكم بتاعنا — ملء الشاشة الأصلي ليوتيوب مقفول (fs:0) وزراره
+  // في شريطنا عشان الووترمارك والدروع تفضل شغالة جوه ملء الشاشة
+  buildMgBar();
   // شاشة النهاية (بتغطي شاشة يوتيوب النهائية بالعنوان والاقتراحات)
   var endOv = document.createElement('div'); endOv.id='endOv';
   endOv.innerHTML = '<p>🎉 خلصت الفيديو — برافو عليك!</p><button type="button" id="replayBtn">شوفه تاني ↺</button>';
@@ -1296,10 +1296,8 @@ function buildPlayer(){
     height: '100%',
     /* **controls:0 — مفيش أي واجهة يوتيوب خالص** (القرار النهائي 2026-ؤ):
        مفيش لوجو/وقت/share/إعدادات — كله اتمسح من الأساس. كل التحكم بيبقت
-       عندنا (شريط mgBar + tapLayer عن طريق الـ JS API).
-       **وضع embed (2026-و3): controls=1 → كنترولز يوتيوب الأصلية ظاهرة —
-       وقايمة ⚙ الجودة فيها شغالة بجد (الطالب بيغير 360p/720p/1080p بنفسه) */
-    playerVars: { autoplay:1, controls:(CFG.nativeControls ? 1 : 0), rel:0, modestbranding:1, playsinline:1, iv_load_policy:3, cc_load_policy:0, cc_lang_pref:'ar', hl:'ar', fs:(CFG.nativeControls ? 1 : 0), disablekb:1, enablejsapi:1, vq:'hd1080', origin: location.origin },
+       عندنا (شريط mgBar + tapLayer عن طريق الـ JS API) */
+    playerVars: { autoplay:1, controls:0, rel:0, modestbranding:1, playsinline:1, iv_load_policy:3, cc_load_policy:0, cc_lang_pref:'ar', hl:'ar', fs:0, disablekb:1, enablejsapi:1, vq:'hd1080', origin: location.origin },
     events: {
       onReady: function(ev){
         /* تكملة المشاهدة بنأجلها لأول لحظة تشغيل فعلية — أعلى أمان على الموبايل
@@ -1309,6 +1307,12 @@ function buildPlayer(){
         try{ setMuteIcon(!!(playerApi.isMuted && playerApi.isMuted())); }catch(e){}
         if(pendingStart){ pendingStart = false; startWithWatchdog(); }
         layoutWrap();
+      },
+      onPlaybackQualityChange: function(){
+        /* أرضية 720p: أي تغير جودة من يوتيوب → بنعيد طلب الأرضية فورًا
+           (لو الطالب مش مختار مستوى صريح) */
+        ytApplyFloor();
+        ytUpdateQLabel();
       },
       onStateChange: function(ev){
         try{
@@ -1327,15 +1331,13 @@ function buildPlayer(){
             killCaptions();
             /* قايمة الجودة: نجمع المستويات المتاحة من يوتيوب ونحدّث الزرار */
             ytCollectLevels();
+            /* أرضية 720p مع كل تشغيل — طلب المستر: «أقل شيء 720» */
+            ytApplyFloor();
             /* دورة الووترمارك الكبيرة بتشتغل مع التشغيل */
             wmRun(true);
             setPlayIcon(true);
             /* (2026-و3) الشريط يختفي لوحده أول ما الفيديو يمشي */
             barScheduleHide();
-            /* دفعة جودة واحدة بعد 4 ثواني من أول تشغيل (أفضل مجهود) —
-               في وضع embed (كنترولز أصلية) منغيرها: الطالب بيختار الجودة
-               بنفسه من ⚙ يوتيوب وممنوع نعادي عليه بإعادة تحميل */
-            if(!qNudgeDone && !CFG.nativeControls) setTimeout(nudgeQualityOnce, 4000);
             var so=document.getElementById('startOv'); if(so) so.style.display='none';
             var eo=document.getElementById('endOv'); if(eo) eo.style.display='none';
           } else if(ev.data === YT.PlayerState.PAUSED){
@@ -1390,6 +1392,11 @@ function buildPlayer(){
         reportProgress(cur, dur);
         mgUpdateProgress();
         ytUpdateQLabel();
+        /* أرضية 720p دورية: طلب الأرضية كل 5 ثواني + حارس إعادة التحميل
+           لو التيار لسه واقف تحت 720 (بحد أقصى 3 محاولات) */
+        var floorNow = Math.floor(Date.now() / 5000);
+        if(floorNow !== lastFloorCheck){ lastFloorCheck = floorNow; ytApplyFloor(); }
+        ytFloorGuard();
         /* حارس النهاية: لو شاشة الاقتراحات هتظهر (ENDED ماتفوتش) → غطّي فورًا */
         if(ytState()===0){
           var eo3=document.getElementById('endOv');
@@ -1672,30 +1679,11 @@ function mountFile(){
   else v.src = src;
 }
 
-/* ===== مشغل كود التضمين (HTML embed من موقع تاني — غير يوتيوب) =====
-   (2026-و3 — طلب المستر: «أنا أقدر أضيف فيديو من كود HTML»)
-   بيرندر لينك التضمين زي ما هو في iframe + كل الحمايات فوقه
-   (الدرع العلوي + الووترمارك + منع كليك يمين/مفاتيح).
-   ملاحظة صادقة: التقدم/الاكتمال مش بيتراقبوا هنا (مفيش API للموقع التاني) */
-function mountEmbed(){
-  var url = String(CFG.embedUrl || '');
-  /* ملحوظة: جوه القالب بنستخدم indexOf بدل regex — \\ بتتاكل في الـ template literal */
-  if(url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0){ wrap.innerHTML = '<p style="color:#fca5a5;font-family:sans-serif;padding:24px;direction:rtl">كود التضمين غير صالح — اتأكد من اللينك أو بلغ الإدارة</p>'; return; }
-  var f = document.createElement('iframe');
-  f.id = 'embedFrame';
-  f.setAttribute('allow','accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen');
-  f.setAttribute('allowfullscreen','');
-  f.setAttribute('referrerpolicy','strict-origin-when-cross-origin');
-  f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#000';
-  f.src = url;
-  wrap.appendChild(f);
-}
-
 /* ===== تشغيل ===== */
 buildWm();
 ensureTopShield();
 layoutWrap();
-if(CFG.kind === 'youtube') mountYouTube(); else if(CFG.kind === 'file') mountFile(); else if(CFG.kind === 'embed') mountEmbed();
+if(CFG.kind === 'youtube') mountYouTube(); else if(CFG.kind === 'file') mountFile();
 
 /* زرار ملء الشاشة للملفات (ليوتيوب الزرار جوه الكنترولز بتاعته) */
 if(CFG.kind === 'file'){
