@@ -973,6 +973,9 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
      كل نموذج مفصول لوحده — والطالب بيشوف نموذج واحد بس بيتحدد عشوائيًا
      ثابت لحسابه على السيرفر (في /api/exams لما الطلب يكون بstudentId) */
   const [examModels, setExamModels] = useState<Array<{ name: string; filePath: string; fileType: string; questions: any[] }>>([])
+  /* (2026-و) طلب المستر: التوزيع مش إجباري يكون عشوائي — عشوائي 🎲 أو نموذج واحد ثابت للكل 📌 */
+  const [modelMode, setModelMode] = useState<'random' | 'fixed'>('random')
+  const [fixedModelName, setFixedModelName] = useState('')
   const [modelExtracting, setModelExtracting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const answerKeyRef = useRef<HTMLInputElement>(null)
@@ -1092,11 +1095,15 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
       if (localAnswerKeyPath) { body.answerKeyPath = localAnswerKeyPath; body.answerKeyType = localAnswerKeyType }
       if (localThumbnailPath) { body.thumbnail = localThumbnailPath }
       if (formQuestions.length > 0) { body.questions = JSON.stringify(formQuestions); body.passScore = String(formPassScore) }
-      // نماذج الامتحان العشوائية — بتبعت مع الامتحان والطالب بياخد واحد بس عشوائي
-      if (examModels.length > 0) { body.models = JSON.stringify(examModels) }
+      // نماذج الامتحان — مع طريقة التوزيع (عشوائي أو نموذج واحد ثابت للكل)
+      if (examModels.length > 0) {
+        body.models = JSON.stringify(examModels)
+        body.modelMode = modelMode
+        if (modelMode === 'fixed') { body.fixedModel = fixedModelName || examModels[0].name }
+      }
       const res = await fetch('/api/exams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (res.ok) {
-        toast.success('تم إضافة الامتحان'); setShowForm(false); setFormTitle(''); setFormContent(''); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileType(''); setFormFileUrl(''); setFormQuestions([]); setFormPassScore(50); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyType(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setExamModels([]); loadExams()
+        toast.success('تم إضافة الامتحان'); setShowForm(false); setFormTitle(''); setFormContent(''); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileType(''); setFormFileUrl(''); setFormQuestions([]); setFormPassScore(50); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyType(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setExamModels([]); setModelMode('random'); setFixedModelName(''); loadExams()
       } else { try { const d = await res.json(); toast.error(d.error || 'خطأ', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر - حاول تاني', { duration: 8000 }) } }
     } catch (err: any) { toast.error('خطأ في الاتصال: ' + (err.message || ''), { duration: 8000 }) }
     setSubmitting(false)
@@ -1175,7 +1182,7 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
       <CardHeader className="pb-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <CardTitle className="text-lg flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" />تتبع الامتحانات</CardTitle>
-          <Button size="sm" onClick={() => { setShowForm(!showForm); if (!showForm) setExamModels([]) }}><Plus className="h-4 w-4 ml-1" />إضافة امتحان</Button>
+          <Button size="sm" onClick={() => { setShowForm(!showForm); if (!showForm) { setExamModels([]); setModelMode('random'); setFixedModelName('') } }}><Plus className="h-4 w-4 ml-1" />إضافة امتحان</Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -1305,7 +1312,7 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                 </Button>
               </div>
               {examModels.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground text-center py-1.5">مفيش نماذج لسه — لو ضفت نموذجين أو أكتر الامتحان هيبقى عشوائي تلقائيًا</p>
+                <p className="text-[11px] text-muted-foreground text-center py-1.5">مفيش نماذج لسه — لو ضفت نموذجين أو أكتر تقدر تختار العشوائية أو نموذج واحد ثابت</p>
               ) : (
                 <div className="space-y-1.5">
                   {examModels.map((m, mi) => (
@@ -1314,10 +1321,28 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                         <Badge className="bg-purple-500 text-white text-[10px] shrink-0">{m.name}</Badge>
                         <span className="text-[11px] text-muted-foreground truncate">{m.questions.length} سؤال {m.filePath ? '• الملف مرفوع ✓' : ''}</span>
                       </div>
-                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={() => setExamModels(examModels.filter((_, i) => i !== mi))}><Trash2 className="h-3 w-3" /></Button>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={() => { setExamModels(examModels.filter((_, i) => i !== mi)); if (fixedModelName === m.name) setFixedModelName('') }}><Trash2 className="h-3 w-3" /></Button>
                     </div>
                   ))}
-                  <p className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">✅ الامتحان هيبقى عشوائي: {examModels.length} نماذج — كل طالب هياخد واحد بس منهم</p>
+                  {/* (2026-و) طريقة التوزيع: عشوائي أو نموذج واحد ثابت للكل */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-[11px] font-semibold shrink-0">طريقة التوزيع:</span>
+                    <select value={modelMode} onChange={(e) => { setModelMode(e.target.value as 'random' | 'fixed'); if (e.target.value === 'random') setFixedModelName('') }} className="h-7 rounded-md border border-input bg-transparent px-2 text-[11px]">
+                      <option value="random">🎲 عشوائي — كل طالب نموذج مختلف</option>
+                      <option value="fixed">📌 نموذج واحد ثابت للكل</option>
+                    </select>
+                    {modelMode === 'fixed' && (
+                      <select value={fixedModelName} onChange={(e) => setFixedModelName(e.target.value)} className="h-7 rounded-md border border-purple-500/50 bg-transparent px-2 text-[11px] text-purple-600 dark:text-purple-400">
+                        <option value="">اختر النموذج الثابت…</option>
+                        {examModels.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+                      </select>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+                    {modelMode === 'fixed'
+                      ? '📌 كل الطلاب هيشوفوا ' + (fixedModelName || examModels[0].name) + ' بس (نموذج واحد ثابت للكل)'
+                      : '✅ الامتحان هيبقى عشوائي: ' + examModels.length + ' نماذج — كل طالب هياخد واحد بس منهم'}
+                  </p>
                 </div>
               )}
             </div>
@@ -1345,7 +1370,9 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                         {(exam as any).filePath && <Badge variant="outline" className="text-[9px] border-primary/40 text-primary">أسئلة</Badge>}
                         {(exam as any).answerKeyPath && <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-600">إجابة</Badge>}
                         {(exam as any).questions && (exam as any).questions !== '' && <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-600">MCQ</Badge>}
-                        {(exam as any).models && <Badge className="text-[9px] bg-purple-500 text-white">نماذج عشوائية</Badge>}
+                        {(exam as any).models && ((exam as any).modelMode === 'fixed'
+                          ? <Badge className="text-[9px] bg-amber-500 text-white">📌 نموذج ثابت</Badge>
+                          : <Badge className="text-[9px] bg-purple-500 text-white">نماذج عشوائية</Badge>)}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -2367,6 +2394,9 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
      كل نموذج مفصول لوحده — والطالب بيشوف نموذج واحد بس بيتحدد عشوائيًا
      ثابت لحسابه على السيرفر (في /api/exams لما الطلب يكون بستUDENTId) */
   const [examModels, setExamModels] = useState<Array<{ name: string; filePath: string; fileType: string; questions: any[] }>>([])
+  /* (2026-و) طلب المستر: التوزيع مش إجباري يكون عشوائي — عشوائي 🎲 أو نموذج واحد ثابت للكل 📌 */
+  const [modelMode, setModelMode] = useState<'random' | 'fixed'>('random')
+  const [fixedModelName, setFixedModelName] = useState('')
   const [modelExtracting, setModelExtracting] = useState(false)
   const isExamManager = apiPath === '/api/exams'
   const [filterGrade, setFilterGrade] = useState('')
@@ -2604,8 +2634,12 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       if (answerKeyPathRef.val) { body.answerKeyPath = answerKeyPathRef.val; body.answerKeyType = answerKeyTypeRef.val }
       if (thumbnailPathRef.val) { body.thumbnail = thumbnailPathRef.val }
       if (supportMCQ && mcqQuestions.length > 0) { body.questions = JSON.stringify(mcqQuestions) }
-      // نماذج الامتحان العشوائية — بتبعت مع الامتحان والطالب بياخد واحد بس عشوائي
-      if (isExamManager && examModels.length > 0) { body.models = JSON.stringify(examModels) }
+      // نماذج الامتحان — مع طريقة التوزيع (عشوائي أو نموذج واحد ثابت للكل)
+      if (isExamManager && examModels.length > 0) {
+        body.models = JSON.stringify(examModels)
+        body.modelMode = modelMode
+        if (modelMode === 'fixed') { body.fixedModel = fixedModelName || examModels[0].name }
+      }
       const res = await fetch(apiPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (res.ok) {
         toast.success('تم الإضافة بنجاح'); setShowForm(false); setFormValues({}); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setMcqQuestions([]); setExamModels([]); loadItems(false); onRefresh()
@@ -2628,7 +2662,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
               <option value="">كل الصفوف</option>
               {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
-            <Button size="sm" onClick={() => { setShowForm(!showForm); if (!showForm) setExamModels([]) }}><Plus className="h-4 w-4 ml-1" />إضافة</Button>
+            <Button size="sm" onClick={() => { setShowForm(!showForm); if (!showForm) { setExamModels([]); setModelMode('random'); setFixedModelName('') } }}><Plus className="h-4 w-4 ml-1" />إضافة</Button>
           </div>
         </div>
       </CardHeader>
@@ -2767,7 +2801,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
                   </Button>
                 </div>
                 {examModels.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground text-center py-1.5">مفيش نماذج لسه — لو ضفت نموذجين أو أكتر الامتحان هيبقى عشوائي تلقائيًا</p>
+                  <p className="text-[11px] text-muted-foreground text-center py-1.5">مفيش نماذج لسه — لو ضفت نموذجين أو أكتر تقدر تختار العشوائية أو نموذج واحد ثابت</p>
                 ) : (
                   <div className="space-y-1.5">
                     {examModels.map(function(m, mi) {
@@ -2777,11 +2811,29 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
                             <Badge className="bg-purple-500 text-white text-[10px] shrink-0">{m.name}</Badge>
                             <span className="text-[11px] text-muted-foreground truncate">{m.questions.length} سؤال {m.filePath ? '• الملف مرفوع ✓' : ''}</span>
                           </div>
-                          <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={function() { setExamModels(examModels.filter(function(_, i) { return i !== mi })) }}><X className="h-3 w-3" /></Button>
+                          <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={function() { setExamModels(examModels.filter(function(_, i) { return i !== mi })); if (fixedModelName === m.name) setFixedModelName('') }}><X className="h-3 w-3" /></Button>
                         </div>
                       )
                     })}
-                    <p className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">✅ الامتحان هيبقى عشوائي: {examModels.length} نماذج — كل طالب هياخد واحد بس منهم</p>
+                    {/* (2026-و) طريقة التوزيع: عشوائي أو نموذج واحد ثابت للكل */}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <span className="text-[11px] font-semibold shrink-0">طريقة التوزيع:</span>
+                      <select value={modelMode} onChange={function(e) { setModelMode(e.target.value as 'random' | 'fixed'); if (e.target.value === 'random') setFixedModelName('') }} className="h-7 rounded-md border border-input bg-transparent px-2 text-[11px]">
+                        <option value="random">🎲 عشوائي — كل طالب نموذج مختلف</option>
+                        <option value="fixed">📌 نموذج واحد ثابت للكل</option>
+                      </select>
+                      {modelMode === 'fixed' && (
+                        <select value={fixedModelName} onChange={function(e) { setFixedModelName(e.target.value) }} className="h-7 rounded-md border border-purple-500/50 bg-transparent px-2 text-[11px] text-purple-600 dark:text-purple-400">
+                          <option value="">اختر النموذج الثابت…</option>
+                          {examModels.map(function(m) { return <option key={m.name} value={m.name}>{m.name}</option> })}
+                        </select>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+                      {modelMode === 'fixed'
+                        ? '📌 كل الطلاب هيشوفوا ' + (fixedModelName || examModels[0].name) + ' بس (نموذج واحد ثابت للكل)'
+                        : '✅ الامتحان هيبقى عشوائي: ' + examModels.length + ' نماذج — كل طالب هياخد واحد بس منهم'}
+                    </p>
                   </div>
                 )}
               </div>
@@ -2789,7 +2841,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
             {uploadMsg && <p className="text-xs text-primary animate-pulse">{uploadMsg}</p>}
             <div className="flex gap-2">
               <Button size="sm" onClick={handleSubmit} disabled={submitting || uploading}>{submitting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ'}</Button>
-              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormValues({}); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setMcqQuestions([]); setExamModels([]); setUploadMsg('') }}>إلغاء</Button>
+              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormValues({}); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setMcqQuestions([]); setExamModels([]); setModelMode('random'); setFixedModelName(''); setUploadMsg('') }}>إلغاء</Button>
             </div>
           </div>
         )}
@@ -2808,7 +2860,9 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
                     {item.filePath && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">أسئلة</Badge>}
                     {item.answerKeyPath && <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">إجابة</Badge>}
                     {(item as any).questions && <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">أسئلة</Badge>}
-                    {(item as any).models && <Badge className="text-[10px] bg-purple-500 text-white">نماذج عشوائية</Badge>}
+                    {(item as any).models && ((item as any).modelMode === 'fixed'
+                      ? <Badge className="text-[10px] bg-amber-500 text-white">📌 نموذج ثابت</Badge>
+                      : <Badge className="text-[10px] bg-purple-500 text-white">نماذج عشوائية</Badge>)}
                     <span className="text-[10px] text-muted-foreground">{new Date(item.createdAt).toLocaleDateString('ar-EG')}</span>
                   </div>
                 </div>
