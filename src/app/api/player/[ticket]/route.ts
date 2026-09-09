@@ -526,34 +526,42 @@ function reportProgress(cur, dur){
 function reportEnded(){ try{ if(window.parent && window.parent !== window) window.parent.postMessage({type:'mg_ended', videoId:CFG.videoId}, '*'); }catch(e){} }
 
 /* ===== حماية الفحص + منع التسجيل (تنبيه فوري) =====
-   منع التسجيل (طلب المستر 2026-ز):
-   • Win/⌘ + Shift + R (تسجيل ويندوز) → "التسجيل ممنوع"
-   • Win/⌘ + Shift + S (أداة القص) → "التسجيل ممنوع"
+   (2026-ط تعديل طلب المستر الحرفي: رسالة الكليك اليمين تبقى
+   "كليك يمين ممنوع" مش "التسجيل ممنوع"):
+   • كليك يمين → "🚫 كليك يمين ممنوع"
+   • Win/⌘ + Shift + R (تسجيل ويندوز) → "الخاصية دي ممنوعة"
+   • Win/⌘ + Shift + S (أداة القص) → "الخاصية دي ممنوعة"
+   • كل زرار function من F1 لـ F12 (فيهم F10) → "الخاصية دي ممنوعة"
    • زرار PrintScreen → محاولة تفريغ الحافظة + رسالة
-   • كليك يمين ممنوع
    ملاحظة حقيقية: اختصار النظام نفسه فوق صلاحية المتصفح — لكن المحاولة
    بتتكشف والتحذير بيظهر فورًا، والووترمارك باسم الطالب ورقمه هو الخصم
    الحقيقي لأي صورة/فيديو مسرب. */
-document.addEventListener('contextmenu', function(e){ e.preventDefault(); toast('🚫 التسجيل ممنوع — كليك يمين مقفول'); });
+document.addEventListener('contextmenu', function(e){ e.preventDefault(); toast('🚫 كليك يمين ممنوع'); });
 document.addEventListener('dragstart', function(e){ e.preventDefault(); });
 document.addEventListener('selectstart', function(e){ if(e.target && e.target.id !== 'toast') e.preventDefault(); });
+/* تتبّع ضغطة زرار ويندوز/⌘ نفسه (2026-ط): أندوز ساعات بياخد الاختصار
+   ليه ويبلع الـ metaKey من الحدث — فبنسجل لحظة الضغط على الميتا، وأي
+   R/S بعداها مباشرة نعتبرها محاولة تسجيل/قص حتى لو المتصفح مابعثش
+   metaKey — دي أقصى محاولة ممكنة من جوه المتصفح (طلب المستر:
+   "لو تقدر منعهم منعهم، ولو ما تقدرتش ما تمنعهمش") */
+var lastMetaTs = 0;
 document.addEventListener('keydown', function(e){
   var k = (e.key || '').toLowerCase();
+  if(e.key === 'Meta' || e.key === 'OS' || e.keyCode === 91 || e.keyCode === 92){ lastMetaTs = Date.now(); }
   /* (2026-ز طلب المستر الحرفي) Windows/⌘ + Shift + S و Windows/⌘ + Shift + R
      — فحصهم الأول قبل أي حاجة عشان الرسالة القصيرة المطلوبة
      "الخاصية دي ممنوعة" تظهر فورًا ومش بيلتهمهم منع الحفظ العام */
-  var metaPressed0 = !!(e.metaKey || e.key === 'OS' || e.key === 'Meta' || e.keyCode === 91 || e.keyCode === 92);
-  if(metaPressed0 && e.shiftKey && (k === 'r' || k === 's')){
+  var metaPressed0 = !!(e.metaKey || e.key === 'OS' || e.key === 'Meta' || e.keyCode === 91 || e.keyCode === 92 || (Date.now() - lastMetaTs < 3000));
+  if(e.shiftKey && (k === 'r' || k === 's') && metaPressed0){
     e.preventDefault(); e.stopPropagation(); toast('🛡️ الخاصية دي ممنوعة'); return;
   }
   var blocked = false;
-  /* (2026-ز) F12 + كل زرار function من F1 لـ F12 — طلب المستر: زرار
-     الـ function وزرار الـ function + F12 ممنوعين زي ما هما بالظبط */
+  /* (2026-ز) F12 + كل زرار function من F1 لـ F12 (فيهم F10) — طلب المستر */
   if(k === 'f12' || /^f([1-9]|1[0-2])$/.test(k)) blocked = true;
   if((e.ctrlKey || e.metaKey) && e.shiftKey && (k === 'i' || k === 'j' || k === 'c')) blocked = true;
   if((e.ctrlKey || e.metaKey) && (k === 'u' || k === 's')) blocked = true;
   if((e.metaKey || e.ctrlKey) && e.altKey && (k === 'i' || k === 'j' || k === 'c')) blocked = true;
-  if(blocked){ e.preventDefault(); e.stopPropagation(); toast('🛡️ عرض الفيديو محمي — دي خاصية مقفولة'); return; }
+  if(blocked){ e.preventDefault(); e.stopPropagation(); toast('🛡️ الخاصية دي ممنوعة'); return; }
   /* Ctrl + Shift + R / S — إعادة التحميل العنيدة + حفظ الصفحة/أداة القص */
   if(e.ctrlKey && e.shiftKey && (k === 'r' || k === 's')){
     e.preventDefault(); e.stopPropagation(); toast('🛡️ الخاصية دي ممنوعة'); return;
@@ -753,14 +761,21 @@ var qSel = 'large', lastQAssert = 0;
    بـ suggestedQuality في أول 2.5 ثانية بدل استنىاء الحارس 20 ثانية */
 var qEarlyPinned = false;
 /* حارس الجودة القسري (علاج "بختار 720 والرقم بيفضل 360"):
-   سلم تصعيدي بلا لوب:
-   1) setPlaybackQualityRange + setPlaybackQuality كل 6 ثواني
-   2) بعد 10 ثواني عدم مطابقة → forceQ (نطاق + سيك صغير بيطلب تيار جديد
+   سلم تصعيدي بلا لوب — أسرع بعد تعديل 2026-ط (طلب المستر:
+   "لو مش عارف تغير في الجودة ثبتها على 480 تلقائي"):
+   1) setPlaybackQualityRange + setPlaybackQuality كل 5 ثواني
+   2) بعد 6 ثواني عدم مطابقة → forceQ (نطاق + سيك صغير بيطلب تيار جديد
       من غير reload)
-   3) بعد 25 ثانية → **تبديل تيار حقيقي واحد** loadVideoById بالمستوى المطلوب
-      (suggestedQuality بيطلب التيار بالمستوى ده من أول لحظة) — سقف 3 مرات
-      + كولداون 30 ثانية عشان مفيش لوب إعادات تحميل على النت الضعيف */
+   3) بعد 10 ثواني → **تبديل تيار حقيقي** loadVideoById بالمستوى المطلوب
+      (suggestedQuality بيطلب التيار بالمستوى ده من أول لحظة) — سقف 8 مرات
+      + كولداون 15 ثانية عشان مفيش لوب إعادات تحميل على النت الضعيف
+   ولو بعد تبديلين حقيقيين الجودة لسه تحت المطلوب → السبب سرعة النت نفسها
+   (يوتيوب مش بيبعت تيار أعلى من اللي النت واصل له) — بنقول الحقيقة مرة واحدة */
 var qLowSince = 0, qHardTries = 0, lastQHard = 0, qPendingPause = false, lastCapCheck = 0;
+/* (2026-ط) إعادة تأكيد سريعة بعد اختيار الطالب لمستوى + تنبيه سقف الشبكة
+   (مرة كل 60 ثانية كحد أقصى — المستر قال "أنا مش عارف ليه بتثبت على 360"
+   وده سببها الحقيقي: النت هو اللي بيكتب السقف مش المشغل) */
+var qPostSwitchUntil = 0, qPostSwitchTarget = '', lastQCapNotice = 0;
 /* أعلى جودة متاحة فعلًا في الفيديو — لو الملف الأصلي مرفوع بجودة ضعيفة
    يوتيوب هيرجّع أعلى حاجة عنده بس (حدود المصدر مش حدود المشغل) */
 function highestAvail(){
@@ -1033,6 +1048,11 @@ function mountYouTube(){
                التيار فعلًا — ده اللي كان بيخلي الرقم بيتغير كتابيًا بس) */
             var tgt = (q === 'top') ? highestAvail() : resolveLockLevel(q);
             switchQ(tgt);
+            /* (2026-ط) بعد التبديل: إعادة تأكيد النطاق كل 1.5ث لأول 15ث —
+               التيار الجديد بيبدأ وبيستقر والقفل بيتضغط عليه طول الوقت */
+            qPostSwitchUntil = Date.now() + 15000;
+            qPostSwitchTarget = tgt || '';
+            lastQCapNotice = 0; /* اختيار جديد = تنبيه السقف يتاح تاني */
           }
           updateQBtn();
           qMenu.style.display = 'none';
@@ -1138,7 +1158,10 @@ function buildPlayer(){
                 }catch(eEP){}
               }, 2500);
             }
-            /* الكابشن ممنوع خالص (طلب المستر) — أول ما التشغيل يبدأ نطفيه */
+            /* الكابشن ممنوع خالص (طلب المستر 2026-ط: "الكابشن ده ممنوع نهائيًا") —
+               **التحميل-ثم-الشيل** هو اللي بيقتل كابشن يوتيوب التلقائي (ASR)
+               كمان: الشيل لوحده ساعات مبيشتغلش على الترجمة التلقائية */
+            try{ playerApi.loadModule && playerApi.loadModule('captions'); }catch(e){}
             try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
             try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
             if(qPendingPause){ qPendingPause = false; try{ playerApi.pauseVideo(); }catch(e){} }
@@ -1157,8 +1180,10 @@ function buildPlayer(){
         }catch(e){}
       },
       onApiChange: function(){
-        /* (2026-ي) الكابشن/الترجمة ممنوعة خالص — الحدث ده بي nalع أول ما
-           موديول الترجمة يتجهز فيتشال فورًا قبل ما يبان أي سطر تحت */
+        /* (2026-ط) الكابشن/الترجمة ممنوعة خالص — الحدث ده بيناول أول ما
+           موديول الترجمة يتجهز فيتشال فورًا قبل ما يبان أي سطر تحت
+           (تحميل-ثم-شيل عشان يقتل الترجمة التلقائية كمان) */
+        try{ playerApi.loadModule && playerApi.loadModule('captions'); }catch(e){}
         try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
         try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
       },
@@ -1218,40 +1243,52 @@ function buildPlayer(){
         /* حارس الجودة (2026-ح — قفل 480p الاتنين اتجاهين):
            الجودة الفعلية لازم تطابق المطلوب — لو نزلت تحت المطلوب نرفعها،
            ولو طلعت فوقه ننزّلها (زي اختيار يدوي ثابت في يوتيوب).
-           سلم التصعيد بلا لوب:
-           1) إعادة تأكيد هادية كل 6 ثواني (setPlaybackQualityRange)
-           2) بعد 10 ثواني عدم مطابقة → forceQ (نطاق + سيك صغير بيطلب تيار
-              جديد من غير ما نقص جلسة التشغيل) — بكولداون 20 ثانية
-           3) بعد 25 ثانية → hardReloadQ (تبديل تيار حقيقي loadVideoById
-              بالمستوى المطلوب) — سقف 3 مرات + كولداون 30 ثانية،
+           سلم التصعيد بلا لوب (أسرع بعد تعديل 2026-ط):
+           1) إعادة تأكيد كل 5 ثواني (setPlaybackQualityRange)
+           2) بعد 6 ثواني عدم مطابقة → forceQ (نطاق + سيك صغير بيطلب تيار
+              جديد من غير ما نقص جلسة التشغيل) — بكولداون 15 ثانية
+           3) بعد 10 ثواني → hardReloadQ (تبديل تيار حقيقي loadVideoById
+              بالمستوى المطلوب) — سقف 8 مرات + كولداون 15 ثانية،
               والميزانية بترجع أول ما الجودة تظبط */
         if(ytState() === 1 && qSel !== 'auto'){
           var q = '';
           try{ q = playerApi.getPlaybackQuality() || ''; }catch(e){}
           var eff = wantedLevel();
           var qMismatch = eff && q && q !== 'unknown' && q !== 'auto' && qRankOf(q) !== qRankOf(eff);
+          /* (2026-ط) إعادة تأكيد سريعة بعد تبديل الطالب اليدوي (كل 1.5ث لأول 15ث) */
+          if(qPostSwitchTarget && Date.now() < qPostSwitchUntil && Date.now() - lastQAssert > 1500){
+            lastQAssert = Date.now();
+            try{ playerApi.setPlaybackQualityRange(qPostSwitchTarget, qPostSwitchTarget); }catch(e){}
+            try{ playerApi.setPlaybackQuality(qPostSwitchTarget); }catch(e){}
+          }
           if(qMismatch){
             if(!qLowSince) qLowSince = Date.now();
             var misFor = Date.now() - qLowSince;
-            if(misFor > 12000 && Date.now() - lastQHard > 20000 && qHardTries < 6){
+            if(misFor > 10000 && Date.now() - lastQHard > 15000 && qHardTries < 8){
               qHardTries++; lastQHard = Date.now(); qLowSince = Date.now();
               hardReloadQ(eff);
-            } else if(misFor > 8000){
-              if(Date.now() - lastQAssert > 20000){ lastQAssert = Date.now(); qPendingPause = false; forceQ(eff); }
-            } else if(Date.now() - lastQAssert > 6000){
+            } else if(misFor > 6000){
+              if(Date.now() - lastQAssert > 15000){ lastQAssert = Date.now(); qPendingPause = false; forceQ(eff); }
+            } else if(Date.now() - lastQAssert > 5000){
               lastQAssert = Date.now(); applyQ();
             }
+            /* (2026-ط) لو بعد تبديلين تيار حقيقيين الجودة لسه تحت المطلوب →
+               السقف الحقيقي سرعة النت مش المشغل — بنقول الحقيقة مرة واحدة
+               كل 60 ثانية بدل ما نفضل نحاول على الفاضي والمستر مش فاهم السبب */
+            if(qHardTries >= 2 && Date.now() - lastQCapNotice > 60000){
+              lastQCapNotice = Date.now();
+              toast('النت دلوقتي واصل لـ' + qLabel(q) + ' بس — يوتيوب بيثبّت أعلى جودة سرعة النت تقدر عليها، وترجع تعلى لوحدها لما النت يتحسن');
+            }
           } else { qLowSince = 0; qHardTries = 0; }
-        }
-        /* الكابشن ممنوع — فحص دوري خفيف كل 5 ثواني: لو الترجمة اتفتحت من
-           أي سبب (إعداد حساب يوتيوب مثلاً) تتقفل فورًا قبل ما حد يشوف حاجة */
+        } else { qPostSwitchUntil = 0; }
+        /* الكابشن ممنوع — فحص دوري كل 5 ثواني: الشيل **غير مشروط** (2026-ط):
+           كابشن الحساب التلقائي (ASR) ساعات getOption بيرجّع مفيش track وهو
+           ظاهر على الشاشة — فالشيل بيبقى دايمًا مش مرتبط بفحص الـ track */
         var capNow = Math.floor(Date.now() / 5000);
         if(capNow !== lastCapCheck){
           lastCapCheck = capNow;
-          try{
-            var capTrack = playerApi.getOption ? playerApi.getOption('captions','track') : null;
-            if(capTrack){ playerApi.unloadModule && playerApi.unloadModule('captions'); }
-          }catch(e){}
+          try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
+          try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
         }
         if(!seekDragging){
           var se = document.getElementById('seek');
