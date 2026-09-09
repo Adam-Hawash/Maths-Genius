@@ -343,10 +343,20 @@ function ytIdOf(url: string) {
   return match ? match[1] : null
 }
 
+// اللينك المباشر لملف فيديو (MP4/WebM/M3U8/…) بيتشغل في المشغل العادي
+// (من غير أي يوتيوب + إعدادات جودة ظاهرة) — فبيتصنف file مش link خارجي
+function isDirectMediaUrl(url: string): boolean {
+  if (!url) return false
+  const s = String(url).trim()
+  if (!/^https?:\/\//i.test(s) && !s.startsWith('/')) return false
+  return /\.(mp4|webm|m3u8|mov|ogg|ogv)(\?.*)?$/i.test(s)
+}
+
 function videoKindOf(v: any): 'youtube' | 'file' | 'link' | 'none' {
-  if (v.kind) return v.kind
+  if (v.kind) return v.kind === 'link' && isDirectMediaUrl(v.url || '') ? 'file' : v.kind
   if (ytIdOf(v.url || '')) return 'youtube'
   if (v.filePath && /\.(mp4|webm|mov|avi)$/i.test(v.filePath)) return 'file'
+  if (v.url && isDirectMediaUrl(v.url)) return 'file'
   if (v.url) return 'link'
   return 'none'
 }
