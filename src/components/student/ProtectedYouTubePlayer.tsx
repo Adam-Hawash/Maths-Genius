@@ -195,7 +195,6 @@ export function ProtectedYouTubePlayer({
      على الفيديو نفسه هو الخصم الحقيقي لأي صورة/فيديو مسرب. */
   const [recMsg, setRecMsg] = useState('')
   const recTimerRef = useRef<any>(null)
-  const lastMetaTsRef = useRef(0)
   function warnRecording(msg: string) {
     setRecMsg(msg)
     if (recTimerRef.current) clearTimeout(recTimerRef.current)
@@ -204,13 +203,8 @@ export function ProtectedYouTubePlayer({
   useEffect(function () {
     function onKey(e: KeyboardEvent) {
       var k = (e.key || '').toLowerCase()
-      if (e.key === 'Meta' || e.key === 'OS' || e.keyCode === 91 || e.keyCode === 92) lastMetaTsRef.current = Date.now()
-      var metaPressed = !!(e.metaKey || e.key === 'OS' || e.key === 'Meta' || e.keyCode === 91 || e.keyCode === 92 || Date.now() - lastMetaTsRef.current < 3000)
-      if (metaPressed && e.shiftKey && (k === 'r' || k === 's')) {
-        e.preventDefault()
-        warnRecording('🛡️ الخاصية دي ممنوعة')
-        return
-      }
+      /* (تعديل 2026-ك) Win/⌘ + Shift + R/S مش بيتمنعوا — بقرار المستر
+         ("دول ما تمنعوش") — اختصارات نظام التشغيل ومفيش موقع يمنعها */
       /* Ctrl + Shift + R / S (طلب المستر حرفيًا 2026-ح — إعادة تحميل عنيدة /
          حفظ الصفحة / أداة القص في متصفحات كتير) */
       if (e.ctrlKey && e.shiftKey && (k === 'r' || k === 's')) {
