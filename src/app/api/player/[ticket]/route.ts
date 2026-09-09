@@ -263,65 +263,19 @@ const PLAYER_PAGE = `<!doctype html>
   #wrap{position:relative;width:100%;max-width:100vw;background:#000;overflow:hidden}
   #wrap.fs{width:100vw;height:100vh;max-width:none}
   #yt,#fileVid{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
-  /* ===== الووترمارك (المواصفات الجديدة 2026-ح — طلب المستر الحرفي) =====
-     • **4 ووترمارك صغيرة ثابتة** ظاهرة على طول:
-       واحدة فوق في النص + اتنين في نص الفيديو (يمين وشمال)
-       + واحدة تحت خالص في نص الفيديو
-     • الووترمارك الكبيرة الشفافة في النص: **بتظهر 10 ثواني وبتختفي 20 ثانية**
-       (دورة 30 ثانية بتكرر لوحدها — keyframes wmBlink30) */
+  /* ===== الووترمارك (المواصفات الجديدة 2026-و5 — طلب المستر الحرفي:
+     «ووتر مارك سودة تحت خالص ناحية اليمين — مستطيل صغير مش كبير قوي») =====
+     • مستطيل أسود صغير واحد بس — تحت خالص ناحية اليمين — ظاهر على طول
+     • فيه الاسم والرقم سطر واحد — والكروت المتفرقة والووترمارك الكبيرة اتشالوا */
   .wm{position:absolute;inset:0;z-index:40;pointer-events:none;user-select:none;overflow:hidden}
-  @keyframes wmBlink30{0%{opacity:0}1.5%{opacity:var(--wmo,.5)}31.5%{opacity:var(--wmo,.5)}33.5%{opacity:0}98.5%{opacity:0}100%{opacity:var(--wmo,.5)}}
-  /* الووترمارك الكبير في النص — سطرين: الاسم الثنائي + الرقم تحته
-     **بتظهر 10 ثواني وبتختفي 20 ثانية** (دورة 30 ثانية) */
-  #wmBig{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:41;direction:rtl;
-    text-align:center;max-width:94%;--wmo:.5;opacity:0;
-    animation:wmBlink30 30s linear infinite;
-    font-weight:900;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
-    font-size:clamp(20px,5.6vw,72px);line-height:1.25;
-    unicode-bidi:plaintext;letter-spacing:0}
-  #wmBig .b1{display:block;color:rgba(0,0,0,.10);white-space:nowrap;
-    -webkit-text-stroke:1.3px rgba(0,0,0,.42);paint-order:stroke fill;
-    text-shadow:0 0 16px rgba(255,255,255,.16)}
-  /* الرقم تحت الاسم في سطر لوحده — أصغر بس واضح ومقروء (لازم الرقم يظهر) */
-  #wmBig .b2{display:block;font-size:.5em;direction:ltr;unicode-bidi:plaintext;
-    margin-top:.14em;letter-spacing:0;white-space:nowrap;color:rgba(0,0,0,.10);
-    -webkit-text-stroke:1px rgba(0,0,0,.40);paint-order:stroke fill;
-    text-shadow:0 0 12px rgba(255,255,255,.16)}
-  /* ===== الكروت الثابتة (تعديل 2026-ز بطلب المستر) =====
-     • كارت جديد فوق الشمال: **عريض بس مش طويل** — بيغطي علامة القناة
-       (عنوان يوتيوب/اسم القناة) اللي بتظهر فوق الشمال
-     • كروت نص اليمين والشمال: **أصغر بكتير** — شكل ووترمارك هادي مش كروت كبيرة */
-  /* 0) فوق الشمال — عريض قصير بيغطي علامة القناة (طلب المستر 2026-ز) */
-  .wmCardTL{position:absolute;z-index:47;top:2.6%;left:1.8%}
-  .wmCardTL .in{display:flex;align-items:center;justify-content:center;gap:9px;min-width:min(52%,560px);max-width:82%;
-    background:rgba(0,0,0,.82);border:1px solid rgba(255,255,255,.26);color:#fff;border-radius:10px;
-    padding:5px 14px;direction:rtl;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.45)}
-  .wmCardTL .nm{font-size:clamp(10px,1.25vw,14px);font-weight:800;unicode-bidi:plaintext;letter-spacing:0;
-    text-shadow:0 1px 2px rgba(0,0,0,.8);white-space:nowrap}
-  .wmCardTL .sep{opacity:.6;font-size:clamp(9px,1vw,12px)}
-  .wmCardTL .ph{font-size:clamp(9px,1.05vw,12px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.9;white-space:nowrap}
-  /* 1) فوق في النص */
-  .wmCardTC{position:absolute;z-index:46;top:2.8%;left:50%;transform:translateX(-50%)}
-  /* 2) نص الفيديو على اليمين — **مصغّرة** (2026-ز) */
-  .wmCardMR{position:absolute;z-index:46;top:50%;right:1.8%;transform:translateY(-50%);opacity:.88}
-  /* 3) نص الفيديو على الشمال — **مصغّرة** (2026-ز) */
-  .wmCardML{position:absolute;z-index:46;top:50%;left:1.8%;transform:translateY(-50%);opacity:.88}
-  /* 4) تحت خالص في النص — **بقى كارت هادي صغير** (2026-ط2 — طلب المستر:
-     «خفي اللي تحت ده، شكله مش لطيف») — نفس شكل الكروت الجانبية المصغرة */
-  .wmCardBC{position:absolute;z-index:46;bottom:64px;left:50%;transform:translateX(-50%);opacity:.8}
-  .wmCardTC .in{display:inline-block;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.28);
-    color:#fff;border-radius:14px;padding:7px 18px;text-align:center;direction:rtl;
-    box-shadow:0 8px 26px rgba(0,0,0,.55)}
-  /* كروت اليمين/الشمال/تحت المصغّرة — شكل ووترمارك صغير شفاف (2026-ز/ط2) */
-  .wmCardMR .in,.wmCardML .in,.wmCardBC .in{display:inline-block;background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.16);
-    color:rgba(255,255,255,.92);border-radius:999px;padding:2px 10px;text-align:center;direction:rtl;
-    box-shadow:none}
-  .wmCardTC .nm{display:block;font-size:clamp(11px,1.5vw,15px);font-weight:800;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap;
-    text-shadow:0 1px 2px rgba(0,0,0,.8)}
-  .wmCardTC .ph{display:block;font-size:clamp(9.5px,1.2vw,12px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.85;margin-top:2px}
-  .wmCardMR .nm,.wmCardML .nm,.wmCardBC .nm{display:block;font-size:clamp(8px,0.95vw,11px);font-weight:700;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap;
-    text-shadow:0 1px 2px rgba(0,0,0,.8)}
-  .wmCardMR .ph,.wmCardML .ph,.wmCardBC .ph{display:block;font-size:clamp(7px,0.8vw,9.5px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.85;margin-top:1px}
+  /* المستطيل الأسود الصغير — تحت خالص ناحية اليمين (z-index 46 → تحت
+     mgBar (60) فالشريط بيتغطى عليه لما يظهر، وبيبان أول ما الشريط يختفي) */
+  .wmCardBR{position:absolute;z-index:46;bottom:12px;right:12px}
+  .wmCardBR .in{display:inline-flex;align-items:center;gap:7px;background:rgba(0,0,0,.84);
+    border-radius:8px;padding:5px 11px;direction:rtl;white-space:nowrap}
+  .wmCardBR .nm{font-size:clamp(10px,1.15vw,12.5px);font-weight:800;color:#fff;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap}
+  .wmCardBR .sep{opacity:.55;font-size:clamp(9px,1vw,11px);color:#fff}
+  .wmCardBR .ph{font-size:clamp(9px,1.05vw,11.5px);font-weight:700;color:#fff;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.92;white-space:nowrap}
   /* درع فوق كامل (2026-ط2 — طلب المستر: «اعمل blur على كل حاجة،
      وغطّي اسم القناة اللي فوق بالكامل — علامة سودة أو كلمة Math Genius —
      أي حاجة بس تكون مغطية»): شريط داكن + بلور بعرض الشاشة كلها، ثابت
@@ -457,59 +411,26 @@ function deobfuscate(b64, key){
   }catch(e){ return ''; }
 }
 
-/* ===== الووترمارك (المواصفات الجديدة 2026-ح — طلب المستر الحرفي) =====
-   • **4 كروت ثابتة**: فوق في النص + نص الفيديو يمين وشمال + تحت خالص في النص
-   • الووترمارك الكبيرة الشفافة في النص: بتظهر **10 ثواني** وبتختفي **20 ثانية**
-     (دورة 30 ثانية — الـ keyframes wmBlink30 في الـ CSS فوق)
-   • الاسم من غير قص أي حرف — ممنوع letter-spacing
-     وpaint-order:stroke عشان الحواف السودة متاكلش الحروف */
+/* ===== الووترمارك (المواصفات الجديدة 2026-و5 — طلب المستر الحرفي:
+   «ووتر مارك سودة تحت خالص ناحية اليمين — مستطيل صغير مش كبير قوي») =====
+   • مستطيل أسود صغير واحد تحت يمين فيه الاسم والرقم — ظاهر على طول
+   • الووترمارك الكبيرة اللي في النص + الكروت المتفرقة اتمسحوا كلهم بطلبه */
 var wmName = String(CFG.wm.name || '').trim();
 var wmPhone = String(CFG.wm.phone || '').trim();
-/* الاسم الثنائي: أول كلمتين بس — سطر واحد في النص بدل الاسم كله */
-function wmShortName(){
-  var p = wmName.split(/\\s+/).filter(Boolean);
-  return p.slice(0, 2).join(' ');
-}
-function wmCardHtml(){
-  return '<div class="in"><span class="nm">' + esc(wmName || wmPhone) + '</span>' + ((wmName && wmPhone) ? '<span class="ph">' + esc(wmPhone) + '</span>' : '') + '</div>';
-}
 function buildWm(){
   if(!CFG.wm.enabled) return;
   var old = document.getElementById('wm');
   if(old) old.parentNode.removeChild(old);
   var layer = document.createElement('div');
   layer.id = 'wm'; layer.className = 'wm';
-  /* 1) الووترمارك الكبيرة في النص — سطرين: الاسم الثنائي والرقم تحته —
-        بتظهر 10 ثواني وبتختفي 20 ثانية (دورة 30 ثانية متكررة) */
-  var big1 = wmShortName() || wmPhone;
-  if(big1){
-    var big = document.createElement('div');
-    big.id = 'wmBig';
-    var nameLine = '<span class="b1">' + esc(big1) + '</span>';
-    /* الرقم تحت الاسم في سطر لوحده — لازم يبان زي ما المستر طلب */
-    var numLine = (wmName && wmPhone) ? '<span class="b2">' + esc(wmPhone) + '</span>' : '';
-    big.innerHTML = nameLine + numLine;
-    var wmo = Math.min(0.6, Math.max(0.3, (Number(CFG.wm.opacity) || 0.55) * 0.85));
-    big.style.setProperty('--wmo', String(wmo));
-    /* الدورة (10 ثواني ظاهرة / 20 مخفية) بتشتغل **وقت التشغيل بس** —
-       بتبدأ واقفة مع الفيديو وأول تشغيل بتكمل (طلب المستر 2026-ل) */
-    big.style.animationPlayState = 'paused';
-    layer.appendChild(big);
-  }
-  /* 2) الكروت الأربعة الثابتة (طلب المستر: واحدة فوق في النص، اتنين في النص
-        يمين وشمال، وواحدة تحت خالص في النص) — ظاهرة على طول */
+  /* المستطيل الأسود الصغير — تحت خالص ناحية اليمين (2026-و5):
+     سطر واحد (الاسم • الرقم) — ظاهر على طول */
   if(wmName || wmPhone){
-    var cardHtml = wmCardHtml();
-    /* فوق الشمال — عريض قصير، سطر واحد (الاسم • الرقم) — بيغطي علامة
-       القناة اللي بتظهر فوق الشمال (طلب المستر 2026-ز) */
-    var tl = document.createElement('div'); tl.className = 'wmCardTL';
-    tl.innerHTML = '<div class="in"><span class="nm">' + esc(wmName || wmPhone) + '</span>' +
+    var br = document.createElement('div');
+    br.className = 'wmCardBR';
+    br.innerHTML = '<div class="in"><span class="nm">' + esc(wmName || wmPhone) + '</span>' +
       ((wmName && wmPhone) ? '<span class="sep">•</span><span class="ph">' + esc(wmPhone) + '</span>' : '') + '</div>';
-    layer.appendChild(tl);
-    var tc = document.createElement('div'); tc.className = 'wmCardTC'; tc.innerHTML = cardHtml; layer.appendChild(tc);
-    var mr = document.createElement('div'); mr.className = 'wmCardMR'; mr.innerHTML = cardHtml; layer.appendChild(mr);
-    var ml = document.createElement('div'); ml.className = 'wmCardML'; ml.innerHTML = cardHtml; layer.appendChild(ml);
-    var bc = document.createElement('div'); bc.className = 'wmCardBC'; bc.innerHTML = cardHtml; layer.appendChild(bc);
+    layer.appendChild(br);
   }
   wrap.appendChild(layer);
 }
@@ -950,7 +871,8 @@ function startWithWatchdog(){
 function ytState(){ try{ return playerApi && playerApi.getPlayerState ? playerApi.getPlayerState() : -1; }catch(e){ return -1; } }
 /* دورة الووترمارك الكبيرة (10 ظاهرة / 20 مخفية) بتشتغل وقت التشغيل بس —
    عند الإيقاف بتتوقف مؤقتًا ومتكملش (طلب المستر 2026-ل) */
-function wmRun(onoff){ try{ var w=document.getElementById('wmBig'); if(w) w.style.animationPlayState = onoff ? 'running' : 'paused'; }catch(e){} }
+/* (2026-و5) wmRun اتنست — الووترمارك الكبيرة اتمسحت بطلب المستر (بقى مستطيل صغير ثابت تحت يمين) */
+function wmRun(onoff){ /* no-op */ }
 
 /* ===== إخفاء شريط التحكم تلقائيًا (2026-و3 — طلب المستر الحرفي:
    «الشريط اللي تحت عاوزها تختفي أول ما أفتح الفيديو عادي، ولما أوقفه تظهر،
