@@ -34,15 +34,18 @@
 //     (التشغيل/الإيقاف بدوسة على الفيديو نفسه، ومفيش كتم ولا وقت ولا براند).
 //     **غطاء capLid السفلي اتشال نهائيًا (2026-و2)** — «من غير ما الفيديو
 //     يتقص عشان تقصص لي تحت برضه» — الفيديو دلوقتي كامل 100% لآخر بكسل.
-//  7-ب) الجودة بعد قفل الكنترولز (تحديث 2026-و4 — طلب المستر الحرفي:
-//     «أنا عاوزها أقل شيء 720... الفيديو ثابت على 360 وده شيء ضعيف جداً.
-//     لو هنعرف نتحكم بيها خليها عادية»): **أرضية جودة 720p** —
-//     setPlaybackQualityRange('hd720','highres') عند كل تشغيل وتغير جودة
-//     ودوريًا + حارس يعيد تحميل التيار بـ hd720 لو واقف تحت 720 (3 محاولات
-//     كحد أقصى) — لو النت يسمح بأعلى من 720 بياخد أعلى («خليها عادية»)،
-//     والمحصلة مش هتثبت على 360 تاني. ويوتيوب لسه بيقدر يتجاهل — ساعتها
-//     **الحل الجذري الوحيد لجودة مضمونة = ملف فيديو مباشر (مش يوتيوب)** —
-//     أي لينك مباشر بيتشغل بمشغلنا النظيف والجودة = جودة الملف نفسه.
+//  7-ب) الجودة بعد قفل الكنترولز (تحديث 2026-و5 — طلب المستر الحرفي:
+//     «خلي الجودة مقبولة لـ 480 تكون هي دي الجودة وأنا أقدر أغيرها
+//     والتغيير يكون بيحصل بجد»): **أرضية جودة 480p** —
+//     setPlaybackQualityRange('large','highres') عند كل تشغيل وتغير جودة
+//     ودوريًا + حارس يعيد تحميل التيار بـ large لو واقف تحت 480 (3 محاولات
+//     كحد أقصى) — لو النت يسمح بأعلى بياخد أعلى، والمحصلة مش هتثبت على 360.
+//     **اختيار الطالب من ⚙ بقى بيتأكد بجد (ytVerifyQuality)**: متحقق دوري
+//     لو يوتيوب ماثبتش المستوى المطلوب → إعادة طلب (2 مرة كحد أقصى)
+//     وبعدها رسالة صادقة بالمستوى اللي يوتيوب ثبتته فعلًا. ويوتيوب لسه
+//     بيقدر يتجاهل (مفيش ضمان رسمي من 2023) — **الجودة المضمونة 100% =
+//     ملف فيديو مباشر (مش يوتيوب)** — أي لينك مباشر بيتشغل بمشغلنا
+//     النظيف والجودة = جودة الملف نفسه.
 //     **ميزة «إضافة فيديو من كود HTML» اتلغت نهائيًا (2026-و4)** بطلب
 //     المستر نفسه: «لما باجي أضيف كود الـ HTML بلاقي جايبلي حاجات
 //     الـ YouTube، لا.. فأنا عاوزك تلغي» — راجعت الكود كله (القايمة في
@@ -928,7 +931,7 @@ function startWithWatchdog(){
       /* الضربة القوية: loadVideoById بيحمّل التيار من الأول وبيشتغل فورًا —
          أقوى بكتير من playVideo في المتصفحات العنيدة */
       var cur = 0; try{ cur = playerApi.getCurrentTime() || 0; }catch(e){}
-      try{ playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur)), 'hd720'); }catch(e){}
+      try{ playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur)), 'large'); }catch(e){}
     } else if(attempts === 5){
       try{ playerApi.mute(); muteFallback = true; showUnmuteBtn(); playerApi.playVideo(); }catch(e){}
     } else if(attempts >= 7){
@@ -1118,23 +1121,24 @@ function buildMgBar(){
     trackWrap.addEventListener('pointercancel', function(){ mgSeeking = false; });
   }
 }
-/* ===== أرضية الجودة 720p (2026-و4 — طلب المستر الحرفي: «أنا عاوزها أقل
-   شيء 720... الفيديو ثابت على 360 وده شيء ضعيف جداً... لو هنعرف نتحكم
-   بيها خليها عادية») — نظام من طبقتين:
-   1) أرضية دائمة: setPlaybackQualityRange('hd720','highres') عند كل تشغيل
-      وكل تغير جودة ودوريًا — دي أقرب باب سبه يوتيوب مفتوح لرفع أقل حد
-      للتيار (يعني لو النت يسمح بأعلى من 720 ياخد أعلى — لو مش يسمح
-      بـ 720 نفسها بيرجع لأقرب مستوى ممكن فوق 360).
-   2) حارس دوري: لو التيار مع كده واقف تحت 720 (tiny/small/medium/large)
-      → إعادة تحميل التيار من نفس الثانية بـ hd720 — محاولة محدودة
+/* ===== أرضية الجودة 480p (2026-و5 — طلب المستر الحرفي: «خلي الجودة
+   مقبولة لـ 480 تكون هي دي الجودة وأنا أقدر أغيرها والتغيير يكون بيحصل
+   بجد») — نظام من طبقتين:
+   1) أرضية دائمة: setPlaybackQualityRange('large','highres') عند كل تشغيل
+      وكل تغير جودة ودوريًا — أقرب باب سبه يوتيوب مفتوح لرفع أقل حد للتيار
+      (لو النت يسمح بأعلى من 480 ياخد أعلى — لو مش يسمح بـ 480 نفسها
+      بيرجع لأقرب مستوى ممكن فوق 360).
+   2) حارس دوري: لو التيار مع كده واقف تحت 480 (tiny/small/medium)
+      → إعادة تحميل التيار من نفس الثانية بـ large — محاولة محدودة
       (3 مرات بفاصل 12 ثانية) عشان ميقعدش يعيد التحميل على طول.
-   لو الطالب اختار مستوى بنفسه من قايمة ⚙ → احترام اختياره ومفيش
-   أرضية (اختياره صريح). لو يوتيوب تجاهل كل ده — مفيش أي باب رسمي
-   تاني: دي أقصى اللي الـ API بيسمح بيه من 2023 */
+   لو الطالب اختار مستوى بنفسه من قايمة ⚙ → مفيش أرضية، وبدلها
+   ytVerifyQuality بتتحقق كل شوية إن يوتيوب ثبت المستوى المطلوب بجد —
+   لو لأ → إعادة طلب (2 مرة كحد أقصى) وبعدها رسالة صادقة بالمستوى
+   الفعلي. يوتيوب بيفضل يقدر يتجاهل — أقصى الـ API بيسمح بيه من 2023 */
 var qFloorTries = 0, qFloorLast = 0;
 function ytApplyFloor(){
   if(fallbackActive || ytQWanted) return;
-  try{ if(playerApi && playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange('hd720','highres'); }catch(e){}
+  try{ if(playerApi && playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange('large','highres'); }catch(e){}
 }
 function ytFloorGuard(){
   if(fallbackActive || ytQWanted || !playerApi || !ytIdCached) return;
@@ -1143,12 +1147,39 @@ function ytFloorGuard(){
   if(now - qFloorLast < 12000) return;
   var q = '';
   try{ q = String(playerApi.getPlaybackQuality() || ''); }catch(e){}
-  if(q !== 'tiny' && q !== 'small' && q !== 'medium' && q !== 'large') return;
+  if(q !== 'tiny' && q !== 'small' && q !== 'medium') return;
   qFloorTries++; qFloorLast = now;
   try{
     var cur = 0; try{ cur = playerApi.getCurrentTime()||0; }catch(e){}
-    playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur)), 'hd720');
-    try{ if(playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange('hd720','highres'); }catch(e){}
+    playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur)), 'large');
+    try{ if(playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange('large','highres'); }catch(e){}
+  }catch(e){}
+}
+/* ===== متحقق اختيار الطالب (2026-و5 — طلب المستر: «والتغيير يكون بيحصل
+   بجد مش زي كل مرة تقولي اشتغل وهو مبيشتغلش»): لما الطالب يختار مستوى من
+   ⚙ بنبعت الطلب، وبعدها بنتحقق دوريًا إن يوتيوب ثبت نفس المستوى فعلًا.
+   لو ثبت غيره → إعادة الطلب من نفس الثانية (2 محاولات بفاصل 6 ثواني)،
+   ولو استمر → رسالة صادقة بالمستوى الحقيقي اللي يوتيوب مثبته */
+var qVerifyTries = 0, qVerifyLast = 0;
+function ytVerifyQuality(){
+  if(fallbackActive || !ytQWanted || !playerApi || !ytIdCached) return;
+  var st = 0; try{ st = playerApi.getPlayerState ? playerApi.getPlayerState() : 0; }catch(e){}
+  if(st !== 1 && st !== 3) return;
+  var q = ytCurQuality();
+  if(q === ytQWanted){ qVerifyTries = 0; return; }
+  var now = Date.now();
+  if(now - qVerifyLast < 6000) return;
+  qVerifyTries++; qVerifyLast = now;
+  if(qVerifyTries > 2){
+    qVerifyTries = 0;
+    toast('يوتيوب ثابت دلوقتي على ' + ytQName(q) + ' — المستوى المطلوب مش ثابت على سرعة النت الحالية');
+    return;
+  }
+  try{
+    var cur2 = 0; try{ cur2 = playerApi.getCurrentTime()||0; }catch(e){}
+    playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur2)), ytQWanted);
+    try{ if(playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange(ytQWanted, ytQWanted); }catch(e){}
+    try{ playerApi.playVideo(); }catch(e){}
   }catch(e){}
 }
 /* ===== ⚙ قايمة جودة يوتيوب (2026-و2 — طلب المستر الحرفي: «علامة الجودة
@@ -1191,7 +1222,7 @@ function ytRenderQMenu(){
     var q = sorted[i];
     html += '<div class="qi' + (ytQWanted === q ? ' on' : '') + '" data-q="' + q + '"><span>' + ytQName(q) + '</span><span class="ck">' + (ytQWanted === q ? '✓' : '') + '</span></div>';
   }
-  html += '<div class="qNote">الجودة بتُطلب تلقائيًا بـ 720p على الأقل — ويوتيوب بيرفعها أعلى لو النت يسمح. لو اخترت مستوى بنفسك هنطلبه برضه ويوتيوب بيأكد حسب سرعة النت</div>';
+  html += '<div class="qNote">الجودة بتُطلب تلقائيًا بـ 480p على الأقل — ويوتيوب بيرفعها أعلى لو النت يسمح. ولو اخترت مستوى بنفسك هنطلب ونتحقق إنه ثبت بجد</div>';
   m.innerHTML = html;
   var items = m.getElementsByClassName('qi');
   for(var j=0;j<items.length;j++){
@@ -1205,13 +1236,14 @@ function ytRenderQMenu(){
 }
 function ytSetQuality(q){
   ytQWanted = (q === 'auto') ? '' : q;
+  qVerifyTries = 0; qVerifyLast = 0;
   try{
     if(playerApi && playerApi.loadVideoById && ytIdCached){
       var cur = 0; try{ cur = playerApi.getCurrentTime()||0; }catch(e){}
       playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur)), ytQWanted || 'default');
       try{ if(playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange(ytQWanted || 'auto', ytQWanted || 'auto'); }catch(e){}
       try{ playerApi.playVideo(); }catch(e){}
-      toast('تم طلب جودة ' + (ytQWanted ? ytQName(ytQWanted) : 'تلقائي') + ' — يوتيوب بيأكد حسب سرعة النت');
+      toast('تم طلب جودة ' + (ytQWanted ? ytQName(ytQWanted) : 'تلقائي') + ' — وبنمتأكد إنها ثبتت بجد');
     } else {
       toast('الجودة تلقائية في الوضع ده');
     }
@@ -1309,7 +1341,7 @@ function buildPlayer(){
         layoutWrap();
       },
       onPlaybackQualityChange: function(){
-        /* أرضية 720p: أي تغير جودة من يوتيوب → بنعيد طلب الأرضية فورًا
+        /* أرضية 480p: أي تغير جودة من يوتيوب → بنعيد طلب الأرضية فورًا
            (لو الطالب مش مختار مستوى صريح) */
         ytApplyFloor();
         ytUpdateQLabel();
@@ -1331,7 +1363,7 @@ function buildPlayer(){
             killCaptions();
             /* قايمة الجودة: نجمع المستويات المتاحة من يوتيوب ونحدّث الزرار */
             ytCollectLevels();
-            /* أرضية 720p مع كل تشغيل — طلب المستر: «أقل شيء 720» */
+            /* أرضية 480p مع كل تشغيل — طلب المستر 2026-و5: «مقبولة لـ 480» */
             ytApplyFloor();
             /* دورة الووترمارك الكبيرة بتشتغل مع التشغيل */
             wmRun(true);
@@ -1392,11 +1424,13 @@ function buildPlayer(){
         reportProgress(cur, dur);
         mgUpdateProgress();
         ytUpdateQLabel();
-        /* أرضية 720p دورية: طلب الأرضية كل 5 ثواني + حارس إعادة التحميل
-           لو التيار لسه واقف تحت 720 (بحد أقصى 3 محاولات) */
+        /* أرضية 480p دورية: طلب الأرضية كل 5 ثواني + حارس إعادة التحميل
+           لو التيار لسه واقف تحت 480 (بحد أقصى 3 محاولات) + متحقق اختيار
+           الطالب (يتأكد إن المستوى اللي اختاره ثبت بجد) */
         var floorNow = Math.floor(Date.now() / 5000);
         if(floorNow !== lastFloorCheck){ lastFloorCheck = floorNow; ytApplyFloor(); }
         ytFloorGuard();
+        ytVerifyQuality();
         /* حارس النهاية: لو شاشة الاقتراحات هتظهر (ENDED ماتفوتش) → غطّي فورًا */
         if(ytState()===0){
           var eo3=document.getElementById('endOv');
