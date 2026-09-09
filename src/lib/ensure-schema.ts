@@ -49,6 +49,8 @@ var SCHEMA_COLUMNS = [
   ['Video', 'price', 'REAL', 'DEFAULT 0'],
   ['Video', 'fileType', 'TEXT', "DEFAULT ''"],
   ['Video', 'thumbnail', 'TEXT', "DEFAULT ''"],
+  // كود HTML (embed) — مشغل بواجهة الموقع الأصلي بجودة حقيقية (طلب المستر 2026-و3)
+  ['Video', 'nativeEmbed', 'INTEGER', 'NOT NULL DEFAULT 0'],
   ['Homework', 'questions', 'TEXT', "DEFAULT ''"],
   ['Homework', 'answerKeyPath', 'TEXT', "DEFAULT ''"],
   ['Homework', 'answerKeyType', 'TEXT', "DEFAULT ''"],
