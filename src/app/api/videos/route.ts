@@ -14,17 +14,8 @@ import { isAdmin, getStudentAnyStatus, safeThumb, getYouTubeId, mediaIdFromPath 
 
 export const dynamic = 'force-dynamic'
 
-/* اللينك المباشر لملف فيديو (MP4/WebM/M3U8/…) بيتشغل في المشغل العادي
-   (من غير أي يوتيوب + إعدادات جودة ظاهرة) — فبيتصنف file مش link خارجي */
-function isDirectMedia(u: string): boolean {
-  if (!u) return false
-  const s = String(u).trim()
-  if (!/^https?:\/\//i.test(s) && !s.startsWith('/')) return false
-  return /\.(mp4|webm|m3u8|mov|ogg|ogv)(\?.*)?$/i.test(s)
-}
-
 function stripVideo(v: { id: string; thumbnail: string; url: string; filePath: string; [k: string]: unknown }) {
-  const kind = getYouTubeId(v.url || '') ? 'youtube' : mediaIdFromPath(v.filePath || '') ? 'file' : isDirectMedia(v.url) ? 'file' : v.url ? 'link' : 'none'
+  const kind = getYouTubeId(v.url || '') ? 'youtube' : mediaIdFromPath(v.filePath || '') ? 'file' : v.url ? 'link' : 'none'
   return { ...v, url: '', filePath: '', kind, thumb: safeThumb(v) }
 }
 

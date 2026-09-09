@@ -80,23 +80,10 @@ function obfuscate(plain: string): { k: string; b: string } {
 function pageError(msg: string, status: number) {
   return new NextResponse(
     '<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<style>body{margin:0;background:#0b0b0f;color:#e5e7eb;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box}p{font-size:15px;line-height:1.9;max-width:440px}</style></head>' +
+    '<style>body{margin:0;background:#0b0b0f;color:#e5e7eb;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;box-sizing:border-box}p{font-size:15px;line-height:1.9;max-width:420px}</style></head>' +
     '<body><p>' + htmlEscape(msg) + '</p></body></html>',
     { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store, private' } }
   )
-}
-
-/* (المشغل العادي — قرار المستر 2026-و: «خليه مشغل عادي من غير أي يوتيوب»)
-   اللينك المباشر لملف فيديو (MP4/WebM/MOV/OGG) أو بث HLS (M3U8)
-   بيتشغّل في مشغلنا العادي بالكامل — مفيش يوتيوب أصلًا.
-   ملاحظة للمستر: فيديو يوتيوب نفسه مستحيل يتشغل من غير يوتيوب
-   (الملف نفسه على سيرفرات يوتيوب) — اللينكات المباشرة/الملفات
-   المرفوعة هي اللي بتفتح المشغل العادي ده */
-function isDirectMediaUrl(u: string): boolean {
-  if (!u) return false
-  const s = String(u).trim()
-  if (!/^https?:\/\//i.test(s) && !s.startsWith('/')) return false
-  return /\.(mp4|webm|m3u8|mov|ogg|ogv)(\?.*)?$/i.test(s)
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ ticket: string }> }) {
@@ -133,7 +120,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       try { g = await db.galleryImage.findUnique({ where: { id: galId } }) } catch (e) {}
       if (!g || !(g as any).videoUrl) return pageError('الفيديو غير موجود.', 404)
       const gYt = getYouTubeId(g.videoUrl || '')
-      if (!gYt && !isDirectMediaUrl(g.videoUrl || '')) return pageError('الفيديو ده مفيهوش مصدر تشغيل صالح.', 415)
+      if (!gYt && !/\.(mp4|webm|mov|ogg)(\?|$)/i.test(g.videoUrl || '')) return pageError('الفيديو ده مفيهوش مصدر تشغيل صالح.', 415)
       var gCfg: Record<string, unknown> = {
         videoId: 'gal_' + galId,
         kind: gYt ? 'youtube' : 'file',
@@ -179,15 +166,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const ytId = getYouTubeId(video.url || '')
     const mediaId = mediaIdFromPath(video.filePath || '')
-    const directUrl = (!ytId && !mediaId && isDirectMediaUrl(video.url || '')) ? String(video.url).trim() : ''
     const videoIdEsc = htmlEscape(video.id)
     const titleEsc = htmlEscape(video.title || '')
 
-    // مفيش طريقة تشغيل معروفة → صفحة خطأ (بالشرح: اللينك المباشر لازم ينتهي
-    // بامتداد فيديو — MP4/M3U8/WebM — أو يرفع الملف من لوحة التحكم)
-    if (!ytId && !mediaId && !directUrl) {
-      return pageError('الفيديو ده مفيهوش مصدر تشغيل صالح — اللينك المباشر لازم ينتهي بـ mp4 أو m3u8 أو webm، أو ارفع ملف الفيديو نفسه من لوحة التحكم.', 415)
-    }
+    // مفيش طريقة تشغيل معروفة → صفحة خطأ
+    if (!ytId && !mediaId) return pageError('الفيديو ده مفيهوش مصدر تشغيل صالح.', 415)
 
     // إعدادات المشغل كـ JSON آمن جوه script
     const cfg: Record<string, unknown> = {
@@ -210,10 +193,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     } else if (mediaId) {
       // توكن موقّع ساعتين مرتبط بالطالب — مكانش هيظهر غير جوه صفحة المشغل
       cfg.fileUrl = '/api/files/' + mediaId + '?token=' + signVideoToken(mediaId, row.studentId || 'anon') + '&req=' + encodeURIComponent(row.studentId || 'anon')
-    } else if (directUrl) {
-      // (المشغل العادي) لينك فيديو مباشر من أي موقع — MP4/M3U8/WebM
-      // بيتشغل في مشغلنا العادي من غير أي يوتيوب + إعدادات جودة ظاهرة
-      cfg.fileUrl = directUrl
     }
     const cfgJson = JSON.stringify(cfg).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')
 
@@ -364,30 +343,6 @@ const PLAYER_PAGE = `<!doctype html>
   #mgBrand{flex:0 0 auto;color:rgba(255,255,255,.92);font-weight:900;font-size:12px;letter-spacing:.6px;
     direction:ltr;font-family:system-ui,sans-serif;margin-right:8px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
   @media(max-width:420px){#mgBrand{display:none}}
-  /* ===== (المشغل العادي 2026-و) الوقت + زرار إعدادات الجودة ⚙ + القايمة =====
-     طلب المستر الحرفي: «يكون فيه إعدادات بتاعت الجودة.. تعرف حاجات تكون شايفها» */
-  #mgTime{flex:0 0 auto;font-size:11.5px;font-weight:700;color:rgba(255,255,255,.85);
-    direction:ltr;unicode-bidi:plaintext;letter-spacing:.2px;padding:0 6px;white-space:nowrap;
-    font-variant-numeric:tabular-nums;text-shadow:0 1px 2px rgba(0,0,0,.6)}
-  @media(max-width:620px){#mgTime{display:none}}
-  #mgBar .mBtnWide{flex:0 0 auto;min-width:44px;height:44px;border:0;border-radius:10px;
-    background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;
-    gap:6px;padding:0 10px;cursor:pointer}
-  #mgBar .mBtnWide:hover{background:rgba(255,255,255,.12)}
-  #mgQLabel{font-size:11px;font-weight:800;color:rgba(255,255,255,.9);letter-spacing:.3px;white-space:nowrap}
-  @media(max-width:520px){#mgQLabel{display:none}}
-  #mgQMenu{position:absolute;bottom:68px;left:12px;z-index:72;min-width:170px;display:none;
-    background:#0b0b12;border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:6px;
-    box-shadow:0 14px 40px rgba(0,0,0,.6);direction:rtl}
-  #mgQMenu.open{display:block}
-  #mgQMenu .qHead{padding:5px 12px 7px;color:rgba(255,255,255,.55);font-size:11px;font-weight:800;
-    border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:4px}
-  #mgQMenu .qi{padding:9px 12px;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;
-    display:flex;align-items:center;justify-content:space-between;gap:12px;white-space:nowrap}
-  #mgQMenu .qi:hover{background:rgba(255,255,255,.13)}
-  #mgQMenu .qi.on{background:rgba(255,255,255,.08)}
-  #mgQMenu .qi .ck{font-size:14px;font-weight:900}
-  #mgQMenu .qNote{padding:7px 12px 5px;color:rgba(255,255,255,.55);font-size:10.5px;line-height:1.7;border-top:1px solid rgba(255,255,255,.1);margin-top:4px}
   /* غطاء الكابشن capLid (2026-ؤ + التطوير النهائي 2026-ي):
      الشريط بتاعنا بيغطي من 0 لـ 60px، والغطاء ده بيكمل فوقه **بعرض الشاشة
      كلها** وبارتفاع نسبي (15% — بيكبر لوحده جوه ملء الشاشة عشان الكابشن
@@ -1248,266 +1203,46 @@ function buildPlayer(){
   }
 }
 
-/* ============================================================
-   مشغّل الملفات — **المشغل العادي** (قرار المستر 2026-و)
-   «غيرلي المشغل بتاع الفيديوهات.. خليه مشغل عادي من غير أي يوتيوب
-   ولا أي حاجة تبقى من يوتيوب.. يكون فيه إعدادات بتاعت الجودة..
-   تعرف حاجات تكون شايفها»
-   ============================================================
-   • شريط تحكم عادي كامل من عندنا: تشغيل/إيقاف + شريط تقدم بالسحب
-     + **الوقت (الحالي / المدة)** + كتم + **⚙ إعدادات الجودة** +
-     ملء شاشة + Math Genius — نفس شكل الشريط المعتمد
-   • إعدادات الجودة شغالة بجد:
-     - بث HLS (.m3u8) → قايمة حقيقية من ملف البث (تلقائي + 1080p/720p/480p…)
-       والتبديل فوري من غير إعادة تحميل (hls.js)
-     - ملف MP4 مباشر → بيتشغّل بجودته الأصلية ثابتة والقايمة تعرضها
-       — ده الحل الجذري لمشكلة «مختار 1080 وبيثبت على 360»:
-       الملف الأصلي 1080 بيفضل 1080 — مفيش حد بيقلله خالص
-   • الكابشن ممنوع زي ما هو: إتلاف أي tracks مدمجة + مفيش زرار CC أصلًا
-   • كل الحمايات شغالة: ووترمارك + دروع + منع كليك يمين/مفاتيح + تذاكر */
-var fileApi = null, hlsApi = null, hlsLevels = [], hlsAuto = true, hlsCurIdx = -1;
-var fileQualityLabel = '';
-function fmtTime(s){
-  s = Math.max(0, Math.floor(Number(s) || 0));
-  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
-  var ss = (x < 10 ? '0' : '') + x;
-  return h ? (h + ':' + (m < 10 ? '0' : '') + m + ':' + ss) : (m + ':' + ss);
-}
-function hLabel(h){
-  h = Number(h) || 0;
-  var names = {2160:'4K', 1440:'1440p', 1080:'1080p', 720:'720p', 480:'480p', 360:'360p', 240:'240p', 144:'144p'};
-  return names[h] || (h ? (h + 'p') : 'أصلية');
-}
-/* رسايل أخطاء المشغل العادي — شاشة واضحة + زرار إعادة */
-function fileError(msg){
-  var ov = document.getElementById('fileErrOv');
-  if(!ov){
-    ov = document.createElement('div'); ov.id = 'fileErrOv';
-    ov.style.cssText = 'position:absolute;inset:0;z-index:75;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(2,2,8,.92)';
-    ov.innerHTML = '<p style="color:#fff;font-size:13.5px;font-weight:700;max-width:82%;text-align:center;line-height:1.95;margin:0;direction:rtl"></p>' +
-      '<button type="button" style="padding:10px 22px;border-radius:10px;border:0;background:#fff;color:#111;font-weight:800;font-size:13px;cursor:pointer;font-family:system-ui,sans-serif">حاول تاني ↻</button>';
-    ov.getElementsByTagName('button')[0].addEventListener('click', function(){ try{ location.reload(); }catch(e){} });
-    wrap.appendChild(ov);
-  }
-  ov.style.display = 'flex';
-  try{ ov.getElementsByTagName('p')[0].textContent = msg; }catch(e){}
-}
-/* ===== قايمة الجودة ⚙ (ظاهرة وشغالة — الطلب الأساسي للمستر) ===== */
-function qMenuEl(){ return document.getElementById('mgQMenu'); }
-function closeQMenu(){ var m = qMenuEl(); if(m) m.classList.remove('open'); }
-function updateQLabel(){
-  var el = document.getElementById('mgQLabel'); if(!el) return;
-  if(hlsLevels.length){
-    if(hlsAuto){
-      var hh = (hlsCurIdx >= 0 && hlsLevels[hlsCurIdx]) ? hlsLevels[hlsCurIdx].h : 0;
-      el.textContent = hh ? ('تلقائي • ' + hLabel(hh)) : 'تلقائي';
-    } else {
-      el.textContent = hLabel((hlsLevels[hlsCurIdx] || {}).h);
-    }
-  } else {
-    el.textContent = fileQualityLabel || 'أصلية';
-  }
-}
-function renderQMenu(){
-  var m = qMenuEl(); if(!m) return;
-  var html = '<div class="qHead">إعدادات الجودة</div>';
-  if(hlsLevels.length){
-    html += '<div class="qi' + (hlsAuto ? ' on' : '') + '" data-lv="-1"><span>تلقائي' + (hlsAuto && hlsCurIdx >= 0 && hlsLevels[hlsCurIdx] ? (' (' + hLabel(hlsLevels[hlsCurIdx].h) + ')') : '') + '</span><span class="ck">' + (hlsAuto ? '✓' : '') + '</span></div>';
-    var sorted = hlsLevels.map(function(l, i){ return { h: l.h, i: i }; }).sort(function(a, b){ return (b.h || 0) - (a.h || 0); });
-    for(var i = 0; i < sorted.length; i++){
-      var L = sorted[i];
-      html += '<div class="qi' + (!hlsAuto && hlsCurIdx === L.i ? ' on' : '') + '" data-lv="' + L.i + '"><span>' + hLabel(L.h) + '</span><span class="ck">' + ((!hlsAuto && hlsCurIdx === L.i) ? '✓' : '') + '</span></div>';
-    }
-  } else {
-    html += '<div class="qi on"><span>' + esc(fileQualityLabel || 'الجودة الأصلية') + '</span><span class="ck">✓</span></div>';
-    html += '<div class="qNote">الملف بيتشغّل بجودته الأصلية ثابت — مفيش تقليل تلقائي خالص</div>';
-  }
-  m.innerHTML = html;
-  var items = m.getElementsByClassName('qi');
-  for(var j = 0; j < items.length; j++){
-    (function(item){
-      item.addEventListener('click', function(ev){
-        ev.preventDefault(); ev.stopPropagation();
-        var lv = parseInt(item.getAttribute('data-lv'), 10);
-        if(hlsApi && hlsLevels.length && !isNaN(lv)){
-          hlsAuto = (lv === -1);
-          try{ hlsApi.currentLevel = lv; }catch(e){}
-          if(!hlsAuto) hlsCurIdx = lv;
-          renderQMenu(); updateQLabel();
-        }
-        closeQMenu();
-      });
-    })(items[j]);
-  }
-}
-/* ===== بث HLS (.m3u8) — مستويات جودة حقيقية من ملف البث ===== */
-function setupHls(url){
-  function nativeHls(){ try{ return !!(fileApi && fileApi.canPlayType && fileApi.canPlayType('application/vnd.apple.mpegurl')); }catch(e){ return false; } }
-  function boot(){
-    var Hls = window.Hls;
-    if(!Hls || !Hls.isSupported || !Hls.isSupported()){
-      if(nativeHls()){ fileApi.src = url; return; }
-      fileError('المتصفح ده مش بيدعم بث HLS — جرب كروم أو بلغ الإدارة في قسم الشكاوى');
-      return;
-    }
-    try{
-      var hls = new Hls({ enableWorker: true });
-      hlsApi = hls;
-      hls.loadSource(url);
-      hls.attachMedia(fileApi);
-      hls.on(Hls.Events.MANIFEST_PARSED, function(ev, data){
-        try{
-          var ls = (data && data.levels) || [];
-          hlsLevels = [];
-          for(var i = 0; i < ls.length; i++){ hlsLevels.push({ h: ls[i].height || 0 }); }
-          hlsAuto = true; hlsCurIdx = -1;
-          renderQMenu(); updateQLabel();
-        }catch(e){}
-      });
-      hls.on(Hls.Events.LEVEL_SWITCHED, function(ev, data){
-        try{
-          if(data && typeof data.level === 'number'){
-            hlsCurIdx = data.level; updateQLabel();
-            var mm = qMenuEl(); if(mm && mm.classList.contains('open')) renderQMenu();
-          }
-        }catch(e){}
-      });
-      hls.on(Hls.Events.ERROR, function(ev, data){
-        try{
-          if(data && data.fatal){
-            if(data.type === Hls.ErrorTypes.NETWORK_ERROR){ hls.startLoad(); }
-            else if(data.type === Hls.ErrorTypes.MEDIA_ERROR){ hls.recoverMediaError(); }
-            else { fileError('مصدر البث مش متاح دلوقتي — اتأكد من النت وحاول تاني، ولو تكررت بلغ الإدارة في قسم الشكاوى'); }
-          }
-        }catch(e){}
-      });
-    }catch(e){ fileError('حصل خطأ في تشغيل البث — جرب تاني'); }
-  }
-  if(window.Hls){ boot(); return; }
-  var s = document.createElement('script');
-  s.src = '/hls.min.js';
-  s.onload = function(){ boot(); };
-  s.onerror = function(){
-    if(nativeHls()){ fileApi.src = url; return; }
-    fileError('مش قادرين نحمّل مشغل البث — اتأكد من النت وحاول تاني');
-  };
-  document.head.appendChild(s);
-}
-/* ===== تحديث التقدم + الوقت في شريط الملفات ===== */
-function fileUpdateProgress(){
-  var v = fileApi; if(!v) return;
-  var d = v.duration || 0;
-  var fl = document.getElementById('mgFill'), bf = document.getElementById('mgBuf'), tl = document.getElementById('mgTime');
-  if(fl && d) fl.style.width = Math.min(100, (v.currentTime / d) * 100) + '%';
-  if(bf && d){ try{ var b = v.buffered; var end = b.length ? b.end(b.length - 1) : 0; bf.style.width = Math.min(100, (end / d) * 100) + '%'; }catch(e){} }
-  if(tl) tl.textContent = fmtTime(v.currentTime) + ' / ' + (d ? fmtTime(d) : '…');
-}
-/* ===== بناء شريط التحكم العادي (نفس شكل الشريط المعتمد) ===== */
-function buildFileBar(){
-  if(document.getElementById('mgBar')) return;
-  var bar = document.createElement('div'); bar.id = 'mgBar';
-  var v = fileApi;
-  var play = document.createElement('button'); play.id = 'mgPlay'; play.type = 'button'; play.className = 'mBtn';
-  play.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); try{ if(v.paused){ v.play(); } else { v.pause(); } }catch(err){} });
-  var tw = document.createElement('div'); tw.id = 'mgTrackWrap';
-  tw.innerHTML = '<div id="mgTrack"><div id="mgBuf"></div><div id="mgFill"></div></div>';
-  var fSeeking = false;
-  function fSeekTo(clientX){
-    try{
-      var tr = document.getElementById('mgTrack'); if(!tr) return;
-      var r = tr.getBoundingClientRect(); if(!r.width) return;
-      var d = v.duration || 0; if(!d) return;
-      var frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
-      v.currentTime = frac * d;
-      var fl = document.getElementById('mgFill'); if(fl) fl.style.width = (frac * 100) + '%';
-    }catch(e){}
-  }
-  tw.addEventListener('pointerdown', function(e){ e.preventDefault(); fSeeking = true; try{ if(e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); }catch(err){} fSeekTo(e.clientX); });
-  tw.addEventListener('pointermove', function(e){ if(fSeeking) fSeekTo(e.clientX); });
-  tw.addEventListener('pointerup', function(){ fSeeking = false; });
-  tw.addEventListener('pointercancel', function(){ fSeeking = false; });
-  var time = document.createElement('span'); time.id = 'mgTime'; time.textContent = '0:00 / …';
-  var mute = document.createElement('button'); mute.id = 'mgMute'; mute.type = 'button'; mute.className = 'mBtn';
-  mute.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); try{ v.muted = !v.muted; setMuteIcon(v.muted); }catch(err){} });
-  /* ⚙ إعدادات الجودة — ظاهرة وشغالة (طلب المستر الحرفي) */
-  var gear = document.createElement('button'); gear.id = 'mgGear'; gear.type = 'button'; gear.className = 'mBtnWide';
-  gear.setAttribute('aria-label', 'إعدادات الجودة');
-  gear.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' +
-    '<span id="mgQLabel">…</span>';
-  gear.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); var m = qMenuEl(); if(m) m.classList.toggle('open'); });
-  var fsb = document.createElement('button'); fsb.type = 'button'; fsb.className = 'mBtn';
-  fsb.setAttribute('aria-label','ملء الشاشة');
-  fsb.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
-  fsb.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); toggleFs(); });
-  var brand = document.createElement('span'); brand.id = 'mgBrand'; brand.textContent = 'Math Genius';
-  bar.appendChild(play); bar.appendChild(tw); bar.appendChild(time); bar.appendChild(mute); bar.appendChild(gear); bar.appendChild(fsb); bar.appendChild(brand);
-  wrap.appendChild(bar);
-  /* قايمة الجودة (بتتملي لما المصدر يجهز) */
-  var qm = document.createElement('div'); qm.id = 'mgQMenu'; wrap.appendChild(qm);
-  /* قفل القايمة بأي دوسة بره القايمة والزرار */
-  document.addEventListener('click', function(e){
-    var m = qMenuEl(); if(!m || !m.classList.contains('open')) return;
-    var t = e.target;
-    if(t && (t.id === 'mgGear' || t.id === 'mgQLabel' || (t.closest && t.closest('#mgQMenu')))) return;
-    closeQMenu();
-  });
-  setPlayIcon(false); setMuteIcon(false);
-  /* ملحوظة: مفيش غطاء كابشن هنا — مشغل الملفات مفيهوش ترجمات أصلًا
-     (killTracks بتدمر أي tracks) فمفيش حاجة محتاجة تتغطى، والفيديو
-     يبان كامل 100% من غير أي شريط أسود زيادة */
-}
-function onFileMeta(){
-  try{
-    var v = fileApi; if(!v) return;
-    if(!fileQualityLabel){ fileQualityLabel = hLabel(v.videoHeight); }
-    renderQMenu(); updateQLabel(); fileUpdateProgress();
-  }catch(e){}
-}
+/* ===== مشغّل الملفات المرفوعة (توكن موقّع قصير العمر) ===== */
+var fileApi = null;
 function mountFile(){
   var v = document.createElement('video');
-  v.id = 'fileVid'; v.playsInline = true;
-  v.setAttribute('playsinline',''); v.setAttribute('webkit-playsinline','');
-  v.removeAttribute('controls');
-  v.setAttribute('disablePictureInPicture','');
-  v.setAttribute('disableRemotePlayback','');
-  v.preload = 'metadata';
-  /* الكابشن ممنوع خالص (قرار المستر 2026-ن): إتلاف أي ترجمات مدمجة
-     + ممنوع إضافة ترجمات جديدة + مفيش زرار CC أصلًا ومفيش أي طريق ليها */
+  v.id = 'fileVid'; v.controls = true; v.playsInline = true;
+  v.setAttribute('controlsList', 'nodownload noplaybackrate noremoteplayback nofullscreen');
+  v.setAttribute('disablePictureInPicture', '');
+  v.setAttribute('disableRemotePlayback', '');
+  v.src = CFG.fileUrl;
+  /* الكابشن ممنوع خالص في الملفات كمان (القرار النهائي 2026-ن):
+     أي ترجمات مدمجة في الملف بتتفعل OFF قسريًا — ولو track اتضاف بعد كده
+     بيتقفل لوحده — ومفيش زرار CC أصلًا ومفيش أي طريقة لتشغيلها */
   function killTracks(){
     try{ var tt = v.textTracks; for(var i=0;i<tt.length;i++){ tt[i].mode = 'disabled'; } }catch(e){}
+    /* (2026-ي) حذف عناصر track نفسها من الـ DOM — التعطيل لوحده كان بسيب
+       زرار CC في كنترولز الملف الأصلية يقدر الطالب يرجّع بيها الترجمة */
     try{ var trs = v.getElementsByTagName('track'); while(trs.length){ trs[0].parentNode.removeChild(trs[0]); } }catch(e){}
   }
   v.addEventListener('loadedmetadata', killTracks);
   try{ if(v.textTracks && v.textTracks.addEventListener) v.textTracks.addEventListener('addtrack', killTracks); }catch(e){}
-  if(CFG.resume > 5) v.addEventListener('loadedmetadata', function(){ try{ if(v.duration && CFG.resume < v.duration - 5) v.currentTime = CFG.resume; }catch(e){} });
-  v.addEventListener('loadedmetadata', onFileMeta);
+  if(CFG.resume > 5) v.addEventListener('loadedmetadata', function(){ try{ v.currentTime = CFG.resume; }catch(e){} });
   v.addEventListener('timeupdate', function(){
     lastCur = v.currentTime;
     if(Math.floor(v.currentTime) % 5 === 0 && v.currentTime > 0) reportProgress(v.currentTime, v.duration || 0);
   });
-  v.addEventListener('timeupdate', fileUpdateProgress);
-  v.addEventListener('progress', fileUpdateProgress);
-  v.addEventListener('durationchange', fileUpdateProgress);
-  /* دورة الووترمارك الكبيرة (10 ظاهرة / 20 مخفية) بتتبع التشغيل */
-  v.addEventListener('play', function(){ wmRun(true); setPlayIcon(true); });
-  v.addEventListener('pause', function(){ wmRun(false); setPlayIcon(false); });
-  v.addEventListener('ended', function(){
-    wmRun(false); setPlayIcon(false);
-    /* رجوع للبداية ووقوف — شكل نضيف من غير شاشة اقتراحات */
-    try{ v.currentTime = 0; v.pause(); }catch(e){}
-    reportEnded();
-  });
+  v.addEventListener('ended', function(){ reportEnded(); });
+  /* دورة الووترمارك الكبيرة (10 ظاهرة / 20 مخفية) بتتبع التشغيل في ملفات الفيديو كمان */
+  function wmRun(onoff){ try{ var w=document.getElementById('wmBig'); if(w) w.style.animationPlayState = onoff ? 'running' : 'paused'; }catch(e){} }
+  v.addEventListener('play', function(){ wmRun(true); });
+  v.addEventListener('pause', function(){ wmRun(false); });
+  v.addEventListener('ended', function(){ wmRun(false); });
   wrap.appendChild(v);
   fileApi = v;
-  /* طبقة النقر — دوسة على الفيديو = تشغيل/إيقاف (سلوك المشغل العادي) */
-  var tap = document.createElement('div'); tap.id = 'tapLayer';
-  tap.addEventListener('click', function(){ if(!tapOk()) return; try{ if(v.paused){ v.play(); } else { v.pause(); } }catch(e){} });
-  wrap.appendChild(tap);
-  buildFileBar();
-  /* المصدر: بث HLS له قايمة جودات حقيقية — الملف المباشر بجودته الأصلية */
-  var src = String(CFG.fileUrl || '');
-  if(/\\.m3u8(\\?|$)/i.test(src)) setupHls(src);
-  else v.src = src;
+  var btn = document.createElement('button');
+  btn.id = 'fsBtn'; btn.type = 'button'; btn.setAttribute('aria-label','ملء الشاشة');
+  btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+  btn.addEventListener('click', function(e){ e.stopPropagation(); toggleFs(); });
+  wrap.appendChild(btn);
+  /* (2026-ن) زرار CC للملفات اتشال خالص بطلب المستر — الكابشن ممنوع
+     نهائيًا: killTracks فوق بيقتل أي ترجمة مدمجة ومفيش أي طريق لتشغيلها */
 }
 
 /* ===== تشغيل ===== */

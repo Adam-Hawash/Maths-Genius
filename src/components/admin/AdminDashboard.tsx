@@ -702,7 +702,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
 
   const handleSubmit = async () => {
     if (!formTitle.trim() || !formGrade) { toast.error('أدخل العنوان واختر الصف'); return }
-    if (!formUrl && !formFile) { toast.error('أدخل رابط YouTube أو رابط فيديو مباشر (mp4/m3u8) أو ارفع ملف فيديو'); return }
+    if (!formUrl && !formFile) { toast.error('أدخل رابط YouTube أو ارفع ملف فيديو'); return }
     setSubmitting(true)
     setUploading(true)
     try {
@@ -814,7 +814,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
 
             {/* YouTube URL */}
             <div className="space-y-1.5">
-              <Label className="text-xs">رابط YouTube أو رابط مباشر mp4/m3u8 (بدون يوتيوب بالمشغل العادي) — أو ارفع ملف فيديو</Label>
+              <Label className="text-xs">رابط YouTube (اختياري - أو ارفع ملف فيديو)</Label>
               <Input value={formUrl} onChange={(e) => setFormUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." dir="ltr" />
               {formUrl && getYouTubeId(formUrl) && (
                 <div className="mt-2 w-40 aspect-video rounded-lg overflow-hidden border relative">
