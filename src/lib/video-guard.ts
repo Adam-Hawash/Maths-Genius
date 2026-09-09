@@ -82,29 +82,10 @@ export async function ensurePlayTicketTable(force = false): Promise<void> {
   }
 }
 
-// ===== Self-heal لعمود nativeEmbed (كود HTML embed — طلب المستر 2026-و3) =====
-// لو عمود nativeEmbed ناقص في داتابيز الإنتاج بعد التحديث، أي استعلام Video
-// بيفشل (Prisma بيختار كل الأعمدة) — بنضيفه أوتوماتيك أول استعلام.
-var _nativeEmbedColReady = false
-export async function ensureNativeEmbedColumn(): Promise<void> {
-  if (_nativeEmbedColReady) return
-  try {
-    await db.$executeRawUnsafe('ALTER TABLE Video ADD COLUMN nativeEmbed INTEGER NOT NULL DEFAULT 0')
-  } catch (e) {
-    // العمود موجود بالفعل (أو جدول ناقص — ده شغل ensureSchema)
-  }
-  _nativeEmbedColReady = true
-}
-
-// استخراج لينك التضمين من كود HTML لازق (iframe) — بيرجع '' لو مفيش iframe
-export function extractEmbedSrc(raw: string): string {
-  const s = String(raw || '')
-  if (!/<\s*(iframe|embed|object)\b/i.test(s)) return ''
-  const m = s.match(/\ssrc\s*=\s*["']([^"']+)["']/i)
-  const src = m ? m[1].trim() : ''
-  // أمان: مسموح لينكات http/https بس — مفيش javascript: ولا data:
-  return /^https?:\/\//i.test(src) ? src : ''
-}
+// (ملغاة 2026-و4) self-heal عمود nativeEmbed + extractEmbedSrc — ميزة
+// «إضافة فيديو من كود HTML» اتنست بطلب المستر نفسه (كانت بتجيب واجهة
+// يوتيوب ومفيش تحكم فعلي في الجودة). العمود القديم في داتابيز قديمة هيفضل
+// موجود بس مش بيتقري من أي كود.
 
 export async function getStudentAnyStatus(studentId: string | null | undefined) {
   if (!studentId) return null

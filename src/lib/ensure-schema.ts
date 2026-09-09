@@ -49,8 +49,7 @@ var SCHEMA_COLUMNS = [
   ['Video', 'price', 'REAL', 'DEFAULT 0'],
   ['Video', 'fileType', 'TEXT', "DEFAULT ''"],
   ['Video', 'thumbnail', 'TEXT', "DEFAULT ''"],
-  // كود HTML (embed) — مشغل بواجهة الموقع الأصلي بجودة حقيقية (طلب المستر 2026-و3)
-  ['Video', 'nativeEmbed', 'INTEGER', 'NOT NULL DEFAULT 0'],
+  // nativeEmbed (كود HTML embed) اتلغت 2026-و4 بطلب المستر — العمود مش بيتضاف في قواعد جديدة
   ['Homework', 'questions', 'TEXT', "DEFAULT ''"],
   ['Homework', 'answerKeyPath', 'TEXT', "DEFAULT ''"],
   ['Homework', 'answerKeyType', 'TEXT', "DEFAULT ''"],
