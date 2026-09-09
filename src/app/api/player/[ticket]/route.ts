@@ -16,15 +16,17 @@
 //     ثابت في **الزاوية تحت على اليمين**.
 //  4) حماية فحص: كليك يمين مقفول + F12/Ctrl+Shift+I/J/C/Ctrl+U مقفولين
 //     بتنبيه لطيف + لو أدوات المطور اتفتحت الفيديو بيوقف مؤقتًا.
+//     (تعديل 2026-ك): F10 و Win+Shift+R/S **مش مقفولين** — بقرار المستر
+//     نفسه، لأنها اختصارات نظام التشغيل ومفيش موقع يقدر يمنعها فعلًا.
 //  5) التقدم بيتقال للأب بـ postMessage كل 5 ثواني (مفيش أي لينك).
 //  6) حماية الفيديو من يوتيوب (طلب المستر 2026-و): اسم قناة يوتيوب/العنوان/
 //     زرار الشير/اللينك — مستحيل يبانوا ولا حد يقدر يدوس عليهم:
 //     **درع علوي دايمًا شغال** (مش بس وقت الوقف) + باتش اللوجو + طبقة التقاط
 //     النقرات (مفيش أي ضغطة توصل لليوتيوب أصلًا) — من غير أي قص للفيديو.
-//  7) الجودة (أهم حاجة للمستر): الـ iframe بيرندر **بمقاس الصندوق الحقيقي
-//     100%** (مفيش transform scale — الخدعة القديمة كانت بتمدد البكسلات
-//     فالفيديو بيبان ناعم حتى لو التيار 1080p) + فرض أعلى جودة بالـ API
-//     (حارس + loadVideoById بسقف إعادات تحميل).
+//  7) الجودة (أهم حاجة للمستر — تعديل 2026-ك): **360p مقفولة دايمًا**
+//     بقرار المستر الحرفي "الجودة مش شغاله ثبته على 360" — مفيش قائمة
+//     جودة ولا زرار خالص، والقفل الاتنين اتجاهين بالـ API (حارس كل ثانية
+//     + سيك صغير + تبديل تيار بسقف عشان مفيش لوب).
 //  8) التشغيل المضمون: مراقب متدرج (playVideo → loadVideoById → صامت)
 //     + تحميل API يوتيوب بإعادة محاولة + تسجيل طلب التشغيل قبل جهوزية الـ API
 //     + تكملة مشاهدة آمنة (من غير حلقة النهاية).
@@ -274,17 +276,8 @@ const PLAYER_PAGE = `<!doctype html>
   #ytCtrl{position:absolute;bottom:0;left:0;right:0;z-index:30;display:flex;align-items:center;gap:9px;direction:rtl;
     padding:10px 12px 12px;background:linear-gradient(to top,rgba(0,0,0,.85),rgba(0,0,0,.5) 65%,transparent);transition:opacity .3s}
   #ytCtrl.hide{opacity:0;pointer-events:none}
-  #ppBtn,#fsInBar,#qBtn{height:38px;border-radius:10px;border:0;background:rgba(255,255,255,.16);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto}
-  #ppBtn,#fsInBar{width:38px}
-  #qBtn{padding:0 12px;gap:5px;font-weight:700;font-size:11.5px;font-family:system-ui,sans-serif;white-space:nowrap}
-  #qBtn:hover,#fsInBar:hover,#ppBtn:hover{background:rgba(255,255,255,.26)}
-  #qMenu{position:absolute;bottom:58px;right:12px;z-index:62;background:rgba(10,10,16,.96);border:1px solid rgba(255,255,255,.18);
-    border-radius:12px;padding:6px;display:none;flex-direction:column;min-width:190px;direction:rtl;box-shadow:0 10px 30px rgba(0,0,0,.6)}
-  #qMenu button{display:flex;justify-content:space-between;align-items:center;gap:10px;background:0;border:0;color:#fff;
-    padding:10px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:system-ui,sans-serif;text-align:right;min-height:38px}
-  #qMenu button:hover{background:rgba(255,255,255,.12)}
-  #qMenu button.on{color:#fbbf24}
-  #qMenu .note{font-size:10.5px;color:#fbbf24;padding:7px 12px 3px;line-height:1.7;border-top:1px solid rgba(255,255,255,.12);margin-top:4px}
+  #ppBtn,#fsInBar{height:38px;width:38px;border-radius:10px;border:0;background:rgba(255,255,255,.16);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto}
+  #ppBtn:hover,#fsInBar:hover{background:rgba(255,255,255,.26)}
   #seek{flex:1;-webkit-appearance:none;appearance:none;height:5px;border-radius:4px;background:rgba(255,255,255,.3);outline:0;cursor:pointer;min-width:50px;margin:0}
   #seek::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.6)}
   #seek::-moz-range-thumb{width:15px;height:15px;border:0;border-radius:50%;background:#fff}
@@ -525,39 +518,34 @@ function reportProgress(cur, dur){
 }
 function reportEnded(){ try{ if(window.parent && window.parent !== window) window.parent.postMessage({type:'mg_ended', videoId:CFG.videoId}, '*'); }catch(e){} }
 
-/* ===== حماية الفحص + منع التسجيل (تنبيه فوري) =====
-   (2026-ط تعديل طلب المستر الحرفي: رسالة الكليك اليمين تبقى
-   "كليك يمين ممنوع" مش "التسجيل ممنوع"):
+/* ===== حماية الفحص + منع الحفظ (تعديل 2026-ك — قرار المستر الحرفي:
+   "Windows+Shift+R / Windows+Shift+S و F10 ما تمنعوش") =====
    • كليك يمين → "🚫 كليك يمين ممنوع"
-   • Win/⌘ + Shift + R (تسجيل ويندوز) → "الخاصية دي ممنوعة"
-   • Win/⌘ + Shift + S (أداة القص) → "الخاصية دي ممنوعة"
-   • كل زرار function من F1 لـ F12 (فيهم F10) → "الخاصية دي ممنوعة"
+   • زرار C لوحده (اختصار الكابشن في يوتيوب) → "🚫 الكابشن ممنوع"
+     — الكابشن ممنوع نهائيًا (طلب المستر: "الغي الكابشن خالص")
+   • F12 + كل زرار function من F1 لـ F12 **إلا F10** + Ctrl+Shift+I/J/C
+     + Ctrl+U/Ctrl+S + Ctrl+Shift+R/S → "الخاصية دي ممنوعة"
+     (دي مفاتيح متصفح فعلًا وبتنمسك بجد)
    • زرار PrintScreen → محاولة تفريغ الحافظة + رسالة
-   ملاحظة حقيقية: اختصار النظام نفسه فوق صلاحية المتصفح — لكن المحاولة
-   بتتكشف والتحذير بيظهر فورًا، والووترمارك باسم الطالب ورقمه هو الخصم
-   الحقيقي لأي صورة/فيديو مسرب. */
+   • **F10 و Win/⌘ + Shift + R/S مش مقفولين — بقرار المستر نفسه**:
+     دي اختصارات نظام التشغيل نفسه (ويندوز بيمسكها قبل المتصفح أصلًا) —
+     مفيش أي موقع في العالم (حتى يوتيوب ونتفليكس) يقدر يمنعها فعلًا،
+     والمحاولة الوهمية كانت بتعمل رسايل كاذبة — فاتشالت خالص. */
 document.addEventListener('contextmenu', function(e){ e.preventDefault(); toast('🚫 كليك يمين ممنوع'); });
 document.addEventListener('dragstart', function(e){ e.preventDefault(); });
 document.addEventListener('selectstart', function(e){ if(e.target && e.target.id !== 'toast') e.preventDefault(); });
-/* تتبّع ضغطة زرار ويندوز/⌘ نفسه (2026-ط): أندوز ساعات بياخد الاختصار
-   ليه ويبلع الـ metaKey من الحدث — فبنسجل لحظة الضغط على الميتا، وأي
-   R/S بعداها مباشرة نعتبرها محاولة تسجيل/قص حتى لو المتصفح مابعثش
-   metaKey — دي أقصى محاولة ممكنة من جوه المتصفح (طلب المستر:
-   "لو تقدر منعهم منعهم، ولو ما تقدرتش ما تمنعهمش") */
-var lastMetaTs = 0;
 document.addEventListener('keydown', function(e){
   var k = (e.key || '').toLowerCase();
-  if(e.key === 'Meta' || e.key === 'OS' || e.keyCode === 91 || e.keyCode === 92){ lastMetaTs = Date.now(); }
-  /* (2026-ز طلب المستر الحرفي) Windows/⌘ + Shift + S و Windows/⌘ + Shift + R
-     — فحصهم الأول قبل أي حاجة عشان الرسالة القصيرة المطلوبة
-     "الخاصية دي ممنوعة" تظهر فورًا ومش بيلتهمهم منع الحفظ العام */
-  var metaPressed0 = !!(e.metaKey || e.key === 'OS' || e.key === 'Meta' || e.keyCode === 91 || e.keyCode === 92 || (Date.now() - lastMetaTs < 3000));
-  if(e.shiftKey && (k === 'r' || k === 's') && metaPressed0){
-    e.preventDefault(); e.stopPropagation(); toast('🛡️ الخاصية دي ممنوعة'); return;
+  /* زرار C لوحده = اختصار الكابشن في مشغل يوتيوب — الكابشن ممنوع خالص
+     (طلب المستر: "الغي الكابشن خالص") — Ctrl+Shift+C بتاعة أدوات المطور
+     بيتمسك في فحص أدوات المطور لوحده تحت */
+  if(k === 'c' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey){
+    e.preventDefault(); e.stopPropagation(); toast('🚫 الكابشن ممنوع'); return;
   }
   var blocked = false;
-  /* (2026-ز) F12 + كل زرار function من F1 لـ F12 (فيهم F10) — طلب المستر */
-  if(k === 'f12' || /^f([1-9]|1[0-2])$/.test(k)) blocked = true;
+  /* F12 + كل زرار function من F1 لـ F12 — **إلا F10** (تعديل 2026-ك قرار
+     المستر الحرفي: "F10 ما تمنعوش") */
+  if(k === 'f12' || (/^f([1-9]|1[0-2])$/.test(k) && k !== 'f10')) blocked = true;
   if((e.ctrlKey || e.metaKey) && e.shiftKey && (k === 'i' || k === 'j' || k === 'c')) blocked = true;
   if((e.ctrlKey || e.metaKey) && (k === 'u' || k === 's')) blocked = true;
   if((e.metaKey || e.ctrlKey) && e.altKey && (k === 'i' || k === 'j' || k === 'c')) blocked = true;
@@ -728,6 +716,9 @@ function activateFallback(reason){
      (والووترمارك والدروع بيفضلوا فوقه لأنهم pointer-events:none — الحماية ثابتة) */
   var killIds = ['ytCrop','startOv','tapLayer','centerOv','endOv','ytCtrl','qMenu','peBox','unmuteBtn'];
   for(var i=0;i<killIds.length;i++){ try{ var el = document.getElementById(killIds[i]); if(el && el.parentNode) el.parentNode.removeChild(el); }catch(e){} }
+  /* (2026-ك) نمسح مرجع المشغل القديم — من غير كده التايمر بيفضل ينادي على
+     مشغل اتشال من الـ DOM ويعمّي الكونسول بتحذيرات على الفاضي */
+  playerApi = null;
   var startS = Math.max(0, Math.floor(Number(CFG.resume) || 0));
   if(pendingResume > 5) startS = Math.max(startS, Math.floor(pendingResume));
   var f = document.getElementById('ytPlain');
@@ -739,7 +730,7 @@ function activateFallback(reason){
     f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#000';
     wrap.appendChild(f);
   }
-  f.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&controls=1&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&cc_load_policy=0&start=' + startS;
+  f.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&controls=1&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&cc_load_policy=0&vq=medium&start=' + startS;
   layoutWrap();
   toast('تمام — الفيديو شغّال دلوقتي ▶');
 }
@@ -751,11 +742,14 @@ function scheduleFallbackIfStuck(){
     activateFallback('stuck');
   }, 6000);
 }
-/* قفل الجودة — **الافتراضي 480p مقفولة تلقائيًا** (طلب المستر الحرفي 2026-ح:
-   "الجودة بتتغير كتابيا بس في الحقيقة لأ — لو مالهاش حل ثبتها على 480
-   تلقائيًا عشان تشتغل") — القفل الاتنين اتجاهين (فوق وتحت) والرقم المعروض
-   على الزرار = **الجودة الحقيقية الحية** من getPlaybackQuality مش الورقية */
-var qSel = 'large', lastQAssert = 0;
+/* قفل الجودة النهائي (تعديل 2026-ك — قرار المستر الحرفي):
+   "الجودة مش شغاله ثبته على 360" → **360p مقفولة دايمًا**:
+   • مفيش قائمة جودة ولا زرار خالص — الجودة ثابتة على 360p
+   • القفل الاتنين اتجاهين: يوتيوب طلّع فوق 360 → ننزّل، ونزّل تحت 360
+     (زي 144 على النت الضعيف) → نرفع — عشان مفيش النطاطة بين 144 و360
+   • آلية التنفيذ زي ما هي (بتشتغل فعلًا): vq + cue بـ suggestedQuality
+     + setPlaybackQualityRange + حارس كل ثانية + تبديل تيار بسقف */
+var qSel = 'medium', lastQAssert = 0;
 /* (2026-ز) تثبيت مبكر واحد: أول تشغيل بيبدأ 144/360 (قياس النت ABR) —
    لو التيار الفعلي أقل من المطلوب والمستوى موجود فعلًا → تبديل تيار واحد
    بـ suggestedQuality في أول 2.5 ثانية بدل استنىاء الحارس 20 ثانية */
@@ -771,20 +765,10 @@ var qEarlyPinned = false;
       + كولداون 15 ثانية عشان مفيش لوب إعادات تحميل على النت الضعيف
    ولو بعد تبديلين حقيقيين الجودة لسه تحت المطلوب → السبب سرعة النت نفسها
    (يوتيوب مش بيبعت تيار أعلى من اللي النت واصل له) — بنقول الحقيقة مرة واحدة */
-var qLowSince = 0, qHardTries = 0, lastQHard = 0, qPendingPause = false, lastCapCheck = 0;
-/* (2026-ط) إعادة تأكيد سريعة بعد اختيار الطالب لمستوى + تنبيه سقف الشبكة
-   (مرة كل 60 ثانية كحد أقصى — المستر قال "أنا مش عارف ليه بتثبت على 360"
-   وده سببها الحقيقي: النت هو اللي بيكتب السقف مش المشغل) */
-var qPostSwitchUntil = 0, qPostSwitchTarget = '', lastQCapNotice = 0;
-/* أعلى جودة متاحة فعلًا في الفيديو — لو الملف الأصلي مرفوع بجودة ضعيفة
-   يوتيوب هيرجّع أعلى حاجة عنده بس (حدود المصدر مش حدود المشغل) */
-function highestAvail(){
-  try{
-    var ls = playerApi && playerApi.getAvailableQualityLevels ? playerApi.getAvailableQualityLevels() : [];
-    for(var i=0;i<ls.length;i++){ if(ls[i] && ls[i] !== 'auto' && ls[i] !== 'default') return ls[i]; }
-  }catch(e){}
-  return 'hd720';
-}
+var qLowSince = 0, qHardTries = 0, lastQHard = 0, lastCapCheck = 0;
+/* تنبيه سقف الشبكة (مرة كل 60 ثانية كحد أقصى): لو الجودة لسه تحت 360
+   بعد تبديلين تيار حقيقيين → السبب سرعة النت نفسها مش المشغل */
+var lastQCapNotice = 0;
 /* المستوى الفعلي المفروض: لو المستوى المطلوب مش موجود في الفيديو → أقرب
    مستوى متاح (تعادل → الأقل عشان "تشتغل") */
 function resolveLockLevel(wanted){
@@ -801,7 +785,7 @@ function resolveLockLevel(wanted){
     return best;
   }catch(e){ return wanted; }
 }
-function wantedLevel(){ return qSel === 'top' ? highestAvail() : (qSel === 'auto' ? '' : resolveLockLevel(qSel)); }
+function wantedLevel(){ return resolveLockLevel(qSel); }
 /* ترتيب الجودة — الحارس بيفرض المطلوب **من غير أي إعادة تحميل**:
    إعادة تحميل التيار (loadVideoById) هي السبب الحقيقي إن الجودة كانت بترجع
    لـ360p — يوتيوب بيبدأ أي تيار جديد من أدنى جودة وبيعلى تدريجيًا أثناء
@@ -810,17 +794,8 @@ var qRank = { highres:10, hd2160:10, hd1440:9, hd1080:8, hd720:7, large:6, mediu
 function qRankOf(q){ return qRank[q] || 0; }
 function applyQ(){
   try{
-    if(qSel === 'top'){
-      var best = highestAvail();
-      try{ playerApi.setPlaybackQualityRange(best, best); }catch(e){}
-      try{ playerApi.setPlaybackQuality(best); }catch(e){}
-    } else if(qSel === 'auto'){
-      try{ playerApi.setPlaybackQualityRange('auto', 'auto'); }catch(e){}
-      try{ playerApi.setPlaybackQuality('auto'); }catch(e){}
-    } else {
-      try{ playerApi.setPlaybackQualityRange(qSel, qSel); }catch(e){}
-      try{ playerApi.setPlaybackQuality(qSel); }catch(e){}
-    }
+    playerApi.setPlaybackQualityRange(qSel, qSel);
+    playerApi.setPlaybackQuality(qSel);
   }catch(e){}
 }
 /* (2026-ي) التبديل القسري الحقيقي — **بدون أي إعادة تحميل خالص**:
@@ -843,7 +818,6 @@ function forceQ(target){
   setTimeout(function(){ try{ playerApi.setPlaybackQualityRange(target, target); playerApi.setPlaybackQuality(target); }catch(e){} }, 6000);
 }
 function qLabel(q){ var m = { highres:'2160p+', hd2160:'2160p', hd1440:'1440p', hd1080:'1080p', hd720:'720p', large:'480p', medium:'360p', small:'240p', tiny:'144p' }; return m[q] || q; }
-function updateQBtn(){ var l = document.getElementById('qLbl'); if(l) l.textContent = qSel === 'top' ? 'عالية' : (qSel === 'auto' ? 'تلقائي' : qLabel(qSel)); }
 /* آخر سلاح في سلم الجودة: **تبديل تيار حقيقي واحد** — loadVideoById بنفس
    الثانية والمستوى المطلوب (suggestedQuality بيطلب التيار بالمستوى ده من
    أول لحظة). مش بنكرره (سقف 5 + كولداون من الحارس) */
@@ -854,19 +828,6 @@ function hardReloadQ(target){
     playerApi.loadVideoById({ videoId: ytIdCached, startSeconds: Math.max(0, Math.floor(t)), suggestedQuality: target });
   }catch(e){}
   lastQAssert = Date.now();
-}
-/* (2026-و) تبديل الجودة الحقيقي — بيتستخدم لما الطالب يختار مستوى من
-   القائمة بيده: مفيش فايدة من setPlaybackQuality (يوتيوب لغتها) —
-   **loadVideoById بـ suggestedQuality هو الوحيد اللي بيغير التيار فعلًا**
-   (بنفس الثانية عشان المشاهدة ما تتقطعش، ولو كان واقف بيرجع واقف) */
-function switchQ(target){
-  if(!target || target === 'auto' || !playerApi || !playerApi.loadVideoById || !ytIdCached) return;
-  try{
-    var t = playerApi.getCurrentTime() || 0;
-    qPendingPause = (ytState() === 2);
-    playerApi.loadVideoById({ videoId: ytIdCached, startSeconds: Math.max(0, Math.floor(t)), suggestedQuality: target });
-  }catch(e){}
-  lastQAssert = Date.now(); qLowSince = 0;
 }
 function tapOk(){ var n = Date.now(); if(n - lastTap < 350) return false; lastTap = n; return true; }
 function showUnmuteBtn(){
@@ -974,10 +935,8 @@ function mountYouTube(){
   wrap.appendChild(startOv);
   // طبقة النقر — بتلقط التابات بدل ما توصل ليوتيوب (+ بتقفل قائمة الجودة)
   var tap = document.createElement('div'); tap.id='tapLayer';
-  function closeQMenu(){ var m = document.getElementById('qMenu'); if(m) m.style.display = 'none'; }
   tap.addEventListener('click', function(){
     if(!tapOk()) return;
-    closeQMenu();
     try{ if(playerApi&&playerApi.getPlayerState){ if(playerApi.getPlayerState()===YT.PlayerState.PLAYING) playerApi.pauseVideo(); else startWithWatchdog(); } }catch(e){}
     showCtrl(true);
   });
@@ -1004,69 +963,16 @@ function mountYouTube(){
   var endOv = document.createElement('div'); endOv.id='endOv';
   endOv.innerHTML = '<p>🎉 خلصت الفيديو — برافو عليك!</p><button type="button" id="replayBtn">شوفه تاني ↺</button>';
   wrap.appendChild(endOv);
-  // كنترولز بتاعتنا: تشغيل/إيقاف + شريط تقدم + الوقت + الجودة + ملء الشاشة
+  // كنترولز بتاعتنا: تشغيل/إيقاف + شريط تقدم + الوقت + ملء الشاشة
   var bar = document.createElement('div'); bar.id='ytCtrl';
   bar.innerHTML = '<button id="ppBtn" type="button" aria-label="تشغيل/إيقاف">'+svgPlay()+'</button>' +
     '<input id="seek" type="range" min="0" max="1000" step="1" value="0" aria-label="شريط التقدم">' +
     '<span id="tTime">0:00 / 0:00</span>' +
-    '<button id="qBtn" type="button" aria-label="جودة الفيديو" aria-haspopup="menu"><span id="qLbl">480p</span></button>' +
     '<button id="fsInBar" type="button" aria-label="ملء الشاشة">'+svgFs()+'</button>';
   wrap.appendChild(bar);
-  // قائمة الجودة — بتعرض المستويات الموجودة فعلًا في الفيديو + ملاحظة صادقة
-  // لو أعلى جودة في المصدر ضعيفة (الملف الأصلي على يوتيوب مرفوع بجودة ضعيفة)
-  var qMenu = document.createElement('div'); qMenu.id = 'qMenu'; qMenu.style.display = 'none';
-  wrap.appendChild(qMenu);
-  function buildQMenu(){
-    var html = '';
-    html += '<button type="button" data-q="top" class="'+(qSel==='top'?'on':'')+'"><span>عالية (الأعلى المتاح)</span>'+(qSel==='top'?'<span>✓</span>':'')+'</button>';
-    html += '<button type="button" data-q="auto" class="'+(qSel==='auto'?'on':'')+'"><span>تلقائي</span>'+(qSel==='auto'?'<span>✓</span>':'')+'</button>';
-    var ls = [];
-    try{ ls = playerApi && playerApi.getAvailableQualityLevels ? playerApi.getAvailableQualityLevels() : []; }catch(e){}
-    for(var i=0;i<ls.length;i++){
-      var qq = ls[i];
-      if(!qq || qq === 'auto' || qq === 'default') continue;
-      html += '<button type="button" data-q="'+qq+'" class="'+(qSel===qq?'on':'')+'"><span dir="ltr">'+qLabel(qq)+'</span>'+(qSel===qq?'<span>✓</span>':'')+'</button>';
-    }
-    var best = highestAvail();
-    var lowMap = { large:'480p', medium:'360p', small:'240p', tiny:'144p' };
-    if(best && lowMap[best]) html += '<div class="note">أعلى جودة متاحة في الفيديو ده: '+qLabel(best)+' — دي حدود الملف الأصلي على يوتيوب</div>';
-    qMenu.innerHTML = html;
-    var btns = qMenu.getElementsByTagName('button');
-    for(var j=0;j<btns.length;j++){
-      (function(btn){
-        btn.addEventListener('click', function(e){
-          e.stopPropagation();
-          var q = btn.getAttribute('data-q') || 'top';
-          qSel = q; lastQAssert = Date.now();
-          qLowSince = 0; qHardTries = 0; /* اختيار جديد = ميزانية محاولات جديدة */
-          if(q === 'auto'){
-            /* تلقائي = تحرير الجودة ليوتيوب يظبطها لوحده */
-            applyQ();
-          } else {
-            /* (2026-و) اختيار الطالب بيده = **تبديل تيار حقيقي** بـ
-               loadVideoById + suggestedQuality (الـ API القديم مبتغيرش
-               التيار فعلًا — ده اللي كان بيخلي الرقم بيتغير كتابيًا بس) */
-            var tgt = (q === 'top') ? highestAvail() : resolveLockLevel(q);
-            switchQ(tgt);
-            /* (2026-ط) بعد التبديل: إعادة تأكيد النطاق كل 1.5ث لأول 15ث —
-               التيار الجديد بيبدأ وبيستقر والقفل بيتضغط عليه طول الوقت */
-            qPostSwitchUntil = Date.now() + 15000;
-            qPostSwitchTarget = tgt || '';
-            lastQCapNotice = 0; /* اختيار جديد = تنبيه السقف يتاح تاني */
-          }
-          updateQBtn();
-          qMenu.style.display = 'none';
-        });
-      })(btns[j]);
-    }
-  }
-  var qBtn = document.getElementById('qBtn');
-  qBtn.addEventListener('click', function(e){
-    e.stopPropagation();
-    var open = qMenu.style.display === 'flex';
-    if(open){ qMenu.style.display = 'none'; }
-    else { buildQMenu(); qMenu.style.display = 'flex'; showCtrl(false); }
-  });
+  /* (2026-ك) قائمة الجودة اتشالت خالص بقرار المستر ("الجودة مش شغاله
+     ثبته على 360") — مفيش زرار جودة ولا قائمة: الجودة ثابتة 360p
+     والقفل بتاعها جوه buildPlayer (الحارس كل ثانية) */
   var pp = document.getElementById('ppBtn');
   pp.addEventListener('click', function(e){ e.stopPropagation(); if(!tapOk()) return; try{ if(ytState()===1) playerApi.pauseVideo(); else startWithWatchdog(); }catch(err){} showCtrl(true); });
   document.getElementById('fsInBar').addEventListener('click', function(e){ e.stopPropagation(); toggleFs(); });
@@ -1105,24 +1011,21 @@ function buildPlayer(){
     width: '100%',
     height: '100%',
     // controls:0 → مفيش أي واجهة يوتيوب (لا عنوان لا لوجو لا حاجة) — كل الكنترولز بتاعنا
-    playerVars: (function(){ var pv = { autoplay:1, controls:0, rel:0, modestbranding:1, playsinline:1, iv_load_policy:3, cc_load_policy:0, fs:0, disablekb:1, enablejsapi:1, origin: location.origin }; try{ if(qSel !== 'auto'){ pv.vq = (qSel === 'top') ? 'highres' : qSel; } }catch(ePV){} return pv; })(),
+    playerVars: (function(){ var pv = { autoplay:1, controls:0, rel:0, modestbranding:1, playsinline:1, iv_load_policy:3, cc_load_policy:0, fs:0, disablekb:1, enablejsapi:1, origin: location.origin }; try{ pv.vq = qSel; }catch(ePV){} return pv; })(),
     events: {
       onReady: function(ev){
         /* تكملة المشاهدة بنأجلها لأول لحظة تشغيل فعلية — أعلى أمان على الموبايل
            (الـ seek قبل التشغيل كان بعلّق المشغل في حالة cued على بعض الأجهزة) */
         try{ if(Number(CFG.resume) > 5) pendingResume = Number(CFG.resume); }catch(e){}
-        /* (2026-و) **الحل الحقيقي لـ"بيبدأ 144 وبعدين يعلّى لـ360 ومش بيوصل 480"**:
-           التحميل الأولي من الـ constructor بييجي من غير تلميح جودة — يوتيوب بيبدأ
-           أدنى تيار (tiny=144) وبيعلى تدريجيًا حسب قياس سرعة النت (ABR) وغالبًا
-           بيقف عند 360 على شبكات الموبايل. cueVideoById بـ suggestedQuality
-           بيطلب **تيار 480p من أول لحظة** — دي أقوى نقطة تحكم حقيقية متبقية
-           في IFrame API (setPlaybackQuality اتلغت رسميًا من يوتيوب).
+        /* (تحديث 2026-ك) قفل 360p من أول لحظة: cueVideoById بـ suggestedQuality
+           بيطلب تيار 360p فعلًا — أقوى نقطة تحكم متبقية في IFrame API
+           (setPlaybackQuality اتلغت رسميًا من يوتيوب).
            cue مش load عشان مفيش تشغيل مفاجئ — لسه مستنيين دوسة الطالب */
         try{
-          var qHint = (qSel === 'auto') ? 'default' : resolveLockLevel(qSel);
+          var qHint = resolveLockLevel(qSel);
           playerApi.cueVideoById({ videoId: ytIdCached, startSeconds: 0, suggestedQuality: qHint });
         }catch(eCue){}
-        applyQ(); /* الجودة الافتراضية: **480p مقفولة تلقائيًا** (طلب المستر) */
+        applyQ(); /* 360p مقفولة دايمًا (طلب المستر) */
         if(pendingStart){ pendingStart = false; startWithWatchdog(); }
         layoutWrap();
       },
@@ -1147,7 +1050,7 @@ function buildPlayer(){
               qEarlyPinned = true;
               setTimeout(function(){
                 try{
-                  if(ytState() === 1 && qSel !== 'auto'){
+                  if(ytState() === 1){
                     var effE = wantedLevel(), curE = '';
                     try{ curE = playerApi.getPlaybackQuality() || ''; }catch(eQE){}
                     if(effE && curE && curE !== 'unknown' && curE !== 'auto' && qRankOf(curE) < qRankOf(effE) && qHardTries < 6){
@@ -1164,12 +1067,14 @@ function buildPlayer(){
             try{ playerApi.loadModule && playerApi.loadModule('captions'); }catch(e){}
             try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
             try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
-            if(qPendingPause){ qPendingPause = false; try{ playerApi.pauseVideo(); }catch(e){} }
             var so=document.getElementById('startOv'); if(so) so.style.display='none';
             var eo=document.getElementById('endOv'); if(eo) eo.style.display='none';
             setPP(true); showCtrl(true);
           } else if(ev.data === YT.PlayerState.PAUSED){
             setPP(false); showCtrl(false);
+            /* الكابشن ممنوع — نشيل الموديول كمان وقت الوقف (احتياط) */
+            try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
+            try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
           } else if(ev.data === YT.PlayerState.ENDED){
             setPP(false);
             var eo2=document.getElementById('endOv'); if(eo2) eo2.style.display='flex';
@@ -1188,14 +1093,12 @@ function buildPlayer(){
         try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
       },
       onPlaybackQualityChange: function(ev){
-        /* لو يوتيوب نزّل أو طلّع الجودة لوحدها بعيدًا عن المطلوب → إعادة تأكيد
+        /* لو يوتيوب نزّل أو طلّع الجودة لوحدها بعيدًا عن 360 → إعادة تأكيد
            فورية بالـ API (من غير reload) — القفل الاتنين اتجاهين */
         try{
-          if(qSel !== 'auto'){
-            var effQ = wantedLevel();
-            var curQ = ev.data || '';
-            if(effQ && curQ && curQ !== 'unknown' && qRankOf(curQ) !== qRankOf(effQ)){ lastQAssert = Date.now(); applyQ(); }
-          }
+          var effQ = wantedLevel();
+          var curQ = ev.data || '';
+          if(effQ && curQ && curQ !== 'unknown' && qRankOf(curQ) !== qRankOf(effQ)){ lastQAssert = Date.now(); applyQ(); }
         }catch(e){}
       },
       onError: function(ev){
@@ -1227,20 +1130,12 @@ function buildPlayer(){
       if(playerApi && playerApi.getCurrentTime){
         var cur = playerApi.getCurrentTime() || 0, dur = playerApi.getDuration() || 0;
         reportProgress(cur, dur);
-        /* زرار الجودة: **الرقم الحقيقي الحي** من getPlaybackQuality في كل
-           الأوضاع — مفيش أي رقم ورقي (ده اللي خلى المستر يقول
-           "الجودة بتتغير كتابيا بس في الحقيقة لأ") */
-        try{
-          var aq = playerApi.getPlaybackQuality ? (playerApi.getPlaybackQuality() || '') : '';
-          var ql = document.getElementById('qLbl');
-          if(ql && aq && aq !== 'unknown') ql.textContent = (aq === 'auto') ? 'تلقائي' : qLabel(aq);
-        }catch(eAQ){}
         /* حارس النهاية: لو شاشة الاقتراحات هتظهر (ENDED ماتفوتش) → غطّي فورًا */
         if(ytState()===0){
           var eo3=document.getElementById('endOv');
           if(eo3 && eo3.style.display!=='flex'){ eo3.style.display='flex'; try{ playerApi.seekTo(0,true); playerApi.pauseVideo(); }catch(e){} reportEnded(); }
         }
-        /* حارس الجودة (2026-ح — قفل 480p الاتنين اتجاهين):
+        /* حارس الجودة (تعديل 2026-ك — قفل 360p الاتنين اتجاهين):
            الجودة الفعلية لازم تطابق المطلوب — لو نزلت تحت المطلوب نرفعها،
            ولو طلعت فوقه ننزّلها (زي اختيار يدوي ثابت في يوتيوب).
            سلم التصعيد بلا لوب (أسرع بعد تعديل 2026-ط):
@@ -1250,17 +1145,11 @@ function buildPlayer(){
            3) بعد 10 ثواني → hardReloadQ (تبديل تيار حقيقي loadVideoById
               بالمستوى المطلوب) — سقف 8 مرات + كولداون 15 ثانية،
               والميزانية بترجع أول ما الجودة تظبط */
-        if(ytState() === 1 && qSel !== 'auto'){
+        if(ytState() === 1){
           var q = '';
           try{ q = playerApi.getPlaybackQuality() || ''; }catch(e){}
           var eff = wantedLevel();
           var qMismatch = eff && q && q !== 'unknown' && q !== 'auto' && qRankOf(q) !== qRankOf(eff);
-          /* (2026-ط) إعادة تأكيد سريعة بعد تبديل الطالب اليدوي (كل 1.5ث لأول 15ث) */
-          if(qPostSwitchTarget && Date.now() < qPostSwitchUntil && Date.now() - lastQAssert > 1500){
-            lastQAssert = Date.now();
-            try{ playerApi.setPlaybackQualityRange(qPostSwitchTarget, qPostSwitchTarget); }catch(e){}
-            try{ playerApi.setPlaybackQuality(qPostSwitchTarget); }catch(e){}
-          }
           if(qMismatch){
             if(!qLowSince) qLowSince = Date.now();
             var misFor = Date.now() - qLowSince;
@@ -1268,7 +1157,7 @@ function buildPlayer(){
               qHardTries++; lastQHard = Date.now(); qLowSince = Date.now();
               hardReloadQ(eff);
             } else if(misFor > 6000){
-              if(Date.now() - lastQAssert > 15000){ lastQAssert = Date.now(); qPendingPause = false; forceQ(eff); }
+              if(Date.now() - lastQAssert > 15000){ lastQAssert = Date.now(); forceQ(eff); }
             } else if(Date.now() - lastQAssert > 5000){
               lastQAssert = Date.now(); applyQ();
             }
@@ -1280,7 +1169,7 @@ function buildPlayer(){
               toast('النت دلوقتي واصل لـ' + qLabel(q) + ' بس — يوتيوب بيثبّت أعلى جودة سرعة النت تقدر عليها، وترجع تعلى لوحدها لما النت يتحسن');
             }
           } else { qLowSince = 0; qHardTries = 0; }
-        } else { qPostSwitchUntil = 0; }
+        }
         /* الكابشن ممنوع — فحص دوري كل 5 ثواني: الشيل **غير مشروط** (2026-ط):
            كابشن الحساب التلقائي (ASR) ساعات getOption بيرجّع مفيش track وهو
            ظاهر على الشاشة — فالشيل بيبقى دايمًا مش مرتبط بفحص الـ track */
@@ -1311,6 +1200,13 @@ function mountFile(){
   v.setAttribute('disablePictureInPicture', '');
   v.setAttribute('disableRemotePlayback', '');
   v.src = CFG.fileUrl;
+  /* الكابشن ممنوع خالص (2026-ك): أي ترجمات مدمجة في الملف تتقفل —
+     ولو track اتضاف بعد كده بيتقفل لوحده */
+  function killTracks(){
+    try{ var tt = v.textTracks; for(var i=0;i<tt.length;i++){ tt[i].mode = 'disabled'; } }catch(e){}
+  }
+  v.addEventListener('loadedmetadata', killTracks);
+  try{ if(v.textTracks && v.textTracks.addEventListener) v.textTracks.addEventListener('addtrack', killTracks); }catch(e){}
   if(CFG.resume > 5) v.addEventListener('loadedmetadata', function(){ try{ v.currentTime = CFG.resume; }catch(e){} });
   v.addEventListener('timeupdate', function(){
     lastCur = v.currentTime;
