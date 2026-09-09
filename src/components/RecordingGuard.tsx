@@ -62,6 +62,15 @@ export function RecordingGuard() {
         toast('🛡️ الخاصية دي ممنوعة')
         return
       }
+      /* F10 صراحةً بـ event.key === 'F10' — طلب المستر الحرفي 2026-م:
+         "explicitly intercept and prevent the F10 key (event.key === 'F10')
+         from triggering any browser default behavior" */
+      if (e.key === 'F10') {
+        e.preventDefault()
+        e.stopPropagation()
+        toast('🛡️ الخاصية دي ممنوعة')
+        return
+      }
       /* كل زرار function من F1 لـ F12 ممنوع — **فيهم F10** (طلب المستر
          الحرفي 2026-ل: "explicitly block the F10 key") */
       if (/^f([1-9]|1[0-2])$/.test(k)) {
