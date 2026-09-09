@@ -19,10 +19,14 @@
 //     المستر الحرفي 2026-م: "explicitly intercept and prevent the F10 key")**
 //     بتنبيه لطيف + لو أدوات المطور اتفتحت الفيديو بيوقف مؤقتًا.
 //  5) التقدم بيتقال للأب بـ postMessage كل 5 ثواني (مفيش أي لينك).
-//  6) حماية الفيديو من يوتيوب (طلب المستر 2026-و): اسم قناة يوتيوب/العنوان/
-//     زرار الشير/اللينك — مستحيل يبانوا ولا حد يقدر يدوس عليهم:
-//     **درع علوي دايمًا شغال** (مش بس وقت الوقف) + باتش اللوجو + طبقة التقاط
-//     النقرات (مفيش أي ضغطة توصل لليوتيوب أصلًا) — من غير أي قص للفيديو.
+//  6) حماية الفيديو من يوتيوب (أحدث قرار 2026-ط2 — «اعمل blur على كل حاجة،
+//     وغطّي اسم القناة اللي فوق بالكامل — علامة سودة أو كلمة Math Genius»):
+//     **شريط علوي داكن + بلور بعرض الشاشة كلها مكتوب عليه Math Genius**
+//     دايمًا شغال بيغطي العنوان + اسم القناة + أزرار الشير تغطية 100%
+//     + باتش بلور على لوجو يوتيوب تحت يمين مكتوب عليه Math Genius
+//     **وزرار الإعدادات ⚙ بس هو المتسيب ظاهر وشغال** (من غير أي بلور)
+//     عشان المستر يقدر يرفع الجودة لـ 1080p من قائمة يوتيوب الأصلية
+//     — القائمة دي هي الوحيدة اللي بتبدّل التيار فعلًا.
 //  7) الجودة (القرار النهائي 2026-ن — بعد ما كل حلول الـ API فشلت فعلًا):
 //     يوتيوب أبطلت كل دوال الجودة في الـ IFrame API (setPlaybackQualityRange /
 //     suggestedQuality) — بيتجاهلوها خالص وgetPlaybackQuality بيرجع 360p كذب
@@ -31,17 +35,19 @@
 //     ⚙ بتاعتها هي اللي بتطلب التيار بالمستوى المختار ويوتيوب بيرد ويبدّل
 //     فعلًا. عشان كده **الوضع البديل المضمون بقى هو المشغل الأساسي والوحيد
 //     لليوتيوب**: مشغل يوتيوب الأصلي بكامل حماياتنا فوقه (الوترمارك + الدروع
-//     + درع الكابشن + ملء الشاشة بتاعنا بالوترمارك) + الـ JS API للحاجات
+//     + ملء الشاشة بتاعنا بالوترمارك) + الـ JS API للحاجات
 //     اللي لسه شغالة بس (التقدم/التكملة/إبادة الكابشن) — مفيش أي قائمة
 //     جودة وهمية من عندنا خالص.
 //  8) الكابشن/الترجمة (القرار النهائي — طلب المستر الحرفي: «تشيل زرار
 //     الكابشن وتشيل الكابشن أصلاً — اعمل للكابشن بلوك.. مش عايز أي كتابة
 //     تظهر تحت الفيديو»): مفيش زرار CC في أي مشغل خالص + cc_load_policy=0
 //     + hl=ar + cc_lang_pref=ar + إبادة موديول الترجمة دوريًا (بتقتل ترجمة
-//     ASR التلقائية كمان) + **درع الكابشن (capShield)**: شريط بلور داكن
-//     فوق منطقة الترجمة — أي سطر يحاول يظهر بيبقى مش مقروء أصلًا.
-//     زرار C اتشال من الكيبورد (كان بيفتح الترجمة — الترجمة دلوقتي ممنوعة
-//     نهائيًا ومفيش أي طريقة لفتحها).
+//     ASR التلقائية كمان) + **أوامر postMessage للوضع البديل المباشر كل
+//     3 ثواني** (enablejsapi — الكابشن ممنوع في الوضعين).
+//     **درع الكابشن البلور (capShield) اتشال خالص** (2026-ط2 — المستر:
+//     «خفي الـ blur اللي تحت ده شكله مش لطيف» + كان بيطمس زرار الإعدادات ⚙)
+//     — المنع دلوقتي كله تقني (API + postMessage) من غير أي شريط مرئي.
+//     زرار C اتشال من الكيبورد (كان بيفتح الترجمة — الترجمة ممنوعة نهائيًا).
 //  9) التشغيل المضمون: مراقب متدرج (playVideo → loadVideoById → صامت)
 //     + تحميل API يوتيوب بإعادة محاولة + تسجيل طلب التشغيل قبل جهوزية الـ API
 //     + تكملة مشاهدة آمنة (من غير حلقة النهاية).
@@ -263,26 +269,41 @@ const PLAYER_PAGE = `<!doctype html>
   .wmCardMR{position:absolute;z-index:46;top:50%;right:1.8%;transform:translateY(-50%);opacity:.88}
   /* 3) نص الفيديو على الشمال — **مصغّرة** (2026-ز) */
   .wmCardML{position:absolute;z-index:46;top:50%;left:1.8%;transform:translateY(-50%);opacity:.88}
-  /* 4) تحت خالص في النص — فوق شريط الكنترولز بشوية */
-  .wmCardBC{position:absolute;z-index:46;bottom:70px;left:50%;transform:translateX(-50%)}
-  .wmCardTC .in,.wmCardBC .in{display:inline-block;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.28);
+  /* 4) تحت خالص في النص — **بقى كارت هادي صغير** (2026-ط2 — طلب المستر:
+     «خفي اللي تحت ده، شكله مش لطيف») — نفس شكل الكروت الجانبية المصغرة */
+  .wmCardBC{position:absolute;z-index:46;bottom:64px;left:50%;transform:translateX(-50%);opacity:.8}
+  .wmCardTC .in{display:inline-block;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.28);
     color:#fff;border-radius:14px;padding:7px 18px;text-align:center;direction:rtl;
     box-shadow:0 8px 26px rgba(0,0,0,.55)}
-  /* كروت اليمين/الشمال المصغّرة — شكل ووترمارك صغير شفاف (2026-ز) */
-  .wmCardMR .in,.wmCardML .in{display:inline-block;background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.16);
+  /* كروت اليمين/الشمال/تحت المصغّرة — شكل ووترمارك صغير شفاف (2026-ز/ط2) */
+  .wmCardMR .in,.wmCardML .in,.wmCardBC .in{display:inline-block;background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.16);
     color:rgba(255,255,255,.92);border-radius:999px;padding:2px 10px;text-align:center;direction:rtl;
     box-shadow:none}
-  .wmCardTC .nm,.wmCardBC .nm{display:block;font-size:clamp(11px,1.5vw,15px);font-weight:800;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap;
+  .wmCardTC .nm{display:block;font-size:clamp(11px,1.5vw,15px);font-weight:800;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap;
     text-shadow:0 1px 2px rgba(0,0,0,.8)}
-  .wmCardTC .ph,.wmCardBC .ph{display:block;font-size:clamp(9.5px,1.2vw,12px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.85;margin-top:2px}
-  .wmCardMR .nm,.wmCardML .nm{display:block;font-size:clamp(8px,0.95vw,11px);font-weight:700;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap;
+  .wmCardTC .ph{display:block;font-size:clamp(9.5px,1.2vw,12px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.85;margin-top:2px}
+  .wmCardMR .nm,.wmCardML .nm,.wmCardBC .nm{display:block;font-size:clamp(8px,0.95vw,11px);font-weight:700;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap;
     text-shadow:0 1px 2px rgba(0,0,0,.8)}
-  .wmCardMR .ph,.wmCardML .ph{display:block;font-size:clamp(7px,0.8vw,9.5px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.85;margin-top:1px}
-  /* درع فوق — **دايمًا شغال** (مش بس وقت الوقف): بيغطي عنوان يوتيوب/اسم القناة/
-     زرار الشير اللي بيظهروا وقت الوقف أو بعد التحوال — بديل القص:
-     الفيديو كامل 100% والواجهة مستحيل تبان ولا حد يقدر يدوس عليها */
-  #topShield{position:absolute;top:0;left:0;right:0;height:60px;z-index:22;pointer-events:auto;
-    background:linear-gradient(to bottom,rgba(0,0,0,.92),rgba(0,0,0,.55) 55%,rgba(0,0,0,0))}
+  .wmCardMR .ph,.wmCardML .ph,.wmCardBC .ph{display:block;font-size:clamp(7px,0.8vw,9.5px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.85;margin-top:1px}
+  /* درع فوق كامل (2026-ط2 — طلب المستر الحرفي: «اعمل blur على كل حاجة،
+     وغطّي اسم القناة اللي فوق بالكامل — علامة سودة أو كلمة Math Genius —
+     أي حاجة بس تكون مغطية»): شريط داكن + بلور بعرض الشاشة كلها، ثابت
+     دايمًا، بيغطي عنوان يوتيوب + اسم القناة + أزرار الشير/Watch on YouTube
+     تغطية 100% — مستحيل يبانوا ولا حد يقدر يدوس عليهم — ومكتوب عليه
+     Math Genius بدل أي برندنج يوتيوب */
+  #topShield{position:absolute;top:0;left:0;right:0;z-index:22;pointer-events:auto;
+    height:max(56px,min(14%,96px));
+    background:rgba(0,0,0,.80);
+    -webkit-backdrop-filter:blur(16px) saturate(.9);backdrop-filter:blur(16px) saturate(.9);
+    display:flex;align-items:center;justify-content:flex-start;
+    padding-right:18px;
+    border-bottom:1px solid rgba(255,255,255,.10)}
+  #topShield::after{content:'';position:absolute;top:100%;left:0;right:0;height:26px;
+    background:linear-gradient(to bottom,rgba(0,0,0,.5),rgba(0,0,0,0))}
+  #topShield .brand{color:rgba(255,255,255,.92);font-weight:900;
+    font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+    font-size:clamp(12px,1.9vw,17px);letter-spacing:.5px;direction:ltr;white-space:nowrap;
+    text-shadow:0 1px 3px rgba(0,0,0,.6);pointer-events:none}
   #fsBtn{position:absolute;bottom:10px;left:10px;z-index:50;width:40px;height:40px;border-radius:10px;border:0;cursor:pointer;
     background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;opacity:.75}
   #fsBtn:hover{opacity:1;background:rgba(0,0,0,.75)}
@@ -290,16 +311,14 @@ const PLAYER_PAGE = `<!doctype html>
   #tapLayer{position:absolute;inset:0;z-index:20;background:transparent}
   /* (الكنترولز بقيت بتاعة يوتيوب الأصلية — مفيش شريط تحكم من عندنا:
      قائمة ⚙ الأصلية هي الوحيدة اللي بتغير الجودة فعلًا) */
-  /* ===== درع الكابشن (2026-ن — «اعمل للكابشن بلوك») =====
-     شريط بلور داكن فوق منطقة الترجمة (أعلى شريط الكنترولز) — أي سطر
-     كابشن يحاول يظهر بيتشتت بالبلور وبقى مش مقروء خالص.
-     الـ mask بيخلي الحافة العلوية متلاشية بسلاسة — شكله طبيعي مش ملحوظ */
-  #capShield{position:absolute;bottom:0;left:0;right:0;z-index:24;height:22%;max-height:140px;pointer-events:none;
-    background:linear-gradient(to top,rgba(0,0,0,.55),rgba(0,0,0,.30) 45%,rgba(0,0,0,0) 100%);
-    -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
-    -webkit-mask-image:linear-gradient(to top,#000 40%,transparent 100%);mask-image:linear-gradient(to top,#000 40%,transparent 100%)}
+  /* درع الكابشن البلور (capShield) **اتشال خالص** (2026-ط2 — طلب المستر:
+     «حاول تخفي لي الـ blur اللي تحت ده عشان شكله مش لطيف» + الإعدادات ⚙
+     لازم تبقى ظاهرة وشغالة من غير بلور عشان يقدر يرفع الجودة لـ 1080p).
+     منع الكابشن دلوقتي بـ 3 طبقات من غير أي شريط مرئي:
+     cc_load_policy=0 + إبادة موديول الترجمة دوريًا (API)
+     + أوامر postMessage للمشغل البديل المباشر كل 3 ثواني */
   /* زرار ملء الشاشة للمشغل الأصلي — فوق الشمال (ملء الشاشة الأصلي
-     ليوتيوب مقفول fs:0 عشان الووترمارك ودرع الكابشن يفضلوا شغالين) */
+     ليوتيوب مقفول fs:0 عشان الووترمارك والدروع تفضل شغالة) */
   #fsBtnYt{position:absolute;bottom:60px;left:10px;z-index:50;width:40px;height:40px;border-radius:10px;border:0;cursor:pointer;
     background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;opacity:.8}
   #fsBtnYt:hover{opacity:1;background:rgba(0,0,0,.75)}
@@ -309,14 +328,15 @@ const PLAYER_PAGE = `<!doctype html>
   #endOv{position:absolute;inset:0;z-index:36;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(2,2,8,.94)}
   #endOv p{color:#fff;font-size:16px;font-weight:800;margin:0;font-family:system-ui,sans-serif}
   #endOv button{padding:10px 20px;border-radius:10px;border:0;background:rgba(255,255,255,.16);color:#fff;font-weight:700;font-size:14px;cursor:pointer}
-  /* باتش مكان لوجو/لينك يوتيوب — **فوق شريط الكنترولز** (مش عليه) عشان
-     ميغطيش زرار التشغيل في الواجهة الأصلية — بلور + تعتيم خفيف */
-  #logoPatch{position:absolute;bottom:60px;right:8px;z-index:26;width:120px;height:38px;border-radius:10px;background:rgba(0,0,0,.55);
-    backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);pointer-events:none;display:flex;align-items:center;justify-content:center}
-  /* باتش الركن العلوي (فوق يمين) — بيغطي Share/Watch on YouTube بتوع يوتيوب */
-  #topRightPatch{position:absolute;top:8px;right:8px;z-index:26;min-width:90px;height:38px;border-radius:10px;background:rgba(0,0,0,.55);
-    backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);pointer-events:none;display:flex;align-items:center;justify-content:center;padding:0 12px}
-  #logoPatch span,#topRightPatch span{color:rgba(255,255,255,.85);font-size:10.5px;font-weight:700;font-family:system-ui,sans-serif;direction:rtl;white-space:nowrap}
+  /* باتش لوجو يوتيوب (تحت يمين — جوه شريط الكنترولز نفسه): بيغطي لوجو/
+     لينك «Watch on YouTube» اللي في الركن — بلور + تعتيم + مكتوب عليه
+     Math Genius، والنقر عليه ممنوع (pointer-events:auto بيمنع أي ضغطة
+     توصل لليوتيوب). زرار الإعدادات ⚙ بعيد عنه تمامًا وظاهر وشغال */
+  #logoPatch{position:absolute;bottom:0;right:0;z-index:26;width:104px;height:52px;
+    border-top-left-radius:14px;background:rgba(0,0,0,.74);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    pointer-events:auto;display:flex;align-items:center;justify-content:center}
+  #logoPatch span{color:rgba(255,255,255,.88);font-size:10px;font-weight:800;font-family:system-ui,sans-serif;direction:ltr;white-space:nowrap;letter-spacing:.4px;pointer-events:none}
   /* ===== حماية الفحص ===== */
   #devshield{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(5,5,10,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
   #devshield .box{text-align:center;color:#e5e7eb;direction:rtl;padding:24px}
@@ -414,7 +434,9 @@ function buildWm(){
    الشير — بديل القص: الفيديو كامل 100% والواجهة مستحيل تبان */
 function ensureTopShield(){
   if(document.getElementById('topShield')) return;
-  var ts = document.createElement('div'); ts.id='topShield'; wrap.appendChild(ts);
+  var ts = document.createElement('div'); ts.id='topShield';
+  ts.innerHTML = '<span class="brand">Math Genius</span>';
+  wrap.appendChild(ts);
 }
 /* self-heal: الووترمارك بيرجع يترسم لو حد شاله من الـ DOM */
 function ensureWm(){
@@ -719,10 +741,16 @@ function activateFallback(reason){
     f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#000';
     wrap.appendChild(f);
   }
-  /* نفس مواصفات المشغل الأصلي بالظبط: كنترولز يوتيوب + كابشن مقفول +
-     ووترمارك ودروع فوقه — بيتشتغل لو الـ API نفسه ماقدرش يتحمل */
-  f.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&controls=1&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&cc_load_policy=0&cc_lang_pref=ar&hl=ar&disablekb=1&start=' + startS;
+  /* نفس مواصفات المشغل الأصلي بالظبط: كنترولز يوتيوب (والإعدادات ⚙ شغالة
+     عشان الجودة) + كابشن مقفول + ووترمارك ودروع فوقه — بيتشتغل لو الـ API
+     نفسه ماقدرش يتحمل. enablejsapi=1 → بنقدر نبعت أوامر إبادة الكابشن
+     جوه المشغل المباشر كمان (postMessage كل 3 ثواني) — طلب المستر الحرفي:
+     «اعمل للكابشن بلوك» في أي مشغل */
+  f.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&controls=1&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&cc_load_policy=0&cc_lang_pref=ar&hl=ar&disablekb=1&enablejsapi=1&origin=' + encodeURIComponent(location.origin || 'https://localhost') + '&start=' + startS;
   layoutWrap();
+  try{ if(plainCapTimer){ clearInterval(plainCapTimer); plainCapTimer = null; } }catch(e){}
+  plainCapTimer = setInterval(killCaptionsPlain, 3000);
+  setTimeout(killCaptionsPlain, 1200);
   toast('تمام — الفيديو شغّال دلوقتي ▶');
 }
 function scheduleFallbackIfStuck(){
@@ -736,20 +764,31 @@ function scheduleFallbackIfStuck(){
 /* ===== الكابشن ممنوع خالص (القرار النهائي للمستر 2026-ن) =====
    طلب المستر الحرفي: «تشيل زرار الكابشن وتشيل الكابشن أصلاً — اعمل للكابشن
    بلوك.. أنا مش عايز أي كتابة تظهر تحت الفيديو عشان بتشتت الطالب».
-   التنفيذ على 4 طبقات:
+   التنفيذ على 3 طبقات (من غير أي شريط مرئي — المستر شال البلور اللي تحت):
    1) cc_load_policy=0 + hl=ar + cc_lang_pref=ar → مفيش ترجمة افتراضيًا
       حتى لو حساب يوتيوب بتاع المشاهد فاتح «الترجمة دايمًا» من إعداداته
-   2) killCaptions() مع كل تغيير حالة + دوريًا كل 5 ثواني:
+   2) killCaptions() مع كل تغيير حالة + دوريًا كل 3 ثواني:
       تحميل-ثم-شيل موديول الترجمة بيقتل ترجمة ASR التلقائية كمان
       (اللي getOption مش بيشوفها فبيبان كأن «مفيش ترجمة» وهي ظاهرة)
-   3) درع الكابشن (capShield): شريط بلور داكن فوق منطقة الترجمة —
-      أي سطر يحاول يظهر بيبقى مش مقروء خالص
-   4) مفيش زرار CC في أي واجهة ومفيش زرار C في الكيبورد — مفيش أي طريق
+      + killCaptionsPlain() — أوامر postMessage للوضع البديل المباشر
+   3) مفيش زرار CC في أي واجهة ومفيش زرار C في الكيبورد — مفيش أي طريق
       لفتح الترجمة أصلًا */
 function killCaptions(){
   try{ playerApi.loadModule && playerApi.loadModule('captions'); }catch(e){}
   try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
   try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+}
+/* إبادة الكابشن في **الوضع البديل المباشر** (iframe عادي بدون API):
+   أوامر واجهة يوتيوب للويجت عبر postMessage — شغالة مع enablejsapi=1.
+   بتتنادى كل 3 ثواني — لو حد فتح الكابشن من ⚙ بتنقفل تاني فورًا تقريبًا */
+var plainCapTimer = null;
+function killCaptionsPlain(){
+  try{
+    var fr = document.getElementById('ytPlain');
+    if(!fr || !fr.contentWindow) return;
+    fr.contentWindow.postMessage(JSON.stringify({event:'command', func:'unloadModule', args:['captions']}), '*');
+    fr.contentWindow.postMessage(JSON.stringify({event:'command', func:'setOption', args:['captions','track',{}]}), '*');
+  }catch(e){}
 }
 var lastCapCheck = 0;
 function tapOk(){ var n = Date.now(); if(n - lastTap < 350) return false; lastTap = n; return true; }
@@ -823,13 +862,13 @@ function mountYouTube(){
      يختار 1080p ويوتيوب بيجيبه بجد (كل دوال الجودة في الـ API بيتجاهلها
      يوتيوب من 2023 وده سبب «مختار 1080 وبتثبت على 360»).
      الفيديو كامل 100% من غير أي قص — واجهة يوتيوب بتتغطى بالدروع
-     (topShield/logoPatch/الوترمارك/درع الكابشن) مش بقص أطراف الفيديو */
+     (topShield بشريط Math Genius + logoPatch + الوترمارك) مش بقص أطراف الفيديو */
   var host = document.createElement('div');
   host.id = 'ytHost';
   host.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:#000';
   wrap.appendChild(host);
-  /* درع الكابشن — ممنوع أي كتابة تحت الفيديو (قرار المستر النهائي 2026-ن) */
-  var cs = document.createElement('div'); cs.id = 'capShield'; wrap.appendChild(cs);
+  /* درع الكابشن البلور اتشال (2026-ط2 — كان بيغطي زرار الإعدادات ⚙ وشكله
+     مش لطيف) — منع الكابشن دلوقتي بالـ API + postMessage من غير أي شريط مرئي */
   // شاشة البداية — **صورة الفيديو الحقيقية من يوتيوب** (بتغطي أي عنوان/
   // برanding بتاع يوتيوب لحظة التحميل) + دوسة الطالب = إذن تشغيل بالصوت
   var startOv = document.createElement('div');
@@ -843,22 +882,18 @@ function mountYouTube(){
   startOv.addEventListener('touchend', function(e){ e.preventDefault(); if(!tapOk()) return; startWithWatchdog(); });
   wrap.appendChild(startOv);
   // زرار ملء الشاشة بتاعنا — فوق الشمال. ملء الشاشة الأصلي ليوتيوب مقفول
-  // (fs:0) عشان الووترمارك ودرع الكابشن يفضلوا شغالين جوه ملء الشاشة
+  // (fs:0) عشان الووترمارك والدروع يفضلوا شغالين جوه ملء الشاشة
   var fsb = document.createElement('button');
   fsb.id = 'fsBtnYt'; fsb.type = 'button'; fsb.setAttribute('aria-label','ملء الشاشة');
   fsb.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
   fsb.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); toggleFs(); });
   wrap.appendChild(fsb);
-  // باتش مكان لوجو يوتيوب — **فوق شريط الكنترولز** (مش عليه عشان ميغطيش
-  // زرار التشغيل الأصلي) — بلور + تعتيم + ووترمارك مكانه
+  // باتش لوجو يوتيوب — جوه الركن تحت يمين (مكان اللوجو نفسه): بلور + تعتيم
+  // + كلمة Math Genius — والنقر عليه ممنوع (زي ما المستر طلب: أي حاجة
+  // بتاعت يوتيوب متغطية — الإعدادات ⚙ بس هي الشغالة من الكنترولز)
   var patch = document.createElement('div'); patch.id='logoPatch';
-  patch.innerHTML = '<span>🔒 محتوى محمي</span>';
+  patch.innerHTML = '<span>Math Genius</span>';
   wrap.appendChild(patch);
-  // باتش الركن العلوي (فوق يمين) — طلب المستر 2026-ز: علامة الشير و
-  // "Watch on YouTube" **متشالوش ولا حد يقدر يدوس عليهم**
-  var trp = document.createElement('div'); trp.id='topRightPatch';
-  trp.innerHTML = '<span>🔒 محتوى محمي</span>';
-  wrap.appendChild(trp);
   // شاشة النهاية (بتغطي شاشة يوتيوب النهائية بالعنوان والاقتراحات)
   var endOv = document.createElement('div'); endOv.id='endOv';
   endOv.innerHTML = '<p>🎉 خلصت الفيديو — برافو عليك!</p><button type="button" id="replayBtn">شوفه تاني ↺</button>';
@@ -898,7 +933,7 @@ function buildPlayer(){
        controls:1 → قائمة ⚙ الأصلية هي الوحيدة اللي بتبدّل التيار فعليًا
        (الطالب يختار 1080p → يوتيوب يجيبه بجد). إحنا بنستخدم الـ JS API
        بس للتقدم/التكملة/إبادة الكابشن — مفيش أي قائمة جودة من عندنا.
-       fs:0 → ملء الشاشة الأصلي مقفول عشان الووترمارك ودرع الكابشن
+       fs:0 → ملء الشاشة الأصلي مقفول عشان الووترمارك والدروع
        يفضلوا شغالين جوه ملء الشاشة (الزرار بتاعنا fsBtnYt فوق الشمال).
        disablekb:1 → بيقفل اختصارات كيبورد يوتيوب نفسها — وفيهم زرار C
        بتاع الترجمة! فمفيش أي طريق لفتح الكابشن من الكيبورد كمان */
@@ -981,10 +1016,10 @@ function buildPlayer(){
           var eo3=document.getElementById('endOv');
           if(eo3 && eo3.style.display!=='flex'){ eo3.style.display='flex'; try{ playerApi.seekTo(0,true); playerApi.pauseVideo(); }catch(e){} reportEnded(); }
         }
-        /* الكابشن ممنوع خالص — إبادة دورية كل 5 ثواني (بتقتل ترجمة ASR كمان):
-           حتى لو يوتيوب حاول يطلّع أي سطر، بيتشال فورًا + درع الكابشن
-           (capShield) متبلور فوق منطقته فمستحيل يتقري */
-        var capNow = Math.floor(Date.now() / 5000);
+        /* الكابشن ممنوع خالص — إبادة دورية كل 3 ثواني (بتقتل ترجمة ASR كمان):
+           حتى لو يوتيوب حاول يطلّع أي سطر، بيتشال فورًا — من غير أي شريط
+           بلور مرئي (اتشال بطلب المستر — كان بيغطي زرار الإعدادات ⚙) */
+        var capNow = Math.floor(Date.now() / 3000);
         if(capNow !== lastCapCheck){
           lastCapCheck = capNow;
           killCaptions();

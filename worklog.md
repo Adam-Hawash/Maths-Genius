@@ -304,3 +304,25 @@ Stage Summary:
 - Captions: fully OFF by default, toggleable via the CC button next to the quality gear OR the C key, with honest "no captions available" feedback
 - Keyboard: Right-Click / F12 / Ctrl+U / F10 (explicit) / devtools combos all intercepted with clear Arabic warnings
 - Honest limits documented in-UI: single-MP4 sources play at native resolution with an explanatory message instead of a fake quality menu
+
+---
+Task ID: player-blur-cover-2026-T2
+Agent: Main Agent (Z.ai Code)
+Task: طلب المستر الأخير (بصوت المستر): «اعمل blur على كل حاجة وغطّي اسم القناة اللي فوق بالكامل — علامة سوداء أو كلمة Math Genius — وخلي الإعدادات ⚙ شغالة من غير blur عشان أرفع الجودة، وخفي الـ blur اللي تحت ده شكله مش لطيف»
+
+Work Log:
+- تتبع المشغل الفعلي: المستخدم شغال على الوضع البديل المضمون (SecurePlayerModal → /api/player/[ticket] → PLAYER_PAGE → activateFallback = iframe يوتيوب مباشر بكامل الكنترولز). ProtectedYouTubePlayer.tsx أكدت أنه dead code (مش مستورد في أي صفحة)
+- الشريط العلوي (topShield): بدل التدرج الشفاف القديم → شريط داكن + backdrop-blur(16px) بعرض الشاشة كلها بارتفاع max(56px, min(14%, 96px)) مكتوب عليه "Math Genius" على اليمين (نفس مكان اسم القناة) — بيغطي عنوان يوتيوب + اسم القناة + أزرار الشير تغطية 100% دايمًا، وpointer-events:auto يمنع أي ضغطة توصل ليوتيوب
+- حذف درع الكابشن البلور (capShield) بالكامل (CSS + عنصر الـ DOM): كان هو "البلور الوحش اللي تحت" + كان بيطمس زرار الإعدادات ⚙ بصريًا (blur 22px على شريط الكنترولز)
+- منع الكابشن بقي تقنيًا بدون أي شريط مرئي: cc_load_policy=0 + killCaptions دوريًا كل 3 ثواني في وضع الـ API + **جديد: killCaptionsPlain()** — أوامر postMessage (unloadModule/setOption) للمشغل البديل المباشر كل 3 ثواني بعد إضافة enablejsapi=1&origin للـ embed URL
+- logoPatch: انقطف من فوق الشريط (bottom:60px) إلى جوه الركن تحت يمين (bottom:0 right:0, 104×52px) بلور + تعتيم + كلمة "Math Genius" فوق لوجو يوتيوب نفسه + pointer-events:auto يمنع النقر عليه
+- حذف topRightPatch (بقى عبئًا — الشريط العلوي الكامل يغطي مكانه)
+- كارت الووترمارك السفلي (wmCardBC): بقى pill صغير شفاف زي الكروت الجانبية (opacity .8، بدون ظل) بدل الكارت الكبير الأسود — علاج "شكله مش لطيف"
+- تحقق: استخراج PLAYER_PAGE الحقيقي من الكود وتوليد صفحة اختبار بنفس استبدالات السيرفر + 11 فحص بنيوي كلها PASS + فحص بصري بـ agent-browser على http://localhost:3300 (نفس أصل الإنتاج): الشريط العلوي بـ Math Genius يمين ✓، باتش Math Genius تحت يمين ✓، مفيش بلور تحت ✓، الكروت الأربعة ✓، الوضع البديل اشتغل فعليًا ✓
+- قيد بيئة الاختبار (موثّق بصدق): يوتيوب بيرفض تشغيل الفيديو نفسه من IP الساندبوكس (رسالة "خطأ في إعادة تشغيل الفيديو" جوه الـ iframe حتى مع فيديو يوتيوب الرسمي المضمون) — ده حجب IP بيوتيوب مش خطأ في الكود؛ عند المستخدم التشغيل شغال (مؤكد من سكرين شوت الفيديو شغال 0:29/1:02:23). زرار ⚙ مش قابل للتحقق البصري جوه الساندبوكس لنفس السبب، لكن بنيويًا: مفيش أي عنصر بيغطي منطقته (البلور اتشال + الباتش محصور في أقصى اليمين 104px)
+
+Stage Summary:
+- كل واجهة يوتيوب (عنوان/اسم قناة/شير/لوجو) متغطية بلور + أسود + كلمة Math Genius — مفيش أي برندنج يوتيوب ظاهر
+- زرار الإعدادات ⚙ الأصلي هو الوحيد المتسيب ظاهر وشغال بدون أي بلور — المستر يقدر يرفع الجودة 1080p من قائمة يوتيوب الحقيقية (القائمة الوحيدة اللي بتبدل التيار فعلًا)
+- البلور الوحش اللي تحت اتشال خالص — المنع الصوتي/الترجمة كله تقني خلفي
+- الملف المعدل الوحيد: src/app/api/player/[ticket]/route.ts (101 إضافة / 66 حذف)
