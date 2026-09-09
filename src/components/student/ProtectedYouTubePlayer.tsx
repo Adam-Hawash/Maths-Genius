@@ -183,16 +183,19 @@ export function ProtectedYouTubePlayer({
   const mutedFallbackRef = useRef(false)
   const [needsUnmute, setNeedsUnmute] = useState(false)
 
-  /* ===== منع التسجيل (طلب المستر 2026-ز) =====
-     • Win/⌘ + Shift + R (تسجيل ويندوز) → رسالة "التسجيل ممنوع"
-     • Win/⌘ + Shift + S (أداة القص) → رسالة "التسجيل ممنوع"
+  /* ===== منع التسجيل (طلب المستر 2026-ز + تعديل 2026-ط) =====
+     • كليك يمين → "كليك يمين ممنوع" (طلب المستر الحرفي: ما تقولش
+       "التسجيل ممنوع" في الكليك اليمين)
+     • Win/⌘ + Shift + R/S → "الخاصية دي ممنوعة" + تتبّع ضغطة ويندوز نفسه
+       (الأجهزة ساعات بتبلعم metaKey — بنمسك أي R/S بعد ويندوز مباشرة)
+     • كل زرار function من F1 لـ F12 (فيهم F10) ممنوع
      • زرار PrintScreen → محاولة تفريغ الحافظة + رسالة
-     • كليك يمين ممنوع
      ملاحظة حقيقية: اختصارات النظام نفسها فوق صلاحية المتصفح — لكن
      بنكتشف المحاولة ونبعت التحذير فورًا، والووترمارك باسم الطالب ورقمه
      على الفيديو نفسه هو الخصم الحقيقي لأي صورة/فيديو مسرب. */
   const [recMsg, setRecMsg] = useState('')
   const recTimerRef = useRef<any>(null)
+  const lastMetaTsRef = useRef(0)
   function warnRecording(msg: string) {
     setRecMsg(msg)
     if (recTimerRef.current) clearTimeout(recTimerRef.current)
@@ -201,19 +204,28 @@ export function ProtectedYouTubePlayer({
   useEffect(function () {
     function onKey(e: KeyboardEvent) {
       var k = (e.key || '').toLowerCase()
-      var metaPressed = !!(e.metaKey || e.key === 'OS' || e.key === 'Meta' || e.keyCode === 91 || e.keyCode === 92)
+      if (e.key === 'Meta' || e.key === 'OS' || e.keyCode === 91 || e.keyCode === 92) lastMetaTsRef.current = Date.now()
+      var metaPressed = !!(e.metaKey || e.key === 'OS' || e.key === 'Meta' || e.keyCode === 91 || e.keyCode === 92 || Date.now() - lastMetaTsRef.current < 3000)
       if (metaPressed && e.shiftKey && (k === 'r' || k === 's')) {
         e.preventDefault()
-        warnRecording('🚫 التسجيل ممنوع')
+        warnRecording('🛡️ الخاصية دي ممنوعة')
+        return
       }
       /* Ctrl + Shift + R / S (طلب المستر حرفيًا 2026-ح — إعادة تحميل عنيدة /
          حفظ الصفحة / أداة القص في متصفحات كتير) */
       if (e.ctrlKey && e.shiftKey && (k === 'r' || k === 's')) {
         e.preventDefault()
-        warnRecording('🚫 العملية دي ممنوعة')
+        warnRecording('🛡️ الخاصية دي ممنوعة')
+        return
+      }
+      /* كل زرار function من F1 لـ F12 (فيهم F10) ممنوع — طلب المستر */
+      if (/^f([1-9]|1[0-2])$/.test(k)) {
+        e.preventDefault()
+        warnRecording('🛡️ الخاصية دي ممنوعة')
+        return
       }
       if (k === 'printscreen' || e.keyCode === 44) {
-        warnRecording('🚫 التسجيل ممنوع')
+        warnRecording('🛡️ الخاصية دي ممنوعة')
         try {
           if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText('🔒 المحتوى محمي — Math Genius').catch(function () {})
         } catch (err) {}
@@ -221,7 +233,7 @@ export function ProtectedYouTubePlayer({
     }
     function onCtx(e: MouseEvent) {
       e.preventDefault()
-      warnRecording('🚫 التسجيل ممنوع — كليك يمين مقفول')
+      warnRecording('🚫 كليك يمين ممنوع')
     }
     window.addEventListener('keydown', onKey, true)
     document.addEventListener('contextmenu', onCtx, true)
@@ -1059,7 +1071,7 @@ export function ProtectedYouTubePlayer({
       <VideoWatermark name={studentName} phone={studentPhone} />
       </div>
 
-      {/* رسالة "التسجيل ممنوع" — فوق كل حاجة وخارج الستيج الدوّار */}
+      {/* رسالة المنع (كليك يمين/اختصارات) — فوق كل حاجة وخارج الستيج الدوّار */}
       {recMsg && (
         <div
           role="alert"
