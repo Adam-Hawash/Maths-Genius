@@ -305,10 +305,20 @@ const PLAYER_PAGE = `<!doctype html>
     text-shadow:0 0 12px rgba(255,255,255,.16)}
   .wmCard{position:absolute;z-index:46}
   .wmCardT{top:2.8%;left:50%;transform:translateX(-50%)}
-  /* 2026-و8 — كروت اليمين والشمال (في نص الفيديو ارتفاعًا) اتصغروا ~18%
-     بطلب المستر: «صغرهم لي شوية مش كتير أوي» — بدون تغيير مواضعهم */
-  .wmCardMR{top:50%;right:1.8%;transform:translateY(-50%) scale(.82);opacity:.88}
-  .wmCardML{top:50%;left:1.8%;transform:translateY(-50%) scale(.82);opacity:.88}
+  /* 2026-و9 — الكروت اليمين والشمال طلعوا فوق: بقى 3 فوق (شمال/نص/يمين)
+     و3 تحت — بنفس تصغير ~18% — بطلب المستر: «اللي في النص دول تطلعهم فوق
+     يبقوا تلاتة فوق وتلاتة تحت» */
+  .wmCardMR{top:2.8%;right:2%;transform:scale(.82);transform-origin:top right;opacity:.88}
+  .wmCardML{top:2.8%;left:2%;transform:scale(.82);transform-origin:top left;opacity:.88}
+  /* 2026-و9 — كارتين صغيرين في نص الفيديو يمين وشمال على الطرف خالص —
+     فيهم رقم الطالب بس (من غير اسم ولا QR) — بطلب المستر */
+  .wmNumChip{position:absolute;top:50%;z-index:46;transform:translateY(-50%)}
+  .wmNumR{right:0;border-radius:7px 0 0 7px}
+  .wmNumL{left:0;border-radius:0 7px 7px 0}
+  .wmNumChip .in{display:inline-block;background:rgba(0,0,0,.55);color:#fff;
+    border:1px solid rgba(255,255,255,.16);border-left:0;border-right:0;padding:2.5px 9px;
+    font-size:clamp(8.5px,.95vw,11px);font-weight:700;direction:ltr;unicode-bidi:plaintext;
+    letter-spacing:0;white-space:nowrap;opacity:.85}
   .wmCardB1{bottom:66px;left:2%;opacity:.85}
   .wmCardB2{bottom:66px;left:50%;transform:translateX(-50%);opacity:.85}
   .wmCardB3{bottom:66px;right:2%;opacity:.85}
@@ -322,9 +332,12 @@ const PLAYER_PAGE = `<!doctype html>
   .wmCard .ph{font-size:clamp(8.5px,.95vw,11.5px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.92;white-space:nowrap}
   /* المستطيلات السودة تحت خالص يمين وشمال — تغطية علامة الاشتراك/اللوجو
      بتاعة يوتيوب تغطية كاملة + بتمنع الدوس عليها (فيه يوتيوب بس) */
-  #ytCoverR{position:absolute;z-index:45;bottom:0;right:0;width:min(215px,34%);height:56px;
+  /* (2026-و9) الشريط السفلي بقى بنفس سمك العلوي بالظبط — طلب المستر:
+     «تصغّر الشريط اللي تحت شوية، تقصّره، يكون بنفس سمك اللي فوق» —
+     نفس المعادلة 40–50px ونفس الطقم (أسود + بلور + Math Genius) */
+  #ytCoverR{position:absolute;z-index:45;bottom:0;right:0;width:min(215px,34%);height:max(40px,min(7.5%,50px));
     background:#000;pointer-events:auto}
-  #ytCoverL{position:absolute;z-index:45;bottom:0;left:0;width:min(150px,26%);height:56px;
+  #ytCoverL{position:absolute;z-index:45;bottom:0;left:0;width:min(150px,26%);height:max(40px,min(7.5%,50px));
     background:#000;pointer-events:auto}
   /* درع فوق كامل (2026-ط2 — طلب المستر: «اعمل blur على كل حاجة،
      وغطّي اسم القناة اللي فوق بالكامل — علامة سودة أو كلمة Math Genius —
@@ -356,7 +369,7 @@ const PLAYER_PAGE = `<!doctype html>
      كروت QR بتاعتنا (bottom:66px) فوقيه فبتفضل ظاهرة زي ما المستر عايز،
      والشريط جوه مستطيل الفيديو بس — مبيوصلش لحاجة الصفحة اللي تحت الخالص */
   #botShield{position:absolute;bottom:0;left:0;right:0;z-index:44;pointer-events:auto;
-    height:max(44px,min(8%,56px));
+    height:max(40px,min(7.5%,50px));
     background:rgba(0,0,0,.80);
     -webkit-backdrop-filter:blur(16px) saturate(.9);backdrop-filter:blur(16px) saturate(.9);
     display:flex;align-items:center;justify-content:flex-start;
@@ -481,10 +494,11 @@ function deobfuscate(b64, key){
   }catch(e){ return ''; }
 }
 
-/* ===== الووترمارك (رجوع المواصفات الأصلية + QR — طلب المستر 2026-و6) =====
-   • 6 كروت ثابتة (فوق + يمين + شمال + تلاتة تحت) كل كارت: الاسم + الرقم + QR
-     بيتولد في السيرفر خصيص للطالب — مسح الكود بيحدد مين اللي سجل الفيديو
-   • الووترمارك الكبيرة في النص: 10 ثواني ظاهرة / 20 ثانية مخفية (دورة 30 ث)
+/* ===== الووترمارك (توزيع المستر النهائي — 2026-و9) =====
+   • 6 كروت QR: 3 فوق (شمال/نص/يمين) + 3 تحت (شمال/نص/يمين) — اللي كانوا
+     في النص طلعوا فوق بطلب المستر
+   • كارتين صغيرين في نص الفيديو يمين وشمال على الطرف خالص — رقم الطالب بس
+   • الووترمارك الكبيرة في النص زي ما هي: 10 ثواني ظاهرة / 20 مخفية (دورة 30 ث)
      بتشتغل وقت التشغيل بس — عند الإيقاف بتقف */
 var wmName = String(CFG.wm.name || '').trim();
 var wmPhone = String(CFG.wm.phone || '').trim();
@@ -517,7 +531,7 @@ function buildWm(){
     big.style.animationPlayState = 'paused';
     layer.appendChild(big);
   }
-  /* 2) الكروت الستة بالـ QR: فوق في النص + يمين + شمال + تلاتة تحت */
+  /* 2) الكروت الستة بالـ QR: تلاتة فوق (شمال/نص/يمين) + تلاتة تحت */
   if(wmName || wmPhone){
     var ch = wmCardHtml();
     var t  = document.createElement('div'); t.className  = 'wmCard wmCardT';  t.innerHTML  = ch; layer.appendChild(t);
@@ -526,6 +540,12 @@ function buildWm(){
     var b1 = document.createElement('div'); b1.className = 'wmCard wmCardB1'; b1.innerHTML = ch; layer.appendChild(b1);
     var b2 = document.createElement('div'); b2.className = 'wmCard wmCardB2'; b2.innerHTML = ch; layer.appendChild(b2);
     var b3 = document.createElement('div'); b3.className = 'wmCard wmCardB3'; b3.innerHTML = ch; layer.appendChild(b3);
+  }
+  /* 3) (2026-و9) كارتين صغيرين في النص يمين وشمال على الطرف — رقم الطالب بس */
+  if(wmPhone){
+    var phc = '<div class="in">' + esc(wmPhone) + '</div>';
+    var nr = document.createElement('div'); nr.className = 'wmNumChip wmNumR'; nr.innerHTML = phc; layer.appendChild(nr);
+    var nl = document.createElement('div'); nl.className = 'wmNumChip wmNumL'; nl.innerHTML = phc; layer.appendChild(nl);
   }
   wrap.appendChild(layer);
 }
@@ -1174,31 +1194,36 @@ function buildMgBar(){
    ytVerifyQuality بتتحقق كل شوية إن يوتيوب ثبت المستوى المطلوب بجد —
    لو لأ → إعادة طلب (2 مرة كحد أقصى) وبعدها رسالة صادقة بالمستوى
    الفعلي. يوتيوب بيفضل يقدر يتجاهل — أقصى الـ API بيسمح بيه من 2023 */
-/* (2026-و8) تطوير الأرضية بعد لقطة المستر (لسه 360 بعد النشر):
-   1) الجودة الثابتة فوق الأرضية 3 ثواني متتالية → تصفير المحاولات — بدل ما
-      الحارس يموت نهائيًا بعد أول 3 محاولات، أي هبوط جاي ياخد محاولات جديدة.
-   2) لو يوتيوب رفض الأرضية بعد كل المحاولات → رسالة صادقة مرة واحدة
-      بالمستوى الفعلي (ممنوع الصمت — «مش زي كل مرة تقولي اشتغل وهو مبيشتغلش»). */
-var qFloorTries = 0, qFloorLast = 0, qFloorTold = false, qGoodStreak = 0;
+/* (2026-و9) وقف علّة «يقف ويشتغل» نهائيًا: إعادة تحميل الجودة كانت بتتجدد
+   بلا حدود (التصفير بعد أي استقرار) — الفيديو كان بيقف ويشتغل كل شوية.
+   دلوقتي: محاولتين بس في عمر الفيديو كله، في أول 90 ثانية بس، وبينهم 25
+   ثانية، وبعدها رسالة صادقة واحدة — التشغيل السلس أهم من إلحاح 480p،
+   والتلميح قبل التشغيل (onReady) هو فرصة 480p من غير أي قطيعة */
+var qFloorTries = 0, qFloorLast = 0, qFloorTold = false;
 function ytApplyFloor(){
   if(fallbackActive || ytQWanted) return;
   try{ if(playerApi && playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange('large','highres'); }catch(e){}
 }
 function ytFloorGuard(){
   if(fallbackActive || ytQWanted || !playerApi || !ytIdCached) return;
+  if(qFloorTries >= 2){
+    if(!qFloorTold){ qFloorTold = true;
+      var qf = '';
+      try{ qf = String(playerApi.getPlaybackQuality() || ''); }catch(e){}
+      if(qf === 'tiny' || qf === 'small' || qf === 'medium'){
+        toast('يوتيوب مثبّت دلوقتي على ' + ytQName(qf) + ' — عرض 480p محتاج سرعة إنترنت أعلى، ومش هنقطع الفيديو تاني'); }
+    }
+    return;
+  }
+  var cur = 0; try{ cur = playerApi.getCurrentTime()||0; }catch(e){}
+  if(cur > 90) return; /* ممنوع قطع الفيديو في النص — المحاولات في البداية بس */
   var q = '';
   try{ q = String(playerApi.getPlaybackQuality() || ''); }catch(e){}
   if(q !== 'tiny' && q !== 'small' && q !== 'medium') return;
-  if(qFloorTries >= 3){
-    if(!qFloorTold){ qFloorTold = true;
-      toast('يوتيوب مثبّت دلوقتي على ' + ytQName(q) + ' — عرض 480p محتاج سرعة إنترنت أعلى، ولو النت تحسّن هنجرب تاني تلقائيًا'); }
-    return;
-  }
   var now = Date.now();
-  if(now - qFloorLast < 12000) return;
+  if(now - qFloorLast < 25000) return;
   qFloorTries++; qFloorLast = now;
   try{
-    var cur = 0; try{ cur = playerApi.getCurrentTime()||0; }catch(e){}
     playerApi.loadVideoById(ytIdCached, Math.max(0, Math.floor(cur)), 'large');
     try{ if(playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange('large','highres'); }catch(e){}
   }catch(e){}
@@ -1496,17 +1521,10 @@ function buildPlayer(){
         reportProgress(cur, dur);
         mgUpdateProgress();
         ytUpdateQLabel();
-        /* أرضية 480p دورية: طلب الأرضية كل 5 ثواني + حارس إعادة التحميل
-           لو التيار لسه واقف تحت 480 (بحد أقصى 3 محاولات) + متحقق اختيار
-           الطالب (يتأكد إن المستوى اللي اختاره ثبت بجد) */
+        /* أرضية 480p دورية: طلب الأرضية كل 5 ثواني + حارس محدود (محاولتين
+           في أول 90 ثانية بس — من غير قطيعة) + متحقق اختيار الطالب */
         var floorNow = Math.floor(Date.now() / 5000);
         if(floorNow !== lastFloorCheck){ lastFloorCheck = floorNow; ytApplyFloor(); }
-        /* (2026-و8) استقرار الجودة فوق الأرضية 3 ثواني → تصفير محاولات الحارس */
-        var qNow = '';
-        try{ qNow = String(playerApi.getPlaybackQuality() || ''); }catch(e){}
-        if(qNow && qNow !== 'tiny' && qNow !== 'small' && qNow !== 'medium' && !ytQWanted){
-          qGoodStreak++; if(qGoodStreak >= 3){ qFloorTries = 0; qFloorLast = 0; qFloorTold = false; }
-        } else { qGoodStreak = 0; }
         ytFloorGuard();
         ytVerifyQuality();
         /* حارس النهاية: لو شاشة الاقتراحات هتظهر (ENDED ماتفوتش) → غطّي فورًا */
