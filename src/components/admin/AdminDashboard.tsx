@@ -1175,7 +1175,7 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
     if (savedName) toast.success('تم إضافة ' + savedName + ' — كل طالب هيشوف نموذج واحد بس عشوائي')
   }
 
-  const avgScore = results.length > 0 ? (results.reduce((sum, r) => sum + r.score, 0) / results.length).toFixed(1) : '—'
+  const avgScore = results.length > 0 ? (results.reduce((sum, r) => sum + (Number(r.score) || 0), 0) / results.length).toFixed(1) : '—'
 
   return (
     <Card>

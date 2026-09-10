@@ -348,7 +348,8 @@ export async function POST(request) {
           } catch (imErr) {
             console.error('Exam writing image grade error:', imErr)
           }
-          if (gradeData) {
+          if (gradeData && gradeData.needsGrading !== true) {
+            /* حكم الـ AI الواثق — نهائي: صح/جزئي/غلط (زي الواجب بالظبط) */
             var imAwarded = Math.min(Math.max(Math.round(Number(gradeData.awardedPoints) || (gradeData.isCorrect ? iw.points : 0)), 0), iw.points)
             imageGraded.push({
               question: iw.question,
@@ -362,6 +363,10 @@ export async function POST(request) {
               aiExtractedAnswer: gradeData.extractedAnswer || '',
             })
           } else {
+            /* 2026-و13 — طلب المستر الحرفي: الامتحان يتصرف زي الواجب بالظبط —
+               مفيش حالة «محتاجة مراجعة» معلقة وخالص: الـ AI مش متأكد من قراية
+               الصورة ← درجة مؤقتة عادلة (نص درجة المحاولة) والمستر يقدر يعدلها
+               بضغطة من لوحته — مفيش صفر ظالم ومفيش بادج معلق */
             var hasRealWork = iw.studentText.replace(/\[📷[^\]]*\]/g, '').trim().length > 0
             imageGraded.push({
               question: iw.question,
@@ -369,9 +374,12 @@ export async function POST(request) {
               modelAnswer: iw.modelAnswer,
               awardedPoints: hasRealWork ? Math.ceil(iw.points / 2) : 0,
               maxPoints: iw.points,
-              isCorrect: hasRealWork,
-              feedback: hasRealWork ? 'صورة الحل اترفعت — المستر هيراجعها ويعادلها' : 'لم يتم الإجابة',
+              isCorrect: false,
+              feedback: hasRealWork
+                ? 'صورة الحل اترفعت — درجة مؤقتة لحد ما تراجعها وعدّلها من لوحتك'
+                : 'لم يتم الإجابة',
               gradingStatus: 'graded',
+              aiExtractedAnswer: hasRealWork ? '(صورة الحل مقدرناش نقراها بدقة)' : '',
             })
           }
         }
@@ -403,6 +411,7 @@ export async function POST(request) {
               isCorrect: gr.isCorrect,
               feedback: gr.feedback,
               gradingStatus: gr.gradingStatus || 'graded',
+              needsGrading: gr.needsGrading === true ? true : undefined,
               aiExtractedAnswer: gr.aiExtractedAnswer || '',
             })
           } else {
@@ -437,13 +446,13 @@ export async function POST(request) {
       }
     })
 
+    /* 2026-و12 — طلب المستر الصريح: الطالب ميشوفش أي نتيجة خالص
+       (لا درجة ولا تصحيح ولا إجابة نموذجية) — رسالة واحدة بس.
+       التصحيح كله بيحصل في الخلفية وبيوصل لمستر وائل من الأدمن. */
     return NextResponse.json({
       success: true,
       submitted: true,
-      score: score,
-      maxScore: maxScore,
-      writingGrades: pendingGrades,
-      writingPending: writingQuestions.length > 0,
+      message: 'تم تسليم الامتحان بنجاح — نتيجتك هتظهر لمستر وائل',
     })
   } catch (error) {
     console.error('Exam submit error:', error)

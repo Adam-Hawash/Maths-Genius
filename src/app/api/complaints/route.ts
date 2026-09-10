@@ -139,6 +139,34 @@ export async function GET(request: Request) {
       }
     }
 
+    /* (2026-و12 — طلب المستر: أي شكوى توصلله باسم الطالب ورقم تليفونه)
+       شكاوى قديمة متخزنة من غير اسم/تليفون → بنكمل هويتها من جدول الطلاب */
+    if (!studentId) {
+      try {
+        var needIds: string[] = []
+        rows.forEach(function (r: any) {
+          if (r.studentId && (!r.studentName || !r.phone) && needIds.indexOf(r.studentId) === -1) needIds.push(r.studentId)
+        })
+        if (needIds.length > 0) {
+          var ph = needIds.map(function () { return '?' }).join(',')
+          var srows = (await db.$queryRawUnsafe(
+            'SELECT id, name, phone, grade FROM Student WHERE id IN (' + ph + ')',
+            ...needIds
+          )) || []
+          var smap: any = {}
+          srows.forEach(function (s: any) { smap[s.id] = s })
+          rows.forEach(function (r: any) {
+            var s = smap[r.studentId]
+            if (s) {
+              if (!r.studentName) r.studentName = String(s.name || '')
+              if (!r.phone) r.phone = String(s.phone || '')
+              if (!r.grade) r.grade = String(s.grade || '')
+            }
+          })
+        }
+      } catch (e) {}
+    }
+
     var newCount = rows.filter(function (r) { return r.status === 'new' }).length
     return NextResponse.json({ complaints: rows, newCount: newCount })
   } catch (error) {

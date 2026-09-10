@@ -22,10 +22,11 @@ export async function GET(request: NextRequest) {
         'SELECT id, examId, studentId, score, maxScore, submittedAt, writingGrades FROM ExamResult WHERE studentId = ?',
         studentId
       )
-      var withGrades = (rows || []).map(function(r: any) {
-        var wg: any[] = []
-        try { wg = r.writingGrades ? JSON.parse(r.writingGrades) : [] } catch (e) { wg = [] }
-        return { id: r.id, examId: r.examId, studentId: r.studentId, score: r.score, maxScore: r.maxScore, submittedAt: r.submittedAt, writingGrades: wg }
+      /* 2026-و12 — طلب المستر الصريح: النتيجة ممنوعة على الطالب — الرد
+         بيرجع بس (سلّم إمتى) عشان حالة «تم التقديم» والقفل التسلسلي،
+       من غير أي درجة أو تصحيح أو إجابة نموذجية (دي لمستر وائل بس) */
+      var minimal = (rows || []).map(function(r: any) {
+        return { id: r.id, examId: r.examId, submittedAt: r.submittedAt }
       })
 
       // self-heal: نتايج قديمة ناقصة التصحيح → إعادة تصحيح تلقائي بالذكاء الاصطناعي
@@ -51,15 +52,15 @@ export async function GET(request: NextRequest) {
         }
       } catch (e) {}
 
-      return NextResponse.json({ results: withGrades })
+      return NextResponse.json({ results: minimal })
     } catch (error) {
       console.error('Student exam results error:', error)
       try {
         var rows2 = await db.$queryRawUnsafe(
-          'SELECT id, examId, studentId, score, maxScore, submittedAt FROM ExamResult WHERE studentId = ?',
+          'SELECT id, examId, submittedAt FROM ExamResult WHERE studentId = ?',
           studentId
         )
-        return NextResponse.json({ results: (rows2 || []).map(function(r: any) { return { ...r, writingGrades: [] } }) })
+        return NextResponse.json({ results: (rows2 || []).map(function(r: any) { return { id: r.id, examId: r.examId, submittedAt: r.submittedAt } }) })
       } catch (e2) {
         return NextResponse.json({ results: [] })
       }
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
   if (studentId && examId) {
     try {
       var rows = await db.$queryRawUnsafe(
-        'SELECT id FROM ExamResult WHERE studentId = ? AND examId = ? LIMIT 1',
+        'SELECT id, examId FROM ExamResult WHERE studentId = ? AND examId = ? LIMIT 1',
         studentId, examId
       )
       return NextResponse.json({ results: rows || [] })
@@ -268,10 +269,24 @@ export async function GET(request: NextRequest) {
         // FAST PATH: grades stored at submit time → use them directly (no live AI)
         var stored = storedByOrig[wOrigIdx]
         if (stored) {
-          var storedAwarded = Math.min(Math.max(Math.round(Number(stored.awardedPoints) || 0), 0), pts)
-          var storedIsCorrect = stored.isCorrect === true || (storedAwarded >= Math.ceil(pts * 0.5) && storedAwarded > 0)
+          /* 2026-و13 — التسليم بقى حاسم (زي الواجب): مفيش صفوف needsGrading
+             جديدة — والحكم المخزن الصريح بيتحترم زي ما هو (الدرجة المؤقتة
+             النصفية تفضل غلط بالبادج مع تعليق واضح إنها مؤقتة) */
+          var storedNeedsReview = stored.needsGrading === true || stored.gradingStatus === 'needsGrading' || stored.gradingStatus === 'pending'
+          var storedAwarded = storedNeedsReview
+            ? 0
+            : Math.min(Math.max(Math.round(Number(stored.awardedPoints) || 0), 0), pts)
+          var storedIsCorrect = storedNeedsReview
+            ? false
+            : (stored.isCorrect === true
+                ? true
+                : (stored.isCorrect === false
+                    ? false
+                    : (storedAwarded >= Math.ceil(pts * 0.5) && storedAwarded > 0)))
           var storedExtracted = stored.aiExtractedAnswer || (String(stored.answer || '') !== '' ? String(stored.answer) : '')
-          var storedFeedback = stored.feedback || (storedIsCorrect ? 'صح' : 'غلط')
+          var storedFeedback = storedNeedsReview
+            ? (stored.feedback || 'التصحيح الذكي محتاج يتأكد — محتاجة مراجعة مستر وائل')
+            : (stored.feedback || (storedIsCorrect ? 'صح' : 'غلط'))
           var storedAnsText = String(stored.answer || studentText || '')
 
           allQuestions.push({
@@ -285,8 +300,8 @@ export async function GET(request: NextRequest) {
             aiFeedback: storedFeedback,
             imageGraded: /\[📷/.test(storedAnsText),
             textGraded: !/\[📷/.test(storedAnsText),
-            needsGrading: false,
-            isGraded: true,
+            needsGrading: storedNeedsReview,
+            isGraded: !storedNeedsReview,
             awardedPoints: storedAwarded,
             maxPoints: stored.maxPoints || pts,
           })
@@ -296,13 +311,13 @@ export async function GET(request: NextRequest) {
             points: pts,
             modelAnswer: stored.modelAnswer || modelAnswer,
             acceptedAnswers: acceptedAnswers,
-            needsGrading: false,
+            needsGrading: storedNeedsReview,
             aiExtractedAnswer: storedExtracted,
             aiIsCorrect: storedIsCorrect,
             aiFeedback: storedFeedback,
             imageGraded: /\[📷/.test(storedAnsText),
             textGraded: !/\[📷/.test(storedAnsText),
-            isGraded: true,
+            isGraded: !storedNeedsReview,
             isCorrect: storedIsCorrect,
             awardedPoints: storedAwarded,
             maxPoints: stored.maxPoints || pts,
