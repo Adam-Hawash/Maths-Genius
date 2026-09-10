@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, safeWrite } from '@/lib/db'
 
 // GET /api/homework/[id] - 获取单个作业
 export async function GET(
@@ -67,17 +67,30 @@ export async function DELETE(
       return NextResponse.json({ error: '作业不存在' }, { status: 404 })
     }
 
-    // المستر طلب: حذف الواجب من المنصة = حذف كل حاجة تخصه
-    // (تسليمات الطالب + درجاته + تصحيحات الـ AI — عشان مفيش "واجب محذوف" يفضل ظاهر بدرجة)
-    // الفورين كي مش مفروض على داتابيز الإنتاج (اتعملت بـ raw SQL) فبنمسح يدوي.
+    // (2026-و16) طلب المستر حرفيًا: «أي واجب أمسحه — النقاط بتاعته تختفي
+    // والإجابات بتاعته تختفي من صفحة الأدمن». الحذف بقى عملية واحدة ذرّية
+    // (transaction): تسليمات الطلاب (الإجابات + تصحيحات الـ AI جواهم) + الواجب
+    // نفسه في نفس اللحظة — مفيش نتيجة يتيمة تفضل ظاهرة ولا نقاط بتتحسب من
+    // واجب اتمسح. الفورين كي مش مفروض على داتابيز الإنتاج (اتعملت بـ raw SQL)
+    // فبنمسح يدوي جوه transaction واحدة عشان النضيف يبقى كله أو لا حاجة.
     try {
-      await db.$executeRawUnsafe('DELETE FROM HomeworkResult WHERE homeworkId = ?', id)
-    } catch (e) {
-      console.error('حذف تسليمات الواجب فشل:', e)
-      try { await db.homeworkResult.deleteMany({ where: { homeworkId: id } }) } catch (e2) {}
+      await safeWrite(async function () {
+        await db.$transaction([
+          db.$executeRawUnsafe('DELETE FROM HomeworkResult WHERE homeworkId = ?', id),
+          db.$executeRawUnsafe('DELETE FROM Homework WHERE id = ?', id),
+        ])
+      })
+    } catch (txErr) {
+      // احتياط: نفس الحذف المتتابع القديم لو الـ transaction مش متاح على الداتابيز
+      console.error('حذف الواجب المتسلسل فشل — رجوع للحذف المتتابع:', txErr)
+      try {
+        await db.$executeRawUnsafe('DELETE FROM HomeworkResult WHERE homeworkId = ?', id)
+      } catch (e) {
+        console.error('حذف تسليمات الواجب فشل:', e)
+        try { await db.homeworkResult.deleteMany({ where: { homeworkId: id } }) } catch (e2) {}
+      }
+      await db.homework.delete({ where: { id } })
     }
-
-    await db.homework.delete({ where: { id } })
 
     return NextResponse.json({ message: '作业删除成功' })
   } catch (error) {

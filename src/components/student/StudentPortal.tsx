@@ -156,11 +156,11 @@ export function StudentPortal() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button variant="outline" size="sm" onClick={() => setShowGuide(true)} className="gap-1.5">
+                  <Button variant="outline" size="sm" onClick={() => setShowGuide(true)} className="gap-1.5 h-11 sm:h-8">
                     <HelpCircle className="h-4 w-4" />
                     <span className="hidden sm:inline">دليل التعامل</span>
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={logout} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                  <Button variant="ghost" size="sm" onClick={logout} className="text-destructive hover:text-destructive hover:bg-destructive/10 h-11 sm:h-8 shrink-0">
                     <LogOut className="h-4 w-4 ml-1" />
                     <span className="hidden sm:inline">خروج</span>
                   </Button>
@@ -295,7 +295,7 @@ export function StudentPortal() {
       {/* Top Bar */}
       <div className="border-b px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setShowFullPortal(false)} className="gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setShowFullPortal(false)} className="gap-1 h-11 sm:h-8 shrink-0">
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline text-xs">رجوع</span>
           </Button>
@@ -1343,7 +1343,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                     </div>
                   )}
 
-                  <Button size="sm" disabled={Object.keys(myAnswers).length === 0 && Object.keys(hwAnswers[hw.id] || {}).length === 0 || hwSubmitting === hw.id} onClick={async function() {
+                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-8 mt-1" disabled={Object.keys(myAnswers).length === 0 && Object.keys(hwAnswers[hw.id] || {}).length === 0 || hwSubmitting === hw.id} onClick={async function() {
                     setHwSubmitting(hw.id)
                     try {
                       // Map display answers back to original indices
@@ -1593,9 +1593,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
     })
     return (
       <div className="space-y-4" dir="ltr">
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold">{exam.title}</h3>
-          <Button variant="outline" size="sm" onClick={() => { setTakingExam(null); setAnswers({}); setWritingAnswers({}); setExamQuestions([]); setExamShuffleMap([]) }}>رجوع</Button>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-bold truncate min-w-0">{exam.title}</h3>
+          <Button variant="outline" size="sm" className="h-11 sm:h-8 shrink-0" onClick={() => { setTakingExam(null); setAnswers({}); setWritingAnswers({}); setExamQuestions([]); setExamShuffleMap([]) }}>رجوع</Button>
         </div>
         
         {/* MCQ Section */}
@@ -1667,7 +1667,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         )}
 
         <Button
-          className="w-full"
+          className="w-full h-11 sm:h-10"
           disabled={submitting}
           onClick={async () => {
             setSubmitting(true)
@@ -1797,7 +1797,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                         مقفول — سلّم اللي قبله الأول
                       </button>
                     ) : hasQuestions ? (
-                      <Button size="sm" disabled={checkingServer} onClick={async () => {
+                      <Button size="sm" className="h-11 sm:h-8" disabled={checkingServer} onClick={async () => {
                         setCheckingServer(true)
                         try {
                           var checkRes = await fetch('/api/exam-results?studentId=' + studentId + '&examId=' + exam.id)
