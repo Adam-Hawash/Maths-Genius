@@ -1863,6 +1863,8 @@ interface StudentAnalytics {
   avgWatchPercent: number
   examsTaken: number; examsPassed: number; totalExams: number
   avgExamScore: number; activityScore: number
+  firstExamAt?: number | null; lastExamAt?: number | null; bestExamScore?: number
+  homeworkDone?: number; totalHomework?: number; avgHwScore?: number
 }
 
 function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void }) {
@@ -1963,6 +1965,55 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                   <div className="text-center p-3 rounded-lg bg-purple-500/10"><p className="text-xl font-bold text-purple-600 dark:text-purple-400">{summary.avgActivity}%</p><p className="text-[10px] text-muted-foreground">متوسط النشاط</p></div>
                 </div>
               )}
+
+              {/* (جدول الترتيب 2026-و10 — طلب المستر: «مين الطلاب اللي خلصوا الامتحانات الأول ودرجاتهم بالترتيب») */}
+              {(() => {
+                const ranked = students
+                  .filter(function (s) { return s.examsTaken > 0 && (s as any).firstExamAt })
+                  .sort(function (a, b) { return Number((a as any).firstExamAt) - Number((b as any).firstExamAt) })
+                if (ranked.length === 0) return null
+                const medal = function (i: number) { return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1) }
+                return (
+                  <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border-b border-amber-500/30">
+                      <Trophy className="h-4 w-4 text-amber-500" />
+                      <p className="text-sm font-bold">ترتيب تسليم الامتحانات — اللي خلصوا الأول الأول</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b text-xs text-muted-foreground">
+                          <th className="text-center py-2 px-2 font-medium w-10">#</th>
+                          <th className="text-right py-2 px-2 font-medium">الطالب</th>
+                          <th className="text-center py-2 px-1 font-medium">أول تسليم</th>
+                          <th className="text-center py-2 px-1 font-medium">الامتحانات</th>
+                          <th className="text-center py-2 px-1 font-medium">متوسط الدرجات</th>
+                          <th className="text-center py-2 px-1 font-medium">أفضل درجة</th>
+                        </tr></thead>
+                        <tbody>
+                          {ranked.map((s, i) => (
+                            <tr key={s.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => loadDetail(s.id)}>
+                              <td className="text-center py-2 px-2 font-bold text-xs">{medal(i)}</td>
+                              <td className="py-2 px-2">
+                                <p className="font-medium text-xs truncate max-w-[150px]">{s.name}</p>
+                                <p className="text-[10px] text-muted-foreground" dir="ltr">{s.phone}</p>
+                              </td>
+                              <td className="text-center py-2 px-1">
+                                <span className="text-[10px] font-medium">{new Date((s as any).firstExamAt).toLocaleDateString('ar-EG')}</span>
+                                <p className="text-[9px] text-muted-foreground" dir="ltr">{new Date((s as any).firstExamAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</p>
+                              </td>
+                              <td className="text-center py-2 px-1 text-xs font-medium">{s.examsTaken}/{s.totalExams}</td>
+                              <td className="text-center py-2 px-1">
+                                <span className={`text-xs font-bold ${(s as any).avgExamScore >= 50 ? 'text-emerald-600' : 'text-red-500'}`}>{(s as any).avgExamScore}</span>
+                              </td>
+                              <td className="text-center py-2 px-1 text-xs font-medium">{(s as any).bestExamScore}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Student Analytics Table */}
               <div className="overflow-x-auto">
@@ -3017,6 +3068,16 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
 
   var handleSave = async function() {
     if (extractedQuestions.length === 0) { toast.error('لا يوجد اسئلة للحفظ'); return }
+    /* (استخراج أدق 2026-و10) ممنوع حفظ سؤال اختيارات من غير إجابة محددة —
+       ده كان بيتحول لإجابة عشوائية (A) عند الطالب. المستر بيثبتها بإيده الأول */
+    var unfixed = extractedQuestions.filter(function(q: any) {
+      var isMcq = q.type !== 'writing' && q.type !== 'essay' && Array.isArray(q.options) && q.options.length > 0
+      return isMcq && (q.correct === -1 || q.correct === undefined || q.correct === null)
+    })
+    if (unfixed.length > 0) {
+      toast.error('فيه ' + unfixed.length + ' سؤال اختيارات من غير إجابة محددة — حدد الإجابة الصحيحة (دوس على الحرف A/B/C/D) لكل واحد فيهم الأول')
+      return
+    }
     setSaving(true); setStatusMsg('جاري الحفظ في قاعدة البيانات...')
     try {
       var fd = new FormData()
@@ -3201,6 +3262,14 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
                     <span className="text-xs font-bold text-primary">سؤال {qi + 1}</span>
                     <Badge variant="outline" className={"text-[9px] " + (qType === 'mcq' ? 'border-blue-500/40 text-blue-600' : 'border-amber-500/40 text-amber-600')}>{qType === 'mcq' ? 'اختيارات' : 'مقالي'}</Badge>
                     <span className="text-[10px] text-muted-foreground">{q.points || 1} نقطة</span>
+                    {/* (استخراج أدق 2026-و10) تحذير صريح للأسئلة اللي الـ AI ماقدرش
+                       يقرا إجابتها من ورقة الإجابات بثقة — ممنوع تخرج عشوائية */}
+                    {qType === 'mcq' && (q.needsReview || q.correct === -1 || q.correct === undefined) && (
+                      <Badge variant="outline" className="text-[9px] border-red-500/50 bg-red-500/10 text-red-600">⚠ مش متأكد من الإجابة — ثبّتها بإيدك</Badge>
+                    )}
+                    {q.keyQuote && (
+                      <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-600" title="النص المقروء حرفياً من ورقة الإجابات">📄 من المفتاح: {String(q.keyQuote).slice(0, 24)}</Badge>
+                    )}
                   </div>
                   <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={function() { deleteQuestion(qi) }}><Trash2 className="h-3 w-3" /></Button>
                 </div>

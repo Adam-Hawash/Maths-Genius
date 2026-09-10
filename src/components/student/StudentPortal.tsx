@@ -1739,6 +1739,11 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                 if (typeof data.score === 'number') {
                   setLastResult({ examId: takingExam, score: data.score, maxScore: data.maxScore, writingGrades: data.writingGrades || [] })
                 }
+                // (إصلاح 2026-و10) التسليم بقى فوري والتصحيح الذكي للأسئلة
+                // المقالية بيكمل في الخلفية — نقول للطالب الحقيقة بجد
+                if (data.writingPending) {
+                  toast('تم التسليم ✅ — درجة الاختياري ظاهرة دلوقتي، والتصحيح الذكي للأسئلة المقالية بيكمل في الخلفية ويحدّث درجتك تلقائيًا')
+                }
                 setSubmittedExamId(takingExam)
                 setExamSubmitted(true)
                 onExamSubmitted(takingExam)
@@ -1749,11 +1754,27 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                 toast.error(data.error || 'خطأ في التقديم')
               }
             } catch (e) {
-              // If timeout/network error, treat as submitted (server may still be processing)
-              toast.success('تم تقديم الامتحان بنجاح')
-              setSubmittedExamId(takingExam)
-              setExamSubmitted(true)
-              onExamSubmitted(takingExam)
+              /* (إصلاح 2026-و10) ممنوع الكذب: الانقطاع/التايم أوت كان بيقول
+                 «تم التقديم» حتى لو التسليم ماوصلش للسيرفر أصلًا — فكان الطالب
+                 بيختفي من عند المستر وهو فاكر نفسه سلم. دلوقتي بنسأل السيرفر
+                 بجد: هل فيه نتيجة للامتحان ده؟ لو موجودة → اتسلم فعلًا،
+                 لو لأ → رسالة صادقة + زرار التسليم لسه شغال يقدر يعيد */
+              try {
+                var verifyRes = await fetch('/api/exam-results?studentId=' + encodeURIComponent(studentId) + '&examId=' + encodeURIComponent(takingExam))
+                var verifyData = await verifyRes.json()
+                var vResults = Array.isArray(verifyData) ? verifyData : (verifyData.results || [])
+                var landed = vResults.some(function(r: any) { return r && r.examId === takingExam })
+                if (landed) {
+                  toast.success('تم تقديم الامتحان — التسليم وصل ✅')
+                  setSubmittedExamId(takingExam)
+                  setExamSubmitted(true)
+                  onExamSubmitted(takingExam)
+                } else {
+                  toast.error('حصل انقطاع والتسليم ماوصلش — جرب تسلّم تاني، إجاباتك محفوظة عندك')
+                }
+              } catch (vErr) {
+                toast.error('حصل انقطاع في الشبكة — اتأكد من النت وجرّب تسلّم تاني')
+              }
             }
             setSubmitting(false)
           }}
