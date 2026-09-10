@@ -1258,6 +1258,12 @@ function buildPlayer(){
            (الـ seek قبل التشغيل كان بعلّق المشغل في حالة cued على بعض الأجهزة) */
         try{ if(Number(CFG.resume) > 5) pendingResume = Number(CFG.resume); }catch(e){}
         killCaptions();
+        /* (2026-س1) دفعة مكثفة لإبادة الكابشن بعد الجاهزية — «تمنعه منعاً باتاً»:
+           0.4/1.2/2.5/4 ثواني — لو يوتيوب جهز موديول الترجمة متأخر بيتإباد فورًا
+           + الإبادة الدورية كل 3 ثواني شغالة زي ما هي */
+        try{
+          [400, 1200, 2500, 4000].forEach(function(ms){ setTimeout(killCaptions, ms); });
+        }catch(e){}
         try{ setMuteIcon(!!(playerApi.isMuted && playerApi.isMuted())); }catch(e){}
         if(pendingStart){ pendingStart = false; startWithWatchdog(); }
         layoutWrap();
