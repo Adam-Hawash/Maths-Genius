@@ -308,20 +308,25 @@ const PLAYER_PAGE = `<!doctype html>
   /* 2026-و9 — الكروت اليمين والشمال طلعوا فوق: بقى 3 فوق (شمال/نص/يمين)
      و3 تحت — بنفس تصغير ~18% — بطلب المستر: «اللي في النص دول تطلعهم فوق
      يبقوا تلاتة فوق وتلاتة تحت» */
-  .wmCardMR{top:2.8%;right:2%;transform:scale(.82);transform-origin:top right;opacity:.88}
-  .wmCardML{top:2.8%;left:2%;transform:scale(.82);transform-origin:top left;opacity:.88}
+  /* 2026-و11 — «في الطرف خالص، في طرف الشاشة» — الكروت الجانبية بقيت ملاصقة
+     للحافة بلا فاصل (كانت 2%) — يمين وشمال ملاصقين خالص */
+  .wmCardMR{top:2.8%;right:0;transform:scale(.82);transform-origin:top right;opacity:.88}
+  .wmCardML{top:2.8%;left:0;transform:scale(.82);transform-origin:top left;opacity:.88}
   /* 2026-و9 — كارتين صغيرين في نص الفيديو يمين وشمال على الطرف خالص —
      فيهم رقم الطالب بس (من غير اسم ولا QR) — بطلب المستر */
-  .wmNumChip{position:absolute;top:50%;z-index:46;transform:translateY(-50%)}
-  .wmNumR{right:0;border-radius:7px 0 0 7px}
-  .wmNumL{left:0;border-radius:0 7px 7px 0}
+  .wmNumChip{position:absolute;z-index:46;transform:translateY(-50%)}
+  .wmNumR{right:0;top:50%;border-radius:7px 0 0 7px}
+  .wmNumL{left:0;top:44%;border-radius:0 7px 7px 0}
+  /* 2026-و11 — المستر طلب 2 شمال مش 1: «في النص على اليمين صغيرة وفي النص
+     على الشمال صغيرين» — الشمال اتنين فوق بعض واليمين واحدة في النص */
+  .wmNumL2{left:0;top:56%;border-radius:0 7px 7px 0}
   .wmNumChip .in{display:inline-block;background:rgba(0,0,0,.55);color:#fff;
     border:1px solid rgba(255,255,255,.16);border-left:0;border-right:0;padding:2.5px 9px;
     font-size:clamp(8.5px,.95vw,11px);font-weight:700;direction:ltr;unicode-bidi:plaintext;
     letter-spacing:0;white-space:nowrap;opacity:.85}
-  .wmCardB1{bottom:66px;left:2%;opacity:.85}
+  .wmCardB1{bottom:66px;left:0;opacity:.85}
   .wmCardB2{bottom:66px;left:50%;transform:translateX(-50%);opacity:.85}
-  .wmCardB3{bottom:66px;right:2%;opacity:.85}
+  .wmCardB3{bottom:66px;right:0;opacity:.85}
   .wmCard .in{display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.66);
     border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:9px;padding:3px 9px;
     direction:rtl;white-space:nowrap}
@@ -541,11 +546,13 @@ function buildWm(){
     var b2 = document.createElement('div'); b2.className = 'wmCard wmCardB2'; b2.innerHTML = ch; layer.appendChild(b2);
     var b3 = document.createElement('div'); b3.className = 'wmCard wmCardB3'; b3.innerHTML = ch; layer.appendChild(b3);
   }
-  /* 3) (2026-و9) كارتين صغيرين في النص يمين وشمال على الطرف — رقم الطالب بس */
+  /* 3) (2026-و11) تلات كروت صغيرين في النص على الطرف خالص — رقم الطالب بس:
+     واحدة يمين + اتنين شمال (فوق بعض) — بطلب المستر الحرفي */
   if(wmPhone){
     var phc = '<div class="in">' + esc(wmPhone) + '</div>';
     var nr = document.createElement('div'); nr.className = 'wmNumChip wmNumR'; nr.innerHTML = phc; layer.appendChild(nr);
     var nl = document.createElement('div'); nl.className = 'wmNumChip wmNumL'; nl.innerHTML = phc; layer.appendChild(nl);
+    var nl2 = document.createElement('div'); nl2.className = 'wmNumChip wmNumL2'; nl2.innerHTML = phc; layer.appendChild(nl2);
   }
   wrap.appendChild(layer);
 }
@@ -1233,18 +1240,23 @@ function ytFloorGuard(){
    ⚙ بنبعت الطلب، وبعدها بنتحقق دوريًا إن يوتيوب ثبت نفس المستوى فعلًا.
    لو ثبت غيره → إعادة الطلب من نفس الثانية (2 محاولات بفاصل 6 ثواني)،
    ولو استمر → رسالة صادقة بالمستوى الحقيقي اللي يوتيوب مثبته */
-var qVerifyTries = 0, qVerifyLast = 0;
+/* 2026-و11 — علة تعليق الفيديو الأخيرة: التصفير qVerifyTries=0 بعد الرسالة
+   كان بيخلّي الدورة (تحميتين كل 18 ثانية للأبد) تتكرر من غير نهاية لما
+   يوتيوب يرفض المستوى المطلوب — بقت رسالة واحدة بعدها سكوت تام،
+   والصفير بيتصفّر بس لو يوتيوب ثبت المستوى المطلوب فعلًا */
+var qVerifyTries = 0, qVerifyLast = 0, qVerifyTold = false;
 function ytVerifyQuality(){
   if(fallbackActive || !ytQWanted || !playerApi || !ytIdCached) return;
   var st = 0; try{ st = playerApi.getPlayerState ? playerApi.getPlayerState() : 0; }catch(e){}
   if(st !== 1 && st !== 3) return;
   var q = ytCurQuality();
-  if(q === ytQWanted){ qVerifyTries = 0; return; }
+  if(q === ytQWanted){ qVerifyTries = 0; qVerifyLast = 0; qVerifyTold = false; return; }
+  if(qVerifyTold) return; /* الرسالة ظهرت = مفيش قطع تاني — السلاسة أهم */
   var now = Date.now();
   if(now - qVerifyLast < 6000) return;
   qVerifyTries++; qVerifyLast = now;
   if(qVerifyTries > 2){
-    qVerifyTries = 0;
+    qVerifyTold = true;
     toast('يوتيوب ثابت دلوقتي على ' + ytQName(q) + ' — المستوى المطلوب مش ثابت على سرعة النت الحالية');
     return;
   }

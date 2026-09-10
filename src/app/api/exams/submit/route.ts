@@ -57,7 +57,10 @@ function pickModelIdx(examId: string, studentId: string, n: number): number {
   for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
   return n > 0 ? h % n : 0
 }
-function modelQuestionsForStudent(exam: any, studentId: string): string {
+/* 2026-و11 — إصلاح باج حقيقي: الدالة كانت بتقرأ examId من برة نطاقها
+   (متغير محلي في POST) → ReferenceError وقت التسليم → «لا توجد أسئلة»
+   في امتحانات النماذج العشوائية، وتصحيح النموذج الغلط في المخلوطة */
+function modelQuestionsForStudent(exam: any, studentId: string, examId: string): string {
   try {
     var models = exam && exam.models ? JSON.parse(exam.models) : []
     if (!Array.isArray(models) || models.length === 0) return String(exam.questions || '')
@@ -136,10 +139,22 @@ export async function POST(request) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
     }
 
-    // Parse questions — لو الامتحان بالنماذج → أسئلة نموذج الطالب هو (حتمي زي ما شافها)
-    var questions = parseQuestions(exam.questions)
+    // Parse questions — (2026-و11) نفس منطق /api/exams بالظبط: لو الامتحان
+    // فيه نماذج ← أسئلة نموذج الطالب هو هي الأصل للتصحيح (حتى لو فيه أسئلة
+    // أساس — الطالب شاف النموذج بتاعه فلازم يتصحح عليه)، والأساس بوابه احتياط
+    var hasModels = false
+    try {
+      var pModels = exam && exam.models ? JSON.parse(exam.models) : []
+      hasModels = Array.isArray(pModels) && pModels.length > 0
+    } catch (e) {}
+    var questions = hasModels
+      ? parseQuestions(modelQuestionsForStudent(exam, studentId, examId))
+      : parseQuestions(exam.questions)
     if (questions.length === 0) {
-      questions = parseQuestions(modelQuestionsForStudent(exam, studentId))
+      questions = parseQuestions(exam.questions)
+    }
+    if (questions.length === 0) {
+      questions = parseQuestions(modelQuestionsForStudent(exam, studentId, examId))
     }
     if (questions.length === 0) {
       return NextResponse.json({ error: 'لا توجد أسئلة في هذا الامتحان' }, { status: 400 })
@@ -173,14 +188,24 @@ export async function POST(request) {
     // ===== المرحلة 1: تصحيح الاختياري فورًا (محلي — مفيش انتظار) =====
     var score = 0
     var maxScore = 0
+    /* 2026-و11 — أسئلة اختيارية من غير مفتاح مؤكد: صفر درجة + مراجعة مستر — مش (A) بالحر */
+    var keylessMcq: any[] = []
     mcqQuestions.forEach(function(item, i) {
       var q = item.q
       var origIdx = item.origIdx
       var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
       maxScore += pts
       var opts = Array.isArray(q.options) ? q.options : []
-      var correctIdx = typeof q.correct === 'number' ? q.correct : 0
-      if (correctIdx < 0 || correctIdx >= opts.length) { correctIdx = 0 }
+      var correctIdx = typeof q.correct === 'number' ? q.correct : -1
+      if (correctIdx < 0 || correctIdx >= opts.length) {
+        keylessMcq.push({
+          index: origIdx,
+          question: String(q.question || q.q || ('السؤال ' + (origIdx + 1))),
+          points: pts,
+          studentAnswer: lookupAnswer(answers, origIdx),
+        })
+        return /* صفر درجة — مفيش تخمين */
+      }
       var studentAnswer = lookupAnswer(answers, origIdx)
       if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === correctIdx) {
         score += pts
@@ -228,6 +253,25 @@ export async function POST(request) {
       var mediaIds = extractImageMediaIds(studentText)
       if (mediaIds.length > 0) imageWorkload.push(wEntry)
       else textWorkload.push(wEntry)
+    }
+
+    /* 2026-و11 — أسئلة المفتاح الناقص بتتحط في المراجعة بحالة graded
+       (مش pending عشان إعادة التصحيح الذاتي متحاولش تصححها بالـ AI)
+       — صفر درجة صادق + رسالة واضحة للطالب والمستر */
+    for (var ki = 0; ki < keylessMcq.length; ki++) {
+      var km = keylessMcq[ki]
+      pendingGrades.push({
+        origIdx: km.index,
+        question: km.question,
+        answer: km.studentAnswer !== undefined && km.studentAnswer !== null ? String(km.studentAnswer) : '',
+        modelAnswer: '⚠ السؤال ده من غير إجابة مؤكدة في مفتاح الدرجات — المستر هيحدد الإجابة الصحيحة ويعيد التصحيح',
+        awardedPoints: 0,
+        maxPoints: km.points,
+        isCorrect: false,
+        feedback: '⚠ السؤال ده محتاج مراجعة المستر — إجابته مش مؤكدة في مفتاح الدرجات',
+        gradingStatus: 'graded',
+        needsManualKey: true,
+      })
     }
 
     if (maxScore === 0) { maxScore = questions.length }
