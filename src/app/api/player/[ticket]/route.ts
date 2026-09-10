@@ -304,14 +304,16 @@ const PLAYER_PAGE = `<!doctype html>
     -webkit-text-stroke:1px rgba(0,0,0,.40);paint-order:stroke fill;
     text-shadow:0 0 12px rgba(255,255,255,.16)}
   .wmCard{position:absolute;z-index:46}
-  .wmCardT{top:2.8%;left:50%;transform:translateX(-50%)}
+  .wmCardT{top:2.8%;left:50%;transform:translateX(-50%) scale(1.14)}
   /* 2026-و9 — الكروت اليمين والشمال طلعوا فوق: بقى 3 فوق (شمال/نص/يمين)
      و3 تحت — بنفس تصغير ~18% — بطلب المستر: «اللي في النص دول تطلعهم فوق
      يبقوا تلاتة فوق وتلاتة تحت» */
   /* 2026-و11 — «في الطرف خالص، في طرف الشاشة» — الكروت الجانبية بقيت ملاصقة
      للحافة بلا فاصل (كانت 2%) — يمين وشمال ملاصقين خالص */
-  .wmCardMR{top:2.8%;right:0;transform:scale(.82);transform-origin:top right;opacity:.88}
-  .wmCardML{top:2.8%;left:0;transform:scale(.82);transform-origin:top left;opacity:.88}
+  /* 2026-و15 — «كبّر الووترمارك اللي فوق مش كتير أوي» — الكروت التلاتة فوق
+     كبروا شوية: النص 1.14x والجانبين من .82 لـ .92 */
+  .wmCardMR{top:2.8%;right:0;transform:scale(.92);transform-origin:top right;opacity:.88}
+  .wmCardML{top:2.8%;left:0;transform:scale(.92);transform-origin:top left;opacity:.88}
   /* 2026-و9 — كارتين صغيرين في نص الفيديو يمين وشمال على الطرف خالص —
      فيهم رقم الطالب بس (من غير اسم ولا QR) — بطلب المستر */
   .wmNumChip{position:absolute;z-index:46;transform:translateY(-50%)}
@@ -374,7 +376,11 @@ const PLAYER_PAGE = `<!doctype html>
      كروت QR بتاعتنا (bottom:66px) فوقيه فبتفضل ظاهرة زي ما المستر عايز،
      والشريط جوه مستطيل الفيديو بس — مبيوصلش لحاجة الصفحة اللي تحت الخالص */
   #botShield{position:absolute;bottom:0;left:0;right:0;z-index:44;pointer-events:auto;
-    height:max(40px,min(7.5%,50px));
+    /* 2026-و15 — طلب المستر الحرفي: «كبّر الشريط اللي بيعزل الكابشن سنة بسيطة
+       يكون واصل لحد الووترمارك اللي تحت خالص» — زوّدنا سنة (1cm = ‎37.8px)
+       فبيرجع السمك من 50px لحوالي 88px — واصل لكروت الـ QR اللي تحت
+       (bottom:66px) والكروت فوقيه لسه ظاهرة (z-46 > z-44) */
+    height:calc(max(40px,min(7.5%,50px)) + 1cm);
     background:rgba(0,0,0,.80);
     -webkit-backdrop-filter:blur(16px) saturate(.9);backdrop-filter:blur(16px) saturate(.9);
     display:flex;align-items:center;justify-content:flex-start;
