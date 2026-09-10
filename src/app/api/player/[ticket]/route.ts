@@ -291,9 +291,10 @@ const PLAYER_PAGE = `<!doctype html>
     text-align:center;max-width:94%;--wmo:.5;opacity:0;
     animation:wmBlink30 30s linear infinite;
     font-weight:900;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
-    /* 2026-و7 — طلب المستر: «صغرها لي شوية... عشان بتداري على الشرح» —
-       من 5.6vw/72px لـ 3.6vw/46px (أصغر ~35%) وبنفس المكان */
-    font-size:clamp(14px,3.6vw,46px);line-height:1.25;
+    /* 2026-و8 — المستر رجّع القرار: «اللي في النص الكبيرة دي رجّعلي مقاسها
+       زي ما كانت كبيرة شوية» — رجعت لمقاسها الأصلي 5.6vw/72px بنفس المكان
+       (التصغير بقى على الكروت الجانبية يمين وشمال بدلها) */
+    font-size:clamp(20px,5.6vw,72px);line-height:1.25;
     unicode-bidi:plaintext;letter-spacing:0}
   #wmBig .b1{display:block;color:rgba(0,0,0,.10);white-space:nowrap;
     -webkit-text-stroke:1.3px rgba(0,0,0,.42);paint-order:stroke fill;
@@ -304,8 +305,10 @@ const PLAYER_PAGE = `<!doctype html>
     text-shadow:0 0 12px rgba(255,255,255,.16)}
   .wmCard{position:absolute;z-index:46}
   .wmCardT{top:2.8%;left:50%;transform:translateX(-50%)}
-  .wmCardMR{top:50%;right:1.8%;transform:translateY(-50%);opacity:.88}
-  .wmCardML{top:50%;left:1.8%;transform:translateY(-50%);opacity:.88}
+  /* 2026-و8 — كروت اليمين والشمال (في نص الفيديو ارتفاعًا) اتصغروا ~18%
+     بطلب المستر: «صغرهم لي شوية مش كتير أوي» — بدون تغيير مواضعهم */
+  .wmCardMR{top:50%;right:1.8%;transform:translateY(-50%) scale(.82);opacity:.88}
+  .wmCardML{top:50%;left:1.8%;transform:translateY(-50%) scale(.82);opacity:.88}
   .wmCardB1{bottom:66px;left:2%;opacity:.85}
   .wmCardB2{bottom:66px;left:50%;transform:translateX(-50%);opacity:.85}
   .wmCardB3{bottom:66px;right:2%;opacity:.85}
@@ -1171,19 +1174,28 @@ function buildMgBar(){
    ytVerifyQuality بتتحقق كل شوية إن يوتيوب ثبت المستوى المطلوب بجد —
    لو لأ → إعادة طلب (2 مرة كحد أقصى) وبعدها رسالة صادقة بالمستوى
    الفعلي. يوتيوب بيفضل يقدر يتجاهل — أقصى الـ API بيسمح بيه من 2023 */
-var qFloorTries = 0, qFloorLast = 0;
+/* (2026-و8) تطوير الأرضية بعد لقطة المستر (لسه 360 بعد النشر):
+   1) الجودة الثابتة فوق الأرضية 3 ثواني متتالية → تصفير المحاولات — بدل ما
+      الحارس يموت نهائيًا بعد أول 3 محاولات، أي هبوط جاي ياخد محاولات جديدة.
+   2) لو يوتيوب رفض الأرضية بعد كل المحاولات → رسالة صادقة مرة واحدة
+      بالمستوى الفعلي (ممنوع الصمت — «مش زي كل مرة تقولي اشتغل وهو مبيشتغلش»). */
+var qFloorTries = 0, qFloorLast = 0, qFloorTold = false, qGoodStreak = 0;
 function ytApplyFloor(){
   if(fallbackActive || ytQWanted) return;
   try{ if(playerApi && playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange('large','highres'); }catch(e){}
 }
 function ytFloorGuard(){
   if(fallbackActive || ytQWanted || !playerApi || !ytIdCached) return;
-  if(qFloorTries >= 3) return;
-  var now = Date.now();
-  if(now - qFloorLast < 12000) return;
   var q = '';
   try{ q = String(playerApi.getPlaybackQuality() || ''); }catch(e){}
   if(q !== 'tiny' && q !== 'small' && q !== 'medium') return;
+  if(qFloorTries >= 3){
+    if(!qFloorTold){ qFloorTold = true;
+      toast('يوتيوب مثبّت دلوقتي على ' + ytQName(q) + ' — عرض 480p محتاج سرعة إنترنت أعلى، ولو النت تحسّن هنجرب تاني تلقائيًا'); }
+    return;
+  }
+  var now = Date.now();
+  if(now - qFloorLast < 12000) return;
   qFloorTries++; qFloorLast = now;
   try{
     var cur = 0; try{ cur = playerApi.getCurrentTime()||0; }catch(e){}
@@ -1378,6 +1390,24 @@ function buildPlayer(){
         try{
           [400, 1200, 2500, 4000, 6000, 8000].forEach(function(ms){ setTimeout(killCaptions, ms); });
         }catch(e){}
+        /* (2026-و8) تلميح 480p من أول لحظة: لو التيار المقرر دلوقتي تحت 480
+           والفيديو لسه مش شغال → إعادة ترتيب بـ large قبل أي تشغيل —
+           ده كان سبب إن أول تشغيل بيبدأ 360p (التلميح كان في مسار إعادة
+           المحاولة بس) */
+        try{
+          setTimeout(function(){
+            try{
+              if(fallbackActive || ytQWanted || !playerApi || !ytIdCached) return;
+              var st0 = 0; try{ st0 = playerApi.getPlayerState ? playerApi.getPlayerState() : -1; }catch(e){}
+              if(st0 === 1 || st0 === 3) return;
+              var q0 = ''; try{ q0 = String(playerApi.getPlaybackQuality() || ''); }catch(e){}
+              if(q0 === 'tiny' || q0 === 'small' || q0 === 'medium'){
+                playerApi.cueVideoById(ytIdCached, 0, 'large');
+                try{ if(playerApi.setPlaybackQualityRange) playerApi.setPlaybackQualityRange('large','highres'); }catch(e){}
+              }
+            }catch(e){}
+          }, 1200);
+        }catch(e){}
         try{ setMuteIcon(!!(playerApi.isMuted && playerApi.isMuted())); }catch(e){}
         if(pendingStart){ pendingStart = false; startWithWatchdog(); }
         layoutWrap();
@@ -1471,6 +1501,12 @@ function buildPlayer(){
            الطالب (يتأكد إن المستوى اللي اختاره ثبت بجد) */
         var floorNow = Math.floor(Date.now() / 5000);
         if(floorNow !== lastFloorCheck){ lastFloorCheck = floorNow; ytApplyFloor(); }
+        /* (2026-و8) استقرار الجودة فوق الأرضية 3 ثواني → تصفير محاولات الحارس */
+        var qNow = '';
+        try{ qNow = String(playerApi.getPlaybackQuality() || ''); }catch(e){}
+        if(qNow && qNow !== 'tiny' && qNow !== 'small' && qNow !== 'medium' && !ytQWanted){
+          qGoodStreak++; if(qGoodStreak >= 3){ qFloorTries = 0; qFloorLast = 0; qFloorTold = false; }
+        } else { qGoodStreak = 0; }
         ytFloorGuard();
         ytVerifyQuality();
         /* حارس النهاية: لو شاشة الاقتراحات هتظهر (ENDED ماتفوتش) → غطّي فورًا */
