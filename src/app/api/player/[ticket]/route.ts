@@ -291,7 +291,9 @@ const PLAYER_PAGE = `<!doctype html>
     text-align:center;max-width:94%;--wmo:.5;opacity:0;
     animation:wmBlink30 30s linear infinite;
     font-weight:900;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
-    font-size:clamp(20px,5.6vw,72px);line-height:1.25;
+    /* 2026-و7 — طلب المستر: «صغرها لي شوية... عشان بتداري على الشرح» —
+       من 5.6vw/72px لـ 3.6vw/46px (أصغر ~35%) وبنفس المكان */
+    font-size:clamp(14px,3.6vw,46px);line-height:1.25;
     unicode-bidi:plaintext;letter-spacing:0}
   #wmBig .b1{display:block;color:rgba(0,0,0,.10);white-space:nowrap;
     -webkit-text-stroke:1.3px rgba(0,0,0,.42);paint-order:stroke fill;
@@ -340,6 +342,26 @@ const PLAYER_PAGE = `<!doctype html>
   #topShield::after{content:'';position:absolute;top:100%;left:0;right:0;height:12px;
     background:linear-gradient(to bottom,rgba(0,0,0,.45),rgba(0,0,0,0))}
   #topShield .brand{color:rgba(255,255,255,.92);font-weight:900;
+    font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+    font-size:clamp(12px,1.9vw,17px);letter-spacing:.5px;direction:ltr;white-space:nowrap;
+    text-shadow:0 1px 3px rgba(0,0,0,.6);pointer-events:none}
+  /* درع تحت كامل (2026-و7 — طلب المستر: «عاوزك تحط لي زي blur كده زي بتاع
+     المستطيل الأسود اللي من فوق ومن تحت... يداري كل حاجة بس ما يكونش
+     يداري الحتة اللي تحت دي») — نفس شكل الطقم العلوي بالظبط: شريط داكن
+     + بلور بعرض الفيديو كلها، ثابت دايمًا، بيغطي صف يوتيوب تحت خالص
+     (الاشتراك/اللوجو/الشير/سطر الكابشن) تغطية كاملة 100%.
+     كروت QR بتاعتنا (bottom:66px) فوقيه فبتفضل ظاهرة زي ما المستر عايز،
+     والشريط جوه مستطيل الفيديو بس — مبيوصلش لحاجة الصفحة اللي تحت الخالص */
+  #botShield{position:absolute;bottom:0;left:0;right:0;z-index:44;pointer-events:auto;
+    height:max(44px,min(8%,56px));
+    background:rgba(0,0,0,.80);
+    -webkit-backdrop-filter:blur(16px) saturate(.9);backdrop-filter:blur(16px) saturate(.9);
+    display:flex;align-items:center;justify-content:flex-start;
+    padding-right:14px;
+    border-top:1px solid rgba(255,255,255,.10)}
+  #botShield::before{content:'';position:absolute;bottom:100%;left:0;right:0;height:10px;
+    background:linear-gradient(to top,rgba(0,0,0,.35),rgba(0,0,0,0))}
+  #botShield .brand{color:rgba(255,255,255,.92);font-weight:900;
     font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
     font-size:clamp(12px,1.9vw,17px);letter-spacing:.5px;direction:ltr;white-space:nowrap;
     text-shadow:0 1px 3px rgba(0,0,0,.6);pointer-events:none}
@@ -512,6 +534,15 @@ function ensureTopShield(){
   ts.innerHTML = '<span class="brand">Math Genius</span>';
   wrap.appendChild(ts);
 }
+/* درع الشريط السفلي الكامل (2026-و7) — نفس الطقم العلوي بس تحت:
+   بيغطي صف يوتيوب كله (اشتراك/لوجو/شير/كابشن) تغطية كاملة —
+   وكروت QR فوقه ظاهرة، ومتلفسش أي حاجة برة مستطيل الفيديو */
+function ensureBotShield(){
+  if(document.getElementById('botShield')) return;
+  var bs = document.createElement('div'); bs.id='botShield';
+  bs.innerHTML = '<span class="brand">Math Genius</span>';
+  wrap.appendChild(bs);
+}
 /* المستطيلات السودة تحت يمين وشمال — تغطية علامة الاشتراك/اللوجو بتاعة
    يوتيوب (فيه يوتيوب بس) — وبتمنع الدوس على اللي تحتها كمان */
 function ensureYtCovers(){
@@ -528,7 +559,7 @@ function ensureWm(){
   if(!CFG.wm.enabled) return;
   if(!document.getElementById('wm')) buildWm();
 }
-setInterval(function(){ ensureWm(); ensureYtCovers(); }, 4000);
+setInterval(function(){ ensureWm(); ensureYtCovers(); ensureBotShield(); }, 4000);
 try{ new MutationObserver(ensureWm).observe(wrap, {childList:true, subtree:true}); }catch(e){}
 
 /* ===== ملء الشاشة (الووترمارك جوه العنصر فبيفضل ظاهر) ===== */
@@ -1728,6 +1759,7 @@ function mountFile(){
 buildWm();
 ensureTopShield();
 ensureYtCovers();
+ensureBotShield();
 layoutWrap();
 if(CFG.kind === 'youtube') mountYouTube(); else if(CFG.kind === 'file') mountFile();
 
