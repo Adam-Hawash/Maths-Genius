@@ -452,7 +452,7 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       submitted: true,
-      message: 'تم تسليم الامتحان بنجاح — نتيجتك هتظهر لمستر وائل',
+      message: 'تم تسليم الامتحان بنجاح — انتظر النتيجة من المستر',
     })
   } catch (error) {
     console.error('Exam submit error:', error)

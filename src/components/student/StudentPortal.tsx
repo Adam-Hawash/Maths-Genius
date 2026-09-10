@@ -1544,9 +1544,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
     )
   }
 
-  // EXAM SUBMITTED SUCCESS SCREEN — (2026-و13) طلب المستر الحرفي بالحرف: علامة صح
-  // + «تم تسليم الامتحان» ومفيش أي حاجة تانية خالص (لا درجة، لا تصحيح،
-  //   ولا حتى كلام عن النتيجة) + زرار «العودة إلى صفحتك» — BAS.
+  // EXAM SUBMITTED SUCCESS SCREEN — (2026-و15) تحديث نص المستر: «تم تسليم الامتحان بنجاح
+  // انتظر النتيجة من المستر» — برضه من غير أي درجة ولا تصحيح ولا أسئلة — بس زرار العودة.
   if (examSubmitted) {
     return (
       <div className="flex flex-col items-center justify-center py-12 px-6 space-y-5">
@@ -1554,7 +1553,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
           <CheckCircle2 className="h-14 w-14 text-emerald-500" />
         </div>
         <div className="text-center space-y-2">
-          <h2 className="text-xl font-bold text-emerald-600">تم تسليم الامتحان</h2>
+          <h2 className="text-xl font-bold text-emerald-600">تم تسليم الامتحان بنجاح</h2>
+          <p className="text-sm text-muted-foreground">انتظر النتيجة من المستر</p>
         </div>
         <Button
           onClick={() => {
@@ -1702,8 +1702,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
               clearTimeout(submitTimeout)
               const data = await res.json()
               if (res.ok && (data.submitted || data.alreadySubmitted)) {
-                /* (2026-و14) بدون أي نتيجة ولا أي ذِكر للنتيجة — رسالة واحدة بس */
-                toast.success('تم تسليم الامتحان ✅')
+                /* (2026-و15) نص المستر: تم بنجاح + انتظر النتيجة من المستر — من غير أي درجة */
+                toast.success('تم تسليم الامتحان بنجاح — انتظر النتيجة من المستر ✅')
                 setSubmittedExamId(takingExam)
                 setExamSubmitted(true)
                 onExamSubmitted(takingExam)
