@@ -7,13 +7,12 @@
 //     وبيتفك في الذاكرة لحظة التشغيل بس، فمفيش ID في مصدر الصفحة
 //     ولا في الـ DOM ولا في أي console.log.
 //  2) الملفات المرفوعة بتتخدم بتوكن موقّع قصير العمر مرتبط بالطالب.
-//  3) ووترمارك (مواصفات المستر النهائية 2026-ز): مفيش أي شِپات على الحواف خالص —
-//     ووترمارك كبير واحد في نص الخلفية على سطرين (الاسم الثنائي + الرقم تحته)
-//     **ثابت تمامًا من غير أي نبض** (طلب المستر حرفيًا: "خليها ثابتة ما
-//     تغيرهاش — الشفافية بتاعتها حلوة") + بيرجع يرسم لوحه نفسه لو اتمسح
-//     + شغال جوه ملء الشاشة.
-//     وكارتين (الاسم الكامل + الرقم): واحد فوق الناحية الشمال (جديد) وواحد
-//     ثابت في **الزاوية تحت على اليمين**.
+//  3) الووترمارك (رجوع المواصفات الأصلية + QR — 2026-و6): 6 كروت ثابتة
+//     (1 فوق في النص + 1 يمين + 1 شمال + 3 تحت) كل كارت: الاسم + الرقم
+//     + QR الطالب (بيتولد في السيرفر — مسح الكود بيحدد مين سجّل الفيديو)
+//     + الووترمارك الكبيرة الشفافة في النص بتظهر 10 ثواني وبتختفي 20 ثانية
+//     وقت التشغيل بس + بيرجع يرسم لوحه نفسه لو اتمسح + شغال جوه ملء الشاشة
+//     + مستطيلين سودة تحت يمين وشمال بيغطوا علامة الاشتراك/اللوجو يوتيوب
 //  4) حماية فحص: كليك يمين مقفول + F12/Ctrl+U/Ctrl+S + Ctrl+Shift+I/J/C/K
 //     + **كل زرار F1 لـ F12 وفيهم F10 صراحةً (event.key === 'F10' — طلب
 //     المستر الحرفي 2026-م: "explicitly intercept and prevent the F10 key")**
@@ -69,6 +68,7 @@
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
+import QRCode from 'qrcode'
 import { db } from '@/lib/db'
 import { getYouTubeId, mediaIdFromPath, signVideoToken, ensurePlayTicketTable } from '@/lib/video-guard'
 
@@ -188,6 +188,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       } catch (e) {}
     }
 
+    // QR الووترمارك (2026-و6): بيتولد في السيرفر خصيص للطالب — محتويه
+    // المنصة + اسمه + رقمه — لو الفيديو اتسرب، مسح الكود بيحدد مين سجّله فورًا
+    var wmQr = ''
+    if (wmEnabled === '1' && (wmName || wmPhone)) {
+      try {
+        const qrSvg = await QRCode.toString('Math Genius | ' + wmName + ' | ' + wmPhone, {
+          type: 'svg', margin: 0, width: 64, errorCorrectionLevel: 'M',
+          color: { dark: '#000000', light: '#ffffff' },
+        })
+        wmQr = 'data:image/svg+xml;base64,' + Buffer.from(qrSvg, 'utf8').toString('base64')
+      } catch (e) { wmQr = '' }
+    }
+
     const ytId = getYouTubeId(video.url || '')
     const mediaId = mediaIdFromPath(video.filePath || '')
     const directUrl = (!ytId && !mediaId && isDirectMediaUrl(video.url || '')) ? String(video.url).trim() : ''
@@ -212,6 +225,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         interval: wmInterval,
         name: wmName,
         phone: wmPhone,
+        qr: wmQr,
       },
     }
     if (ytId) {
@@ -263,19 +277,50 @@ const PLAYER_PAGE = `<!doctype html>
   #wrap{position:relative;width:100%;max-width:100vw;background:#000;overflow:hidden}
   #wrap.fs{width:100vw;height:100vh;max-width:none}
   #yt,#fileVid{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
-  /* ===== الووترمارك (المواصفات الجديدة 2026-و5 — طلب المستر الحرفي:
-     «ووتر مارك سودة تحت خالص ناحية اليمين — مستطيل صغير مش كبير قوي») =====
-     • مستطيل أسود صغير واحد بس — تحت خالص ناحية اليمين — ظاهر على طول
-     • فيه الاسم والرقم سطر واحد — والكروت المتفرقة والووترمارك الكبيرة اتشالوا */
+  /* ===== الووترمارك (رجوع المواصفات الأصلية + QR — طلب المستر 2026-و6) =====
+     • 6 كروت ثابتة ظاهرة على طول: 1 فوق في النص + 1 يمين + 1 شمال
+       + 3 تحت (شمال/نص/يمين) — كل كارت: الاسم + الرقم + **QR الطالب**
+       (بيتولد في السيرفر باسمه ورقمه — لو الفيديو اتسرب مسح الكود يكشفه)
+     • الووترمارك الكبيرة الشفافة في النص رجعت: **بتظهر 10 ثواني وبتختفي
+       20 ثانية** (دورة 30 ثانية بتكرر لوحدها — keyframes wmBlink30) وقت التشغيل بس
+     • مستطيلين سودة تحت خالص (يمين وشمال) بيغطوا علامة الاشتراك/اللوجو
+       بتوع يوتيوب — طلب المستر الحرفي: «عايزك تداريها لي بمستطيل أسود كده يمين وشمال» */
   .wm{position:absolute;inset:0;z-index:40;pointer-events:none;user-select:none;overflow:hidden}
-  /* المستطيل الأسود الصغير — تحت خالص ناحية اليمين (z-index 46 → تحت
-     mgBar (60) فالشريط بيتغطى عليه لما يظهر، وبيبان أول ما الشريط يختفي) */
-  .wmCardBR{position:absolute;z-index:46;bottom:12px;right:12px}
-  .wmCardBR .in{display:inline-flex;align-items:center;gap:7px;background:rgba(0,0,0,.84);
-    border-radius:8px;padding:5px 11px;direction:rtl;white-space:nowrap}
-  .wmCardBR .nm{font-size:clamp(10px,1.15vw,12.5px);font-weight:800;color:#fff;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap}
-  .wmCardBR .sep{opacity:.55;font-size:clamp(9px,1vw,11px);color:#fff}
-  .wmCardBR .ph{font-size:clamp(9px,1.05vw,11.5px);font-weight:700;color:#fff;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.92;white-space:nowrap}
+  @keyframes wmBlink30{0%{opacity:0}1.5%{opacity:var(--wmo,.5)}31.5%{opacity:var(--wmo,.5)}33.5%{opacity:0}98.5%{opacity:0}100%{opacity:var(--wmo,.5)}}
+  #wmBig{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:41;direction:rtl;
+    text-align:center;max-width:94%;--wmo:.5;opacity:0;
+    animation:wmBlink30 30s linear infinite;
+    font-weight:900;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+    font-size:clamp(20px,5.6vw,72px);line-height:1.25;
+    unicode-bidi:plaintext;letter-spacing:0}
+  #wmBig .b1{display:block;color:rgba(0,0,0,.10);white-space:nowrap;
+    -webkit-text-stroke:1.3px rgba(0,0,0,.42);paint-order:stroke fill;
+    text-shadow:0 0 16px rgba(255,255,255,.16)}
+  #wmBig .b2{display:block;font-size:.5em;direction:ltr;unicode-bidi:plaintext;
+    margin-top:.14em;letter-spacing:0;white-space:nowrap;color:rgba(0,0,0,.10);
+    -webkit-text-stroke:1px rgba(0,0,0,.40);paint-order:stroke fill;
+    text-shadow:0 0 12px rgba(255,255,255,.16)}
+  .wmCard{position:absolute;z-index:46}
+  .wmCardT{top:2.8%;left:50%;transform:translateX(-50%)}
+  .wmCardMR{top:50%;right:1.8%;transform:translateY(-50%);opacity:.88}
+  .wmCardML{top:50%;left:1.8%;transform:translateY(-50%);opacity:.88}
+  .wmCardB1{bottom:66px;left:2%;opacity:.85}
+  .wmCardB2{bottom:66px;left:50%;transform:translateX(-50%);opacity:.85}
+  .wmCardB3{bottom:66px;right:2%;opacity:.85}
+  .wmCard .in{display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.66);
+    border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:9px;padding:3px 9px;
+    direction:rtl;white-space:nowrap}
+  .wmCard .qr{width:clamp(22px,2.8vw,32px);height:clamp(22px,2.8vw,32px);border-radius:3px;
+    background:#fff;padding:2px;display:block}
+  .wmCard .nm{font-size:clamp(9px,1.05vw,12.5px);font-weight:800;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap}
+  .wmCard .sep{opacity:.55;font-size:clamp(8px,.9vw,10.5px)}
+  .wmCard .ph{font-size:clamp(8.5px,.95vw,11.5px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.92;white-space:nowrap}
+  /* المستطيلات السودة تحت خالص يمين وشمال — تغطية علامة الاشتراك/اللوجو
+     بتاعة يوتيوب تغطية كاملة + بتمنع الدوس عليها (فيه يوتيوب بس) */
+  #ytCoverR{position:absolute;z-index:45;bottom:0;right:0;width:min(215px,34%);height:56px;
+    background:#000;pointer-events:auto}
+  #ytCoverL{position:absolute;z-index:45;bottom:0;left:0;width:min(150px,26%);height:56px;
+    background:#000;pointer-events:auto}
   /* درع فوق كامل (2026-ط2 — طلب المستر: «اعمل blur على كل حاجة،
      وغطّي اسم القناة اللي فوق بالكامل — علامة سودة أو كلمة Math Genius —
      أي حاجة بس تكون مغطية»): شريط داكن + بلور بعرض الشاشة كلها، ثابت
@@ -411,26 +456,51 @@ function deobfuscate(b64, key){
   }catch(e){ return ''; }
 }
 
-/* ===== الووترمارك (المواصفات الجديدة 2026-و5 — طلب المستر الحرفي:
-   «ووتر مارك سودة تحت خالص ناحية اليمين — مستطيل صغير مش كبير قوي») =====
-   • مستطيل أسود صغير واحد تحت يمين فيه الاسم والرقم — ظاهر على طول
-   • الووترمارك الكبيرة اللي في النص + الكروت المتفرقة اتمسحوا كلهم بطلبه */
+/* ===== الووترمارك (رجوع المواصفات الأصلية + QR — طلب المستر 2026-و6) =====
+   • 6 كروت ثابتة (فوق + يمين + شمال + تلاتة تحت) كل كارت: الاسم + الرقم + QR
+     بيتولد في السيرفر خصيص للطالب — مسح الكود بيحدد مين اللي سجل الفيديو
+   • الووترمارك الكبيرة في النص: 10 ثواني ظاهرة / 20 ثانية مخفية (دورة 30 ث)
+     بتشتغل وقت التشغيل بس — عند الإيقاف بتقف */
 var wmName = String(CFG.wm.name || '').trim();
 var wmPhone = String(CFG.wm.phone || '').trim();
+/* الاسم الثنائي: أول كلمتين بس — سطر واحد في النص */
+function wmShortName(){
+  var p = wmName.split(/\\s+/).filter(Boolean);
+  return p.slice(0, 2).join(' ');
+}
+function wmCardHtml(){
+  var qr = CFG.wm.qr ? '<img class="qr" src="' + CFG.wm.qr + '" alt="">' : '';
+  return '<div class="in">' + qr + '<span class="nm">' + esc(wmName || wmPhone) + '</span>' +
+    ((wmName && wmPhone) ? '<span class="sep">•</span><span class="ph">' + esc(wmPhone) + '</span>' : '') + '</div>';
+}
 function buildWm(){
   if(!CFG.wm.enabled) return;
   var old = document.getElementById('wm');
   if(old) old.parentNode.removeChild(old);
   var layer = document.createElement('div');
   layer.id = 'wm'; layer.className = 'wm';
-  /* المستطيل الأسود الصغير — تحت خالص ناحية اليمين (2026-و5):
-     سطر واحد (الاسم • الرقم) — ظاهر على طول */
+  /* 1) الووترمارك الكبيرة في النص — سطرين: الاسم الثنائي والرقم تحته —
+        بتظهر 10 ثواني وبتختفي 20 ثانية (دورة 30 ثانية متكررة) */
+  var big1 = wmShortName() || wmPhone;
+  if(big1){
+    var big = document.createElement('div');
+    big.id = 'wmBig';
+    big.innerHTML = '<span class="b1">' + esc(big1) + '</span>' +
+      ((wmName && wmPhone) ? '<span class="b2">' + esc(wmPhone) + '</span>' : '');
+    var wmo = Math.min(0.6, Math.max(0.3, (Number(CFG.wm.opacity) || 0.55) * 0.85));
+    big.style.setProperty('--wmo', String(wmo));
+    big.style.animationPlayState = 'paused';
+    layer.appendChild(big);
+  }
+  /* 2) الكروت الستة بالـ QR: فوق في النص + يمين + شمال + تلاتة تحت */
   if(wmName || wmPhone){
-    var br = document.createElement('div');
-    br.className = 'wmCardBR';
-    br.innerHTML = '<div class="in"><span class="nm">' + esc(wmName || wmPhone) + '</span>' +
-      ((wmName && wmPhone) ? '<span class="sep">•</span><span class="ph">' + esc(wmPhone) + '</span>' : '') + '</div>';
-    layer.appendChild(br);
+    var ch = wmCardHtml();
+    var t  = document.createElement('div'); t.className  = 'wmCard wmCardT';  t.innerHTML  = ch; layer.appendChild(t);
+    var mr = document.createElement('div'); mr.className = 'wmCard wmCardMR'; mr.innerHTML = ch; layer.appendChild(mr);
+    var ml = document.createElement('div'); ml.className = 'wmCard wmCardML'; ml.innerHTML = ch; layer.appendChild(ml);
+    var b1 = document.createElement('div'); b1.className = 'wmCard wmCardB1'; b1.innerHTML = ch; layer.appendChild(b1);
+    var b2 = document.createElement('div'); b2.className = 'wmCard wmCardB2'; b2.innerHTML = ch; layer.appendChild(b2);
+    var b3 = document.createElement('div'); b3.className = 'wmCard wmCardB3'; b3.innerHTML = ch; layer.appendChild(b3);
   }
   wrap.appendChild(layer);
 }
@@ -442,12 +512,23 @@ function ensureTopShield(){
   ts.innerHTML = '<span class="brand">Math Genius</span>';
   wrap.appendChild(ts);
 }
+/* المستطيلات السودة تحت يمين وشمال — تغطية علامة الاشتراك/اللوجو بتاعة
+   يوتيوب (فيه يوتيوب بس) — وبتمنع الدوس على اللي تحتها كمان */
+function ensureYtCovers(){
+  if(CFG.kind !== 'youtube') return;
+  if(!document.getElementById('ytCoverR')){
+    var r = document.createElement('div'); r.id = 'ytCoverR'; wrap.appendChild(r);
+  }
+  if(!document.getElementById('ytCoverL')){
+    var l = document.createElement('div'); l.id = 'ytCoverL'; wrap.appendChild(l);
+  }
+}
 /* self-heal: الووترمارك بيرجع يترسم لو حد شاله من الـ DOM */
 function ensureWm(){
   if(!CFG.wm.enabled) return;
   if(!document.getElementById('wm')) buildWm();
 }
-setInterval(ensureWm, 4000);
+setInterval(function(){ ensureWm(); ensureYtCovers(); }, 4000);
 try{ new MutationObserver(ensureWm).observe(wrap, {childList:true, subtree:true}); }catch(e){}
 
 /* ===== ملء الشاشة (الووترمارك جوه العنصر فبيفضل ظاهر) ===== */
@@ -790,10 +871,13 @@ function scheduleFallbackIfStuck(){
       + killCaptionsPlain() — أوامر postMessage للوضع البديل المباشر
    3) مفيش زرار CC في أي واجهة ومفيش زرار C في الكيبورد — مفيش أي طريق
       لفتح الترجمة أصلًا */
+/* **(تصحيح جذري 2026-و6 — سبب ظهور الكابشن اتحدد)**: loadModule('captions')
+   كان بيتنادى هنا مع كل إبادة (كل 3 ثواني!) — تحميل الموديول نفسه بيخلّي
+   يوتيوب يجهز ويعرض المسار الافتراضي للترجمة، يعني «العلاج» كان هو السبب.
+   الإبادة الصح: تصفير المسار الأول + تفريغ الموديول — من غير أي تحميل خالص */
 function killCaptions(){
-  try{ playerApi.loadModule && playerApi.loadModule('captions'); }catch(e){}
-  try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
   try{ playerApi.setOption && playerApi.setOption('captions','track',{}); }catch(e){}
+  try{ playerApi.unloadModule && playerApi.unloadModule('captions'); }catch(e){}
 }
 /* إبادة الكابشن في **الوضع البديل المباشر** (iframe عادي بدون API):
    أوامر واجهة يوتيوب للويجت عبر postMessage — شغالة مع enablejsapi=1.
@@ -803,8 +887,8 @@ function killCaptionsPlain(){
   try{
     var fr = document.getElementById('ytPlain');
     if(!fr || !fr.contentWindow) return;
-    fr.contentWindow.postMessage(JSON.stringify({event:'command', func:'unloadModule', args:['captions']}), '*');
     fr.contentWindow.postMessage(JSON.stringify({event:'command', func:'setOption', args:['captions','track',{}]}), '*');
+    fr.contentWindow.postMessage(JSON.stringify({event:'command', func:'unloadModule', args:['captions']}), '*');
   }catch(e){}
 }
 var lastCapCheck = 0;
@@ -871,8 +955,7 @@ function startWithWatchdog(){
 function ytState(){ try{ return playerApi && playerApi.getPlayerState ? playerApi.getPlayerState() : -1; }catch(e){ return -1; } }
 /* دورة الووترمارك الكبيرة (10 ظاهرة / 20 مخفية) بتشتغل وقت التشغيل بس —
    عند الإيقاف بتتوقف مؤقتًا ومتكملش (طلب المستر 2026-ل) */
-/* (2026-و5) wmRun اتنست — الووترمارك الكبيرة اتمسحت بطلب المستر (بقى مستطيل صغير ثابت تحت يمين) */
-function wmRun(onoff){ /* no-op */ }
+function wmRun(onoff){ try{ var w=document.getElementById('wmBig'); if(w) w.style.animationPlayState = onoff ? 'running' : 'paused'; }catch(e){} }
 
 /* ===== إخفاء شريط التحكم تلقائيًا (2026-و3 — طلب المستر الحرفي:
    «الشريط اللي تحت عاوزها تختفي أول ما أفتح الفيديو عادي، ولما أوقفه تظهر،
@@ -1262,7 +1345,7 @@ function buildPlayer(){
            0.4/1.2/2.5/4 ثواني — لو يوتيوب جهز موديول الترجمة متأخر بيتإباد فورًا
            + الإبادة الدورية كل 3 ثواني شغالة زي ما هي */
         try{
-          [400, 1200, 2500, 4000].forEach(function(ms){ setTimeout(killCaptions, ms); });
+          [400, 1200, 2500, 4000, 6000, 8000].forEach(function(ms){ setTimeout(killCaptions, ms); });
         }catch(e){}
         try{ setMuteIcon(!!(playerApi.isMuted && playerApi.isMuted())); }catch(e){}
         if(pendingStart){ pendingStart = false; startWithWatchdog(); }
@@ -1644,6 +1727,7 @@ function mountFile(){
 /* ===== تشغيل ===== */
 buildWm();
 ensureTopShield();
+ensureYtCovers();
 layoutWrap();
 if(CFG.kind === 'youtube') mountYouTube(); else if(CFG.kind === 'file') mountFile();
 
