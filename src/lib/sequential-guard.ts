@@ -25,6 +25,28 @@ function hasQuestions(questionsJson: string | null | undefined): boolean {
   }
 }
 
+/* (إصلاح 2026-و10) الفحص الخام مباشرة من الداتابيز — سبب علة
+   «الامتحان ده مش هيتسلم غير لما تاخد اللي قبله» رغم إن الطالب سلمه:
+   كان findUnique بمفتاح مركب studentId_examId لكن ExamResult مفيهوش
+   @@unique مركب في الـ schema → Prisma بيرمي ValidationError والـ catch
+   كان بيبلعه ويرجّع null → الحارس بيفتكر إن التسليم مش موجود ويرفض
+   كل تسليم جاي للأبد. الاستعلام الخام مفيهوش أي علاقة بالـ schema */
+async function rowExists(table: 'ExamResult' | 'HomeworkResult', studentId: string, itemId: string): Promise<boolean> {
+  try {
+    var col = table === 'ExamResult' ? 'examId' : 'homeworkId'
+    var rows: any[] = await (db as any).$queryRawUnsafe(
+      'SELECT id FROM ' + table + ' WHERE studentId = ? AND ' + col + ' = ? LIMIT 1',
+      studentId,
+      itemId
+    )
+    return Array.isArray(rows) && rows.length > 0
+  } catch (e) {
+    /* الجدول نفسه مش موجود أصلاً = مفيش أي تسليمات — نرجّع false عشان
+       الحارس يشتغل طبيعي (التسليم الأول بيفتح اللي بعده) */
+    return false
+  }
+}
+
 /** الواجب بيفتح بس لو الواجب اللي قبله (نفس الصف، الأقدم الأول) متسلّم */
 export async function checkHwSequential(
   homeworkId: string,
@@ -44,9 +66,8 @@ export async function checkHwSequential(
     for (var i = idx - 1; i >= 0; i--) {
       var prev = gradeHws[i]
       if (!hasQuestions(prev.questions)) continue // ملف بس — مش قابل للتسليم، نتخطاه
-      var done = await db.homeworkResult.findUnique({
-        where: { studentId_homeworkId: { studentId, homeworkId: prev.id } },
-      }).catch(function () { return null })
+      /* (إصلاح 2026-و10) فحص خام — findUnique المركب كان بينكسر صامت */
+      var done = await rowExists('HomeworkResult', studentId, prev.id)
       if (!done) {
         return {
           ok: false,
@@ -81,9 +102,9 @@ export async function checkExamSequential(
     for (var i = idx - 1; i >= 0; i--) {
       var prev = gradeExams[i]
       if (!hasQuestions(prev.questions)) continue
-      var done = await db.examResult.findUnique({
-        where: { studentId_examId: { studentId, examId: prev.id } },
-      }).catch(function () { return null })
+      /* (إصلاح 2026-و10) فحص خام — findUnique المركب كان بينكسر صامت
+         (ValidationError مبلوع → done دايماً null → رفض دائم) */
+      var done = await rowExists('ExamResult', studentId, prev.id)
       if (!done) {
         return {
           ok: false,

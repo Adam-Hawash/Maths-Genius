@@ -154,10 +154,24 @@ function mergeQuestionsAndAnswers(questions: any[], answers: any[]): any[] {
       }
     }
     // MCQ
-    var correctIdx = typeof q.correct === 'number' ? q.correct : 0
-    // If answer doc has correct index, prefer it
-    if (ans && typeof ans.correct === 'number') correctIdx = ans.correct
-    return {
+    /* (استخراج أدق 2026-و10) ممنوع الافتراضي الصامت على A: لو ورقة الإجابات
+       ماجابتش إجابة واثقة للسؤال → correct:-1 + needsReview عشان شاشة
+       المراجعة تنبّه المستر يثبّتها بإيده قبل الحفظ — بدل ما تطلع إجابة عشوائية */
+    var correctIdx = typeof q.correct === 'number' ? q.correct : -1
+    var needsReview = false
+    var keyQuote = ''
+    var confidence = ''
+    if (ans && typeof ans.correct === 'number' && ans.correct >= 0) {
+      correctIdx = ans.correct
+      keyQuote = ans.keyQuote || ''
+      confidence = ans.confidence || 'high'
+      if (confidence === 'low') needsReview = true
+    } else {
+      needsReview = true
+      confidence = 'low'
+    }
+    if (correctIdx >= 0 && Array.isArray(q.options) && correctIdx >= q.options.length) { needsReview = true }
+    var outQ: any = {
       type: 'mcq',
       question: q.question || '',
       options: (q.options || ['N/A', 'N/A', 'N/A', 'N/A']).slice(0, 4),
@@ -165,6 +179,10 @@ function mergeQuestionsAndAnswers(questions: any[], answers: any[]): any[] {
       points: q.points || 1,
       modelAnswer: modelAnswer,
     }
+    if (needsReview) outQ.needsReview = true
+    if (keyQuote) outQ.keyQuote = keyQuote
+    if (confidence) outQ.confidence = confidence
+    return outQ
   })
 }
 
@@ -456,8 +474,18 @@ function buildAnswersOnlyPrompt(grade: string, type: string, questions: any[]): 
   lines.push('- For MCQ: the correct option index (0=A, 1=B, 2=C, 3=D) and a step-by-step modelAnswer')
   lines.push('- For WRITING: a complete step-by-step modelAnswer AND an array of acceptedAnswers (acceptable final answers)')
   lines.push('')
+  /* (استخراج أدق 2026-و10 — شكوى المستر: «تستخرج منه الإجابة… ما تكونش بالحر»):
+     الإجابة لازم تتقرا من ورقة الإجابات حرفياً — ممنوع تخمين الحرف */
+  lines.push('ACCURACY RULES (most important — the teacher complained about random answers):')
+  lines.push('- READ the answer key EXACTLY as written. For MCQ the "correct" index MUST be the letter/number actually written in the key for that question (e.g. key says "12-B" → correct:1).')
+  lines.push('- ALWAYS include "keyQuote": the exact text you read from the key for that question (like "12-B" or "Q5: x=7"). This proves you read it, do not invent it.')
+  lines.push('- ALWAYS include "confidence": "high" when the key clearly states the answer, "low" when the key is ambiguous, unreadable, or the answer is not there.')
+  lines.push('- If the answer for a question is NOT clearly found in the key → set "correct": -1 (MCQ) and confidence "low" — NEVER guess a letter. Still provide your best modelAnswer (marked as solved by you).')
+  lines.push('- Watch out for common traps: shifted numbering (answer 5 belongs to question 6), columns read in the wrong order, and answer letters written next to the PREVIOUS question. Verify the question number in the key matches before assigning.')
+  lines.push('- Match by the question NUMBER first; only fall back to matching by text when the key has no numbers.')
+  lines.push('')
   lines.push('SMART RULE: If the answer for a question IS found in the document → extract it exactly as written in the document.')
-  lines.push('If the answer is NOT found in the document → SOLVE that question yourself completely: expert math teacher, correct, clear step-by-step solution matching the grade curriculum level (Grade: ' + grade + ').')
+  lines.push('If the answer is NOT found in the document → SOLVE that question yourself completely: expert math teacher, correct, clear step-by-step solution matching the grade curriculum level (Grade: ' + grade + ') — and mark confidence "low".')
   lines.push('NEVER return empty values: EVERY question must get a complete modelAnswer (extracted OR solved by you). For writing questions also fill acceptedAnswers.')
   lines.push('')
   lines.push('Rules:')
@@ -471,7 +499,7 @@ function buildAnswersOnlyPrompt(grade: string, type: string, questions: any[]): 
   lines.push('- Each answer object MUST have an "index" field matching the question number (0-based)')
   lines.push('')
   lines.push('Return ONE single valid JSON object — no text before or after, no markdown fences, no fields outside the object:')
-  lines.push('{"answers":[{"index":0,"correct":0,"modelAnswer":"step by step"},{"index":1,"modelAnswer":"full solution","acceptedAnswers":["5","x=5"]}]}')
+  lines.push('{"answers":[{"index":0,"correct":0,"confidence":"high","keyQuote":"1-A","modelAnswer":"step by step"},{"index":1,"correct":-1,"confidence":"low","keyQuote":"","modelAnswer":"full solution","acceptedAnswers":["5","x=5"]}]}')
   return lines.join('\n')
 }
 
