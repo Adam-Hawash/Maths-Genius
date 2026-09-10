@@ -182,18 +182,27 @@ async function gradeWritingDecisive(writing: QItem[], answers: any): Promise<{ v
       console.error('[regrade-core] image grade error:', imErr)
     }
     if (gradeData) {
-      var imAwarded = Math.min(Math.max(Math.round(Number(gradeData.awardedPoints) || (gradeData.isCorrect ? iw.points : 0)), 0), iw.points)
+      /* 2026-و13 — نفس قرار التسليم: الـ AI مش متأكد من قراية الصورة ←
+         درجة مؤقتة عادلة (نص درجة المحاولة) بدل صفر — زي الواجب بالظبط،
+         والمستر يعدلها بضغطة من لوحته */
+      var imRealWork = iw.studentText.replace(/\[📷[^\]]*\]/g, '').trim().length > 0
+      var imUnsure = gradeData.needsGrading === true && gradeData.isCorrect !== true
+      var imAwarded = imUnsure
+        ? (imRealWork ? Math.ceil(iw.points / 2) : 0)
+        : Math.min(Math.max(Math.round(Number(gradeData.awardedPoints) || (gradeData.isCorrect ? iw.points : 0)), 0), iw.points)
       imageGraded.push({
         question: iw.question,
         answer: iw.studentText,
         modelAnswer: iw.modelAnswer,
         awardedPoints: imAwarded,
         maxPoints: iw.points,
-        isCorrect: imAwarded >= Math.ceil(iw.points * 0.5) && imAwarded > 0,
-        feedback: gradeData.feedback || (imAwarded > 0 ? 'تم تصحيح صورة الحل' : 'الحل مش مطابق'),
+        isCorrect: imUnsure ? false : (imAwarded >= Math.ceil(iw.points * 0.5) && imAwarded > 0),
+        feedback: imUnsure
+          ? (imRealWork ? 'صورة الحل اترفعت — درجة مؤقتة لحد ما تراجعها وعدّلها من لوحتك' : 'لم يتم الإجابة')
+          : (gradeData.feedback || (imAwarded > 0 ? 'تم تصحيح صورة الحل' : 'الحل مش مطابق')),
         gradingStatus: 'graded',
         needsGrading: false,
-        aiExtractedAnswer: gradeData.extractedAnswer || '',
+        aiExtractedAnswer: gradeData.extractedAnswer || (imUnsure && imRealWork ? '(صورة الحل مقدرناش نقراها بدقة)' : ''),
       })
     } else {
       // الـ VLM فشل → درجة محاولة عادلة بدل ما نسيبها فاضية

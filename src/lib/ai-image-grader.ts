@@ -28,8 +28,10 @@ async function callGrader(parts: any[]): Promise<{ ok: boolean; text?: string; e
   for (var attempt = 0; attempt < 2; attempt++) {
     var result = await callGeminiCentral({
       parts: parts,
-      generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
-      timeoutMs: 35000,
+      /* 2026-و12 — توكنز أكتر + وقت أطول: صور الحل الكبيرة كانت بتقطع
+         الـ JSON أو تطقطع التايم أوت فيرجع حكم غلط بدل تصحيح سليم */
+      generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+      timeoutMs: 60000,
       thinking: 'low',
     })
     if (result.ok) return { ok: true, text: result.text }
@@ -91,6 +93,85 @@ export function normalizeFinalAnswer(s: string): string {
 function finalPart(s: string): string {
   var parts = String(s || '').split('=')
   return (parts[parts.length - 1] || '').trim()
+}
+
+/* ------------------------------------------------------------------
+ * 2026-و12 — التصحيح على الإجابة النهائية (طلب المستر الحرفي:
+ * «يصحح بناءً على الإجابة النهائية اللي هي آخر حاجة»).
+ * الشكل المعكوس دايماً متكافئ: "1/4 = x" === "x = 1/4" — اسم المتغير
+ * ومكانه مبيغيروش حاجة، المقارنة بالقيم.
+ * finalAnswerCandidates بترجع كل القيم المرشحة للإجابة النهائية:
+ *   آخر جزء بعد آخر "=" + (لو النص جزأين وفيه متغير عاري) الجزء القيمي التاني.
+ * المتغير العاري (x, y, n) ملوش قيمة لوحده — بنمنع مطابقة عاري×عاري
+ * عشان "1/4 = x" مايتطابقش مع "2 = y" عن طريق "x"==="y".
+ * ------------------------------------------------------------------ */
+export function isBareVariable(s: string): boolean {
+  return /^[a-z]{1,2}$/.test(normalizeFinalAnswer(s))
+}
+
+function finalAnswerCandidatesSingle(text: string): string[] {
+  var t = String(text || '').toLowerCase()
+  var parts = t.split(/[=:]/)
+  var segs: string[] = []
+  for (var i = 0; i < parts.length; i++) {
+    var s = (parts[i] || '').trim()
+    if (s) segs.push(s)
+  }
+  var out: string[] = []
+  if (segs.length === 0) {
+    var whole = t.trim()
+    if (whole) out.push(whole)
+    return out
+  }
+  out.push(segs[segs.length - 1])
+  if (segs.length === 2) {
+    var lastBare = isBareVariable(segs[1])
+    var firstBare = isBareVariable(segs[0])
+    if (lastBare !== firstBare) {
+      if (!firstBare && out.indexOf(segs[0]) === -1) out.push(segs[0])
+      if (!lastBare && out.indexOf(segs[1]) === -1) out.push(segs[1])
+    }
+  }
+  return out
+}
+
+export function finalAnswerCandidates(text: string): string[] {
+  var t = String(text || '').toLowerCase()
+  /* 2026-و13 — النموذج ممكن يكون فيه أكتر من إجابة مقبولة مفصولة بـ
+     «أو / او / or / |» (زي "x = 2 أو x = 1/4") — بنستخرج مرشحين
+     لكل بديل لوحده عشان أي بديل يعتبر إجابة صحيحة.
+     ملحوظة: ممنوع القسمة على "/" — دي بتاعة الكسور (1/2). */
+  var alternatives = t.split(/\s+(?:أو|او|or)\s+|\s*\|\s*/)
+    .map(function (x) { return x.trim() })
+    .filter(Boolean)
+  if (alternatives.length === 0) alternatives = [t]
+  var out: string[] = []
+  alternatives.forEach(function (alt: string) {
+    finalAnswerCandidatesSingle(alt).forEach(function (c: string) {
+      if (c && out.indexOf(c) === -1) out.push(c)
+    })
+  })
+  return out
+}
+
+/* أي قيمة من إجابة الطالب متكافئة مع أي قيمة من النموذج/المقبولة؟
+   (ممنوع مطابقة حرفية، وممنوع عاري×عاري) */
+export function anyFinalEquivalent(studentText: string, modelText: string, acceptedAnswers?: string[]): boolean {
+  var sCands = finalAnswerCandidates(studentText)
+  var mCands = finalAnswerCandidates(modelText)
+  var all: string[] = mCands.slice()
+  ;(acceptedAnswers || []).forEach(function (a: string) { if (a && all.indexOf(a) === -1) all.push(a) })
+  for (var i = 0; i < sCands.length; i++) {
+    var sc = sCands[i]
+    if (!sc) continue
+    for (var j = 0; j < all.length; j++) {
+      var cc = all[j]
+      if (!cc) continue
+      if (isBareVariable(sc) && isBareVariable(cc)) continue
+      if (exactEquivalent(sc, cc)) return true
+    }
+  }
+  return false
 }
 
 /* canonicalize a pure monomial so x^6y^4 === y^4*x^6 (order never matters).
@@ -272,7 +353,7 @@ export async function gradeImageAnswer(params: {
   prompt += '   (b) If there is no box → the final answer is the LAST line they wrote (the value after the LAST "=").\n'
   prompt += '   CRITICAL: every intermediate step, every middle result, every scratched-out attempt is NOT the answer. Do NOT grade an intermediate value. Many students write wrong-looking middle steps and still end with the CORRECT boxed final answer — that is CORRECT, full marks. If you compare a middle step against the model answer instead of the boxed/last value, you FAIL.\n'
   prompt += '   Set answerSource = "boxed" if found in a box, "last-line" if from the last line, "unclear" if you truly cannot read any final value.\n'
-  prompt += 'STEP 5 — Compare the student\'s final answer VALUE with the model final answer and accepted answers. You are comparing MATHEMATICAL VALUES, not strings. All of these are the SAME answer: 2^7 = 128, 1/2 = 0.5 = ½ = 50%, n=6 = n = 6 = 6, x^4y^3 = y^3x^4, √50 = 5√2, 2^{n+2} = 2^n·4, 3:4 = 3/4, 3,5 = 3.5, ٤٢ = 42. Units and labels NEVER matter (12 سم = 12 cm = 12). Simplify BOTH sides mentally before deciding.\n'
+  prompt += 'STEP 5 — Compare the student\'s final answer VALUE with the model final answer and accepted answers. You are comparing MATHEMATICAL VALUES, not strings. The model answer may list MULTIPLE acceptable final answers separated by "أو" / "او" / "or" (like "x = 2 أو x = 1/4") — the student\'s final answer is CORRECT if it matches ANY ONE of those alternatives. All of these are the SAME answer: 2^7 = 128, 1/2 = 0.5 = ½ = 50%, n=6 = n = 6 = 6, x^4y^3 = y^3x^4, √50 = 5√2, 2^{n+2} = 2^n·4, 3:4 = 3/4, 3,5 = 3.5, ٤٢ = 42. Units and labels NEVER matter (12 سم = 12 cm = 12). "1/4 = x" and "x = 1/4" are the SAME answer — the variable name and its side/position NEVER matter; grade ONLY the final VALUE the student ended with (the LAST thing written). Simplify BOTH sides mentally before deciding.\n'
   prompt += 'STEP 6 — A correct final answer with wrong/missing/unreadable steps is still CORRECT (full points). A genuinely DIFFERENT final value is WRONG even if the steps look nice. Never mark an answer wrong just because the handwriting is hard to read or the steps are messy — judge the final value.\n'
   prompt += 'STEP 7 — ALWAYS give a definite verdict (isCorrect true or false). Only say onTopic=false when the photo truly contains NO student work at all.\n\n'
   prompt += 'awardedPoints: an integer from 0 to ' + maxPoints + ' (' + maxPoints + ' only when isCorrect=true).\n\n'
@@ -348,12 +429,13 @@ export async function gradeImageAnswer(params: {
 
   // ---- GUARD 3: exact-equivalence false-negative fix (AI said wrong but the
   // final answers are EXACTLY equivalent after normalization).
-  // Candidates: model final part + ALL boxed values in the model solution
-  // (\boxed{..} / 【..】) + accepted answers.
+  // 2026-و12: بيقارن كل قيم الإجابة النهائية (الطالب × [كل أجزاء النموذج
+  // + المربّع + المقبولة]) — بيصلّح الشكل المعكوس "1/4 = x" vs "x = 1/4".
   if (!isCorrect && finalAns) {
     var candidates: string[] = []
     if (modelAnswer) {
-      candidates.push(finalPart(modelAnswer))
+      var mCands3 = finalAnswerCandidates(modelAnswer)
+      for (var m3 = 0; m3 < mCands3.length; m3++) candidates.push(mCands3[m3])
       var boxedM = modelAnswer.match(/\\boxed\{([^}]+)\}/g) || []
       for (var bi = 0; bi < boxedM.length; bi++) {
         var inner = boxedM[bi].replace(/^\\boxed\{/, '').replace(/\}$/, '')
@@ -363,14 +445,24 @@ export async function gradeImageAnswer(params: {
       for (var ji = 0; ji < jpM.length; ji++) candidates.push(jpM[ji].replace(/[【】]/g, ''))
     }
     acceptedAnswers.forEach(function (a) { candidates.push(a) })
-    for (var ci = 0; ci < candidates.length; ci++) {
-      if (candidates[ci] && exactEquivalent(finalAns, candidates[ci])) {
-        isCorrect = true
-        awardedPoints = maxPoints
-        if (!feedback || feedback.indexOf('غلط') >= 0 || feedback.indexOf('خطأ') >= 0 || feedback.indexOf('خاطئة') >= 0) {
-          feedback = 'إجابة صحيحة — الإجابة النهائية (المربّعة) مطابقة للصحيحة'
+    var sCands3 = finalAnswerCandidates(finalAns)
+    var flipped = false
+    for (var si = 0; si < sCands3.length && !flipped; si++) {
+      var sc3 = sCands3[si]
+      if (!sc3) continue
+      for (var ci = 0; ci < candidates.length; ci++) {
+        var cc3 = candidates[ci]
+        if (!cc3) continue
+        if (isBareVariable(sc3) && isBareVariable(cc3)) continue
+        if (exactEquivalent(sc3, cc3)) {
+          isCorrect = true
+          awardedPoints = maxPoints
+          flipped = true
+          if (!feedback || feedback.indexOf('غلط') >= 0 || feedback.indexOf('خطأ') >= 0 || feedback.indexOf('خاطئة') >= 0) {
+            feedback = 'إجابة صحيحة — الإجابة النهائية (الأخيرة) مطابقة للصحيحة'
+          }
+          break
         }
-        break
       }
     }
   }
@@ -487,7 +579,9 @@ export async function gradeTextAnswer(params: {
   prompt += 'MODEL SOLUTION:\n' + (modelAnswer ? repairCorruptMath(modelAnswer) : '(none - SOLVE the question yourself step by step, find the correct final answer, then grade the student answer against YOUR solution. Grade on the final answer AND the solution steps: correct final → full points, correct method with small slip → about half)') + '\n'
   prompt += acceptedStr + '\n\n'
   prompt += 'CORE PRINCIPLE — the student answer is CORRECT (full points) whenever its FINAL value is mathematically EQUAL to the model final value, even if written differently:\n'
+  prompt += '- The model answer may list MULTIPLE acceptable final answers separated by "أو" / "او" / "or" (like "x = 2 أو x = 1/4") — the student answer is CORRECT if it matches ANY ONE of those alternatives\n'
   prompt += '- Different order: y^4x^6 = x^6y^4\n'
+  prompt += '- REVERSED equation forms are the SAME answer: "1/4 = x" === "x = 1/4" — the variable name and its side/position NEVER matter\n'
   prompt += '- Different notation: a^7 = aaaaaaa (a multiplied 7 times), 2^10 = 1024, 1/2 = 0.5 = ½ = 50%, x^(1/2) = √x, √50 = 5√2, 3:4 = 3/4, 3,5 = 3.5\n'
   prompt += '- Arabic digits ٤٢ = 42; units and labels are IGNORED (12 سم = 12 cm = 12, x = 5 = 5); with or without × * · spaces or steps\n'
   prompt += '- The final value may be CONTAINED in the model solution (model shows steps, student wrote only the final result) → still CORRECT\n'
@@ -511,20 +605,26 @@ export async function gradeTextAnswer(params: {
   var confidence = String(parsed.confidence || 'high').toLowerCase()
   var awardedPoints = clampPoints(parsed.awardedPoints, maxPoints)
 
-  // exact-equivalence false-negative fix (model final part + boxed values + accepted)
+  // exact-equivalence false-negative fix (2026-و12): كل قيم إجابة الطالب
+  // مقابل كل قيم النموذج + المربّع + المقبولة — بيصلّح الشكل المعكوس
   if (!isCorrect) {
     var candidates: string[] = []
-    candidates.push(finalPart(modelAnswer))
+    var mCands4 = finalAnswerCandidates(modelAnswer)
+    for (var m4 = 0; m4 < mCands4.length; m4++) candidates.push(mCands4[m4])
     var boxedM = modelAnswer.match(/\\boxed\{([^}]+)\}/g) || []
     for (var bi = 0; bi < boxedM.length; bi++) candidates.push(boxedM[bi].replace(/^\\boxed\{/, '').replace(/\}$/, ''))
     var jpM = modelAnswer.match(/【([^】]+)】/g) || []
     for (var ji = 0; ji < jpM.length; ji++) candidates.push(jpM[ji].replace(/[【】]/g, ''))
     acceptedAnswers.forEach(function (a) { candidates.push(a) })
-    var studentFinal = finalPart(studentAnswer)
-    for (var ci = 0; ci < candidates.length; ci++) {
-      if (candidates[ci] && studentFinal && exactEquivalent(studentFinal, candidates[ci])) {
-        isCorrect = true
-        break
+    var sCands4 = finalAnswerCandidates(studentAnswer)
+    for (var si2 = 0; si2 < sCands4.length && !isCorrect; si2++) {
+      var sc4 = sCands4[si2]
+      if (!sc4) continue
+      for (var ci2 = 0; ci2 < candidates.length; ci2++) {
+        var cc4 = candidates[ci2]
+        if (!cc4) continue
+        if (isBareVariable(sc4) && isBareVariable(cc4)) continue
+        if (exactEquivalent(sc4, cc4)) { isCorrect = true; break }
       }
     }
   }
