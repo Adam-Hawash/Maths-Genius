@@ -298,8 +298,12 @@ function mcqContrib(mcq: QItem[], answers: any): { contrib: Record<string, numbe
     var pts = pointsOf(q, 1)
     maxFromMcq += pts
     var opts = Array.isArray(q.options) ? q.options : []
-    var correctIdx = typeof q.correct === 'number' ? q.correct : 0
-    if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
+    /* 2026-و11 — مفتاح ناقص = صفر صادق مش (A) بالحر — لحد ما المستر يثبت المفتاح */
+    var correctIdx = typeof q.correct === 'number' ? q.correct : -1
+    if (correctIdx < 0 || correctIdx >= opts.length) {
+      contrib[String(item.origIdx)] = 0
+      return
+    }
     var studentAnswer = lookupAnswer(answers, item.origIdx)
     var ok = studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === correctIdx
     contrib[String(item.origIdx)] = ok ? pts : 0

@@ -35,6 +35,27 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No questions to save' }, { status: 400 })
     }
 
+    /* 2026-و11 — حرس سيرفر: ممنوع تسجيل أي سؤال اختياري من غير إجابة مؤكدة
+       — «ما تكونش بالحر» — العميل كان بيفلتر بس، وده بيقفل التجاوز نهائيًا */
+    var unanswered: number[] = []
+    questions.forEach(function(q: any, i: number) {
+      var isWriting = q.type === 'writing' || q.type === 'essay'
+      if (!isWriting && Array.isArray(q.options)) {
+        var allNA = q.options.length > 0 && q.options.every(function(o: any) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+        if (allNA) isWriting = true
+      }
+      if (!isWriting && (!q.options || q.options.length === 0)) isWriting = true
+      if (!isWriting) {
+        var c = typeof q.correct === 'number' ? q.correct : -99
+        if (c < 0 || c > 3) unanswered.push(i + 1)
+      }
+    })
+    if (unanswered.length > 0) {
+      return NextResponse.json({
+        error: 'في أسئلة من غير إجابة مؤكدة من المفتاح (أسئلة: ' + unanswered.join('، ') + ') — ثبّت إجابتها بإيدك الأول قبل الحفظ'
+      }, { status: 422 })
+    }
+
     // Convert to DB format - preserve ALL fields (type, modelAnswer, acceptedAnswers)
     var dbQuestions = questions.map(function(q) {
       var questionText = q.question || q.q || ''

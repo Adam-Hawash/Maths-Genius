@@ -216,8 +216,9 @@ export async function GET(request: NextRequest) {
         var origIdx = item.origIdx
         var qText = q.question || q.q || ''
         var opts = Array.isArray(q.options) ? q.options : []
-        var correctIdx = typeof q.correct === 'number' ? q.correct : 0
-        if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
+        /* 2026-و11 — سؤال من غير مفتاح مؤكد: عرض صادق — مش إجابة (A) وهمية */
+        var correctIdx = typeof q.correct === 'number' ? q.correct : -1
+        var keyless = correctIdx < 0 || correctIdx >= opts.length
 
         var ans = lookupAnswer(studentAns, origIdx)
 
@@ -225,9 +226,11 @@ export async function GET(request: NextRequest) {
         var studentAnswerText = (typeof ans === 'number' && opts[ans] && opts[ans] !== 'N/A')
           ? String.fromCharCode(65 + ans) + ') ' + opts[ans]
           : 'Not answered'
-        var correctAnswerText = (opts[correctIdx] && opts[correctIdx] !== 'N/A')
-          ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
-          : (q.modelAnswer || 'No correct answer stored')
+        var correctAnswerText = keyless
+          ? '⚠ إجابة السؤال مش مؤكدة في المفتاح — محتاجة مراجعة المستر'
+          : ((opts[correctIdx] && opts[correctIdx] !== 'N/A')
+            ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
+            : (q.modelAnswer || 'No correct answer stored'))
 
         allQuestions.push({
           type: 'mcq',
