@@ -317,11 +317,20 @@ const PLAYER_PAGE = `<!doctype html>
   /* 2026-و9 — كارتين صغيرين في نص الفيديو يمين وشمال على الطرف خالص —
      فيهم رقم الطالب بس (من غير اسم ولا QR) — بطلب المستر */
   .wmNumChip{position:absolute;z-index:46;transform:translateY(-50%)}
-  .wmNumR{right:0;top:50%;border-radius:7px 0 0 7px}
+  /* 2026-و16 — طلب المستر: «اليمين كمان مرتين زي الشمال + الاسم تحتهم صغير» —
+     كل جانب بقى: رقمين (44% و 56%) + اسم الطالب تحتهم (68%) صغير */
+  .wmNumR{right:0;top:44%;border-radius:7px 0 0 7px}
+  .wmNumR2{right:0;top:56%;border-radius:7px 0 0 7px}
   .wmNumL{left:0;top:44%;border-radius:0 7px 7px 0}
-  /* 2026-و11 — المستر طلب 2 شمال مش 1: «في النص على اليمين صغيرة وفي النص
-     على الشمال صغيرين» — الشمال اتنين فوق بعض واليمين واحدة في النص */
   .wmNumL2{left:0;top:56%;border-radius:0 7px 7px 0}
+  .wmNameChip{position:absolute;z-index:46;max-width:36vw;overflow:hidden}
+  .wmNameR{right:0;top:68%;border-radius:7px 0 0 7px}
+  .wmNameL{left:0;top:68%;border-radius:0 7px 7px 0}
+  .wmNameChip .in{display:inline-block;background:rgba(0,0,0,.55);color:#fff;
+    border:1px solid rgba(255,255,255,.16);border-left:0;border-right:0;padding:2.5px 9px;
+    font-size:clamp(8.5px,.95vw,11px);font-weight:700;direction:rtl;unicode-bidi:plaintext;
+    letter-spacing:0;white-space:nowrap;opacity:.85;max-width:36vw;overflow:hidden;
+    text-overflow:ellipsis}
   .wmNumChip .in{display:inline-block;background:rgba(0,0,0,.55);color:#fff;
     border:1px solid rgba(255,255,255,.16);border-left:0;border-right:0;padding:2.5px 9px;
     font-size:clamp(8.5px,.95vw,11px);font-weight:700;direction:ltr;unicode-bidi:plaintext;
@@ -375,12 +384,11 @@ const PLAYER_PAGE = `<!doctype html>
      (الاشتراك/اللوجو/الشير/سطر الكابشن) تغطية كاملة 100%.
      كروت QR بتاعتنا (bottom:66px) فوقيه فبتفضل ظاهرة زي ما المستر عايز،
      والشريط جوه مستطيل الفيديو بس — مبيوصلش لحاجة الصفحة اللي تحت الخالص */
+  /* 2026-و16 — «الشريط اللي تحت يوصل لأول الووترمارك من غير ما يغطيها» —
+     كروت الـ QR تحت قاعدها 66px وسمكها 30–40px → علّينا الشريط بالظبط
+     لحد أول الكروت (96–106px) — والكروت فوقيه برضه (z-46 > z-44) */
   #botShield{position:absolute;bottom:0;left:0;right:0;z-index:44;pointer-events:auto;
-    /* 2026-و15 — طلب المستر الحرفي: «كبّر الشريط اللي بيعزل الكابشن سنة بسيطة
-       يكون واصل لحد الووترمارك اللي تحت خالص» — زوّدنا سنة (1cm = ‎37.8px)
-       فبيرجع السمك من 50px لحوالي 88px — واصل لكروت الـ QR اللي تحت
-       (bottom:66px) والكروت فوقيه لسه ظاهرة (z-46 > z-44) */
-    height:calc(max(40px,min(7.5%,50px)) + 1cm);
+    height:calc(66px + clamp(30px,3.4vw,40px));
     background:rgba(0,0,0,.80);
     -webkit-backdrop-filter:blur(16px) saturate(.9);backdrop-filter:blur(16px) saturate(.9);
     display:flex;align-items:center;justify-content:flex-start;
@@ -552,13 +560,20 @@ function buildWm(){
     var b2 = document.createElement('div'); b2.className = 'wmCard wmCardB2'; b2.innerHTML = ch; layer.appendChild(b2);
     var b3 = document.createElement('div'); b3.className = 'wmCard wmCardB3'; b3.innerHTML = ch; layer.appendChild(b3);
   }
-  /* 3) (2026-و11) تلات كروت صغيرين في النص على الطرف خالص — رقم الطالب بس:
-     واحدة يمين + اتنين شمال (فوق بعض) — بطلب المستر الحرفي */
+  /* 3) (2026-و16) كل جانب: رقمين (يمين + شمال) + اسم الطالب تحتهم صغير —
+     بطلب المستر الحرفي: «اللي على اليمين يكون مرتين برضه ويكون تحتهم اسم الطالب
+     خليها صغيرة زي ما هي» */
   if(wmPhone){
     var phc = '<div class="in">' + esc(wmPhone) + '</div>';
     var nr = document.createElement('div'); nr.className = 'wmNumChip wmNumR'; nr.innerHTML = phc; layer.appendChild(nr);
+    var nr2 = document.createElement('div'); nr2.className = 'wmNumChip wmNumR2'; nr2.innerHTML = phc; layer.appendChild(nr2);
     var nl = document.createElement('div'); nl.className = 'wmNumChip wmNumL'; nl.innerHTML = phc; layer.appendChild(nl);
     var nl2 = document.createElement('div'); nl2.className = 'wmNumChip wmNumL2'; nl2.innerHTML = phc; layer.appendChild(nl2);
+  }
+  if(wmShortName() && wmPhone){
+    var nmc = '<div class="in">' + esc(wmName) + '</div>';
+    var nmR = document.createElement('div'); nmR.className = 'wmNameChip wmNameR'; nmR.innerHTML = nmc; layer.appendChild(nmR);
+    var nmL = document.createElement('div'); nmL.className = 'wmNameChip wmNameL'; nmL.innerHTML = nmc; layer.appendChild(nmL);
   }
   wrap.appendChild(layer);
 }

@@ -1,6 +1,9 @@
 // @ts-nocheck
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
+// (2026-و16) self-heal خلفي: تسليمات الواجب القديمة الناقصة التصحيح بتتصحح
+// تلقائيًا بنفس مسار الذكاء الاصطناعي الحاسم — البادج مش بيفضل معلق للأبد
+import { regradeHomeworkResult, gradesLookPending, questionsHaveWriting } from '@/lib/regrade-core'
 
 // GET /api/homework-results?studentId=xxx - Student: own results (basic info)
 // GET /api/homework-results?homeworkId=xxx - Admin: all results for a homework with per-student details
@@ -68,6 +71,26 @@ export async function GET(request: NextRequest) {
           } catch (e2) { rawResults = [] }
         }
       }
+
+      // (2026-و16) self-heal: تسليمات قديمة قبل التصحيح الفوري (writingResults
+      // فاضية أو فيها pending/needsGrading) ← إعادة تصحيح خلفية بنفس مسار
+      // regrade-core الحاسم بعد ما الرد يتبعت — البادج بيختفي بعد تحديث بسيط
+      try {
+        if (hwInfo && questionsHaveWriting(hwInfo.questions)) {
+          var healIds: string[] = []
+          for (var hi = 0; hi < (rawResults || []).length; hi++) {
+            if (healIds.length < 10 && gradesLookPending(rawResults[hi].writingResults)) healIds.push(rawResults[hi].id)
+          }
+          if (healIds.length > 0) {
+            var healBatch = healIds.slice(0, 10)
+            after(async function () {
+              for (var hj = 0; hj < healBatch.length; hj++) {
+                try { await regradeHomeworkResult(healBatch[hj]) } catch (e) {}
+              }
+            })
+          }
+        }
+      } catch (e) {}
 
       // Get student info for each result
       var studentIds = rawResults.map((r: any) => r.studentId).filter(Boolean)

@@ -1,6 +1,9 @@
 // @ts-nocheck
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
+// (2026-و16) self-heal خلفي: إعادة تصحيح النتايج القديمة الناقصة بنفس مسار
+// الذكاء الاصطناعي الحاسم — بدل ما يفضل بادج «محتاج تصحيح» معلق للأبد
+import { regradeExamResult, regradeHomeworkResult, gradesLookPending, questionsHaveWriting } from '@/lib/regrade-core'
 
 /* Parse a JSON column that may be a string or already-parsed */
 function parseJsonCol(col: any): any {
@@ -180,15 +183,25 @@ export async function GET(
 
     // Get exam results with wrong questions using RAW SQL
     var examResultsEnriched: any[] = []
+    // (2026-و16) self-heal: نتيجة فيها مقالي ودرجاتها المخزنة ناقصة/pending
+    // ← إعادة تصحيح تلقائي في الخلفية بعد الرد (غير محجوب)
+    var healExamIds: string[] = []
     try {
       var examRows = await db.$queryRawUnsafe(
-        'SELECT er.id, er.examId, er.score, er.maxScore, er.submittedAt, er.answers, er.writingResults, er.gradeOverrides, e.title, e.questions, e.passScore FROM ExamResult er LEFT JOIN Exam e ON er.examId = e.id WHERE er.studentId = ? ORDER BY er.submittedAt DESC',
+        // (2026-و16) INNER JOIN: نتيجة مالهاش امتحان أصلاً (اتمسح والداتابيز قديمة)
+        // مبتظهرش خالص — نفس دلالات تنظيف اليتيم اللي فوق
+        'SELECT er.id, er.examId, er.score, er.maxScore, er.submittedAt, er.answers, er.writingResults, er.gradeOverrides, e.title, e.questions, e.passScore FROM ExamResult er INNER JOIN Exam e ON er.examId = e.id WHERE er.studentId = ? ORDER BY er.submittedAt DESC',
         id
       )
 
       for (var i = 0; i < (examRows || []).length; i++) {
         var row = examRows[i]
         var wrongQuestions: any[] = []
+
+        // (2026-و16) تجميع مرشحي الإصلاح الذاتي — نفس فحص sweep/regrade-core
+        try {
+          if (healExamIds.length < 8 && questionsHaveWriting(row.questions) && gradesLookPending(row.writingResults)) healExamIds.push(row.id)
+        } catch (he) {}
 
         // Re-grade to find wrong questions (only if answers saved)
         try {
@@ -342,10 +355,11 @@ export async function GET(
               eneedsGrading = storedExam.needsGrading === true || storedExam.gradingStatus === 'pending'
               if (eneedsGrading) eaiFeedback = eaiFeedback || 'جاري التصحيح بالذكاء الاصطناعي...'
             } else if (estudentText && estudentText !== '[📷 صورة مرفقة]') {
-              // submitted before verdicts were stored → teacher presses the
-              // existing "إعادة تصحيح بالذكاء" button once and it's saved.
+              // (2026-و16) صف قديم قبل ما التصحيح الفوري يبقى موجود — بيتصحح
+              // تلقائيًا في الخلفية (self-heal تحت) بنفس مسار الذكاء الحاسم،
+              // والبادج بيبان كأنه شغّال لحد ما التحديث يجيب الحكم النهائي
               eneedsGrading = true
-              eaiFeedback = 'محتاج تصحيح — اضغط زر (إعادة تصحيح بالذكاء)'
+              eaiFeedback = 'بيتصحح تلقائيًا بالذكاء الاصطناعي… حدّث الصفحة بعد لحظات'
             }
 
             var examQItem: any = {
@@ -434,10 +448,13 @@ export async function GET(
 
     // Get homework results using RAW SQL — include answers + stored writing verdicts
     var homeworkResults: any[] = []
+    // (2026-و16) self-heal للواجبات كمان — نفس فكرة الامتحانات
+    var healHwIds: string[] = []
     try {
       try { await db.$executeRawUnsafe("ALTER TABLE HomeworkResult ADD COLUMN writingResults TEXT DEFAULT ''") } catch (e) {}
       var hwRows = await db.$queryRawUnsafe(
-        'SELECT hr.id, hr.homeworkId, hr.score, hr.maxScore, hr.submittedAt, hr.answers, hr.writingResults, hr.gradeOverrides, h.title, h.questions FROM HomeworkResult hr LEFT JOIN Homework h ON hr.homeworkId = h.id WHERE hr.studentId = ? ORDER BY hr.submittedAt DESC',
+        // (2026-و16) INNER JOIN: تسليم مالوش واجب أصلاً (اتمسح) مبيظهرش خالص
+        'SELECT hr.id, hr.homeworkId, hr.score, hr.maxScore, hr.submittedAt, hr.answers, hr.writingResults, hr.gradeOverrides, h.title, h.questions FROM HomeworkResult hr INNER JOIN Homework h ON hr.homeworkId = h.id WHERE hr.studentId = ? ORDER BY hr.submittedAt DESC',
         id
       )
 
@@ -446,6 +463,11 @@ export async function GET(
         var wrongQuestions: any[] = []
         var writingAnswers: any[] = []
         var allHwQuestions: any[] = []
+
+        // (2026-و16) تجميع مرشحي الإصلاح الذاتي للواجبات — نفس فحص sweep
+        try {
+          if (healHwIds.length < 8 && questionsHaveWriting(row.questions) && gradesLookPending(row.writingResults)) healHwIds.push(row.id)
+        } catch (he2) {}
 
         // Re-grade to find wrong questions + collect writing answers + build all questions
         try {
@@ -813,6 +835,25 @@ export async function GET(
         console.error('Simple homework fetch error:', e9)
       }
     }
+
+    // (2026-و16) الإصلاح الذاتي الخلفي: أي نتيجة قديمة ناقصة التصحيح بتعدي
+    // على نفس مسار regrade-core الحاسم (مطابقة ذكية + AI + fallback بدرجة
+    // محاولة عادلة — صفر needsGrading نهائي) بعد ما الرد يتبعت — غير محجوب
+    // خالص، والمستر بتحديث بسيط للصفحة يلاقي الحكم النهائي والبادج اختفى
+    try {
+      if (healExamIds.length > 0 || healHwIds.length > 0) {
+        var examHealBatch = healExamIds.slice(0, 8)
+        var hwHealBatch = healHwIds.slice(0, 8)
+        after(async function () {
+          for (var ei = 0; ei < examHealBatch.length; ei++) {
+            try { await regradeExamResult(examHealBatch[ei]) } catch (e) {}
+          }
+          for (var hi = 0; hi < hwHealBatch.length; hi++) {
+            try { await regradeHomeworkResult(hwHealBatch[hi]) } catch (e) {}
+          }
+        })
+      }
+    } catch (e) {}
 
     // Summary stats
     const totalVideosWatched = videoProgress.length

@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, safeWrite } from '@/lib/db'
 
 // GET /api/exams/[id] - 获取单个考试
 export async function GET(
@@ -72,16 +72,29 @@ export async function DELETE(
       return NextResponse.json({ error: '考试不存在' }, { status: 404 })
     }
 
-    // حذف الامتحان من المنصة = حذف كل حاجة تخصه (نتايج الطلاب + تصحيحات الـ AI)
-    // عشان مفيش نتيجة تفضل ظاهرة لامتحان اتحذف — نفس منطق حذف الواجب
+    // (2026-و16) طلب المستر حرفيًا: «أي امتحان أمسحه — النقاط بتاعته تختفي
+    // والإجابات بتاعته تختفي من صفحة الأدمن». الحذف بقى عملية واحدة ذرّية
+    // (transaction): نتايج الامتحان (الإجابات + تصحيحات الـ AI جواهم) + الامتحان
+    // نفسه في نفس اللحظة — مفيش نتيجة يتيمة تفضل ظاهرة ولا نقاط بتتحسب من
+    // امتحان اتمسح، ولو فشل حاجة بيرجع كل زي ما كان.
     try {
-      await db.$executeRawUnsafe('DELETE FROM ExamResult WHERE examId = ?', id)
-    } catch (e) {
-      console.error('حذف نتايج الامتحان فشل:', e)
-      try { await db.examResult.deleteMany({ where: { examId: id } }) } catch (e2) {}
+      await safeWrite(async function () {
+        await db.$transaction([
+          db.$executeRawUnsafe('DELETE FROM ExamResult WHERE examId = ?', id),
+          db.$executeRawUnsafe('DELETE FROM Exam WHERE id = ?', id),
+        ])
+      })
+    } catch (txErr) {
+      // احتياط: نفس الحذف المتتابع القديم لو الـ transaction مش متاح على الداتابيز
+      console.error('حذف الامتحان المتسلسل فشل — رجوع للحذف المتتابع:', txErr)
+      try {
+        await db.$executeRawUnsafe('DELETE FROM ExamResult WHERE examId = ?', id)
+      } catch (e) {
+        console.error('حذف نتايج الامتحان فشل:', e)
+        try { await db.examResult.deleteMany({ where: { examId: id } }) } catch (e2) {}
+      }
+      await db.exam.delete({ where: { id } })
     }
-
-    await db.exam.delete({ where: { id } })
 
     return NextResponse.json({ message: '考试删除成功' })
   } catch (error) {

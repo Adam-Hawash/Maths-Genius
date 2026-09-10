@@ -2385,7 +2385,18 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                       {wa.acceptedAnswers && wa.acceptedAnswers.length > 0 && (
                                         <p className="text-[9px] text-muted-foreground">إجابات مقبولة: <FractionText text={wa.acceptedAnswers.join('، ')} /></p>
                                       )}
-                                      <p className="text-[9px] text-muted-foreground mt-1">الدرجة: {wa.points} نقطة - بانتظار التصحيح</p>
+                                      {/* (2026-و16) الحكم الحقيقي بدل «بانتظار التصحيح» الثابت اللي
+                                          كان بيبان دايمًا — البادج بيظهر بس لو التصحيح فعلاً لسه
+                                          شغال في الخلفية، وغير كده الدرجة النهائية صح/غلط.
+                                          التعديل اليدوي (تعليم صح/غلط) شغال زي ما هو من OverrideButton */}
+                                      {wa.needsGrading ? (
+                                        <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1">الدرجة: {wa.points} نقطة - بتصحح بالذكاء الاصطناعي…</p>
+                                      ) : (
+                                        <p className={'text-[9px] mt-1 ' + (wa.isCorrect ? 'text-emerald-600 dark:text-emerald-400' : (String(wa.aiFeedback || '') === 'لم يجب الطالب' ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'))}>
+                                          الدرجة: {Number(wa.awardedPoints || wa.aiAwardedPoints || 0)}/{wa.points} - {wa.isCorrect ? 'صح' : 'غلط'}
+                                          {wa.aiFeedback ? ' — ' + wa.aiFeedback : ''}
+                                        </p>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
