@@ -146,12 +146,11 @@ function buildAiPrompt(needAI: WritingAnswer[]): string {
   lines.push('- Re-read the student final answer TWICE before deciding. Read every digit carefully (4 vs 9, 1 vs 7, 5 vs 3, 0 vs 6). Never confuse digits — if the final value you read equals the model value, it is CORRECT, full stop.')
   lines.push('- If you are talking with a student in a chat: assume the student MEANT the closest valid mathematical interpretation of what they wrote, unless it is clearly a different value.')
   lines.push('')
-  lines.push('FEEDBACK STYLE (2026-و23 — the teacher wants notes like a real teacher chatting with the student):')
-  lines.push('- Write the feedback in Egyptian Arabic, talking DIRECTLY to the student (استخدم «انت»).')
-  lines.push('- Explain WHY the answer is correct or wrong — the reason, not just the verdict. 1–2 short sentences max.')
-  lines.push('- Correct: praise briefly + say what made it right (e.g. «برافو عليك، الإجابة النهائية x = 5 مطابقة للصحيحة»)')
-  lines.push('- Wrong: say kindly what the student did wrong and what the correct answer is (e.g. «المفروض تبقى حسبت الأس الأول — الصح x = 1/4 مش x = 4»)')
-  lines.push('- NEVER be generic. No «إجابة غلط» alone — always the reason.')
+  lines.push('FEEDBACK STYLE (2026-و24 — the teacher wants STRONG teacher-style notes on EVERY question, like a real teacher chatting with the student):')
+  lines.push('- Write the feedback in Egyptian Arabic, talking DIRECTLY to the student (استخدم «انت») — 2–3 short sentences.')
+  lines.push('- Correct: praise + say WHAT he did right (the rule/method he used + the final value). e.g. «برافو عليك! وزعت الأس صح على الحدين ووصلت للناتج المطلوب بالظبط — الإجابة النهائية a^4 b^6 صحيحة.»')
+  lines.push('- Wrong: say (1) WHERE exactly the mistake happened (which step / which rule), (2) what the CORRECT approach is, (3) the correct final answer. e.g. «في الخطوة التانية ضربت الأس غلط: الضرب بيجمّع الأسس a^6 × a^2 = a^8 مش a^4. طبّق قاعدة الضرب تاني — الصح a^4 b^6.»')
+  lines.push('- NEVER be generic. No «إجابة غلط» alone — always the reason + the fix.')
   lines.push('')
   lines.push('Return ONE valid JSON array ONLY — no markdown fences, no text before or after:')
   lines.push('[{"index":0,"awardedPoints":5,"isCorrect":true,"feedback":"..."}]')
@@ -223,6 +222,8 @@ export async function gradeWritingSmart(writingAnswers: WritingAnswer[]): Promis
     // fast path
     var quick = quickSmartMatch(answerText, wa.modelAnswer || '', wa.acceptedAnswers || [])
     if (quick === true) {
+      /* (و24) ملاحظة شخصية زي معلم بيتكلم مع الطالب — حتى في المسار السريع */
+      var stNote = (finalAnswerCandidates(answerText)[0] || answerText.trim() || '').slice(0, 40)
       graded[i] = {
         question: wa.question,
         answer: answerText,
@@ -230,7 +231,7 @@ export async function gradeWritingSmart(writingAnswers: WritingAnswer[]): Promis
         awardedPoints: maxPts,
         maxPoints: maxPts,
         isCorrect: true,
-        feedback: 'الإجابة صحيحة ✓',
+        feedback: 'برافو عليك ✓ الإجابة النهائية (' + stNote + ') مطابقة للإجابة الصحيحة',
         gradingStatus: 'graded',
       }
       continue

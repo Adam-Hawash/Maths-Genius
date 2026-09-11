@@ -409,6 +409,7 @@ export async function GET(
 
         examResultsEnriched.push({
           id: row.id,
+          examId: row.examId,
           examTitle: row.title || 'امتحان محذوف',
           examGrade: '',
           passScore: passScore,
@@ -455,6 +456,7 @@ export async function GET(
           } catch (e3) {}
           examResultsEnriched.push({
             id: ser.id,
+            examId: ser.examId,
             examTitle: examTitle2,
             examGrade: '',
             passScore: passScore2,
@@ -746,6 +748,7 @@ export async function GET(
 
         homeworkResults.push({
           id: row.id,
+          homeworkId: row.homeworkId,
           homeworkTitle: row.title || 'واجب محذوف',
           score: row.score || 0,
           maxScore: row.maxScore || 100,
@@ -844,6 +847,7 @@ export async function GET(
 
           homeworkResults.push({
             id: shr.id,
+            homeworkId: shr.homeworkId,
             homeworkTitle: hwTitle2,
             score: shr.score || 0,
             maxScore: shr.maxScore || 100,

@@ -1,8 +1,9 @@
 'use client'
 
-import { useAppStore, GRADES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats } from '@/stores/app-store'
+import { useAppStore, GRADES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats, gradesFromConfig, type GradeItem } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
-import { QuestionsEditorDialog, EditQuestionsButton, RegradeButton, OverrideButton } from '@/components/admin/QuestionsEditor'
+import { QuestionsEditorDialog, EditQuestionsButton, RegradeButton, RegradeAllButton, OverrideButton } from '@/components/admin/QuestionsEditor'
+import { GradesSchedulePanel } from '@/components/admin/GradesSchedulePanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Users, UserCheck, Clock, ClipboardList, FileText,
   Megaphone, Plus, Check, X, Trash2, LogOut, Loader2,
@@ -18,7 +20,7 @@ import {
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
   Video as VideoIcon,
-  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag
+  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap
 } from 'lucide-react'
 import { AdminComplaints } from './AdminComplaints'
 import { CMSPanel } from './CMSPanel'
@@ -29,11 +31,17 @@ import { CommunityPanel } from './CommunityPanel'
 import { ActivityPanel } from './ActivityPanel'
 import { PaymentsPanel } from '@/components/PaymentsPanel'
 import { MathKeyboard } from '@/components/student/MathKeyboard'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 
 // Extract ALL image URLs/paths from student answer text
+/* (و24) قايمة الصفوف الديناميكية من إعدادات الأدمن (grades_data) — المستر بقدر يضيف/يمسح صف ويظهر في كل المنصة فورًا */
+function useGradesList(): GradeItem[] {
+  const siteConfig = useAppStore(function (s) { return s.siteConfig })
+  return useMemo(function () { return gradesFromConfig(siteConfig) }, [siteConfig])
+}
+
 function extractAllImagePaths(text: string): string[] {
   if (!text || typeof text !== 'string') return []
   var matches = text.match(/\[📷\s*صورة\s*مرفقة:\s*([^\]]+?)\]/g) || []
@@ -262,6 +270,7 @@ export function AdminDashboard() {
             <TabsTrigger value="payments" className="text-xs sm:text-sm gap-1 text-amber-600 dark:text-amber-400"><Wallet className="h-4 w-4" /><span className="hidden sm:inline">المدفوعات</span></TabsTrigger>
             <TabsTrigger value="ai-extract" className="text-xs sm:text-sm gap-1 text-purple-600 dark:text-purple-400"><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">استخراج AI</span></TabsTrigger>
             <TabsTrigger value="complaints" className="text-xs sm:text-sm gap-1 text-red-600 dark:text-red-400"><Flag className="h-4 w-4" /><span className="hidden sm:inline">الشكاوي</span>{newComplaints > 0 && <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">{newComplaints}</span>}</TabsTrigger>
+            <TabsTrigger value="grades-schedule" className="text-xs sm:text-sm gap-1 text-emerald-600 dark:text-emerald-400"><GraduationCap className="h-4 w-4" /><span className="hidden sm:inline">الصفوف والمواعيد</span></TabsTrigger>
           </TabsList>
 
           <TabsContent value="students"><StudentsManager onStatsRefresh={fetchStats} onViewImage={setImageModalSrc} /></TabsContent>
@@ -287,6 +296,8 @@ export function AdminDashboard() {
           <TabsContent value="payments"><PaymentsPanel onRefresh={fetchStats} /></TabsContent>
           <TabsContent value="ai-extract"><AIExtractionPanel onRefresh={fetchStats} /></TabsContent>
           <TabsContent value="complaints"><AdminComplaints /></TabsContent>
+          {/* (و24) طلب المستر: إدارة الصفوف الدراسية (إضافة/حذف صف + عربي/إنجليزي/إيموجي) + مواعيد السنتر (حذف/إضافة يوم وحصة) */}
+          <TabsContent value="grades-schedule"><GradesSchedulePanel /></TabsContent>
         </Tabs>
 
         {/* Admin Settings Dialog */}
@@ -420,6 +431,7 @@ function StatCard({ icon: Icon, label, value, color }: { icon: any; label: strin
 
 /* ========== STUDENTS MANAGER ========== */
 function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () => void; onViewImage: (src: string) => void }) {
+  const gradesList = useGradesList()
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'paid'>('pending')
@@ -582,7 +594,7 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
           <div className="flex gap-1 flex-wrap items-center">
             <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-8 rounded-md border border-input bg-transparent px-2 text-xs">
               <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {gradesList.map((g) => <option key={g.ar} value={g.ar}>{(g.emoji ? g.emoji + ' ' : '') + g.ar}</option>)}
             </select>
             <div className="flex gap-1 bg-muted rounded-lg p-1">
               {(['pending', 'all', 'approved', 'paid'] as const).map((f) => (
@@ -667,6 +679,7 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
 
 /* ========== VIDEO MANAGER (with REAL XHR upload progress) ========== */
 function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+  const gradesList = useGradesList()
   const currentAdminId = useAppStore(function (s) { return s.currentAdmin?.id || '' })
   const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(true)
@@ -793,7 +806,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
           <div className="flex gap-2 items-center flex-wrap">
             <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
               <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {gradesList.map((g) => <option key={g.ar} value={g.ar}>{(g.emoji ? g.emoji + ' ' : '') + g.ar}</option>)}
             </select>
             <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4 ml-1" />إضافة فيديو</Button>
           </div>
@@ -811,7 +824,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
               <div className="space-y-1.5">
                 <Label className="text-xs">الصف الدراسي *</Label>
                 <select value={formGrade} onChange={(e) => setFormGrade(e.target.value)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                  <option value="">اختر الصف</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                  <option value="">اختر الصف</option>{gradesList.map((g) => <option key={g.ar} value={g.ar}>{(g.emoji ? g.emoji + ' ' : '') + g.ar}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -951,6 +964,7 @@ interface MCQQuestion {
 }
 
 function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => void }) {
+  const gradesList = useGradesList()
   const [examEditTarget, setExamEditTarget] = useState<any>(null)
   const [exams, setExams] = useState<Exam[]>([])
   const [selectedExam, setSelectedExam] = useState<string>('')
@@ -1204,7 +1218,7 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5"><Label className="text-xs">الصف</Label>
                 <select value={formGrade} onChange={(e) => setFormGrade(e.target.value)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                  <option value="">اختر الصف</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                  <option value="">اختر الصف</option>{gradesList.map((g) => <option key={g.ar} value={g.ar}>{(g.emoji ? g.emoji + ' ' : '') + g.ar}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5"><Label className="text-xs">العنوان</Label>
@@ -1421,6 +1435,8 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                     <div className="text-center px-4 py-2 rounded-lg bg-primary/10"><p className="text-lg font-bold text-primary">{results.length}</p><p className="text-[10px] text-muted-foreground">قدموا</p></div>
                     <div className="text-center px-4 py-2 rounded-lg bg-emerald-500/10"><p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{avgScore}</p><p className="text-[10px] text-muted-foreground">متوسط الدرجات</p></div>
                     <div className="text-center px-4 py-2 rounded-lg bg-red-500/10"><p className="text-lg font-bold text-red-600 dark:text-red-400">{notTaken.length}</p><p className="text-[10px] text-muted-foreground">لم يقدموا بعد</p></div>
+                    {/* (و24) إعادة تصحيح كل تسليمات الامتحان ده بالذكاء الاصطناعي — لنتايج قديمة طلعت غلط */}
+                    {selectedExam && <span onClick={function (e) { e.stopPropagation() }}><RegradeAllButton kind="exam" targetId={selectedExam} onDone={function () { if (selectedExam) loadExamResults(selectedExam) }} /></span>}
                   </div>
                   {examInfo && (
                     <div className="flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground bg-muted/30 p-2 rounded-lg">
@@ -1874,6 +1890,7 @@ interface StudentAnalytics {
 }
 
 function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void }) {
+  const gradesList = useGradesList()
   const [grade, setGrade] = useState('')
   const [students, setStudents] = useState<StudentAnalytics[]>([])
   const [summary, setSummary] = useState<any>(null)
@@ -1965,7 +1982,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
               </div>
               <select value={grade} onChange={(e) => setGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm min-w-[200px]">
                 <option value="">اختر الصف لعرض التحليلات</option>
-                {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                {gradesList.map((g) => <option key={g.ar} value={g.ar}>{(g.emoji ? g.emoji + ' ' : '') + g.ar}</option>)}
               </select>
             </div>
           </div>
@@ -1977,7 +1994,24 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
               <p className="text-sm text-muted-foreground">اختر صفًا دراسيًا لعرض تحليلات الطلاب</p>
             </div>
           ) : loading ? (
-            <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            /* (و24) هيكل تحميل (skeleton) بدل السبينر — شكل الجدول بيبان من أول ثانية والتحميل يحس أسرع */
+            <div className="space-y-3 animate-pulse" aria-busy="true" aria-label="جاري تحميل الطلاب">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[0, 1, 2, 3].map(function (i) { return <Skeleton key={i} className="h-16 rounded-lg" /> })}
+              </div>
+              {[0, 1, 2, 3, 4, 5].map(function (i) {
+                return (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg border">
+                    <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-1/3" />
+                      <Skeleton className="h-2.5 w-1/4" />
+                    </div>
+                    <Skeleton className="h-8 w-24 rounded-md hidden sm:block" />
+                  </div>
+                )
+              })}
+            </div>
           ) : students.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Users className="h-10 w-10 text-muted-foreground/30 mb-3" />
@@ -2158,6 +2192,11 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                               <span onClick={function (e) { e.stopPropagation() }}>
                                 <RegradeButton kind="exam" resultId={er.id} onDone={function () { if (selectedStudent && selectedStudent.id) loadDetail(selectedStudent.id) }} />
                               </span>
+                              {er.examId && (
+                                <span onClick={function (e) { e.stopPropagation() }}>
+                                  <RegradeAllButton kind="exam" targetId={er.examId} onDone={function () { if (selectedStudent && selectedStudent.id) loadDetail(selectedStudent.id) }} />
+                                </span>
+                              )}
                             </div>
                           </div>
                           {/* All Questions Review (correct + wrong) */}
@@ -2286,6 +2325,11 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                               <span onClick={function (e) { e.stopPropagation() }}>
                                 <RegradeButton kind="homework" resultId={hr.id} onDone={function () { if (selectedStudent && selectedStudent.id) loadDetail(selectedStudent.id) }} />
                               </span>
+                              {hr.homeworkId && (
+                                <span onClick={function (e) { e.stopPropagation() }}>
+                                  <RegradeAllButton kind="homework" targetId={hr.homeworkId} onDone={function () { if (selectedStudent && selectedStudent.id) loadDetail(selectedStudent.id) }} />
+                                </span>
+                              )}
                             </div>
                           </div>
                           {/* All Questions Review (correct + wrong) */}
@@ -2460,6 +2504,7 @@ interface CMProps<T extends { id: string; grade: string; createdAt: string }> {
 
 function ContentManager<T extends { id: string; grade: string; createdAt: string }>({ title, apiPath, itemName, fields, renderTitle, renderSubtitle, supportFileUpload, fileCategory, acceptedTypes, supportAnswerKey, supportThumbnail, supportMCQ, onRefresh }: CMProps<T>) {
   const [items, setItems] = useState<T[]>([])
+  const gradesList = useGradesList()
   const [loading, setLoading] = useState(true)
   const [editTarget, setEditTarget] = useState<any>(null)
   const [showForm, setShowForm] = useState(false)
@@ -2749,7 +2794,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
           <div className="flex gap-2 items-center flex-wrap">
             <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
               <option value="">كل الصفوف</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {gradesList.map((g) => <option key={g.ar} value={g.ar}>{(g.emoji ? g.emoji + ' ' : '') + g.ar}</option>)}
             </select>
             <Button size="sm" onClick={() => { setShowForm(!showForm); if (!showForm) { setExamModels([]); setModelMode('random'); setFixedModelName('') } }}><Plus className="h-4 w-4 ml-1" />إضافة</Button>
           </div>
@@ -2762,7 +2807,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
             <div className="space-y-1.5">
               <Label className="text-xs">الصف الدراسي</Label>
               <select value={formGrade} onChange={(e) => setFormGrade(e.target.value)} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                <option value="">اختر الصف</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                <option value="">اختر الصف</option>{gradesList.map((g) => <option key={g.ar} value={g.ar}>{(g.emoji ? g.emoji + ' ' : '') + g.ar}</option>)}
               </select>
             </div>
             {Object.entries(fields).map(([key, field]) => (
@@ -2983,6 +3028,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
 
 /* ========== AI EXTRACTION PANEL ========== */
 function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+  const gradesList = useGradesList()
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [extractType, setExtractType] = useState<'exam' | 'homework'>('exam')
   const [grade, setGrade] = useState('')
