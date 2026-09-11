@@ -129,6 +129,7 @@ function buildAiPrompt(needAI: WritingAnswer[]): string {
   lines.push('- Arabic digits ٤٢ = 42; units and labels are IGNORED (12 سم = 12 cm = 12; x = 5 = 5); with or without × * · spaces units or steps')
   lines.push('- The final value may be CONTAINED in the model answer (the model shows full steps, the student wrote only the final result) → still CORRECT')
   lines.push('- UNDERSTAND the answer: find the FINAL value (usually the last thing written: after the last =, or a boxed/circled value, or after ANSWER). Messy steps, extra working or unusual formatting NEVER make a correct final value wrong. Simplify BOTH sides mentally before deciding.')
+  lines.push('- A small SLIP in a MIDDLE step (sign slip, arithmetic slip, self-corrected step) does NOT make the answer wrong when the FINAL value is correct — students stumble mid-way and fix themselves; judge where they ENDED. UNDERSTAND the work like a human teacher, never grade by literal string matching.')
   lines.push('- ALWAYS decide: every graded answer gets a definite isCorrect true or false — never leave one undecided.')
   lines.push('')
   lines.push('NO MODEL ANSWER? SOLVE IT YOURSELF:')

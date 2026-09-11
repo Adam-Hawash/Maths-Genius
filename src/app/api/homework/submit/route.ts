@@ -152,14 +152,31 @@ export async function POST(request) {
       return NextResponse.json({ error: 'الواجب غير موجود' }, { status: 404 })
     }
 
-    // Parse questions
-    var mcq = []
-    var writingQuestions = []
+    /* قراءة إجابة الطالب **بالفهرس الأصلي** للسؤال — نفس طريقة الامتحان
+     * (2026-و20 — العلة اللي كانت بتخلي «أي إجابة مقالي بتتحسب غلط في الواجب»):
+     * العميل بيبعت الإجابات مفتاحها الفهرس الأصلي للسؤال في قايمة الأسئلة الكاملة
+     * (origIdx — زي الامتحان بالظبط)، والكود القديم كان بيقرأ بترقيم مضغوط
+     * (answers[i] للاختياري وanswers[mcqLen + i] للمقالي) — أول ما ييجي سؤال
+     * مقالي قبل اختياري كل الفهارس بتتزحزح: السيرفر يقرأ رقم اختيار أو نص سؤال
+     * تاني ويصحح **كلام مش إجابة الطالب** → كل المقالي غلط! */
+    function lookupAnswer(ans: any, idx: number): any {
+      try {
+        if (Array.isArray(ans)) return ans[idx]
+        if (ans !== null && typeof ans === 'object') {
+          return ans[idx] !== undefined ? ans[idx] : ans[String(idx)]
+        }
+      } catch (e) {}
+      return undefined
+    }
+
+    // Parse questions (مع تتبع الفهرس الأصلي لكل سؤال)
+    var mcq: any[] = []
+    var writingQuestions: any[] = []
     if (homework.questions) {
       try {
         var raw = typeof homework.questions === 'string' ? JSON.parse(homework.questions) : homework.questions
         if (Array.isArray(raw)) {
-          raw.forEach(function(q) {
+          raw.forEach(function(q, idx) {
             var isWriting = q.type === 'writing' || q.type === 'essay'
             if (!isWriting && Array.isArray(q.options)) {
               var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
@@ -169,9 +186,9 @@ export async function POST(request) {
               isWriting = true
             }
             if (isWriting) {
-              writingQuestions.push(q)
+              writingQuestions.push({ q: q, origIdx: idx })
             } else {
-              mcq.push(q)
+              mcq.push({ q: q, origIdx: idx })
             }
           })
         }
@@ -183,12 +200,14 @@ export async function POST(request) {
       return NextResponse.json({ error: 'لا توجد أسئلة في الواجب' }, { status: 400 })
     }
 
-    // ============ MCQ: graded locally, INSTANT ============
+    // ============ MCQ: graded locally, INSTANT (بالفهرس الأصلي) ============
     var score = 0
     var maxScore = 0
     var wrongQuestions = []
 
-    mcq.forEach(function(q, i) {
+    mcq.forEach(function(item) {
+      var q = item.q
+      var origIdx = item.origIdx
       var qText = q.question || q.q || ''
       var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
       maxScore += pts
@@ -196,12 +215,7 @@ export async function POST(request) {
       var correctIdx = typeof q.correct === 'number' ? q.correct : 0
       if (correctIdx < 0 || correctIdx >= opts.length) { correctIdx = 0 }
 
-      var studentAnswer = undefined
-      if (Array.isArray(answers)) {
-        studentAnswer = answers[i]
-      } else if (answers !== null && typeof answers === 'object') {
-        studentAnswer = answers[i] !== undefined ? answers[i] : answers[String(i)]
-      }
+      var studentAnswer = lookupAnswer(answers, origIdx)
 
       if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === correctIdx) {
         score += pts
@@ -221,22 +235,16 @@ export async function POST(request) {
     if (maxScore === 0) { maxScore = mcq.length }
     var mcqScore = score
 
-    // ============ Writing questions: saved as PENDING, graded in background ============
+    // ============ Writing questions: saved as PENDING, graded in background (بالفهرس الأصلي) ============
     var writingAnswers: any[] = []
-    writingQuestions.forEach(function(q, i) {
+    writingQuestions.forEach(function(item) {
+      var q = item.q
       var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
       maxScore += pts
 
       var qText = q.question || q.q || ''
-      var studentText = ''
-      var mcqLen = mcq.length
-      try {
-        if (Array.isArray(answers)) {
-          studentText = answers[mcqLen + i] || ''
-        } else if (answers && typeof answers === 'object') {
-          studentText = answers[mcqLen + i] || answers[String(mcqLen + i)] || ''
-        }
-      } catch (e) {}
+      var sa = lookupAnswer(answers, item.origIdx)
+      var studentText = sa !== undefined && sa !== null ? String(sa) : ''
 
       writingAnswers.push({
         question: qText,
