@@ -7,19 +7,12 @@ import { Badge } from '@/components/ui/badge'
 import { Send, Loader2, MessageSquare, Users } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import type { Discussion } from '@/stores/app-store'
-
-const GRADES = [
-  'الصف الثالث الابتدائي',
-  'الصف الرابع الابتدائي',
-  'الصف الخامس الابتدائي',
-  'الصف السادس الابتدائي',
-  'الصف الأول الاعدادي',
-  'الصف الثاني الاعدادي',
-  'الصف الثالث الاعدادي',
-]
+import { gradesFromConfig, useAppStore, type Discussion } from '@/stores/app-store'
 
 export function CommunityPanel() {
+  // (24-b) قايمة الصفوف بقت ديناميكية من لوحة الأدمن بدل القايمة المحلية الثابتة
+  var siteConfig = useAppStore(function (s) { return s.siteConfig })
+  var GRADES = gradesFromConfig(siteConfig)
   const [selectedGrade, setSelectedGrade] = useState('')
   const [discussions, setDiscussions] = useState<Discussion[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,7 +87,7 @@ export function CommunityPanel() {
             >
               <option value="">اختر صف دراسي لإدارة مجتمعه | Select a grade</option>
               {GRADES.map((g) => (
-                <option key={g} value={g}>{g}</option>
+                <option key={g.ar} value={g.ar}>{(g.emoji ? g.emoji + ' ' : '') + g.ar}</option>
               ))}
             </select>
             {selectedGrade && (

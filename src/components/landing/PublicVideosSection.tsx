@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Loader2, Lock, Play } from 'lucide-react'
-import { useAppStore, GRADES } from '@/stores/app-store'
+import { useAppStore, gradesFromConfig } from '@/stores/app-store'
 
 interface VideoItem {
   id: string
@@ -24,6 +24,9 @@ function getYouTubeThumbnail(url: string) {
 
 export function PublicVideosSection() {
   var setView = useAppStore(function (s) { return s.setView })
+  var siteConfig = useAppStore(function (s) { return s.siteConfig })
+  // (24-b) فلتر الصفوف بقى ديناميكي من قايمة الصفوف في لوحة الأدمن
+  var gradeItems = gradesFromConfig(siteConfig)
   var [videos, setVideos] = useState<VideoItem[]>([])
   var [loading, setLoading] = useState(true)
   var [gradeFilter, setGradeFilter] = useState('all')
@@ -71,14 +74,9 @@ export function PublicVideosSection() {
 
         {/* Grade filter tabs - Arabic only */}
         <div className="flex flex-wrap justify-center gap-2 mb-8">
-          {[
-            { value: 'all', label: 'الكل' },
-            { value: 'الصف السادس الابتدائي', label: 'الصف السادس' },
-            { value: 'الصف الأول الاعدادي', label: 'الأول الإعدادي' },
-            { value: 'الصف الثاني الاعدادي', label: 'الثاني الإعدادي' },
-            { value: 'الصف الثالث الاعدادي', label: 'الثالث الإعدادي' },
-            { value: 'أولى بكالوريا', label: 'أولى بكالوريا' },
-          ].map(function (g) {
+          {[{ value: 'all', label: 'الكل' }].concat(gradeItems.map(function (g) {
+            return { value: g.ar, label: g.ar }
+          })).map(function (g) {
             var isActive = gradeFilter === g.value
             return (
               <button

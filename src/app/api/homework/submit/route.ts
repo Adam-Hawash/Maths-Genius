@@ -12,7 +12,7 @@
 
 import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
-import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
+import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds, finalAnswerCandidates } from '@/lib/ai-image-grader'
 import { gradeFallbackDecisive, quickSmartMatch } from '@/lib/smart-grader'
 import { checkHwSequential } from '@/lib/sequential-guard'
 
@@ -418,6 +418,9 @@ export async function POST(request) {
       }
       // fast local match
       if (quickTextMatch(answerText, wa.modelAnswer, wa.acceptedAnswers)) {
+        /* (و24) ملاحظة شخصية زي معلم بيتكلم مع الطالب — حتى في المسار السريع */
+        var fcNote = (finalAnswerCandidates(answerText)[0] || answerText.trim() || '').slice(0, 40)
+        var noteTxt = 'برافو عليك ✓ إجابتك صح — الإجابة النهائية (' + fcNote + ') مطابقة للإجابة الصحيحة'
         return Object.assign({}, wa, {
           gradingStatus: 'graded',
           needsGrading: false,
@@ -425,9 +428,9 @@ export async function POST(request) {
           awardedPoints: wa.points,
           aiExtractedAnswer: answerText,
           aiIsCorrect: true,
-          aiFeedback: 'إجابة صحيحة (الإجابة النهائية مطابقة للصحيحة)',
+          aiFeedback: noteTxt,
           aiAwardedPoints: wa.points,
-          feedback: 'إجابة صحيحة',
+          feedback: noteTxt,
         })
       }
       // AI text grading
