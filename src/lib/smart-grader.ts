@@ -12,7 +12,7 @@
 
 import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
 import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
-import { exactEquivalent, finalAnswerCandidates, isBareVariable } from './ai-image-grader'
+import { exactEquivalent, finalAnswerCandidates, isBareVariable, modelFinalCandidates, verifyFinalAnswerEqual } from './ai-image-grader'
 
 export interface WritingAnswer {
   question: string
@@ -293,6 +293,7 @@ export async function gradeWritingSmart(writingAnswers: WritingAnswer[]): Promis
 
   var aiResults = parseAiArray(result.text || '')
   if (aiResults && Array.isArray(aiResults)) {
+    var aiVerdictPairs: { n: number; idx: number }[] = []
     for (var n = 0; n < needAIIdx.length; n++) {
       var idx = needAIIdx[n]
       var wa2 = needAI[n]
@@ -310,6 +311,34 @@ export async function gradeWritingSmart(writingAnswers: WritingAnswer[]): Promis
       graded[idx].isCorrect = awarded >= Math.ceil((wa2.points || 1) * 0.5) && awarded > 0
       graded[idx].feedback = String(aiRes.feedback || (awarded > 0 ? 'صحيح' : 'غير صحيح')).slice(0, 300)
       graded[idx].gradingStatus = 'graded'
+      aiVerdictPairs.push({ n: n, idx: idx })
+    }
+    /* (2026-و25) STRICT VERIFY — لكل إجابة الـ AI ما أعطاش الدرجة الكاملة
+       (خصوصًا الأصفار اللي بتبوّظ الطالب) بنعمل نداء تحقق ثاني رخيص بيقارن
+       قيم الإجابة النهائية بس — لو نفس القيمة يقلب صح كاملة.
+       بحد أقصى 6 تحققات لكل دفعة عشان مهلة السيرفلس، وبتسلسل (مش متوازي). */
+    var verifyBudget = 6
+    for (var vp = 0; vp < aiVerdictPairs.length && verifyBudget > 0; vp++) {
+      var pair = aiVerdictPairs[vp]
+      var waV = needAI[pair.n]
+      var gV = graded[pair.idx]
+      var vMax = waV.points || 1
+      if (!gV || gV.gradingStatus !== 'graded') continue
+      if (Number(gV.awardedPoints) >= vMax) continue
+      if (!waV.modelAnswer && !(waV.acceptedAnswers && waV.acceptedAnswers.length > 0)) continue
+      var sVc = finalAnswerCandidates(waV.answer || '').slice(0, 3)
+      if (sVc.length === 0) continue
+      var mVc = modelFinalCandidates(waV.modelAnswer || '', waV.acceptedAnswers || []).slice(0, 3)
+      if (mVc.length === 0) continue
+      verifyBudget--
+      try {
+        var sameV = await verifyFinalAnswerEqual({ studentFinals: sVc, modelFinals: mVc, question: waV.question })
+        if (sameV) {
+          gV.awardedPoints = vMax
+          gV.isCorrect = true
+          gV.feedback = String('برافو عليك ✓ الإجابة النهائية (' + sVc[0] + ') مطابقة للإجابة الصحيحة — تم التأكد من القيمة مرتين').slice(0, 300)
+        }
+      } catch (vErr) { console.error('[gradeWritingSmart] verify error:', vErr) }
     }
   } else {
     for (var m2 = 0; m2 < needAIIdx.length; m2++) {
@@ -354,9 +383,28 @@ function heuristicFallback(slot: GradedAnswer, wa: WritingAnswer): GradedAnswer 
   var awarded = 0
   var feedback = 'الإجابة مش مطابقة للإجابة النموذجية'
 
+  /* (2026-و25) محاولة فعلية من الطالب؟ نص ≥ 3 حروف معنوية أو صورة مرفوعة */
+  var realAttempt = (!!st && st.replace(/[^0-9a-zA-Z\u0600-\u06FF]/g, '').length >= 3) || /\[📷/.test(wa.answer || '')
+  var hasImage = /\[📷/.test(wa.answer || '')
+
+  /* (2026-و25) فاضي تمامًا (مفيش نص ومفيش صورة) → صفر صريح «لم يتم الإجابة»
+     من أول سطر — نفس رسالة مسار gradeWritingSmart، مهما كان فيه نموذجية أو لا */
+  if (!st && !hasImage) {
+    return {
+      question: slot.question,
+      answer: slot.answer,
+      modelAnswer: slot.modelAnswer,
+      awardedPoints: 0,
+      maxPoints: maxPts,
+      isCorrect: false,
+      feedback: 'لم يتم الإجابة',
+      gradingStatus: 'graded',
+    }
+  }
+
   if (!model) {
     // nothing to compare with at all → count anything written as attempted work
-    if (st && st.replace(/[^0-9a-zA-Z\u0600-\u06FF]/g, '').length >= 3) {
+    if (realAttempt) {
       awarded = Math.ceil(maxPts / 2)
       feedback = 'الإجابة مكتوبة بس محتاجة مراجعة المستر النهائية'
     } else {
@@ -387,7 +435,20 @@ function heuristicFallback(slot: GradedAnswer, wa: WritingAnswer): GradedAnswer 
     } else if (sim >= 0.55) {
       awarded = Math.ceil(maxPts / 2)
       feedback = 'فيه تشابه جزئي مع الحل النموذجي — راجعها مع المستر'
+    } else if (hasImage) {
+      /* 2026-و25 — صورة مرفوعة مقدرناش نقراها محليًا في المسار النصي →
+         نص درجة المحاولة + مراجعة بدل صفر (زي decisiveImageFallback بالظبط) */
+      awarded = Math.ceil(maxPts / 2)
+      feedback = 'درجة مؤقتة — صورة الحل محتاجة مراجعة المستر وهيعدلها لو لزم'
+    } else if (realAttempt && (sim >= 0.30 || sharedValueToken(st, model))) {
+      /* 2026-و25 — علاج «كله غلط. حرام»: محاولة حقيقية فيها علاقة بالحل
+         (رقم/رمز مشترك أو تشابه ≥ 0.30) ومقدرناش نحكم بقوة ← نص الدرجة
+         + ملاحظة مراجعة صريحة — زي decisiveImageFallback بالظبط —
+         ممنوع صفر صامت. المستر يقدر يعدلها من لوحته لو الغلط حقيقي. */
+      awarded = Math.ceil(maxPts / 2)
+      feedback = 'درجة مؤقتة — مقدرناش نحكم بدقة على إجابتك والمستر هيعدلها لو لزم'
     }
+    /* كلام ضايع تمامًا (مفيش أي رقم/رمز مشترك ولا تشابه) → 0 زي ما هو */
   }
 
   return {
@@ -421,4 +482,17 @@ function bigramSimilarity(a: string, b: string): number {
   }
   var denom = total + (cleanB.length - 1)
   return denom > 0 ? (2 * hits) / denom : 0
+}
+
+/* (2026-و25) هل إجابة الطالب فيها أي رقم أو كلمة/رمز مادة موجودة في النموذج؟
+   ده الدليل الرخيص إن فيه علاقة حقيقية بين شغل الطالب والحل — بساعده نمنع
+   صفر صامت لمحاولة حقيقية مقدرناش نحكم بقية (الأرقام هي الإشارة القوية في
+   الرياضيات: "3×3×3×3 = 81" ضد نموذج "3^4 = 81" بيتشاركوا في 3 و 81). */
+function sharedValueToken(studentNorm: string, modelNorm: string): boolean {
+  if (!studentNorm || !modelNorm) return false
+  var tokens = studentNorm.match(/\d+(?:\.\d+)?|[a-z\u0600-\u06FF]{2,}/g) || []
+  for (var i = 0; i < tokens.length; i++) {
+    if (modelNorm.indexOf(tokens[i]) !== -1) return true
+  }
+  return false
 }

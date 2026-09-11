@@ -19,7 +19,7 @@ import { NextResponse } from 'next/server'
 import { after } from 'next/server'
 import { db } from '@/lib/db'
 import { gradeImageAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
-import { gradeWritingSmart } from '@/lib/smart-grader'
+import { gradeWritingSmart, gradeFallbackDecisive } from '@/lib/smart-grader'
 import { checkExamSequential } from '@/lib/sequential-guard'
 import { parseQuestions, resolveQuestionsForStudent } from '@/lib/exam-models'
 
@@ -45,6 +45,12 @@ async function ensureTable() {
     try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN writingResults TEXT DEFAULT ""') } catch(e) {}
     try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN gradeOverrides TEXT DEFAULT ""') } catch(e) {}
     try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP') } catch(e) {}
+    /* (25-ب1) أعمدة الميزات الجديدة على Exam/Homework — defensive ALTERs
+       بنفس نمط المشروع (ممنوع db:push): إظهار الإجابات + المؤقت + الجدولة */
+    try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN showResult INTEGER DEFAULT 0') } catch(e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN timeLimitMin INTEGER DEFAULT 0') } catch(e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN scheduledAt DATETIME') } catch(e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE Homework ADD COLUMN scheduledAt DATETIME') } catch(e) {}
   } catch (e) {
     console.error('Ensure ExamResult table error:', e)
   }
@@ -90,8 +96,10 @@ export async function POST(request) {
     // Fetch exam (مع النماذج عشان نعرف أسئلة الطالب الفعلية)
     var exam = null
     try {
+      /* (25-ب1) showResult مضاف للـ SELECT — بنقرأه بس للرد النهائي
+         (إظهار نتيجة الاختياري للطالب أو رسالة الانتظار) */
       var examRows = await db.$queryRawUnsafe(
-        'SELECT id, title, questions, passScore, models, modelMode, fixedModel FROM Exam WHERE id = ? LIMIT 1',
+        'SELECT id, title, questions, passScore, models, modelMode, fixedModel, showResult FROM Exam WHERE id = ? LIMIT 1',
         examId
       )
       exam = examRows && examRows.length > 0 ? examRows[0] : null
@@ -264,150 +272,262 @@ export async function POST(request) {
     // ===== المرحلة 3: رد فوري صادق — التسليم وصل مضمون =====
     // (التصحيح الذكي للمقالي بيكمل في after() وبعدها UPDATE الدرجة)
     after(async () => {
-      try {
-        // 3أ) نص → التصحيح الذكي (مطابقة سريعة + دفعة AI واحدة + fallback)
-        var textGraded: any[] = []
+      // 3أ) نص → التصحيح الذكي (مطابقة سريعة + دفعة AI واحدة + fallback)
+      var textGraded: any[] = []
+      var imageGraded: any[] = []
+
+      /* (2026-و25) partial persist — بنكتب الحكم الحالي بعد كل مرحلة: لو
+         التسليم الخلفي اتقطع (serverless timeout/crash) اللي اتصحح مش بيضيع،
+         والباقي بيفضل pending و gradesLookPending بيلقطه للإصلاح الذاتي
+         (sweep / إعادة تصحيح الأدمن). الحكم النهائي (isFinal) بس هو اللي
+         بيحوّل اللي ماتصححش لفولباك حاسم بدل ما يفضل معلق. */
+      var persistExamGrades = async function(isFinal: boolean) {
         try {
-          var textResult = await gradeWritingSmart(textWorkload.map(function(w) {
-            return {
-              question: w.question,
-              answer: w.studentText,
-              modelAnswer: w.modelAnswer,
-              acceptedAnswers: w.acceptedAnswers,
-              points: w.points,
+          var gradesByOrig: Record<number, any> = {}
+          for (var tx = 0; tx < textWorkload.length; tx++) {
+            var tg = textGraded[tx]
+            if (tg) gradesByOrig[textWorkload[tx].origIdx] = tg
+          }
+          for (var ix = 0; ix < imageWorkload.length; ix++) {
+            var ig = imageGraded[ix]
+            if (ig) gradesByOrig[imageWorkload[ix].origIdx] = ig
+          }
+          var writingScore = 0
+          var finalGrades: any[] = []
+          for (var pi = 0; pi < pendingGrades.length; pi++) {
+            var pg = pendingGrades[pi]
+            var gr = gradesByOrig[pg.origIdx]
+            if (gr) {
+              writingScore += Number(gr.awardedPoints) || 0
+              finalGrades.push({
+                origIdx: pg.origIdx,
+                question: gr.question || pg.question,
+                answer: gr.answer !== undefined ? gr.answer : pg.answer,
+                modelAnswer: gr.modelAnswer || pg.modelAnswer,
+                awardedPoints: gr.awardedPoints,
+                maxPoints: gr.maxPoints || pg.maxPoints,
+                isCorrect: gr.isCorrect,
+                feedback: gr.feedback,
+                gradingStatus: gr.gradingStatus || 'graded',
+                needsGrading: gr.needsGrading === true ? true : undefined,
+                aiExtractedAnswer: gr.aiExtractedAnswer || '',
+              })
+            } else if (pg.needsManualKey || pg.gradingStatus !== 'pending') {
+              // أسئلة مفتاح ناقص — حكمها جاهز من التسليم
+              finalGrades.push(pg)
+            } else if (!isFinal) {
+              // snapshot جزئي: لسه ما اتصرحش — بيفضل pending للإصلاح الذاتي
+              finalGrades.push(pg)
+            } else if ((pg.answer || '').trim()) {
+              // (2026-و25) سؤال اتجاوب عليه فعلاً ومقدرناش نصححه (فشل كلي) —
+              // ممنوع الصفر الصامت «لم يتم الإجابة» على محاولة حقيقية:
+              // صورة → نص درجة المحاولة، نص → fallback حاسم بالقيم/التشابه
+              if (/\[📷/.test(pg.answer || '')) {
+                var imHalf = Math.ceil((pg.maxPoints || 1) / 2)
+                writingScore += imHalf
+                finalGrades.push({
+                  origIdx: pg.origIdx,
+                  question: pg.question,
+                  answer: pg.answer,
+                  modelAnswer: pg.modelAnswer,
+                  awardedPoints: imHalf,
+                  maxPoints: pg.maxPoints,
+                  isCorrect: false,
+                  feedback: 'صورة الحل اترفعت — درجة مؤقتة لحد ما المستر يراجعها وعدّلها من لوحته',
+                  gradingStatus: 'graded',
+                  aiExtractedAnswer: '(صورة الحل مقدرناش نقراها بدقة)',
+                })
+              } else {
+                var fbD = gradeFallbackDecisive({
+                  question: pg.question,
+                  answer: pg.answer,
+                  modelAnswer: pg.modelAnswer || '',
+                  acceptedAnswers: [],
+                  points: pg.maxPoints || 1,
+                })
+                writingScore += Number(fbD.awardedPoints) || 0
+                finalGrades.push({
+                  origIdx: pg.origIdx,
+                  question: pg.question,
+                  answer: pg.answer,
+                  modelAnswer: pg.modelAnswer,
+                  awardedPoints: fbD.awardedPoints,
+                  maxPoints: fbD.maxPoints,
+                  isCorrect: fbD.isCorrect,
+                  feedback: fbD.feedback,
+                  gradingStatus: 'graded',
+                })
+              }
+            } else {
+              // السؤال ده اتسلّم من غير نص ولا صورة → صفر صريح مش pending
+              finalGrades.push({
+                origIdx: pg.origIdx,
+                question: pg.question,
+                answer: pg.answer,
+                modelAnswer: pg.modelAnswer,
+                awardedPoints: 0,
+                maxPoints: pg.maxPoints,
+                isCorrect: false,
+                feedback: 'لم يتم الإجابة',
+                gradingStatus: 'graded',
+              })
             }
-          }))
-          textGraded = textResult.graded || []
-        } catch (grErr) {
-          console.error('Exam writing smart grade error:', grErr)
-          textGraded = textWorkload.map(function(w) {
-            return {
-              question: w.question, answer: w.studentText, modelAnswer: w.modelAnswer,
-              awardedPoints: 0, maxPoints: w.points, isCorrect: false,
-              feedback: 'تعذر التصحيح — راجع مع المستر', gradingStatus: 'graded',
-            }
-          })
-        }
-
-        // 3ب) صور → VLM لكل سؤال
-        var imageGraded: any[] = []
-        for (var im = 0; im < imageWorkload.length; im++) {
-          var iw = imageWorkload[im]
-          var mediaIds2 = extractImageMediaIds(iw.studentText)
-          var gradeData: any = null
-          try {
-            gradeData = await gradeImageAnswer({
-              mediaId: mediaIds2[0],
-              question: iw.question,
-              modelAnswer: iw.modelAnswer,
-              acceptedAnswers: iw.acceptedAnswers,
-              maxPoints: iw.points,
-            })
-          } catch (imErr) {
-            console.error('Exam writing image grade error:', imErr)
           }
-          if (gradeData && gradeData.needsGrading !== true) {
-            /* حكم الـ AI الواثق — نهائي: صح/جزئي/غلط (زي الواجب بالظبط) */
-            var imAwarded = Math.min(Math.max(Math.round(Number(gradeData.awardedPoints) || (gradeData.isCorrect ? iw.points : 0)), 0), iw.points)
-            imageGraded.push({
-              question: iw.question,
-              answer: iw.studentText,
-              modelAnswer: iw.modelAnswer,
-              awardedPoints: imAwarded,
-              maxPoints: iw.points,
-              isCorrect: imAwarded >= Math.ceil(iw.points * 0.5) && imAwarded > 0,
-              feedback: gradeData.feedback || (imAwarded > 0 ? 'تم تصحيح صورة الحل' : 'الحل مش مطابق'),
-              gradingStatus: 'graded',
-              aiExtractedAnswer: gradeData.extractedAnswer || '',
-            })
-          } else {
-            /* 2026-و13 — طلب المستر الحرفي: الامتحان يتصرف زي الواجب بالظبط —
-               مفيش حالة «محتاجة مراجعة» معلقة وخالص: الـ AI مش متأكد من قراية
-               الصورة ← درجة مؤقتة عادلة (نص درجة المحاولة) والمستر يقدر يعدلها
-               بضغطة من لوحته — مفيش صفر ظالم ومفيش بادج معلق */
-            var hasRealWork = iw.studentText.replace(/\[📷[^\]]*\]/g, '').trim().length > 0
-            imageGraded.push({
-              question: iw.question,
-              answer: iw.studentText,
-              modelAnswer: iw.modelAnswer,
-              awardedPoints: hasRealWork ? Math.ceil(iw.points / 2) : 0,
-              maxPoints: iw.points,
-              isCorrect: false,
-              feedback: hasRealWork
-                ? 'صورة الحل اترفعت — درجة مؤقتة لحد ما تراجعها وعدّلها من لوحتك'
-                : 'لم يتم الإجابة',
-              gradingStatus: 'graded',
-              aiExtractedAnswer: hasRealWork ? '(صورة الحل مقدرناش نقراها بدقة)' : '',
-            })
-          }
-        }
 
-        // 3ج) دمج بترتيب الأسئلة الأصلي + جمع الدرجة النهائية
-        var gradesByOrig: Record<number, any> = {}
-        for (var tx = 0; tx < textWorkload.length; tx++) {
-          var tg = textGraded[tx]
-          if (tg) gradesByOrig[textWorkload[tx].origIdx] = tg
-        }
-        for (var ix = 0; ix < imageWorkload.length; ix++) {
-          var ig = imageGraded[ix]
-          if (ig) gradesByOrig[imageWorkload[ix].origIdx] = ig
-        }
-        var writingScore = 0
-        var finalGrades: any[] = []
-        for (var pi = 0; pi < pendingGrades.length; pi++) {
-          var pg = pendingGrades[pi]
-          var gr = gradesByOrig[pg.origIdx]
-          if (gr) {
-            writingScore += Number(gr.awardedPoints) || 0
-            finalGrades.push({
-              origIdx: pg.origIdx,
-              question: gr.question || pg.question,
-              answer: gr.answer !== undefined ? gr.answer : pg.answer,
-              modelAnswer: gr.modelAnswer || pg.modelAnswer,
-              awardedPoints: gr.awardedPoints,
-              maxPoints: gr.maxPoints || pg.maxPoints,
-              isCorrect: gr.isCorrect,
-              feedback: gr.feedback,
-              gradingStatus: gr.gradingStatus || 'graded',
-              needsGrading: gr.needsGrading === true ? true : undefined,
-              aiExtractedAnswer: gr.aiExtractedAnswer || '',
-            })
-          } else {
-            // السؤال ده اتسلّم من غير نص ولا صورة → صفر صريح مش pending
-            finalGrades.push({
-              origIdx: pg.origIdx,
-              question: pg.question,
-              answer: pg.answer,
-              modelAnswer: pg.modelAnswer,
-              awardedPoints: 0,
-              maxPoints: pg.maxPoints,
-              isCorrect: false,
-              feedback: 'لم يتم الإجابة',
-              gradingStatus: 'graded',
-            })
-          }
-        }
+          var finalScore = score + writingScore
+          var finalJson = ''
+          try { finalJson = JSON.stringify(finalGrades) } catch(e) { finalJson = writingGradesJson }
 
-        var finalScore = score + writingScore
-        var finalJson = ''
-        try { finalJson = JSON.stringify(finalGrades) } catch(e) { finalJson = writingGradesJson }
-
-        /* 2026-و22 — العمودين مع بعض بعد التصحيح النهائي كمان */
-        await db.$executeRawUnsafe(
-          'UPDATE ExamResult SET score = ?, writingGrades = ?, writingResults = ? WHERE id = ?',
-          finalScore, finalJson, finalJson, resultId
-        )
-        console.log('[exam-submit] background AI grading done:', resultId, 'score', finalScore + '/' + maxScore)
-      } catch (bgErr) {
-        // فشل التصحيح الخلفي ≠ فقدان التسليم — الصف محفوظ والدرجة الاختيارية موجودة،
-        // ولوحة المستر فيها إعادة تصحيح ذاتية هتكمّل
-        console.error('Exam background grading error:', bgErr)
+          /* 2026-و22 — العمودين مع بعض (writingGrades + writingResults) */
+          await db.$executeRawUnsafe(
+            'UPDATE ExamResult SET score = ?, writingGrades = ?, writingResults = ? WHERE id = ?',
+            finalScore, finalJson, finalJson, resultId
+          )
+        } catch (pErr) {
+          console.error('Exam persist grades error:', pErr)
+        }
       }
+
+      try {
+        var textResult = await gradeWritingSmart(textWorkload.map(function(w) {
+          return {
+            question: w.question,
+            answer: w.studentText,
+            modelAnswer: w.modelAnswer,
+            acceptedAnswers: w.acceptedAnswers,
+            points: w.points,
+          }
+        }))
+        textGraded = textResult.graded || []
+      } catch (grErr) {
+        console.error('Exam writing smart grade error:', grErr)
+        /* (2026-و25) كان هنا صفر صامت لكل سؤال («تعذر التصحيح») — دلوقتي
+           fallback حاسم: تكافؤ القيم → كاملة، علاقة بالحل → نص درجة + مراجعة */
+        textGraded = textWorkload.map(function(w) {
+          return gradeFallbackDecisive({
+            question: w.question,
+            answer: w.studentText,
+            modelAnswer: w.modelAnswer,
+            acceptedAnswers: w.acceptedAnswers || [],
+            points: w.points,
+          })
+        })
+      }
+      await persistExamGrades(false)
+
+      // 3ب) صور → VLM لكل سؤال (بتسلسل — مفتاح واحد مبيتحملش متوازي)
+      for (var im = 0; im < imageWorkload.length; im++) {
+        var iw = imageWorkload[im]
+        var mediaIds2 = extractImageMediaIds(iw.studentText)
+        var gradeData: any = null
+        try {
+          gradeData = await gradeImageAnswer({
+            mediaId: mediaIds2[0],
+            question: iw.question,
+            modelAnswer: iw.modelAnswer,
+            acceptedAnswers: iw.acceptedAnswers,
+            maxPoints: iw.points,
+          })
+        } catch (imErr) {
+          console.error('Exam writing image grade error:', imErr)
+        }
+        if (gradeData && gradeData.needsGrading !== true) {
+          /* حكم الـ AI الواثق — نهائي: صح/جزئي/غلط (زي الواجب بالظبط) */
+          var imAwarded = Math.min(Math.max(Math.round(Number(gradeData.awardedPoints) || (gradeData.isCorrect ? iw.points : 0)), 0), iw.points)
+          imageGraded[im] = {
+            question: iw.question,
+            answer: iw.studentText,
+            modelAnswer: iw.modelAnswer,
+            awardedPoints: imAwarded,
+            maxPoints: iw.points,
+            isCorrect: imAwarded >= Math.ceil(iw.points * 0.5) && imAwarded > 0,
+            feedback: gradeData.feedback || (imAwarded > 0 ? 'تم تصحيح صورة الحل' : 'الحل مش مطابق'),
+            gradingStatus: 'graded',
+            aiExtractedAnswer: gradeData.extractedAnswer || '',
+          }
+        } else {
+          /* 2026-و13 — طلب المستر الحرفي: الامتحان يتصرف زي الواجب بالظبط —
+             مفيش حالة «محتاجة مراجعة» معلقة وخالص: الـ AI مش متأكد من قراية
+             الصورة ← درجة مؤقتة عادلة (نص درجة المحاولة) والمستر يقدر يعدلها
+             بضغطة من لوحته — مفيش صفر ظالم ومفيش بادج معلق */
+          var hasRealWork = iw.studentText.replace(/\[📷[^\]]*\]/g, '').trim().length > 0
+          imageGraded[im] = {
+            question: iw.question,
+            answer: iw.studentText,
+            modelAnswer: iw.modelAnswer,
+            awardedPoints: hasRealWork ? Math.ceil(iw.points / 2) : 0,
+            maxPoints: iw.points,
+            isCorrect: false,
+            feedback: hasRealWork
+              ? 'صورة الحل اترفعت — درجة مؤقتة لحد ما تراجعها وعدّلها من لوحتك'
+              : 'لم يتم الإجابة',
+            gradingStatus: 'graded',
+            aiExtractedAnswer: hasRealWork ? '(صورة الحل مقدرناش نقراها بدقة)' : '',
+          }
+        }
+        /* (2026-و25) snapshot بعد كل صورة — اللي اتصحح متضيعش لو اتقطعنا */
+        await persistExamGrades(false)
+      }
+
+      // 3ج) الحكم النهائي — كل اللي ماتصححش بياخد fallback حاسم (مش pending)
+      await persistExamGrades(true)
+      console.log('[exam-submit] background AI grading done:', resultId)
     })
 
-    /* 2026-و12 — طلب المستر الصريح: الطالب ميشوفش أي نتيجة خالص
-       (لا درجة ولا تصحيح ولا إجابة نموذجية) — رسالة واحدة بس.
-       التصحيح كله بيحصل في الخلفية وبيوصل لمستر وائل من الأدمن. */
+    /* (25-ب1) طلب المستر: حرية إظهار/إخفاء الإجابات بعد التسليم —
+       showResult=false (الافتراضي): نفس الرد القديم حرفيًا — بدون أي نتيجة.
+       showResult=true: الطالب يشوف نتيجة الاختياري فورًا (mcqScore + تفاصيل
+       كل سؤال اختياري) والمقالي بيفضل «بانتظار تصحيح المستر».
+       بناء mcqResults من الاختياري المحسوب مسبقًا في المرحلة 1 (mcqQuestions)
+       — نفس مقارنة الدرجة بالظبط، بدون أي إعادة تصحيح ولا لمس after() */
+    var showResultOn = exam.showResult === 1 || exam.showResult === true
+    if (showResultOn) {
+      var mcqResults = mcqQuestions.map(function (item) {
+        var q = item.q
+        var origIdx = item.origIdx
+        var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+        var opts = Array.isArray(q.options) ? q.options : []
+        var correctIdx = typeof q.correct === 'number' ? q.correct : -1
+        var keyless = correctIdx < 0 || correctIdx >= opts.length
+        var raw = lookupAnswer(answers, origIdx)
+        var isNum = raw !== undefined && raw !== null && raw !== '' && !isNaN(Number(raw))
+        /* إجابة الطالب كنص: لو رقم → نص الخيار المختار عشان الطالب يشوف كلامه
+           (لو الرقم بره حدود الخيارات → يظهر اللي بعته زي ما هو) */
+        var studentText = ''
+        if (raw !== undefined && raw !== null) {
+          /* إجابة الطالب كنص: لو رقم → نص الخيار المختار عشان الطالب يشوف كلامه
+             (لو الرقم بره حدود الخيارات → يظهر اللي بعته زي ما هو) */
+          studentText = isNum ? String(opts[Number(raw)] ?? raw) : String(raw)
+        }
+        var isCorrect = !keyless && raw !== undefined && raw !== null && Number(raw) === correctIdx
+        var entry: any = {
+          origIdx: origIdx,
+          question: String(q.question || q.q || ('السؤال ' + (origIdx + 1))),
+          studentAnswer: studentText,
+          correctAnswer: keyless ? '' : String(opts[correctIdx] || ''),
+          isCorrect: isCorrect,
+          points: pts,
+        }
+        if (keyless) {
+          /* ملاحظة داخلية: سؤال اختياري من غير مفتاح مؤكد — صفر + مراجعة مستر
+             (نفس منطق المرحلة 1 بالظبط — الحكم بييجي من المستر لاحقًا) */
+          entry.needsManualKey = true
+          entry.internalNote = '⚠ السؤال ده من غير إجابة مؤكدة في مفتاح الدرجات — المستر هيحدد الإجابة الصحيحة ويعيد التصحيح'
+        }
+        return entry
+      })
+      return NextResponse.json({
+        success: true,
+        submitted: true,
+        showResult: true,
+        message: 'تم تسليم الامتحان بنجاح',
+        mcqScore: score,
+        maxScore: maxScore,
+        writingPending: writingQuestions.length > 0,
+        mcqResults: mcqResults,
+      })
+    }
+
     return NextResponse.json({
       success: true,
       submitted: true,

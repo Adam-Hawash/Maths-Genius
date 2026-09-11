@@ -1,6 +1,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
+import { isAdmin } from '@/lib/video-guard'
+
+/* (25-ب1) جدولة الظهور — defensive ALTER بنفس نمط المشروع (ممنوع db:push) */
+async function ensureHomeworkFeatureColumns() {
+  try { await db.$executeRawUnsafe('ALTER TABLE Homework ADD COLUMN scheduledAt DATETIME') } catch (e) {}
+}
 
 // GET /api/homework/[id] - 获取单个作业
 export async function GET(
@@ -18,6 +24,59 @@ export async function GET(
     return NextResponse.json({ homework })
   } catch (error) {
     console.error('获取作业详情失败:', error)
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 })
+  }
+}
+
+/* (25-ب1) PATCH /api/homework/[id] — تعديل/إلغاء موعد ظهور الواجب:
+   يقبل { adminId, scheduledAt } — scheduledAt = null يعني إلغاء الجدولة
+   (يظهر فورًا). التحقق بنفس نمط auth الأدمن الموجود (adminId + isAdmin
+   زي /api/videos بالظبط). */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const body = await request.json()
+
+    // الكتابة للأدمن بس (نفس نمط /api/videos)
+    if (!(await isAdmin(body && body.adminId))) {
+      return NextResponse.json({ error: 'غير مسموح' }, { status: 401 })
+    }
+
+    await ensureHomeworkFeatureColumns()
+
+    const existing = await db.homework.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: 'الواجب غير موجود' }, { status: 404 })
+    }
+
+    if (body.scheduledAt === undefined) {
+      return NextResponse.json({ error: 'لا توجد حقول للتعديل' }, { status: 400 })
+    }
+
+    var data: Record<string, unknown>
+    if (body.scheduledAt === null || body.scheduledAt === '') {
+      // إلغاء الجدولة — يظهر فورًا
+      data = { scheduledAt: null }
+    } else {
+      try {
+        var sd = new Date(String(body.scheduledAt))
+        if (isNaN(sd.getTime())) throw new Error('bad date')
+        data = { scheduledAt: sd }
+      } catch (e) {
+        return NextResponse.json({ error: 'صيغة الموعد غير صحيحة' }, { status: 400 })
+      }
+    }
+
+    const homework = await safeWrite(function () {
+      return db.homework.update({ where: { id }, data })
+    })
+
+    return NextResponse.json({ message: 'تم تحديث موعد ظهور الواجب', homework })
+  } catch (error) {
+    console.error('PATCH homework error:', error)
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 })
   }
 }

@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, safeWrite } from '@/lib/db'
+import { isAdmin } from '@/lib/video-guard'
+
+/* (25-ب1) جدولة الظهور للواجبات — defensive ALTER بنفس نمط المشروع
+   (ممنوع db:push — كل قاعدة بيانات بتترقّى تلقائيًا هنا) */
+async function ensureHomeworkFeatureColumns() {
+  try { await db.$executeRawUnsafe('ALTER TABLE Homework ADD COLUMN scheduledAt DATETIME') } catch (e) {}
+}
 
 // Normalize grade names so old and new naming conventions match
 // e.g. "الصف الثالث الاعدادي" == "تالتة إعدادي" == "الصف الثالث الإعدادي"
@@ -31,11 +38,16 @@ function normalizeGrade(grade: string): string {
 
 export async function GET(request: NextRequest) {
   try {
+    await ensureHomeworkFeatureColumns()
     const { searchParams } = new URL(request.url)
     const grade = searchParams.get('grade')
     const keyword = searchParams.get('keyword')
     const page = parseInt(searchParams.get('page') || '1')
     const pageSize = parseInt(searchParams.get('pageSize') || '20')
+    // (25-ب1) تمييز الأدمن بنفس النمط الموجود في المشروع (adminId + isAdmin
+    // زي /api/videos بالظبط) — الأدمن بس اللي يشوف العناصر المجدولة
+    const adminId = searchParams.get('adminId')
+    const admin = await isAdmin(adminId)
 
     const where: Record<string, unknown> = {}
     if (grade) {
@@ -52,6 +64,12 @@ export async function GET(request: NextRequest) {
     if (keyword) {
       where.OR = where.OR ? [...(where.OR as unknown[]), { title: { contains: keyword } }] : [{ title: { contains: keyword } }]
     }
+    /* (25-ب1) جدولة الظهور: أي واجب موعده في المستقبل **متنزلش**
+       لأي طلب مش من أدمن (الطالب/الزائر) — هو بس اللي يشوفه (ببادج مجدول).
+       الفلتر الافتراضي = أمان: لو مفيش إثبات أدمن الرد نضيف. */
+    if (!admin) {
+      where.AND = [{ OR: [{ scheduledAt: null }, { scheduledAt: { lte: new Date() } }] }]
+    }
 
     const [homework, total] = await Promise.all([
       db.homework.findMany({
@@ -63,7 +81,16 @@ export async function GET(request: NextRequest) {
       db.homework.count({ where }),
     ])
 
-    return NextResponse.json({ homework, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
+    /* (25-ب1) للأدمن بس: بادج «مجدول» — العناصر اللي موعدها في المستقبل
+       بترجع مع flag scheduled: true عشان اللوحة تعرضها بوضوح */
+    const outHomework = admin
+      ? homework.map(function (h: any) {
+          var isScheduled = h && h.scheduledAt ? new Date(h.scheduledAt).getTime() > Date.now() : false
+          return { ...h, scheduled: isScheduled }
+        })
+      : homework
+
+    return NextResponse.json({ homework: outHomework, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
   } catch (error: any) {
     console.error('Homework fetch error:', error)
     return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
@@ -72,15 +99,27 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await ensureHomeworkFeatureColumns()
     const body = await request.json()
-    const { title, content, grade, filePath, fileType, answerKeyPath, answerKeyType, thumbnail, questions } = body
+    const { title, content, grade, filePath, fileType, answerKeyPath, answerKeyType, thumbnail, questions, scheduledAt } = body
 
     if (!title || !grade) {
       return NextResponse.json({ error: 'Title and grade are required' }, { status: 400 })
     }
 
-    const homework = await db.homework.create({
-      data: { title, content: content || '', grade, filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '', questions: questions || '' },
+    /* (25-ب1) موعد ظهور الواجب للطلاب (اختياري) — null/فاضي = يظهر فورًا */
+    var scheduledDate: Date | null = null
+    if (scheduledAt) {
+      try {
+        var d = new Date(String(scheduledAt))
+        if (!isNaN(d.getTime())) scheduledDate = d
+      } catch (e) {}
+    }
+
+    const homework = await safeWrite(function () {
+      return db.homework.create({
+        data: { title, content: content || '', grade, filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '', questions: questions || '', scheduledAt: scheduledDate },
+      })
     })
 
     return NextResponse.json({ message: 'Homework added', homework }, { status: 201 })
