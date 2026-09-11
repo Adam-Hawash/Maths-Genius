@@ -384,11 +384,11 @@ const PLAYER_PAGE = `<!doctype html>
      (الاشتراك/اللوجو/الشير/سطر الكابشن) تغطية كاملة 100%.
      كروت QR بتاعتنا (bottom:66px) فوقيه فبتفضل ظاهرة زي ما المستر عايز،
      والشريط جوه مستطيل الفيديو بس — مبيوصلش لحاجة الصفحة اللي تحت الخالص */
-  /* 2026-و16 — «الشريط اللي تحت يوصل لأول الووترمارك من غير ما يغطيها» —
-     كروت الـ QR تحت قاعدها 66px وسمكها 30–40px → علّينا الشريط بالظبط
-     لحد أول الكروت (96–106px) — والكروت فوقيه برضه (z-46 > z-44) */
+  /* 2026-و19 — «نزّل الشريط اللي تحت شويه — ما يكونش عالي كده قوي» —
+     بقى 66px + 6–10px بس (على مستوى سطر الكابشن بالظبط) بدل ما كان
+     واصل لأول كروت الـ QR (96–106px) — والكروت فوقيه ظاهرة زي ما هي (z-46 > z-44) */
   #botShield{position:absolute;bottom:0;left:0;right:0;z-index:44;pointer-events:auto;
-    height:calc(66px + clamp(30px,3.4vw,40px));
+    height:calc(66px + clamp(6px,0.9vw,10px));
     background:rgba(0,0,0,.80);
     -webkit-backdrop-filter:blur(16px) saturate(.9);backdrop-filter:blur(16px) saturate(.9);
     display:flex;align-items:center;justify-content:flex-start;
