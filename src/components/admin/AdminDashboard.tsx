@@ -60,6 +60,18 @@ function extractFirstImagePath(text: string): string {
   return ''
 }
 
+/* (2026-و22) بادج حكم التصحيح الذكي — درجة مؤقتة بدل «AI: غلط» الوهمي
+   (طلب المستر: «بيقلب لي السؤال غلط أصلاً من غير ما يقرأه» — لما الـAI
+   مش متأكد بيحط درجة مؤقتة والمستر يعدلها، فالبادج لازم يقول كده صريح) */
+function writingVerdictBadge(aq: any): { cls: string; text: string } {
+  if (aq.needsGrading) return { cls: 'bg-gray-500/10 text-gray-600', text: 'بيتصحح بالذكاء الاصطناعي…' }
+  if (aq.aiIsCorrect === true) return { cls: 'bg-emerald-500/10 text-emerald-600', text: 'AI: صح' }
+  var awarded = Number(aq.awardedPoints || 0)
+  var maxP = Number(aq.maxPoints || aq.points || 0)
+  if (awarded > 0) return { cls: 'bg-amber-500/10 text-amber-600', text: 'درجة مؤقتة (' + awarded + '/' + maxP + ') — راجعها وعدّلها' }
+  return { cls: 'bg-red-500/10 text-red-600', text: 'AI: غلط' }
+}
+
 // Global image modal helper - opens an overlay showing the full image
 function ImageModal({ imageSrc, onClose }: { imageSrc: string | null; onClose: () => void }) {
   if (!imageSrc) return null
@@ -1472,19 +1484,13 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                                           <div className="flex items-start gap-1.5">
                                             <span className={`shrink-0 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${
                                               aq.type === 'writing'
-                                                ? (aq.needsGrading
-                                                    ? 'bg-gray-500/10 text-gray-600'
-                                                    : (aq.isGraded
-                                                        ? (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')
-                                                        : (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600')))
+                                                ? writingVerdictBadge(aq).cls
                                                 : aq.isCorrect
                                                   ? 'bg-emerald-500/10 text-emerald-600'
                                                   : 'bg-red-500/10 text-red-600'
                                             }`}>
                                               {aq.type === 'writing'
-                                                ? (aq.needsGrading
-                                                    ? 'بيتصحح بالذكاء الاصطناعي…'
-                                                    : (aq.aiIsCorrect === true ? 'AI: صح' : 'AI: غلط'))
+                                                ? writingVerdictBadge(aq).text
                                                 : aq.isCorrect ? 'Correct' : 'Wrong'}
                                             </span>
                                             <p className="font-medium flex-1" style={{ textAlign: 'left' }}>{qi + 1}. <FractionText text={aq.question} /></p>
@@ -2136,9 +2142,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                       aq.overridden
                                         ? 'bg-purple-500/10 text-purple-600'
                                         : aq.type === 'writing'
-                                          ? (aq.needsGrading
-                                              ? 'bg-gray-500/10 text-gray-600'
-                                              : (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'))
+                                          ? writingVerdictBadge(aq).cls
                                           : aq.isCorrect
                                             ? 'bg-emerald-500/10 text-emerald-600'
                                             : 'bg-red-500/10 text-red-600'
@@ -2146,9 +2150,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                       {aq.overridden
                                         ? (aq.isCorrect ? 'صح (يدوي ✓)' : 'غلط (يدوي ✗)')
                                         : aq.type === 'writing'
-                                          ? (aq.needsGrading
-                                              ? 'بيتصحح بالذكاء الاصطناعي…'
-                                              : (aq.aiIsCorrect === true ? 'AI: صح' : 'AI: غلط'))
+                                          ? writingVerdictBadge(aq).text
                                           : aq.isCorrect ? 'Correct' : 'Wrong'}
                                     </span>
                                     <span onClick={function (e) { e.stopPropagation() }} className="shrink-0">
@@ -2268,9 +2270,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                       aq.overridden
                                         ? 'bg-purple-500/10 text-purple-600'
                                         : aq.type === 'writing'
-                                          ? (aq.needsGrading
-                                              ? 'bg-gray-500/10 text-gray-600'
-                                              : (aq.aiIsCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'))
+                                          ? writingVerdictBadge(aq).cls
                                           : aq.isCorrect
                                             ? 'bg-emerald-500/10 text-emerald-600'
                                             : 'bg-red-500/10 text-red-600'
@@ -2278,9 +2278,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                       {aq.overridden
                                         ? (aq.isCorrect ? 'صح (يدوي ✓)' : 'غلط (يدوي ✗)')
                                         : aq.type === 'writing'
-                                          ? (aq.needsGrading
-                                              ? 'بيتصحح بالذكاء الاصطناعي…'
-                                              : (aq.aiIsCorrect === true ? 'AI: صح' : 'AI: غلط'))
+                                          ? writingVerdictBadge(aq).text
                                           : aq.isCorrect ? 'Correct' : 'Wrong'}
                                     </span>
                                     <span onClick={function (e) { e.stopPropagation() }} className="shrink-0">

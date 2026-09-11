@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 // (2026-و16) self-heal خلفي: إعادة تصحيح النتايج القديمة الناقصة بنفس مسار
 // الذكاء الاصطناعي الحاسم — بدل ما يفضل بادج «محتاج تصحيح» معلق للأبد
 import { regradeExamResult, regradeHomeworkResult, gradesLookPending, questionsHaveWriting } from '@/lib/regrade-core'
+import { resolveQuestionsForStudent } from '@/lib/exam-models'
 
 /* Parse a JSON column that may be a string or already-parsed */
 function parseJsonCol(col: any): any {
@@ -27,6 +28,19 @@ function applyOverride(item: any, overrides: any): void {
       item.awardedPoints = overrides[key] === true ? (item.points || item.aiAwardedPoints || 0) : 0
     }
   }
+}
+
+/* (2026-و22) قراءة إجابة الطالب **بالفهرس الأصلي** للسؤال — نفس helper
+ * مسارات التسليم: العميل بيبعت الإجابات مفتاحها الفهرس في قايمة الأسئلة
+ * الكاملة، وقراية أي شاشة بأي ترقيم تاني = إجابة/ورقة في سؤال مش سؤاله */
+function lookupByOrigIdx(ans: any, idx: number): any {
+  try {
+    if (Array.isArray(ans)) return ans[idx]
+    if (ans !== null && typeof ans === 'object') {
+      return ans[idx] !== undefined ? ans[idx] : ans[String(idx)]
+    }
+  } catch (e) {}
+  return undefined
 }
 
 // Ensure tables exist before querying
@@ -190,7 +204,7 @@ export async function GET(
       var examRows = await db.$queryRawUnsafe(
         // (2026-و16) INNER JOIN: نتيجة مالهاش امتحان أصلاً (اتمسح والداتابيز قديمة)
         // مبتظهرش خالص — نفس دلالات تنظيف اليتيم اللي فوق
-        'SELECT er.id, er.examId, er.score, er.maxScore, er.submittedAt, er.answers, er.writingResults, er.gradeOverrides, e.title, e.questions, e.passScore FROM ExamResult er INNER JOIN Exam e ON er.examId = e.id WHERE er.studentId = ? ORDER BY er.submittedAt DESC',
+        'SELECT er.id, er.examId, er.studentId, er.score, er.maxScore, er.submittedAt, er.answers, er.writingResults, er.writingGrades, er.gradeOverrides, e.title, e.questions, e.models, e.modelMode, e.fixedModel, e.passScore FROM ExamResult er INNER JOIN Exam e ON er.examId = e.id WHERE er.studentId = ? ORDER BY er.submittedAt DESC',
         id
       )
 
@@ -204,12 +218,10 @@ export async function GET(
         } catch (he) {}
 
         // Re-grade to find wrong questions (only if answers saved)
+        // (2026-و22) أسئلة الطالب الفعلية = نموذجه لو الامتحان فيه نماذج —
+        // مش أسئلة الأساس (ده كان سبب بعثرة الورق على أسئلة تانية في الأدمن)
         try {
-          var mcq = []
-          if (row.questions) {
-            var raw = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
-            if (Array.isArray(raw)) mcq = raw
-          }
+          var mcq = resolveQuestionsForStudent(row, row.studentId, row.examId)
           var studentAnswers: any = {}
           if (row.answers) {
             studentAnswers = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
@@ -258,10 +270,10 @@ export async function GET(
         try {
           var mcqAll: any[] = []
           var writingAllExam: any[] = []
-          if (row.questions) {
-            var rawAll = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
-            if (Array.isArray(rawAll)) {
-              rawAll.forEach(function(q, idx) {
+          // (2026-و22) نفس منطق التسليم بالظبط — أسئلة نموذج الطالب أولاً
+          var rawAll: any[] = resolveQuestionsForStudent(row, row.studentId, row.examId)
+          if (rawAll.length > 0) {
+            rawAll.forEach(function(q, idx) {
                 var isW = q.type === 'writing' || q.type === 'essay'
                 if (!isW && Array.isArray(q.options)) {
                   var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
@@ -271,7 +283,6 @@ export async function GET(
                 if (isW) writingAllExam.push({ q: q, origIdx: idx })
                 else mcqAll.push({ q: q, origIdx: idx })
               })
-            }
           }
           var studentAnsAll: any = {}
           if (row.answers) {
@@ -290,8 +301,17 @@ export async function GET(
           var storedExamVerdicts: any[] = []
           try {
             var parsedExam = parseJsonCol(row.writingResults)
-            if (Array.isArray(parsedExam)) storedExamVerdicts = parsedExam
+            if (Array.isArray(parsedExam) && parsedExam.length > 0) storedExamVerdicts = parsedExam
           } catch (e) {}
+          if (storedExamVerdicts.length === 0) {
+            // (2026-و22) فولباك: تسليمات قديمة كانت بتكتب writingGrades بس —
+            // من غير الفولباك ده البادج «بيتصحح بالذكاء الاصطناعي» كان بيفضل
+            // ظاهر رغم إن التصحيح الخلفي خلص فعلًا
+            try {
+              var parsedExamGrades = parseJsonCol(row.writingGrades)
+              if (Array.isArray(parsedExamGrades) && parsedExamGrades.length > 0) storedExamVerdicts = parsedExamGrades
+            } catch (e) {}
+          }
           var examOverrides: any = parseJsonCol(row.gradeOverrides)
 
           // MCQ all questions - lookup by origIdx
@@ -345,7 +365,12 @@ export async function GET(
             var epoints = (typeof ewq.points === 'number' && ewq.points > 0) ? ewq.points : 5
             var eneedsGrading = false
 
-            var storedExam = storedExamVerdicts.find(function (sv: any) { return sv && (sv.origIdx === eOrigIdx || (sv.question || '') === eqText) }) || storedExamVerdicts[ewi] || null
+            /* 2026-و22 — المطابقة بالفهرس الأصلي أو نص السؤال بس.
+               اتشال الـ fallback الموضعي (storedExamVerdicts[ewi]) اللي كان
+               بيربط حكم سؤال بسؤال تاني لما التطابق يفشل = «الورق في
+               سؤال مش سؤاله». لو مفيش تطابق يبقى السؤال لسه مستني
+               إصلاح/تصحيح — مش بنخمّن بالترتيب */
+            var storedExam = storedExamVerdicts.find(function (sv: any) { return sv && (sv.origIdx === eOrigIdx || (sv.question || '') === eqText) }) || null
             if (storedExam) {
               eaiExtracted = storedExam.aiExtractedAnswer || storedExam.extractedAnswer || ''
               eaiIsCorrect = storedExam.aiIsCorrect === true || storedExam.isCorrect === true
@@ -471,12 +496,15 @@ export async function GET(
 
         // Re-grade to find wrong questions + collect writing answers + build all questions
         try {
-          var mcq = []
-          var writingQs = []
+          /* (2026-و22) بنسل الفهرس الأصلي لكل سؤال — الكود القديم كان بيقرأ
+             بمكان السؤال في قايمة الاختياري/المقالي → أي مقالي مش في الآخر
+             كان بيعثر كل الإجابات والورق في شاشة الأدمن */
+          var mcq: any[] = []
+          var writingQs: any[] = []
           if (row.questions) {
             var raw = typeof row.questions === 'string' ? JSON.parse(row.questions) : row.questions
             if (Array.isArray(raw)) {
-              raw.forEach(function(q) {
+              raw.forEach(function(q, qOrigIdx) {
                 // Detect writing: type field, OR options empty/N/A
                 var isWriting = q.type === 'writing' || q.type === 'essay'
                 if (!isWriting && Array.isArray(q.options)) {
@@ -487,9 +515,9 @@ export async function GET(
                   isWriting = true
                 }
                 if (isWriting) {
-                  writingQs.push(q)
+                  writingQs.push({ q: q, origIdx: qOrigIdx })
                 } else {
-                  mcq.push(q)
+                  mcq.push({ q: q, origIdx: qOrigIdx })
                 }
               })
             }
@@ -499,18 +527,14 @@ export async function GET(
             studentAnswers = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
           }
 
-          mcq.forEach(function(q, qi) {
+          mcq.forEach(function(item) {
+            var q = item.q
             var qText = q.question || q.q || ''
             var opts = Array.isArray(q.options) ? q.options : []
             var correctIdx = typeof q.correct === 'number' ? q.correct : 0
             if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
 
-            var ans = undefined
-            if (Array.isArray(studentAnswers)) {
-              ans = studentAnswers[qi]
-            } else if (studentAnswers !== null && typeof studentAnswers === 'object') {
-              ans = studentAnswers[qi] !== undefined ? studentAnswers[qi] : studentAnswers[String(qi)]
-            }
+            var ans = lookupByOrigIdx(studentAnswers, item.origIdx)
 
             if (ans === undefined || ans === null || Number(ans) !== correctIdx) {
               wrongQuestions.push({
@@ -525,20 +549,18 @@ export async function GET(
             }
           })
 
-          // Collect writing answers (offset by mcq length)
-          writingQs.forEach(function(q, wi) {
+          // Collect writing answers — **بالفهرس الأصلي** (2026-و22) مش (عدد الاختياري + الموضع)
+          writingQs.forEach(function(item) {
+            var q = item.q
             var qText = q.question || q.q || ''
             var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
             var studentText = ''
-            var offset = mcq.length
             try {
-              if (Array.isArray(studentAnswers)) {
-                studentText = studentAnswers[offset + wi] || ''
-              } else if (studentAnswers && typeof studentAnswers === 'object') {
-                studentText = studentAnswers[offset + wi] || studentAnswers[String(offset + wi)] || ''
-              }
+              var lookedUp = lookupByOrigIdx(studentAnswers, item.origIdx)
+              studentText = lookedUp !== undefined && lookedUp !== null ? String(lookedUp) : ''
             } catch (e) {}
             writingAnswers.push({
+              origIdx: item.origIdx,
               question: qText,
               answer: typeof studentText === 'string' ? studentText : String(studentText || ''),
               points: pts,
@@ -578,7 +600,12 @@ export async function GET(
             continue
           }
 
-          var storedHw = storedWritingHw.find(function(sw) { return (sw.question || '') === waItem.question }) || storedWritingHw[wai] || null
+          /* (2026-و22) المطابقة: الفهرس الأصلي → نص السؤال → الموضع (للتسليمات
+             القديمة اللي كانت بتتحفظ بترتيب الأسئلة المقالية) */
+          var storedHw = storedWritingHw.find(function(sw) { return sw && waItem.origIdx !== undefined && sw.origIdx === waItem.origIdx })
+            || storedWritingHw.find(function(sw) { return sw && (sw.question || '') === waItem.question })
+            || storedWritingHw[wai]
+            || null
 
           if (storedHw && storedHw.gradingStatus === 'pending') {
             // background grading still running
@@ -657,17 +684,14 @@ export async function GET(
             studentAnsAll2 = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
           }
           // MCQ all questions
-          mcqAll2.forEach(function(q, qi) {
+          mcqAll2.forEach(function(q) {
             var qText = q.question || q.q || ''
             var opts = Array.isArray(q.options) ? q.options : []
             var correctIdx = typeof q.correct === 'number' ? q.correct : 0
             if (correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0
-            var ans = undefined
-            if (Array.isArray(studentAnsAll2)) {
-              ans = studentAnsAll2[qi]
-            } else if (studentAnsAll2 !== null && typeof studentAnsAll2 === 'object') {
-              ans = studentAnsAll2[qi] !== undefined ? studentAnsAll2[qi] : studentAnsAll2[String(qi)]
-            }
+            /* (2026-و22) بالفهرس الأصلي مش بمكان السؤال في قايمة الاختياري */
+            var mcqOrig = typeof q.__origIdx === 'number' ? q.__origIdx : 0
+            var ans = lookupByOrigIdx(studentAnsAll2, mcqOrig)
             var isCorrect = ans !== undefined && ans !== null && Number(ans) === correctIdx
             var studentAnswerText = (typeof ans === 'number' && opts[ans])
               ? String.fromCharCode(65 + ans) + ') ' + opts[ans]
@@ -688,16 +712,15 @@ export async function GET(
             allHwQuestions.push(hwMcqItem)
           })
           // Writing all questions
-          writingAll2.forEach(function(q, wi) {
+          writingAll2.forEach(function(q) {
             var qText = q.question || q.q || ''
             var studentText = ''
-            var offset = mcqAll2.length
+            /* (2026-و22) بالفهرس الأصلي مش (عدد الاختياري + الموضع) —
+               ده سبب «بيحط الورق في سؤال مش سؤاله» في الواجبات */
+            var wrOrig = typeof q.__origIdx === 'number' ? q.__origIdx : 0
             try {
-              if (Array.isArray(studentAnsAll2)) {
-                studentText = studentAnsAll2[offset + wi] || ''
-              } else if (studentAnsAll2 && typeof studentAnsAll2 === 'object') {
-                studentText = studentAnsAll2[offset + wi] || studentAnsAll2[String(offset + wi)] || ''
-              }
+              var lookedUpW = lookupByOrigIdx(studentAnsAll2, wrOrig)
+              studentText = lookedUpW !== undefined && lookedUpW !== null ? String(lookedUpW) : ''
             } catch (e) {}
             var hwWrItem: any = {
               type: 'writing',
