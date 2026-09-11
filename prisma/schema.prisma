@@ -55,6 +55,10 @@ model StudentActivity {
   details   String   @default("")
   createdAt DateTime @default(now())
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([studentId, action, createdAt])
+  @@index([createdAt])
 }
 
 model Video {
@@ -133,6 +137,9 @@ model ExamResult {
   submittedAt DateTime @default(now())
   student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([examId])
 }
 
 model Announcement {

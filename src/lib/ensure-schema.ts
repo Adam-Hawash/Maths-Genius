@@ -124,12 +124,69 @@ var SCHEMA_FIXES = [
   'UPDATE Payment SET amount = 0 WHERE amount IS NULL',
 ]
 
+/* ============================================================
+ * 2026-و23 — الفهارس الناقصة (بيئة SQLite مش بتعمل فهارس تلقائية
+ * للـ Foreign Keys) — لوحة «طلابي» كانت بتعمل count/groupBy على
+ * StudentActivity و ExamResult بفل سكان على كل الصفوف. الفهارس دي
+ * بتخلي الاستعلامات فورية مهما كبر حجم السجلات.
+ * ============================================================ */
+export var SCHEMA_INDEXES = [
+  'CREATE INDEX IF NOT EXISTS idx_student_activity_student ON StudentActivity(studentId)',
+  'CREATE INDEX IF NOT EXISTS idx_student_activity_action ON StudentActivity(studentId, action, createdAt)',
+  'CREATE INDEX IF NOT EXISTS idx_exam_result_student ON ExamResult(studentId)',
+  'CREATE INDEX IF NOT EXISTS idx_exam_result_exam ON ExamResult(examId)',
+  'CREATE INDEX IF NOT EXISTS idx_student_status_grade ON Student(status, grade)',
+  'CREATE INDEX IF NOT EXISTS idx_hw_result_student ON HomeworkResult(studentId)',
+  'CREATE INDEX IF NOT EXISTS idx_video_progress_student ON VideoProgress(studentId)',
+  'CREATE INDEX IF NOT EXISTS idx_student_created ON Student(createdAt)',
+  'CREATE INDEX IF NOT EXISTS idx_activity_created ON StudentActivity(createdAt)',
+]
+
 export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint']
 
-/* Returns { missing: string[], repaired: boolean, results: any[] } */
+/* ============================================================
+ * 2026-و23 — **إصلاح بطء المنصة** (طلب المستر: «المنصة بطيئة، تسجيل
+ * الدخول وطلابي بياخدوا وقت عقبال ما يحملوا»):
+ * الجذر: كل إقلاع سيرفر (cold start على Vercel) كان بيشغّل الدورة
+ * الكاملة: 48 محاولة ALTER TABLE (بتفشل كلها بـ duplicate) + ~21
+ * UPDATE — يعني ~70 استعلام متسلسل على Turso بيضيفوا 2-4 ثواني على
+ * أول طلب بعد كل إقلاع. الحل: بصمة (هاش) لبنية الجداول والأعمدة
+ * والفهارس متخزنة في SiteConfig — لو البصمة مطابقة → تخطي كل حاجة
+ * (استعلام واحد بس)، ولو اتغيرت البنية مستقبلًا → البصمة تتغير
+ * والترميم بيشغّل لوحده من غير صيانة يدوية.
+ * ============================================================ */
+import { createHash } from 'crypto'
+
+var SCHEMA_HASH_KEY = 'schema_heal_hash'
+
+function currentSchemaHash(): string {
+  var joined = SCHEMA_TABLES.join('||') + '##' +
+    SCHEMA_COLUMNS.map(function (c) { return c.join('.') }).join('|') + '##' +
+    SCHEMA_FIXES.join('##') + '##' +
+    SCHEMA_INDEXES.join('##')
+  return createHash('md5').update(joined).digest('hex').substring(0, 12)
+}
+
 export async function ensureSchema(client: any, opts?: { force?: boolean }) {
   var force = !!(opts && opts.force)
   var results: any[] = []
+
+  /* المسار السريع: البصمة متخزنة ومطابقة → مفيش أي ترميم محتاج
+     (استعلام واحد بدل ~70 — ده اللي هيخلي الدخول ولوحة الطلاب فورًا) */
+  if (!force) {
+    try {
+      var flagRes = await client.execute({
+        sql: 'SELECT value FROM SiteConfig WHERE key = ? LIMIT 1',
+        args: [SCHEMA_HASH_KEY],
+      })
+      var stored = flagRes && flagRes.rows && flagRes.rows.length > 0 ? String(flagRes.rows[0].value || '') : ''
+      if (stored && stored === currentSchemaHash()) {
+        return { missing: [], repaired: false, skipped: true, results: [] }
+      }
+    } catch (e) {
+      // لو الجدول نفسه مش موجود (قاعدة جديدة) → الدورة الكاملة تحت
+    }
+  }
 
   // Which core tables already exist?
   var existing: string[] = []
@@ -165,6 +222,24 @@ export async function ensureSchema(client: any, opts?: { force?: boolean }) {
   for (var m = 0; m < SCHEMA_FIXES.length; m++) {
     try { await client.execute(SCHEMA_FIXES[m]) } catch (e) {}
   }
+
+  // Indexes (idempotent — CREATE INDEX IF NOT EXISTS)
+  for (var ix = 0; ix < SCHEMA_INDEXES.length; ix++) {
+    try { await client.execute(SCHEMA_INDEXES[ix]); results.push({ index: SCHEMA_INDEXES[ix], ok: true }) }
+    catch (e: any) { results.push({ index: SCHEMA_INDEXES[ix], ok: false, error: String(e && e.message) || '' }) }
+  }
+
+  // تخزين بصمة البنية — الإقلاعات الجاية بتتخطى الترميم كله
+  try {
+    var hash = currentSchemaHash()
+    try {
+      await client.execute({ sql: 'UPDATE SiteConfig SET value = ?, updatedAt = CURRENT_TIMESTAMP WHERE key = ?', args: [hash, SCHEMA_HASH_KEY] })
+    } catch (uErr) {
+      try {
+        await client.execute({ sql: 'INSERT INTO SiteConfig (id, key, value) VALUES (?, ?, ?)', args: ['sch' + hash + Date.now().toString(36), SCHEMA_HASH_KEY, hash] })
+      } catch (iErr) {}
+    }
+  } catch (hErr) {}
 
   return { missing, repaired: missing.length > 0, results }
 }

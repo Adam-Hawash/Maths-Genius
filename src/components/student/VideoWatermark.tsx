@@ -172,8 +172,9 @@ export function VideoWatermark({ name, phone }: { name?: string; phone?: string 
         <WmCard nm={nm} num={num} />
       </div>
 
-      {/* 4) تحت خالص في النص — فوق شريط الكنترولز بشوية عشان مفيش تداخل */}
-      <div className="absolute z-[61]" style={{ bottom: 70, left: '50%', transform: 'translateX(-50%)' }}>
+      {/* 4) تحت خالص في النص — واقفة **بالظبط** على حد الشريط العلوي
+          (الشريط بقى 60px في 2026-و23 — «واصل لأول الـ watermark ما يعديهاش») */}
+      <div className="absolute z-[61]" style={{ bottom: 60, left: '50%', transform: 'translateX(-50%)' }}>
         <WmCard nm={nm} num={num} />
       </div>
     </div>
