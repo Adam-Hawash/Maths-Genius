@@ -3,6 +3,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 import { regradeExamResult, gradesLookPending, questionsHaveWriting } from '@/lib/regrade-core'
+import { resolveQuestionsForStudent, splitForDisplay } from '@/lib/exam-models'
 import { gradeFallbackDecisive, quickSmartMatch } from '@/lib/smart-grader'
 
 // GET /api/exam-results?studentId=xxx&examId=yyy - Student pre-submit check (raw SQL)
@@ -98,14 +99,15 @@ export async function GET(request: NextRequest) {
     var examInfo: any = null
     try {
       var examRows = await db.$queryRawUnsafe(
-        'SELECT id, title, grade, questions, passScore FROM Exam WHERE id = ? LIMIT 1',
+        // (2026-و22) النماذج معانا — كل طالب بيتعرض أسئلة نموذجه هو
+        'SELECT id, title, grade, questions, models, modelMode, fixedModel, passScore FROM Exam WHERE id = ? LIMIT 1',
         examId
       )
       examInfo = examRows && examRows.length > 0 ? examRows[0] : null
     } catch (e) {
       console.error('Exam lookup error:', e)
       try {
-        examInfo = await db.exam.findUnique({ where: { id: examId }, select: { id: true, title: true, grade: true, questions: true, passScore: true } })
+        examInfo = await db.exam.findUnique({ where: { id: examId }, select: { id: true, title: true, grade: true, questions: true, models: true, modelMode: true, fixedModel: true, passScore: true } })
       } catch (e2) {}
     }
 
@@ -148,7 +150,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Parse exam questions
+    // Parse exam questions — (2026-و22) الأساس للعرض العام بس؛ جوه اللوب
+    // كل طالب بيتعرض أسئلة نموذجه هو (resolveQuestionsForStudent)
     var examQuestions: any[] = []
     try {
       if (examInfo.questions) {
@@ -157,20 +160,12 @@ export async function GET(request: NextRequest) {
       }
     } catch (e) {}
 
-    // Separate MCQ from writing for re-grading + display
+    // Separate MCQ from writing — أساس (للعرض العام + totals) — جوه اللوب
+    // بنعمل نفس الفصل لأسئلة كل طالب على حدة
     // Track ORIGINAL index for each question (key for student answers lookup)
     var mcqQs: any[] = []        // [{q: ..., origIdx: 0}, ...]
     var writingQs: any[] = []    // [{q: ..., origIdx: 1}, ...]
-    examQuestions.forEach(function(q: any, idx: number) {
-      var isWriting = q.type === 'writing' || q.type === 'essay'
-      if (!isWriting && Array.isArray(q.options)) {
-        var allNA = q.options.length > 0 && q.options.every(function(o: any) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
-        if (allNA) isWriting = true
-      }
-      if (!isWriting && (!q.options || q.options.length === 0)) isWriting = true
-      if (isWriting) writingQs.push({ q: q, origIdx: idx })
-      else mcqQs.push({ q: q, origIdx: idx })
-    })
+    splitForDisplay(examQuestions, mcqQs, writingQs)
 
     // Helper: look up student answer at original index
     function lookupAnswer(studentAns: any, origIdx: number): any {
@@ -197,6 +192,13 @@ export async function GET(request: NextRequest) {
         }
       } catch (e) {}
 
+      /* (2026-و22) أسئلة الطالب الفعلية — نموذجه لو الامتحان فيه نماذج.
+         ده كان سبب «الورق بيتعرض في سؤال مش سؤاله» في امتحانات النماذج */
+      var studentQuestions = resolveQuestionsForStudent(examInfo, r.studentId, examId)
+      var mcqQsS: any[] = []
+      var writingQsS: any[] = []
+      splitForDisplay(studentQuestions, mcqQsS, writingQsS)
+
       var allQuestions: any[] = []
       var wrongQuestions: any[] = []
       var writingAnswers: any[] = []
@@ -211,8 +213,8 @@ export async function GET(request: NextRequest) {
         }
       } catch (e) {}
 
-      // MCQ all questions - iterate by ORIGINAL index
-      mcqQs.forEach(function(item, qi) {
+      // MCQ all questions - iterate by ORIGINAL index (أسئلة الطالب نفسه)
+      mcqQsS.forEach(function(item, qi) {
         var q = item.q
         var origIdx = item.origIdx
         var qText = q.question || q.q || ''
@@ -250,9 +252,9 @@ export async function GET(request: NextRequest) {
         }
       })
 
-      // Writing all questions - iterate by ORIGINAL index
-      for (var wi = 0; wi < writingQs.length; wi++) {
-        var wItem = writingQs[wi]
+      // Writing all questions - iterate by ORIGINAL index (أسئلة الطالب نفسه)
+      for (var wi = 0; wi < writingQsS.length; wi++) {
+        var wItem = writingQsS[wi]
         var wq = wItem.q
         var wOrigIdx = wItem.origIdx
         var qText = wq.question || wq.q || ''
@@ -496,15 +498,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate most missed questions (across all submissions)
-    var questionMisses: Record<number, { question: string; total: number; wrong: number }> = {}
+    // (2026-و22) بالمفتاح نص السؤال — في النماذج كل طالب لسته مختلفة
+    // فالترقيم الموضعي كان بيجمع أسئلة مختلفة تحت بعض
+    var questionMisses: Record<string, { question: string; total: number; wrong: number }> = {}
     results.forEach(function(r: any) {
-      r.allQuestions.forEach(function(aq: any, idx: number) {
-        if (!questionMisses[idx]) {
-          questionMisses[idx] = { question: aq.question, total: 0, wrong: 0 }
+      r.allQuestions.forEach(function(aq: any) {
+        var qKey = String(aq.question || '')
+        if (!questionMisses[qKey]) {
+          questionMisses[qKey] = { question: aq.question, total: 0, wrong: 0 }
         }
         if (aq.type === 'mcq') {
-          questionMisses[idx].total++
-          if (!aq.isCorrect) questionMisses[idx].wrong++
+          questionMisses[qKey].total++
+          if (!aq.isCorrect) questionMisses[qKey].wrong++
         }
       })
     })

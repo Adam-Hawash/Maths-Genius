@@ -247,6 +247,9 @@ export async function POST(request) {
       var studentText = sa !== undefined && sa !== null ? String(sa) : ''
 
       writingAnswers.push({
+        /* (2026-و22) الفهرس الأصلي بيتخزن مع الحكم — شاشات العرض بتطابق بيه
+           بدل ما تخمّن بالترتيب (المطابقة الموضعية كانت ببعثر الورق) */
+        origIdx: item.origIdx,
         question: qText,
         answer: typeof studentText === 'string' ? studentText : String(studentText || ''),
         points: pts,

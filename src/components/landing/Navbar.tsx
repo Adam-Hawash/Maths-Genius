@@ -186,6 +186,16 @@ export function Navbar() {
 
           {/* YouTube + Theme Toggle + Mobile Menu Button */}
           <div className="flex items-center gap-2">
+            {/* Geometry Laws — ظاهر على طول في الموبايل فوق من غير فتح القائمة
+                (طلب المستر: «عاوزه يبقى باين في الموبايل») */}
+            <a
+              href="/geometry-laws"
+              title="Geometry Laws — قوانين الهندسة"
+              aria-label="Geometry Laws — قوانين الهندسة"
+              className="md:hidden flex items-center justify-center min-h-[44px] min-w-[44px] rounded-xl text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
+            >
+              <Shapes className="h-5 w-5" />
+            </a>
             {youtubeLink && (
               <a
                 href={youtubeLink}

@@ -21,6 +21,7 @@ import { db } from '@/lib/db'
 import { gradeImageAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 import { gradeWritingSmart } from '@/lib/smart-grader'
 import { checkExamSequential } from '@/lib/sequential-guard'
+import { parseQuestions, resolveQuestionsForStudent } from '@/lib/exam-models'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -49,45 +50,8 @@ async function ensureTable() {
   }
 }
 
-/* ===== اختيار النموذج الحتمي — نسخة مطابقة لمنطق /api/exams (applyModelForStudent)
-   عشان التسليم يصحّح نفس الأسئلة اللي الطالب شافها فعلًا ===== */
-function pickModelIdx(examId: string, studentId: string, n: number): number {
-  var s = String(examId) + '|' + String(studentId)
-  var h = 5381
-  for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
-  return n > 0 ? h % n : 0
-}
-/* 2026-و11 — إصلاح باج حقيقي: الدالة كانت بتقرأ examId من برة نطاقها
-   (متغير محلي في POST) → ReferenceError وقت التسليم → «لا توجد أسئلة»
-   في امتحانات النماذج العشوائية، وتصحيح النموذج الغلط في المخلوطة */
-function modelQuestionsForStudent(exam: any, studentId: string, examId: string): string {
-  try {
-    var models = exam && exam.models ? JSON.parse(exam.models) : []
-    if (!Array.isArray(models) || models.length === 0) return String(exam.questions || '')
-    var idx = -1
-    if (exam.modelMode === 'fixed' && exam.fixedModel) {
-      for (var f = 0; f < models.length; f++) {
-        if (models[f] && models[f].name === exam.fixedModel) { idx = f; break }
-      }
-      if (idx < 0) idx = 0
-    } else {
-      idx = pickModelIdx(examId, studentId, models.length)
-    }
-    var m = models[idx]
-    if (!m) return String(exam.questions || '')
-    return m.questions ? (typeof m.questions === 'string' ? m.questions : JSON.stringify(m.questions)) : String(exam.questions || '')
-  } catch (e) {
-    return String(exam.questions || '')
-  }
-}
-
-function parseQuestions(rawQ: any): any[] {
-  try {
-    var raw = typeof rawQ === 'string' ? JSON.parse(rawQ) : rawQ
-    if (Array.isArray(raw)) return raw
-  } catch (e) {}
-  return []
-}
+/* ===== اختيار النموذج الحتمي — بقى مشترك من lib/exam-models (2026-و22)
+   عشان كل مكان (تسليم/عرض/إعادة تصحيح) يحسب نفس أسئلة الطالب بالظبط ===== */
 
 export async function POST(request) {
   try {
@@ -139,22 +103,13 @@ export async function POST(request) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
     }
 
-    // Parse questions — (2026-و11) نفس منطق /api/exams بالظبط: لو الامتحان
-    // فيه نماذج ← أسئلة نموذج الطالب هو هي الأصل للتصحيح (حتى لو فيه أسئلة
-    // أساس — الطالب شاف النموذج بتاعه فلازم يتصحح عليه)، والأساس بوابه احتياط
-    var hasModels = false
-    try {
-      var pModels = exam && exam.models ? JSON.parse(exam.models) : []
-      hasModels = Array.isArray(pModels) && pModels.length > 0
-    } catch (e) {}
-    var questions = hasModels
-      ? parseQuestions(modelQuestionsForStudent(exam, studentId, examId))
-      : parseQuestions(exam.questions)
+    // Parse questions — (2026-و22) الـ helper المشترك resolveQuestionsForStudent:
+    // لو الامتحان فيه نماذج ← أسئلة نموذج الطالب هو هي الأصل للتصحيح
+    // (حتى لو فيه أسئلة أساس — الطالب شاف النموذج بتاعه فلازم يتصحح عليه)،
+    // والأساس بوابه احتياط. نفس الدالة اللي بتقرأ شاشات الأدمن — صفر تعارض.
+    var questions = resolveQuestionsForStudent(exam, studentId, examId)
     if (questions.length === 0) {
       questions = parseQuestions(exam.questions)
-    }
-    if (questions.length === 0) {
-      questions = parseQuestions(modelQuestionsForStudent(exam, studentId, examId))
     }
     if (questions.length === 0) {
       return NextResponse.json({ error: 'لا توجد أسئلة في هذا الامتحان' }, { status: 400 })
@@ -286,16 +241,19 @@ export async function POST(request) {
     try { writingGradesJson = JSON.stringify(pendingGrades) } catch(e) { writingGradesJson = '' }
 
     try {
+      /* 2026-و22 — بنكتب العمودين مع بعض (writingGrades + writingResults):
+         شاشات الأدمن بتقرأ writingResults — لو ما اتكتبش كان البادج
+         «بيتصحح بالذكاء الاصطناعي» فضل ظاهر لحد ما الإصلاح الذاتي يعدّي */
       await db.$executeRawUnsafe(
-        'INSERT INTO ExamResult (id, studentId, examId, score, maxScore, answers, writingGrades) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        resultId, studentId, examId, score, maxScore, answersJson, writingGradesJson
+        'INSERT INTO ExamResult (id, studentId, examId, score, maxScore, answers, writingGrades, writingResults) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        resultId, studentId, examId, score, maxScore, answersJson, writingGradesJson, writingGradesJson
       )
     } catch (insertErr) {
       console.error('Insert exam result error:', insertErr)
       try {
         await db.$executeRawUnsafe(
-          'INSERT INTO ExamResult (id, studentId, examId, score, maxScore, answers) VALUES (?, ?, ?, ?, ?, ?)',
-          resultId, studentId, examId, score, maxScore, answersJson
+          'INSERT INTO ExamResult (id, studentId, examId, score, maxScore, answers, writingGrades) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          resultId, studentId, examId, score, maxScore, answersJson, writingGradesJson
         )
       } catch (retryErr) {
         console.error('Retry insert exam result error:', retryErr)
@@ -434,9 +392,10 @@ export async function POST(request) {
         var finalJson = ''
         try { finalJson = JSON.stringify(finalGrades) } catch(e) { finalJson = writingGradesJson }
 
+        /* 2026-و22 — العمودين مع بعض بعد التصحيح النهائي كمان */
         await db.$executeRawUnsafe(
-          'UPDATE ExamResult SET score = ?, writingGrades = ? WHERE id = ?',
-          finalScore, finalJson, resultId
+          'UPDATE ExamResult SET score = ?, writingGrades = ?, writingResults = ? WHERE id = ?',
+          finalScore, finalJson, finalJson, resultId
         )
         console.log('[exam-submit] background AI grading done:', resultId, 'score', finalScore + '/' + maxScore)
       } catch (bgErr) {
