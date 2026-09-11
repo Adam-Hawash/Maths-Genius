@@ -11,7 +11,7 @@ import { db } from '@/lib/db'
      صفحة الدفع العامة كانت بتبعت JSON والـ API بيقرأ formData فيرجع 500 */
 export async function POST(request: NextRequest) {
   try {
-    var videoId = '', videoTitle = '', paymentMethod = '', notes = '', studentId = '', studentName = ''
+    var videoId = '', videoTitle = '', paymentMethod = '', notes = '', studentId = '', studentName = '', studentPhone = '', studentGrade = ''
     var amount = 0
     var contentType = request.headers.get('content-type') || ''
     if (contentType.indexOf('application/json') !== -1) {
@@ -23,19 +23,40 @@ export async function POST(request: NextRequest) {
       notes = String(body.note || body.notes || '')
       studentId = String(body.studentId || '')
       studentName = String(body.studentName || '')
+      studentPhone = String(body.studentPhone || '')
+      studentGrade = String(body.studentGrade || '')
     } else {
       var formData = await request.formData()
       videoId = String(formData.get('videoId') || '')
       videoTitle = String(formData.get('videoTitle') || '')
       amount = parseFloat(String(formData.get('amount') || '0')) || 0
-      paymentMethod = String(formData.get('paymentMethod') || '')
+      paymentMethod = String(formData.get('paymentMethod') || formData.get('method') || '')
       notes = String(formData.get('notes') || formData.get('note') || '')
       studentId = String(formData.get('studentId') || '')
       studentName = String(formData.get('studentName') || '')
+      studentPhone = String(formData.get('studentPhone') || '')
+      studentGrade = String(formData.get('studentGrade') || '')
     }
 
     if (!videoId || !paymentMethod) {
       return NextResponse.json({ error: 'videoId and paymentMethod are required' }, { status: 400 })
+    }
+
+    /* (و25) إصلاح جذري تاني — عمودي القاعدة أسماءهم method وnote
+       (الكود القديم كان بيكتب paymentMethod/notes = Unknown argument = 500
+       يعني تسليم الدفع كان بايظ من الأول خالص!). وهوية الطالب:
+       الصفحة العامة بتبعت temp-id لو مش مسجل دخول → نلحق الطالب برقم
+       تليفونه (مطلوب من فورم «رقم الهاتف المسجل بالمنصة») — لو مش
+       موجود في المنصة نرد برسالة واضحة. */
+    var resolvedStudent: any = null
+    if (studentId && studentId.indexOf('temp-') !== 0) {
+      try { resolvedStudent = await db.student.findUnique({ where: { id: studentId } }) } catch (e) { resolvedStudent = null }
+    }
+    if (!resolvedStudent && studentPhone) {
+      try { resolvedStudent = await db.student.findUnique({ where: { phone: studentPhone.trim() } }) } catch (e) { resolvedStudent = null }
+    }
+    if (!resolvedStudent) {
+      return NextResponse.json({ error: 'الرقم ده مش مسجل في المنصة — اعمل حساب الأول أو اتأكد من رقم تليفونك' }, { status: 400 })
     }
 
     // مفيش تخزين إيصالات — receiptPath فاضي دايمًا (توفير مساحة قاعدة البيانات)
@@ -43,14 +64,16 @@ export async function POST(request: NextRequest) {
 
     var payment = await db.payment.create({
       data: {
-        studentId,
-        studentName,
+        studentId: resolvedStudent.id,
+        studentName: studentName || resolvedStudent.name,
+        studentPhone: studentPhone || resolvedStudent.phone,
+        studentGrade: studentGrade || resolvedStudent.grade,
+        method: paymentMethod,
+        amount,
         videoId,
         videoTitle,
-        amount,
-        paymentMethod,
         receiptPath,
-        notes,
+        note: notes,
         status: 'pending',
       },
     })
