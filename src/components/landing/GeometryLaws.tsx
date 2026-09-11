@@ -10,6 +10,9 @@
  * كل شكل = كارت قابل للضغط يفتح ورقة القوانين الكاملة بتاعته:
  *   Laws (Area / Perimeter / Volume…) + Theorems (Pythagoras,
  *   Euclid's angle sum, tangents, similarity…) — كله English.
+ * + «القسمة عاوزها تحت بعض أو علامة الـ divide» — أي قسمة في الصيغ
+ *   بتتكتب توكن [num/den] وبتترسم كسر رأسي (البسط فوق والمقام تحت
+ *   بخط في النص) عبر renderFormula/Frac تحت — مش ½ ولا a/b سطر واحد.
  * ============================================================ */
 
 import { useMemo, useState } from 'react'
@@ -255,8 +258,8 @@ const FLAT_SHAPES: Shape[] = [
     id: 'triangle', ar: 'المثلث', en: 'Triangle', tags: 'مثلث مساحة محيط هيرون area heron triangle',
     draw: DRAW.triangle,
     laws: [
-      { label: 'Area', formula: 'A = ½ × b × h' },
-      { label: 'Heron\u2019s Formula', formula: 'A = √( s(s−a)(s−b)(s−c) ) , s = (a+b+c) ÷ 2' },
+      { label: 'Area', formula: 'A = [1/2] × b × h' },
+      { label: 'Heron\u2019s Formula', formula: 'A = √( s(s−a)(s−b)(s−c) ) , s = [a+b+c/2]' },
       { label: 'Perimeter', formula: 'P = a + b + c' },
     ],
     theorems: [
@@ -272,7 +275,7 @@ const FLAT_SHAPES: Shape[] = [
     draw: DRAW.rightTriangle,
     laws: [
       { label: 'Pythagoras\u2019 Theorem', formula: 'c² = a² + b²  →  c = √(a² + b²)' },
-      { label: 'Area', formula: 'A = ½ × a × b' },
+      { label: 'Area', formula: 'A = [1/2] × a × b' },
       { label: 'Perimeter', formula: 'P = a + b + c' },
     ],
     theorems: [
@@ -286,13 +289,13 @@ const FLAT_SHAPES: Shape[] = [
     id: 'equilateral', ar: 'المثلث المتساوي الأضلاع', en: 'Equilateral Triangle', tags: 'متساوي الأضلاع مثلث equilateral 60',
     draw: DRAW.equilateral,
     laws: [
-      { label: 'Area', formula: 'A = (√3 ÷ 4) × a²' },
-      { label: 'Height', formula: 'h = (√3 ÷ 2) × a' },
+      { label: 'Area', formula: 'A = [√3/4] × a²' },
+      { label: 'Height', formula: 'h = [√3/2] × a' },
       { label: 'Perimeter', formula: 'P = 3a' },
     ],
     theorems: [
       { name: 'Euclid I.1 / I.5', formula: 'a = b = c , كل الزوايا = 60°', note: 'All three sides equal → all three angles equal (60° each).' },
-      { name: 'Pythagoras on the half', formula: '(a/2)² + h² = a²', note: 'الارتفاع بينصف القاعدة — بتشتغل بيها فيثاغورس علشان تطلع h.' },
+      { name: 'Pythagoras on the half', formula: '[a/2]² + h² = a²', note: 'الارتفاع بينصف القاعدة — بتشتغل بيها فيثاغورس علشان تطلع h.' },
     ],
   },
   {
@@ -312,7 +315,7 @@ const FLAT_SHAPES: Shape[] = [
     id: 'rhombus', ar: 'المعين', en: 'Rhombus', tags: 'معين مساحة قطرين rhombus diagonal perpendicular',
     draw: DRAW.rhombus,
     laws: [
-      { label: 'Area (Diagonals)', formula: 'A = ½ × d₁ × d₂' },
+      { label: 'Area (Diagonals)', formula: 'A = [1/2] × d₁ × d₂' },
       { label: 'Area (Base × Height)', formula: 'A = a × h' },
       { label: 'Perimeter', formula: 'P = 4a' },
     ],
@@ -325,13 +328,13 @@ const FLAT_SHAPES: Shape[] = [
     id: 'trapezoid', ar: 'شبه المنحرف', en: 'Trapezium', tags: 'منحرف شبه المنحرف مساحة trapezium trapezoid median',
     draw: DRAW.trapezoid,
     laws: [
-      { label: 'Area', formula: 'A = ½ × (b₁ + b₂) × h' },
-      { label: 'Median (Midsegment)', formula: 'm = ½ × (b₁ + b₂)' },
+      { label: 'Area', formula: 'A = [1/2] × (b₁ + b₂) × h' },
+      { label: 'Median (Midsegment)', formula: 'm = [1/2] × (b₁ + b₂)' },
       { label: 'Perimeter', formula: 'P = مجموع الأضلاع الأربعة' },
     ],
     theorems: [
       { name: 'Euclid — Bases', formula: 'b₁ ∥ b₂', note: 'القاعدتين المتوازيتين بس — الأضلاع التانية مش شرط تكون متوازية.' },
-      { name: 'Median Theorem', formula: 'm ∥ b₁ , b₂  و m = ½(b₁ + b₂)', note: 'الخط المتوسط موازي للقاعدتين وطوله نص مجموعهم.' },
+      { name: 'Median Theorem', formula: 'm ∥ b₁ , b₂  و m = [1/2] × (b₁ + b₂)', note: 'الخط المتوسط موازي للقاعدتين وطوله نص مجموعهم.' },
     ],
   },
   {
@@ -340,7 +343,7 @@ const FLAT_SHAPES: Shape[] = [
     laws: [
       { label: 'Area', formula: 'A = πr²' },
       { label: 'Circumference', formula: 'C = 2πr = πd' },
-      { label: 'Pi (π)', formula: 'π ≈ 22/7 ≈ 3.14' },
+      { label: 'Pi (π)', formula: 'π ≈ [22/7] ≈ 3.14' },
     ],
     theorems: [
       { name: 'Euclid III.18 — Tangent', formula: 'المماس ⊥ نصف القطر عند نقطة التماس', note: 'A tangent to a circle is perpendicular to the radius at the point of contact.' },
@@ -353,12 +356,12 @@ const FLAT_SHAPES: Shape[] = [
     id: 'sector', ar: 'القطاع الدائري', en: 'Sector', tags: 'قطاع دائري قوس زاوية sector arc length angle',
     draw: DRAW.sector,
     laws: [
-      { label: 'Area', formula: 'A = (θ ÷ 360) × πr²' },
-      { label: 'Arc Length', formula: 'L = (θ ÷ 360) × 2πr' },
+      { label: 'Area', formula: 'A = [θ/360] × πr²' },
+      { label: 'Arc Length', formula: 'L = [θ/360] × 2πr' },
       { label: 'Perimeter', formula: 'P = L + 2r' },
     ],
     theorems: [
-      { name: 'Euclid III — Proportion', formula: 'θ/360 = L/2πr = A/πr²', note: 'نسبة الزاوية بتنفع تحسب القوس أو المساحة بالتناسب.' },
+      { name: 'Euclid III — Proportion', formula: '[θ/360] = [L/2πr] = [A/πr²]', note: 'نسبة الزاوية بتنفع تحسب القوس أو المساحة بالتناسب.' },
     ],
   },
 ]
@@ -408,21 +411,21 @@ const SOLID_SHAPES: Shape[] = [
     id: 'cone', ar: 'المخروط', en: 'Cone', tags: 'مخروط حجم رازم cone slant height volume',
     draw: DRAW.cone,
     laws: [
-      { label: 'Volume', formula: 'V = (1 ÷ 3) × πr²h' },
+      { label: 'Volume', formula: 'V = [1/3] × πr²h' },
       { label: 'Slant Height', formula: 'l = √(r² + h²)' },
       { label: 'Curved Surface (CSA)', formula: 'CSA = πrl' },
       { label: 'Total Surface (TSA)', formula: 'TSA = πr(l + r)' },
     ],
     theorems: [
       { name: 'Pythagoras\u2019 Theorem', formula: 'l² = r² + h²', note: 'الرازم (الراسم) والنق والارتفاع بيعملوا مثلث قائم — فيثاغورس بيطلع الرازم.' },
-      { name: 'Volume Ratio', formula: 'V(المخروط) = ⅓ V(الأسطوانة)', note: 'المخروط بياخد ثلث حجم الأسطوانة بنفس النق والارتفاع.' },
+      { name: 'Volume Ratio', formula: 'V(المخروط) = [1/3] × V(الأسطوانة)', note: 'المخروط بياخد ثلث حجم الأسطوانة بنفس النق والارتفاع.' },
     ],
   },
   {
     id: 'sphere', ar: 'الكرة', en: 'Sphere', tags: 'كرة حجم مساحة sphere volume surface area',
     draw: DRAW.sphere,
     laws: [
-      { label: 'Volume', formula: 'V = (4 ÷ 3) × πr³' },
+      { label: 'Volume', formula: 'V = [4/3] × πr³' },
       { label: 'Surface Area', formula: 'S = 4πr²' },
     ],
     theorems: [
@@ -433,13 +436,13 @@ const SOLID_SHAPES: Shape[] = [
     id: 'pyramid', ar: 'الهرم الرباعي القائم', en: 'Square Pyramid', tags: 'هرم حجم قاعدة pyramid volume slant euler',
     draw: DRAW.pyramid,
     laws: [
-      { label: 'Volume', formula: 'V = (1 ÷ 3) × Base Area × h = (1 ÷ 3) × a² × h' },
+      { label: 'Volume', formula: 'V = [1/3] × Base Area × h = [1/3] × a² × h' },
       { label: 'Base Area', formula: 'Base = a² (قاعدة مربعة)' },
-      { label: 'Slant Height', formula: 'l = √( h² + (a/2)² )' },
+      { label: 'Slant Height', formula: 'l = √( h² + [a/2]² )' },
     ],
     theorems: [
       { name: 'Euler\u2019s Formula', formula: 'F + V − E = 2  →  5 + 5 − 8 = 2' },
-      { name: 'Pythagoras\u2019 Theorem', formula: 'l² = h² + (a/2)²', note: 'الارتفاع بينصف القاعدة في الهرم القائم — فيثاغورس بيطلع الرازم.' },
+      { name: 'Pythagoras\u2019 Theorem', formula: 'l² = h² + [a/2]²', note: 'الارتفاع بينصف القاعدة في الهرم القائم — فيثاغورس بيطلع الرازم.' },
     ],
   },
 ]
@@ -452,11 +455,46 @@ const MUST_KNOW: { title: string; body: string }[] = [
   { title: 'Area & Volume Unit Conversions', body: '1 cm² = 100 mm² , 1 m² = 10,000 cm² , 1 m³ = 1,000,000 cm³ , 1 litre = 1,000 cm³.' },
 ]
 
+/* ---------- عرض القسمة كسر رأسي (طلب المستر: «تحت بعض أو علامة الـ divide») ---------- */
+
+function Frac({ num, den }: { num: string; den: string }) {
+  return (
+    <span dir="ltr" className="inline-flex flex-col items-center align-middle leading-none font-bold">
+      <span className="px-1">{num}</span>
+      <span aria-hidden="true" className="w-full border-t-[1.5px] border-current my-[2px]" />
+      <span className="px-1">{den}</span>
+    </span>
+  )
+}
+
+/* [num/den] → كسر رأسي في نفس السطر مع باقي الصيغة — باقي النص يفضل زي ما هو */
+function renderFormula(formula: string): React.ReactNode {
+  var re = /\[([^[\]/]+)\/([^[\]/]+)\]/g
+  var out: React.ReactNode[] = []
+  var last = 0
+  var k = 0
+  var m: RegExpExecArray | null
+  while ((m = re.exec(formula)) !== null) {
+    if (m.index > last) out.push(formula.slice(last, m.index))
+    out.push(<Frac key={'frac-' + k} num={m[1]} den={m[2]} />)
+    k = k + 1
+    last = m.index + m[0].length
+  }
+  if (last < formula.length) out.push(formula.slice(last))
+  if (out.length === 0) return formula
+  return out
+}
+
 function LawRow({ l }: { l: Law }) {
   return (
     <div className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 border border-border/40 px-2.5 py-2">
       <span className="text-muted-foreground shrink-0 text-xs font-bold mt-0.5">{l.label}</span>
-      <span dir="ltr" className="font-bold text-foreground text-[13px] text-left leading-relaxed">{l.formula}</span>
+      <span
+        dir="ltr"
+        className="inline-flex flex-wrap items-center gap-x-1 gap-y-0.5 font-bold text-foreground text-[13px] text-left leading-relaxed"
+      >
+        {renderFormula(l.formula)}
+      </span>
     </div>
   )
 }
@@ -467,7 +505,7 @@ function TheoremRow({ t }: { t: Theorem }) {
       <div className="flex items-start justify-between gap-2">
         <p dir="ltr" className="text-xs font-bold text-teal-700 dark:text-teal-400 text-left">{t.name}</p>
       </div>
-      <p dir="auto" className="text-[13px] font-semibold text-foreground leading-relaxed">{t.formula}</p>
+      <p dir="auto" className="text-[13px] font-semibold text-foreground leading-relaxed">{renderFormula(t.formula)}</p>
       {t.note && <p className="text-[11px] text-muted-foreground leading-relaxed">{t.note}</p>}
     </div>
   )
