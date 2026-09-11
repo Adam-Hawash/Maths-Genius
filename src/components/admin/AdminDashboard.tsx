@@ -1881,6 +1881,16 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
   const [selectedStudent, setSelectedStudent] = useState<StudentAnalytics | null>(null)
   const [detail, setDetail] = useState<any>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
+  /* 2026-و23 — خانة بحث الطلاب بالاسم أو الرقم (طلب المستر الحرفي:
+     «أنا بدور على طالب معين فبفضل أنزل أنزل — أضيف لي خانة بحث
+     أكتب اسم الطالب وهو يظهر لي») — فلترة فورية من غير أي طلب شبكة */
+  const [search, setSearch] = useState('')
+  const filteredStudents = search.trim()
+    ? students.filter(function (s) {
+        var q = search.trim().toLowerCase()
+        return (s.name || '').toLowerCase().indexOf(q) !== -1 || (s.phone || '').indexOf(q) !== -1
+      })
+    : students
 
   const loadData = async () => {
     if (!grade) { setStudents([]); setSummary(null); return }
@@ -1941,10 +1951,23 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <CardTitle className="text-lg flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" />طلابي | My Students</CardTitle>
-            <select value={grade} onChange={(e) => setGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm min-w-[200px]">
-              <option value="">اختر الصف لعرض التحليلات</option>
-              {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="🔍 ابحث باسم الطالب أو رقمه..."
+                  className="h-9 rounded-md border border-input bg-transparent pl-3 pr-9 text-sm min-w-[220px]"
+                  aria-label="ابحث عن طالب بالاسم أو رقم الهاتف"
+                />
+              </div>
+              <select value={grade} onChange={(e) => setGrade(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm min-w-[200px]">
+                <option value="">اختر الصف لعرض التحليلات</option>
+                {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -1960,6 +1983,12 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
               <Users className="h-10 w-10 text-muted-foreground/30 mb-3" />
               <p className="text-sm text-muted-foreground">لا يوجد طلاب مفعلون في هذا الصف</p>
             </div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Search className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-sm font-medium">مفيش طالب بالاسم أو الرقم «{search}»</p>
+              <p className="text-xs text-muted-foreground mt-1">جرب جزء من الاسم أو الرقم</p>
+            </div>
           ) : (
             <>
               {/* Grade Summary Cards */}
@@ -1974,7 +2003,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
 
               {/* (جدول الترتيب 2026-و10 — طلب المستر: «مين الطلاب اللي خلصوا الامتحانات الأول ودرجاتهم بالترتيب») */}
               {(() => {
-                const ranked = students
+                const ranked = filteredStudents
                   .filter(function (s) { return s.examsTaken > 0 && (s as any).firstExamAt })
                   .sort(function (a, b) { return Number((a as any).firstExamAt) - Number((b as any).firstExamAt) })
                 if (ranked.length === 0) return null
@@ -2035,7 +2064,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                     <th className="text-center py-2 px-1 font-medium">تفاصيل</th>
                   </tr></thead>
                   <tbody>
-                    {students.map((s) => (
+                    {filteredStudents.map((s) => (
                       <tr key={s.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => loadDetail(s.id)}>
                         <td className="py-2.5 px-2">
                           <p className="font-medium text-xs truncate max-w-[150px]">{s.name}</p>

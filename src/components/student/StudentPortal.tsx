@@ -1024,19 +1024,24 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                               <div className="mt-2 p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
                                 <p className="text-[10px] font-bold text-blue-700 dark:text-blue-400 mb-1">🤖 AI قرأ إجابتك من الصورة:</p>
                                 <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="ltr"><FractionText text={writingAns.aiExtractedAnswer} /></p>
-                                {writingAns.aiFeedback && (
-                                  <p className="text-[10px] text-muted-foreground mt-1">{writingAns.aiFeedback}</p>
-                                )}
                               </div>
                             )}
                             {writingAns.modelAnswer && (
                               <p className="text-xs text-emerald-600 whitespace-pre-wrap break-words" dir="ltr">Correct answer: <FractionText text={writingAns.modelAnswer} /></p>
                             )}
-                            {writingAns.feedback && !writingAns.aiExtractedAnswer && (
-                              <p className="text-[10px] text-muted-foreground" dir="ltr">{writingAns.feedback}</p>
-                            )}
                             {writingAns.awardedPoints !== undefined && (
                               <p className="text-[10px] font-semibold text-muted-foreground">Score: {writingAns.awardedPoints}/{writingAns.maxPoints || writingAns.points}</p>
+                            )}
+                            {/* 2026-و23 — ملاحظة المصحح الذكي في آخر السؤال (طلب المستر الحرفي:
+                                «يديني ملاحظة في آخر السؤال ليه السؤال ده غلط أو ليه السؤال ده صح —
+                                زي ما نحن بنتكلم شات») — صندوق واضح بلون الحكم */}
+                            {(writingAns.aiFeedback || writingAns.feedback) && writingAns.gradingStatus !== 'pending' && (
+                              <div className={'mt-2.5 p-3 rounded-xl border-2 ' + (writingAns.isCorrect === true ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 dark:border-emerald-700' : writingAns.isCorrect === false ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800' : 'bg-muted/40 border-border')}>
+                                <p className={'text-xs font-bold mb-1 flex items-center gap-1.5 ' + (writingAns.isCorrect === true ? 'text-emerald-700 dark:text-emerald-400' : writingAns.isCorrect === false ? 'text-red-700 dark:text-red-400' : 'text-foreground')}>
+                                  <span>📝</span> ملاحظة المصحح الذكي:
+                                </p>
+                                <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words" style={{ textAlign: 'right' }}>{writingAns.aiFeedback || writingAns.feedback}</p>
+                              </div>
                             )}
                           </div>
                         )}
