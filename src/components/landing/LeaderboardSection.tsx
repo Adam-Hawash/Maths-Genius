@@ -134,7 +134,7 @@ export function LeaderboardSection() {
                           المركز {idx + 1}
                         </span>
                       </div>
-                      <p className="mt-1.5 font-semibold text-base leading-snug truncate" dir="auto">
+                      <p className="mt-1.5 font-semibold text-base leading-snug truncate" dir="auto" title={r.name}>
                         {r.name}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">{r.grade}</p>
