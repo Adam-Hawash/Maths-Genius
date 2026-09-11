@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import {
   Users, UserCheck, Clock, ClipboardList, FileText,
   Megaphone, Plus, Check, X, Trash2, LogOut, Loader2,
@@ -78,6 +79,40 @@ function writingVerdictBadge(aq: any): { cls: string; text: string } {
   var maxP = Number(aq.maxPoints || aq.points || 0)
   if (awarded > 0) return { cls: 'bg-amber-500/10 text-amber-600', text: 'درجة مؤقتة (' + awarded + '/' + maxP + ') — راجعها وعدّلها' }
   return { cls: 'bg-red-500/10 text-red-600', text: 'AI: غلط' }
+}
+
+/* ============================================================
+   (25-ب1) أدوات الجدولة + إظهار الإجابات — طلبات المستر:
+   1) حرية إظهار/إخفاء الإجابات للامتحان
+   2) مؤقت اختياري لكل امتحان (الحقل والـ APIs — واجهة العداد عند الطالب)
+   3) جدولة إخفاء للامتحانات والواجبات (موعد ظهور)
+   ============================================================ */
+
+/* التاريخ بالعربي المصري: يوم + شهر + ساعة — لبادج «مجدول — يظهر ...» */
+function formatEgyptian(d: string | Date | null | undefined): string {
+  if (!d) return ''
+  try {
+    var dt = new Date(d)
+    if (isNaN(dt.getTime())) return ''
+    return dt.toLocaleString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+  } catch (e) { return '' }
+}
+
+/* تحويل ISO إلى قيمة datetime-local بتوقيت الجهاز (لعرضها في input) */
+function toLocalInputValue(d: string | Date | null | undefined): string {
+  if (!d) return ''
+  try {
+    var dt = new Date(d)
+    if (isNaN(dt.getTime())) return ''
+    var pad = function (n: number) { return (n < 10 ? '0' : '') + n }
+    return dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate()) + 'T' + pad(dt.getHours()) + ':' + pad(dt.getMinutes())
+  } catch (e) { return '' }
+}
+
+/* هل العنصر مجدول في المستقبل (بادج «مجدول»)؟ */
+function isScheduledFuture(d: string | Date | null | undefined): boolean {
+  if (!d) return false
+  try { var t = new Date(d).getTime(); return !isNaN(t) && t > Date.now() } catch (e) { return false }
 }
 
 // Global image modal helper - opens an overlay showing the full image
@@ -963,8 +998,105 @@ interface MCQQuestion {
   points: number
 }
 
+/* ============================================================
+   (25-ب1) صف إعدادات الامتحان المضغوط — لكل امتحان في القايمة:
+   سوتش «إظهار الإجابات للطلاب» ↔ «النتيجة عند المستر فقط» (يكتب فورًا
+   PATCH + toast) + Input دقائق صغير + حقل موعد مع زرار حفظ وزرار
+   «إلغاء الجدولة» + بادج «مجدول — يظهر {التاريخ بالعربي}»
+   ============================================================ */
+function ExamSettingsRow({ exam, adminId, onChanged }: { exam: any; adminId: string; onChanged: () => void }) {
+  const [showResult, setShowResult] = useState<boolean>(!!exam.showResult)
+  const [toggling, setToggling] = useState(false)
+  const [timeLimit, setTimeLimit] = useState<string>(Number(exam.timeLimitMin) > 0 ? String(exam.timeLimitMin) : '')
+  const [schedVal, setSchedVal] = useState<string>(toLocalInputValue(exam.scheduledAt))
+  const [savingSched, setSavingSched] = useState(false)
+  const scheduled = isScheduledFuture(exam.scheduledAt)
+
+  const patchExam = async function (payload: Record<string, unknown>, okMsg: string): Promise<boolean> {
+    if (!adminId) { toast.error('مفيش جلسة أدمن — سجل دخول تاني', { duration: 8000 }); return false }
+    try {
+      var res = await fetch('/api/exams/' + exam.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId: adminId, ...payload }),
+      })
+      if (res.ok) { toast.success(okMsg); return true }
+      var d: any = {}
+      try { d = await res.json() } catch (e) {}
+      toast.error(d.error || 'خطأ في الحفظ', { duration: 8000 })
+      return false
+    } catch { toast.error('خطأ في الاتصال', { duration: 8000 }); return false }
+  }
+
+  /* سوتش الإجابات — يكتب فورًا مع toast (طلب المستر حرفيًا) */
+  const toggleShowResult = async function (checked: boolean) {
+    setShowResult(checked) /* تفاؤلي — بيرجع لو فشل */
+    setToggling(true)
+    var ok = await patchExam({ showResult: checked }, checked
+      ? 'الإجابات هتظهر للطلاب بعد التسليم (نتيجة + أخطاء)'
+      : 'النتيجة عند المستر فقط — الطالب مش هيشوف حاجة')
+    if (!ok) setShowResult(!checked)
+    setToggling(false)
+  }
+
+  const saveTimeLimit = async function () {
+    var ok = await patchExam(
+      { timeLimitMin: timeLimit.trim() === '' ? 0 : Math.max(0, Number(timeLimit) || 0) },
+      timeLimit.trim() === '' ? 'تم — الامتحان بلا وقت' : ('مدة الامتحان: ' + timeLimit + ' دقيقة')
+    )
+    if (ok) onChanged()
+  }
+
+  const saveSchedule = async function () {
+    if (!schedVal) { toast.error('اختار الموعد الأول'); return }
+    setSavingSched(true)
+    var ok = await patchExam({ scheduledAt: new Date(schedVal).toISOString() }, 'تم جدولة ظهور الامتحان للطلاب')
+    if (ok) onChanged()
+    setSavingSched(false)
+  }
+
+  const cancelSchedule = async function () {
+    setSavingSched(true)
+    var ok = await patchExam({ scheduledAt: null }, 'تم إلغاء الجدولة — الامتحان ظاهر للطلاب فورًا')
+    if (ok) { setSchedVal(''); onChanged() }
+    setSavingSched(false)
+  }
+
+  return (
+    <div className="mt-2 p-2 rounded-lg border border-dashed border-emerald-500/40 bg-emerald-500/5 space-y-1.5"
+      onClick={function (e) { e.stopPropagation() }}>
+      {/* سطر 1: سوتش الإجابات + بادج الجدولة */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Switch checked={showResult} onCheckedChange={toggleShowResult} disabled={toggling} />
+          <span className={'text-[10px] font-medium ' + (showResult ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>
+            {showResult ? 'الإجابات ظاهرة للطلاب' : 'النتيجة عند المستر فقط'}
+          </span>
+        </div>
+        {scheduled && (
+          <Badge className="text-[9px] bg-blue-500 text-white">مجدول — يظهر {formatEgyptian(exam.scheduledAt)}</Badge>
+        )}
+      </div>
+      {/* سطر 2: المؤقت بالدقائق + موعد الظهور */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Input type="number" min={0} value={timeLimit} onChange={function (e) { setTimeLimit(e.target.value) }}
+          placeholder="بلا وقت" className="w-20 h-7 text-[11px]" title="مدة الامتحان بالدقائق (فارغ = بلا وقت)" />
+        <Button type="button" variant="ghost" size="sm" className="h-7 text-[10px] px-2" onClick={saveTimeLimit}>حفظ المدة</Button>
+        <Input type="datetime-local" value={schedVal} onChange={function (e) { setSchedVal(e.target.value) }}
+          placeholder="يظهر فورًا" className="h-7 text-[11px] flex-1 min-w-[150px]" title="موعد ظهور الامتحان للطلاب (فارغ = يظهر فورًا)" />
+        <Button type="button" variant="outline" size="sm" className="h-7 text-[10px] px-2" disabled={!schedVal || savingSched} onClick={saveSchedule}>حفظ الموعد</Button>
+        {scheduled && (
+          <Button type="button" variant="ghost" size="sm" className="h-7 text-[10px] px-2 text-destructive" disabled={savingSched} onClick={cancelSchedule}>إلغاء الجدولة</Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => void }) {
   const gradesList = useGradesList()
+  /* (25-ب1) إثبات الأدمن للـ GET (شوف العناصر المجدولة) + للـ PATCH */
+  const currentAdminId = useAppStore(function (s) { return s.currentAdmin?.id || '' })
   const [examEditTarget, setExamEditTarget] = useState<any>(null)
   const [exams, setExams] = useState<Exam[]>([])
   const [selectedExam, setSelectedExam] = useState<string>('')
@@ -1003,14 +1135,21 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
   const [modelMode, setModelMode] = useState<'random' | 'fixed'>('random')
   const [fixedModelName, setFixedModelName] = useState('')
   const [modelExtracting, setModelExtracting] = useState(false)
+  /* (25-ب1) إعدادات الامتحان في الإنشاء اليدوي: إظهار الإجابات + المؤقت + موعد الظهور */
+  const [formShowResult, setFormShowResult] = useState(false)
+  const [formTimeLimit, setFormTimeLimit] = useState('')
+  const [formScheduledAt, setFormScheduledAt] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const answerKeyRef = useRef<HTMLInputElement>(null)
   const thumbnailRef = useRef<HTMLInputElement>(null)
 
-  const loadExams = async () => {
-    setLoading(true)
+  const loadExams = async (showLoader = true) => {
+    if (showLoader) setLoading(true)
     try {
-      const res = await fetch('/api/exams?pageSize=100')
+      /* (25-ب1) adminId → الأدمن يشوف العناصر المجدولة كمان (ببادج) */
+      const params = new URLSearchParams({ pageSize: '100' })
+      if (currentAdminId) params.set('adminId', currentAdminId)
+      const res = await fetch('/api/exams?' + params.toString())
       if (!res.ok) {
         try { const errData = await res.json(); toast.error('خطأ في تحميل الامتحانات: ' + (errData.error || ''), { duration: 8000 }) } catch { toast.error('خطأ في السيرفر', { duration: 8000 }) }
       } else {
@@ -1127,9 +1266,15 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
         body.modelMode = modelMode
         if (modelMode === 'fixed') { body.fixedModel = fixedModelName || examModels[0].name }
       }
+      /* (25-ب1) إعدادات الامتحان الجديدة — نفس الاتلات بتاعة الاستخراج */
+      body.showResult = formShowResult ? 'true' : 'false'
+      body.timeLimitMin = formTimeLimit.trim() === '' ? '0' : String(Math.max(0, Number(formTimeLimit) || 0))
+      if (formScheduledAt.trim()) {
+        try { body.scheduledAt = new Date(formScheduledAt).toISOString() } catch (e) {}
+      }
       const res = await fetch('/api/exams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (res.ok) {
-        toast.success('تم إضافة الامتحان'); setShowForm(false); setFormTitle(''); setFormContent(''); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileType(''); setFormFileUrl(''); setFormQuestions([]); setFormPassScore(50); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyType(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setExamModels([]); setModelMode('random'); setFixedModelName(''); loadExams()
+        toast.success('تم إضافة الامتحان'); setShowForm(false); setFormTitle(''); setFormContent(''); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileType(''); setFormFileUrl(''); setFormQuestions([]); setFormPassScore(50); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyType(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setExamModels([]); setModelMode('random'); setFixedModelName(''); setFormShowResult(false); setFormTimeLimit(''); setFormScheduledAt(''); loadExams(false)
       } else { try { const d = await res.json(); toast.error(d.error || 'خطأ', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر - حاول تاني', { duration: 8000 }) } }
     } catch (err: any) { toast.error('خطأ في الاتصال: ' + (err.message || ''), { duration: 8000 }) }
     setSubmitting(false)
@@ -1373,6 +1518,44 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
               )}
             </div>
 
+            {/* ===== (25-ب1) إعدادات الامتحان في الإنشاء اليدوي:
+                 سوتش إظهار الإجابات (افتراضي مطفأ) + المؤقت + موعد الظهور ===== */}
+            <div className="space-y-3 p-3 rounded-lg border border-dashed border-emerald-400/50 bg-emerald-500/5">
+              <div>
+                <Label className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">إعدادات الامتحان</Label>
+                <p className="text-[10px] text-muted-foreground mt-0.5">تقدر تعدلها في أي وقت من القايمة تحت (صف الإعدادات لكل امتحان)</p>
+              </div>
+              <div className="flex items-center justify-between gap-3 p-2 rounded-lg border bg-background">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium">إظهار الإجابات للطالب بعد التسليم</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {formShowResult
+                      ? 'الطالب هيشوف نتيجة الاختياري والأخطاء فور التسليم'
+                      : 'الطالب هيشوف «انتظر النتيجة من المستر» فقط (افتراضي)'}
+                  </p>
+                </div>
+                <Switch checked={formShowResult} onCheckedChange={function (v) { setFormShowResult(v) }} />
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">مدة الامتحان بالدقائق (اختياري)</Label>
+                  <Input type="number" min={1} value={formTimeLimit}
+                    onChange={function (e) { setFormTimeLimit(e.target.value) }}
+                    placeholder="بلا وقت" className="w-36 h-8 text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">موعد ظهور الامتحان للطلاب (اختياري)</Label>
+                  <Input type="datetime-local" value={formScheduledAt}
+                    onChange={function (e) { setFormScheduledAt(e.target.value) }}
+                    placeholder="يظهر فورًا" className="h-8 text-xs" />
+                </div>
+                {formScheduledAt && (
+                  <Button type="button" variant="ghost" size="sm" className="h-8 text-[11px] text-destructive"
+                    onClick={function () { setFormScheduledAt('') }}>إلغاء الموعد (يظهر فورًا)</Button>
+                )}
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <Button size="sm" onClick={handleAddExam} disabled={submitting || uploading || uploadingAnswerKey}>{submitting || uploading || uploadingAnswerKey ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ'}</Button>
               <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
@@ -1399,6 +1582,10 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                         {(exam as any).models && ((exam as any).modelMode === 'fixed'
                           ? <Badge className="text-[9px] bg-amber-500 text-white">📌 نموذج ثابت</Badge>
                           : <Badge className="text-[9px] bg-purple-500 text-white">نماذج عشوائية</Badge>)}
+                        {/* (25-ب1) بادجات الميزات الجديدة */}
+                        {(exam as any).showResult && <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-600">إجابات ظاهرة</Badge>}
+                        {Number((exam as any).timeLimitMin) > 0 && <Badge variant="outline" className="text-[9px] border-red-500/40 text-red-600">⏱ {Number((exam as any).timeLimitMin)} د</Badge>}
+                        {isScheduledFuture((exam as any).scheduledAt) && <Badge className="text-[9px] bg-blue-500 text-white">مجدول</Badge>}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -1411,6 +1598,8 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                         onClick={(e) => { e.stopPropagation(); handleDeleteExam(exam.id) }}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
                   </div>
+                  {/* (25-ب1) صف الإعدادات المضغوط: إظهار الإجابات + المؤقت + الجدولة */}
+                  <ExamSettingsRow exam={exam} adminId={currentAdminId} onChanged={function () { loadExams(false) }} />
                 </div>
               ))}
             </div>
@@ -2505,6 +2694,8 @@ interface CMProps<T extends { id: string; grade: string; createdAt: string }> {
 function ContentManager<T extends { id: string; grade: string; createdAt: string }>({ title, apiPath, itemName, fields, renderTitle, renderSubtitle, supportFileUpload, fileCategory, acceptedTypes, supportAnswerKey, supportThumbnail, supportMCQ, onRefresh }: CMProps<T>) {
   const [items, setItems] = useState<T[]>([])
   const gradesList = useGradesList()
+  /* (25-ب1) إثبات الأدمن: GET يشوف المجدول + PATCH موعد الواجب */
+  const currentAdminId = useAppStore(function (s) { return s.currentAdmin?.id || '' })
   const [loading, setLoading] = useState(true)
   const [editTarget, setEditTarget] = useState<any>(null)
   const [showForm, setShowForm] = useState(false)
@@ -2533,7 +2724,13 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
   const [fixedModelName, setFixedModelName] = useState('')
   const [modelExtracting, setModelExtracting] = useState(false)
   const isExamManager = apiPath === '/api/exams'
+  const isHomeworkManager = apiPath === '/api/homework'
   const [filterGrade, setFilterGrade] = useState('')
+  /* (25-ب1) جدولة ظهور الواجب: حقل الإضافة + محرر الموعد في القايمة */
+  const [formScheduledAt, setFormScheduledAt] = useState('')
+  const [schedEditId, setSchedEditId] = useState<string | null>(null)
+  const [schedEditVal, setSchedEditVal] = useState('')
+  const [schedSaving, setSchedSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const answerKeyRef = useRef<HTMLInputElement>(null)
   const thumbnailRef = useRef<HTMLInputElement>(null)
@@ -2543,6 +2740,9 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
     try {
       const params = new URLSearchParams({ pageSize: '100' })
       if (filterGrade) params.set('grade', filterGrade)
+      /* (25-ب1) إثبات الأدمن (adminId + isAdmin على السيرفر) — عشان اللوحة
+         تشوف العناصر المجدولة كمان (الطالب ميشوفهاش لحد الموعد) */
+      if ((isHomeworkManager || isExamManager) && currentAdminId) params.set('adminId', currentAdminId)
       const res = await fetch(`${apiPath}?${params}`)
       if (!res.ok) {
         try { const errData = await res.json(); toast.error('خطأ في تحميل: ' + (errData.error || ''), { description: apiPath, duration: 8000 }) } catch { toast.error('خطأ في السيرفر', { description: apiPath, duration: 8000 }) }
@@ -2768,6 +2968,10 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       if (answerKeyPathRef.val) { body.answerKeyPath = answerKeyPathRef.val; body.answerKeyType = answerKeyTypeRef.val }
       if (thumbnailPathRef.val) { body.thumbnail = thumbnailPathRef.val }
       if (supportMCQ && mcqQuestions.length > 0) { body.questions = JSON.stringify(mcqQuestions) }
+      /* (25-ب1) موعد ظهور الواجب للطلاب (اختياري — فاضي = يظهر فورًا) */
+      if (isHomeworkManager && formScheduledAt.trim()) {
+        try { body.scheduledAt = new Date(formScheduledAt).toISOString() } catch (e) {}
+      }
       // نماذج الامتحان — مع طريقة التوزيع (عشوائي أو نموذج واحد ثابت للكل)
       if (isExamManager && examModels.length > 0) {
         body.models = JSON.stringify(examModels)
@@ -2776,7 +2980,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       }
       const res = await fetch(apiPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (res.ok) {
-        toast.success('تم الإضافة بنجاح'); setShowForm(false); setFormValues({}); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setMcqQuestions([]); setExamModels([]); loadItems(false); onRefresh()
+        toast.success('تم الإضافة بنجاح'); setShowForm(false); setFormValues({}); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setMcqQuestions([]); setExamModels([]); setFormScheduledAt(''); loadItems(false); onRefresh()
       } else { try { const d = await res.json(); toast.error(d.error || 'خطأ', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر - حاول تاني', { duration: 8000 }) } }
     } catch (err: any) { toast.error('خطأ في الاتصال: ' + (err.message || ''), { duration: 8000 }) }
     setSubmitting(false)
@@ -2784,6 +2988,30 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
 
   const handleDelete = async (id: string) => {
     try { await fetch(`${apiPath}/${id}`, { method: 'DELETE' }); toast.success('تم الحذف'); loadItems(false); onRefresh() } catch { toast.error('خطأ') }
+  }
+
+  /* (25-ب1) PATCH موعد ظهور الواجب — تحقق الأدمن على السيرفر
+     (scheduledAt = null → إلغاء الجدولة والظهور فورًا) */
+  const patchHwSchedule = async function (id: string, scheduledAt: string | null, okMsg: string) {
+    if (!currentAdminId) { toast.error('مفيش جلسة أدمن — سجل دخول تاني', { duration: 8000 }); return }
+    setSchedSaving(true)
+    try {
+      var res = await fetch(`${apiPath}/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId: currentAdminId, scheduledAt }),
+      })
+      if (res.ok) {
+        toast.success(okMsg)
+        setSchedEditId(null); setSchedEditVal('')
+        loadItems(false); if (onRefresh) onRefresh()
+      } else {
+        var d: any = {}
+        try { d = await res.json() } catch (e) {}
+        toast.error(d.error || 'خطأ في الحفظ', { duration: 8000 })
+      }
+    } catch { toast.error('خطأ في الاتصال', { duration: 8000 }) }
+    setSchedSaving(false)
   }
 
   return (
@@ -2820,6 +3048,18 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
                 )}
               </div>
             ))}
+            {/* (25-ب1) جدولة ظهور الواجب — قبل الموعد الطالب مش شايف الواجب خالص */}
+            {isHomeworkManager && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">موعد ظهور الواجب للطلاب (اختياري — فاضي = يظهر فورًا)</Label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Input type="datetime-local" value={formScheduledAt} onChange={(e) => setFormScheduledAt(e.target.value)} placeholder="يظهر فورًا" className="h-9 text-sm max-w-[240px]" />
+                  {formScheduledAt && (
+                    <Button type="button" variant="ghost" size="sm" className="h-8 text-[11px] text-destructive" onClick={() => setFormScheduledAt('')}>إلغاء الموعد</Button>
+                  )}
+                </div>
+              </div>
+            )}
             {supportFileUpload && (
               <div className="space-y-1.5">
                 <Label className="text-xs">نموذج الأسئلة (رفع ملف أو رابط)</Label>
@@ -2975,7 +3215,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
             {uploadMsg && <p className="text-xs text-primary animate-pulse">{uploadMsg}</p>}
             <div className="flex gap-2">
               <Button size="sm" onClick={handleSubmit} disabled={submitting || uploading}>{submitting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ'}</Button>
-              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormValues({}); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setMcqQuestions([]); setExamModels([]); setModelMode('random'); setFixedModelName(''); setUploadMsg('') }}>إلغاء</Button>
+              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormValues({}); setFormFile(null); setFormFilePath(''); setFormFileUrl(''); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setMcqQuestions([]); setExamModels([]); setModelMode('random'); setFixedModelName(''); setFormScheduledAt(''); setUploadMsg('') }}>إلغاء</Button>
             </div>
           </div>
         )}
@@ -2984,12 +3224,17 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
         ) : (
           <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
             {items.map((item: any) => (
-              <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 rounded-lg border bg-card">
+              <div key={item.id} className="p-3 rounded-lg border bg-card space-y-2">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div className="space-y-1 min-w-0 flex-1">
                   <p className="font-semibold text-sm">{renderTitle(item)}</p>
                   <p className="text-xs text-muted-foreground truncate max-w-md">{renderSubtitle(item)}</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="secondary" className="text-[10px]">{item.grade}</Badge>
+                    {/* (25-ب1) بادج «مجدول» — الواجب مخفي عن الطلاب لحد الموعد */}
+                    {isHomeworkManager && isScheduledFuture((item as any).scheduledAt) && (
+                      <Badge className="text-[10px] bg-blue-500 text-white" title={'يظهر ' + formatEgyptian((item as any).scheduledAt)}>مجدول — يظهر {formatEgyptian((item as any).scheduledAt)}</Badge>
+                    )}
                     {(item as any).thumbnail && <Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-600">صورة</Badge>}
                     {item.filePath && <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">أسئلة</Badge>}
                     {item.answerKeyPath && <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">إجابة</Badge>}
@@ -3004,8 +3249,41 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
                   {supportMCQ && (
                     <EditQuestionsButton onClick={function () { setEditTarget(item) }} label="" />
                   )}
+                  {/* (25-ب1) تعديل/إلغاء موعد ظهور الواجب */}
+                  {isHomeworkManager && (
+                    <Button size="icon" variant="ghost"
+                      className={'h-8 w-8 shrink-0 ' + (isScheduledFuture((item as any).scheduledAt) ? 'text-blue-600' : 'text-muted-foreground')}
+                      title="موعد ظهور الواجب للطلاب"
+                      onClick={function () {
+                        if (schedEditId === item.id) { setSchedEditId(null); setSchedEditVal('') }
+                        else { setSchedEditId(item.id); setSchedEditVal(toLocalInputValue((item as any).scheduledAt)) }
+                      }}>
+                      📅
+                    </Button>
+                  )}
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0" onClick={() => handleDelete(item.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
+                </div>
+                {/* (25-ب1) محرر الموعد المضغوط */}
+                {isHomeworkManager && schedEditId === item.id && (
+                  <div className="flex items-center gap-1.5 flex-wrap p-2 rounded-lg border border-dashed border-blue-500/40 bg-blue-500/5">
+                    <span className="text-[10px] font-medium shrink-0">موعد الظهور:</span>
+                    <Input type="datetime-local" value={schedEditVal} onChange={function (e) { setSchedEditVal(e.target.value) }}
+                      placeholder="يظهر فورًا" className="h-7 text-[11px] max-w-[220px]" />
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-[10px] px-2"
+                      disabled={schedSaving || !schedEditVal}
+                      onClick={function () { patchHwSchedule(item.id, schedEditVal ? new Date(schedEditVal).toISOString() : null, 'تم تحديث موعد ظهور الواجب') }}>
+                      حفظ الموعد
+                    </Button>
+                    {isScheduledFuture((item as any).scheduledAt) && (
+                      <Button type="button" variant="ghost" size="sm" className="h-7 text-[10px] px-2 text-destructive"
+                        disabled={schedSaving}
+                        onClick={function () { patchHwSchedule(item.id, null, 'تم إلغاء الجدولة — الواجب ظاهر للطلاب فورًا') }}>
+                        إلغاء الجدولة
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -3047,12 +3325,17 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [numQuestions, setNumQuestions] = useState(10)
   const [inputMode, setInputMode] = useState<'file' | 'youtube'>('file')
+  /* (25-ب1) إعدادات الامتحان قبل الحفظ: إظهار الإجابات + المؤقت + موعد الظهور */
+  const [examShowResult, setExamShowResult] = useState(false)
+  const [examTimeLimit, setExamTimeLimit] = useState('')
+  const [examScheduledAt, setExamScheduledAt] = useState('')
 
   var resetAll = function() {
     setStep(1); setExtractType('exam'); setGrade(''); setTitle('')
     setFile(null); setFileUrl(''); setAnswerFile(null); setAnswerUrl('')
     setExtractedQuestions([]); setStatusMsg('')
     setYoutubeUrl(''); setNumQuestions(10); setInputMode('file')
+    setExamShowResult(false); setExamTimeLimit(''); setExamScheduledAt('')
   }
 
   var canProceedStep1 = extractType && grade.trim() && title.trim()
@@ -3167,6 +3450,15 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       var fd = new FormData()
       fd.append('type', extractType); fd.append('grade', grade); fd.append('title', title)
       fd.append('questions', JSON.stringify(extractedQuestions))
+      /* (25-ب1) إعدادات الامتحان: إظهار الإجابات + المؤقت + موعد الظهور
+         (بتخزن من /api/ai/extract-and-save وبتتعدل لاحقًا من تاب الامتحانات) */
+      if (extractType === 'exam') {
+        fd.append('showResult', examShowResult ? 'true' : 'false')
+        fd.append('timeLimitMin', examTimeLimit.trim() === '' ? '0' : String(Math.max(0, Number(examTimeLimit) || 0)))
+      }
+      if (examScheduledAt.trim()) {
+        try { fd.append('scheduledAt', new Date(examScheduledAt).toISOString()) } catch (e) {}
+      }
       var res = await fetch('/api/ai/extract-and-save', { method: 'POST', body: fd })
       var data = await res.json()
       if (res.ok && data.success) { toast.success(data.message || 'تم الحفظ بنجاح!'); onRefresh(); resetAll() }
@@ -3420,6 +3712,45 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
           <Button variant="outline" size="sm" onClick={addQuestion}><Plus className="h-4 w-4 ml-1" />إضافة سؤال اختيارات</Button>
           <Button variant="outline" size="sm" onClick={addWritingQuestion} className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10"><Plus className="h-4 w-4 ml-1" />إضافة سؤال مقالي</Button>
         </div>
+        {/* ===== (25-ب1) إعدادات الامتحان قبل الحفظ — طلبات المستر:
+             سوتش إظهار الإجابات (افتراضي مطفأ) + المؤقت بالدقائق + موعد الظهور ===== */}
+        {extractType === 'exam' && (
+          <div className="space-y-3 p-3 rounded-lg border border-dashed border-emerald-400/50 bg-emerald-500/5">
+            <div>
+              <Label className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">إعدادات الامتحان</Label>
+              <p className="text-[10px] text-muted-foreground mt-0.5">تقدر تعدلها في أي وقت لاحقًا من تاب «الامتحانات»</p>
+            </div>
+            <div className="flex items-center justify-between gap-3 p-2 rounded-lg border bg-background">
+              <div className="min-w-0">
+                <p className="text-xs font-medium">إظهار الإجابات للطالب بعد التسليم</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {examShowResult
+                    ? 'الطالب هيشوف نتيجة الاختياري والأخطاء فور التسليم'
+                    : 'الطالب هيشوف «انتظر النتيجة من المستر» فقط (افتراضي)'}
+                </p>
+              </div>
+              <Switch checked={examShowResult} onCheckedChange={function (v) { setExamShowResult(v) }} />
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">مدة الامتحان بالدقائق (اختياري)</Label>
+                <Input type="number" min={1} value={examTimeLimit}
+                  onChange={function (e) { setExamTimeLimit(e.target.value) }}
+                  placeholder="بلا وقت" className="w-36 h-8 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">موعد ظهور الامتحان للطلاب (اختياري)</Label>
+                <Input type="datetime-local" value={examScheduledAt}
+                  onChange={function (e) { setExamScheduledAt(e.target.value) }}
+                  placeholder="يظهر فورًا" className="h-8 text-xs" />
+              </div>
+              {examScheduledAt && (
+                <Button type="button" variant="ghost" size="sm" className="h-8 text-[11px] text-destructive"
+                  onClick={function () { setExamScheduledAt('') }}>إلغاء الموعد (يظهر فورًا)</Button>
+              )}
+            </div>
+          </div>
+        )}
         <div className="flex gap-2 pt-2">
           <Button className="flex-1" onClick={handleSave} disabled={saving || extractedQuestions.length === 0}>
             {saving ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Save className="h-4 w-4 ml-1" />}

@@ -17,6 +17,30 @@ export async function POST(request) {
     var title = formData.get('title') || ''
     var questionsJson = formData.get('questions') || '[]'
 
+    /* (25-ب1) إعدادات الامتحان الجديدة (تتبعت من AIExtractionPanel):
+       showResult (سوتش إظهار الإجابات) + timeLimitMin (مؤقت بالدقائق)
+       + scheduledAt (موعد ظهور للطلاب — فاضي = يظهر فورًا) */
+    var showResultRaw = formData.get('showResult')
+    var timeLimitRaw = formData.get('timeLimitMin')
+    var scheduledAtRaw = formData.get('scheduledAt') || ''
+    var showResult = showResultRaw === 'true' || showResultRaw === '1' || showResultRaw === 1
+    var timeLimitMin = parseInt(String(timeLimitRaw === null || timeLimitRaw === undefined || timeLimitRaw === '' ? '0' : timeLimitRaw), 10)
+    if (isNaN(timeLimitMin) || timeLimitMin < 0) timeLimitMin = 0
+    var scheduledDate = null
+    if (String(scheduledAtRaw).trim()) {
+      try {
+        var sd = new Date(String(scheduledAtRaw).trim())
+        if (!isNaN(sd.getTime())) scheduledDate = sd
+      } catch (e) {}
+    }
+
+    /* defensive ALTERs (نفس نمط المشروع — ممنوع db:push) عشان الكتابة
+       بالحقول الجديدة ماتفشلش لو الداتابيز لسه قديمة */
+    try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN showResult INTEGER DEFAULT 0') } catch (e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN timeLimitMin INTEGER DEFAULT 0') } catch (e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN scheduledAt DATETIME') } catch (e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE Homework ADD COLUMN scheduledAt DATETIME') } catch (e) {}
+
     if (!grade.trim()) {
       return NextResponse.json({ error: 'Grade is required' }, { status: 400 })
     }
@@ -104,7 +128,11 @@ export async function POST(request) {
             grade: grade,
             content: questions.length + ' questions extracted by AI',
             questions: questionsStr,
-            passScore: 50
+            passScore: 50,
+            /* (25-ب1) إعدادات الامتحان: إظهار الإجابات + المؤقت + جدولة الظهور */
+            showResult: showResult,
+            timeLimitMin: timeLimitMin,
+            scheduledAt: scheduledDate,
           }
         })
       })
@@ -120,7 +148,9 @@ export async function POST(request) {
             title: title.trim(),
             grade: grade,
             content: questions.length + ' questions extracted by AI',
-            questions: questionsStr
+            questions: questionsStr,
+            /* (25-ب1) موعد ظهور الواجب للطلاب (اختياري — فاضي = فورًا) */
+            scheduledAt: scheduledDate,
           }
         })
       })

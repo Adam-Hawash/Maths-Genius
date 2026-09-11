@@ -71,6 +71,36 @@ export async function GET(request: NextRequest) {
   // Student pre-submit check: specific exam + student (raw SQL)
   if (studentId && examId) {
     try {
+      /* (و25) كان بيرجع {id, examId} بس — فزرار «تحديث الملاحظات» في كارت
+         النتيجة (امتحانات showResult) عمره ما كان هيجيب تصحيح المقالي.
+         دلوقتي: لو المستر مفعّل «إظهار الإجابات» للامتحان ده → نتيجة الطالب
+         كاملة (score + writingGrades). الامتحان المخفي (showResult=0) بيفضل
+         مقفول بالحرف — قرار و12 حاكم عليه زي ما هو. */
+      var showResRows: any[] = []
+      try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN showResult INTEGER DEFAULT 0') } catch (e) {}
+      try {
+        showResRows = await db.$queryRawUnsafe('SELECT showResult FROM Exam WHERE id = ? LIMIT 1', examId)
+      } catch (e) {}
+      var showOn = !!(showResRows && showResRows.length > 0 && (showResRows[0].showResult === 1 || showResRows[0].showResult === true))
+      if (showOn) {
+        try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN writingResults TEXT DEFAULT ""') } catch (e) {}
+        var fullRows = await db.$queryRawUnsafe(
+          'SELECT id, examId, studentId, score, maxScore, submittedAt, writingGrades FROM ExamResult WHERE studentId = ? AND examId = ? LIMIT 1',
+          studentId, examId
+        )
+        var withGrades: any[] = []
+        for (var wi2 = 0; wi2 < (fullRows || []).length; wi2++) {
+          var rRow = fullRows[wi2]
+          var wgArr: any[] = []
+          try { wgArr = rRow.writingGrades ? JSON.parse(rRow.writingGrades) : [] } catch (e) { wgArr = [] }
+          withGrades.push({
+            id: rRow.id, examId: rRow.examId, studentId: rRow.studentId,
+            score: rRow.score, maxScore: rRow.maxScore, submittedAt: rRow.submittedAt,
+            writingGrades: wgArr,
+          })
+        }
+        return NextResponse.json({ results: withGrades })
+      }
       var rows = await db.$queryRawUnsafe(
         'SELECT id, examId FROM ExamResult WHERE studentId = ? AND examId = ? LIMIT 1',
         studentId, examId
