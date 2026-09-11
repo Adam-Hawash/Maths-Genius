@@ -10,6 +10,28 @@ async function ensureExamFeatureColumns() {
   try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN timeLimitMin INTEGER DEFAULT 0') } catch (e) {}
   try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN scheduledAt DATETIME') } catch (e) {}
   try { await db.$executeRawUnsafe('ALTER TABLE Homework ADD COLUMN scheduledAt DATETIME') } catch (e) {}
+  /* (2026-و26) استهداف الطلاب — نفس نمط الفيديوهات (VideoSchedule.studentIds):
+     JSON array من ids الطلاب — فاضي = الكل يشوفه */
+  try { await db.$executeRawUnsafe("ALTER TABLE Exam ADD COLUMN targetStudentIds TEXT DEFAULT ''") } catch (e) {}
+}
+
+/* (2026-و26) تطبيع قايمة الطلاب المستهدفين — بتوصل array أو JSON string
+   والخروج JSON string نظيفة (بدون تكرار). undefined = مش متغيرة */
+export function normalizeTargetIds(v: unknown): string | undefined {
+  if (v === undefined || v === null) return undefined
+  var arr: unknown[] = []
+  if (Array.isArray(v)) arr = v
+  else {
+    try { var p = JSON.parse(String(v)); if (Array.isArray(p)) arr = p } catch (e) { return '[]' }
+  }
+  var clean = arr.map(function (x) { return String(x == null ? '' : x).trim() }).filter(Boolean)
+  clean = clean.filter(function (x, i) { return clean.indexOf(x) === i })
+  return JSON.stringify(clean)
+}
+
+/* (2026-و26) قراءة قايمة الاستهداف من صف */
+function parseTargetIds(raw: unknown): string[] {
+  try { var p = JSON.parse(String(raw || '[]')); return Array.isArray(p) ? p : [] } catch (e) { return [] }
 }
 
 // Normalize grade names so old and new naming conventions match
@@ -125,9 +147,20 @@ export async function GET(request: NextRequest) {
       db.exam.count({ where }),
     ])
 
+    /* (2026-و26) استهداف الطلاب (نفس نمط الفيديوهات): الامتحان الموجه
+       لطلاب محددين **مش بيوصل** غير للي اسمه في القايمة — الفلتر هنا
+       على السيرفر فمفيش أي بيانات بتسرب للطالب المستبعد */
+    let visibleExams = exams as unknown as any[]
+    if (!admin) {
+      visibleExams = visibleExams.filter(function (e) {
+        var t = parseTargetIds(e && (e as any).targetStudentIds)
+        return t.length === 0 || (!!studentId && t.indexOf(studentId) !== -1)
+      })
+    }
+
     // توزيع النموذج للطالب (عشوائي ثابت أو نموذج واحد ثابت للكل حسب اختيار
     // المستر) — وإلا الامتحان زي ما هو
-    let outExams = studentId ? exams.map(function (e: any) { return applyModelForStudent(e, studentId) }) : exams
+    let outExams = studentId ? visibleExams.map(function (e: any) { return applyModelForStudent(e, studentId) }) : visibleExams
 
     /* (25-ب1) للأدمن بس: بادج «مجدول» — العناصر اللي موعدها في المستقبل
        بترجع مع flag scheduled: true عشان اللوحة تعرضها بوضوح */
@@ -149,7 +182,7 @@ export async function POST(request: NextRequest) {
   try {
     await ensureExamFeatureColumns()
     const body = await request.json()
-    const { title, content, grade, filePath, fileType, questions, models, modelMode, fixedModel, passScore, answerKeyPath, answerKeyType, thumbnail, showResult, timeLimitMin, scheduledAt } = body
+    const { title, content, grade, filePath, fileType, questions, models, modelMode, fixedModel, passScore, answerKeyPath, answerKeyType, thumbnail, showResult, timeLimitMin, scheduledAt, targetStudentIds } = body
 
     if (!title || !grade) {
       return NextResponse.json({ error: 'Title and grade are required' }, { status: 400 })
@@ -168,6 +201,10 @@ export async function POST(request: NextRequest) {
     }
     var timeLimit = parseInt(String(timeLimitMin === undefined || timeLimitMin === null || timeLimitMin === '' ? '0' : timeLimitMin), 10)
     if (isNaN(timeLimit) || timeLimit < 0) timeLimit = 0
+
+    /* (2026-و26) استهداف الطلاب: array ids → JSON string (فاضي = الكل) */
+    var targetIds = normalizeTargetIds(targetStudentIds)
+    if (targetIds === undefined) targetIds = '[]'
 
     const exam = await safeWrite(function () {
       return db.exam.create({
@@ -188,6 +225,7 @@ export async function POST(request: NextRequest) {
           showResult: showResult === true || showResult === 'true' || showResult === 1,
           timeLimitMin: timeLimit,
           scheduledAt: scheduledDate,
+          targetStudentIds: targetIds,
         },
       })
     })

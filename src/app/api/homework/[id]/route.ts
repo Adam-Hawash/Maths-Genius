@@ -6,6 +6,8 @@ import { isAdmin } from '@/lib/video-guard'
 /* (25-ب1) جدولة الظهور — defensive ALTER بنفس نمط المشروع (ممنوع db:push) */
 async function ensureHomeworkFeatureColumns() {
   try { await db.$executeRawUnsafe('ALTER TABLE Homework ADD COLUMN scheduledAt DATETIME') } catch (e) {}
+  /* (2026-و26) استهداف الطلاب — نفس نمط الفيديوهات */
+  try { await db.$executeRawUnsafe("ALTER TABLE Homework ADD COLUMN targetStudentIds TEXT DEFAULT ''") } catch (e) {}
 }
 
 // GET /api/homework/[id] - 获取单个作业
@@ -52,21 +54,34 @@ export async function PATCH(
       return NextResponse.json({ error: 'الواجب غير موجود' }, { status: 404 })
     }
 
-    if (body.scheduledAt === undefined) {
+    if (body.scheduledAt === undefined && body.targetStudentIds === undefined) {
       return NextResponse.json({ error: 'لا توجد حقول للتعديل' }, { status: 400 })
     }
 
-    var data: Record<string, unknown>
-    if (body.scheduledAt === null || body.scheduledAt === '') {
-      // إلغاء الجدولة — يظهر فورًا
-      data = { scheduledAt: null }
-    } else {
-      try {
-        var sd = new Date(String(body.scheduledAt))
-        if (isNaN(sd.getTime())) throw new Error('bad date')
-        data = { scheduledAt: sd }
-      } catch (e) {
-        return NextResponse.json({ error: 'صيغة الموعد غير صحيحة' }, { status: 400 })
+    var data: Record<string, unknown> = {}
+
+    /* (2026-و26) استهداف الطلاب: array ids → JSON string (فاضي = الكل) */
+    if (body.targetStudentIds !== undefined) {
+      var tArr: unknown[] = []
+      if (Array.isArray(body.targetStudentIds)) tArr = body.targetStudentIds
+      else { try { var tp = JSON.parse(String(body.targetStudentIds)); if (Array.isArray(tp)) tArr = tp } catch (e) {} }
+      var tClean = tArr.map(function (x) { return String(x == null ? '' : x).trim() }).filter(Boolean)
+      tClean = tClean.filter(function (x: string, i: number) { return tClean.indexOf(x) === i })
+      data.targetStudentIds = JSON.stringify(tClean)
+    }
+
+    if (body.scheduledAt !== undefined) {
+      if (body.scheduledAt === null || body.scheduledAt === '') {
+        // إلغاء الجدولة — يظهر فورًا
+        data.scheduledAt = null
+      } else {
+        try {
+          var sd = new Date(String(body.scheduledAt))
+          if (isNaN(sd.getTime())) throw new Error('bad date')
+          data.scheduledAt = sd
+        } catch (e) {
+          return NextResponse.json({ error: 'صيغة الموعد غير صحيحة' }, { status: 400 })
+        }
       }
     }
 
@@ -74,7 +89,7 @@ export async function PATCH(
       return db.homework.update({ where: { id }, data })
     })
 
-    return NextResponse.json({ message: 'تم تحديث موعد ظهور الواجب', homework })
+    return NextResponse.json({ message: 'تم تحديث إعدادات الواجب', homework })
   } catch (error) {
     console.error('PATCH homework error:', error)
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 })

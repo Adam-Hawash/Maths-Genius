@@ -88,6 +88,9 @@ model Homework {
   // (25-ب1) جدولة الظهور: قبل الموعد الطالب مش شايف الواجب خالص —
   // والأدمن شايفه ببادج «مجدول». null = يظهر فورًا.
   scheduledAt   DateTime?
+  // (2026-و26) استهداف الطلاب — نفس نمط الفيديوهات (VideoSchedule):
+  // JSON array بids طلاب محددين — فاضي "[]" = الكل يشوفه
+  targetStudentIds String      @default("")
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   results       HomeworkResult[]
@@ -135,6 +138,9 @@ model Exam {
   // (3) جدولة الظهور: قبل الموعد الطالب مش شايف الامتحان خالص —
   // والأدمن شايفه ببادج «مجدول». null = يظهر فورًا.
   scheduledAt   DateTime?
+  // (2026-و26) استهداف الطلاب — نفس نمط الفيديوهات (VideoSchedule):
+  // JSON array بids طلاب محددين — فاضي "[]" = الكل يشوفه
+  targetStudentIds String      @default("")
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   results       ExamResult[]
