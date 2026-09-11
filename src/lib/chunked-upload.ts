@@ -13,6 +13,17 @@ function uploadWithTimeout(url: string, options: RequestInit): Promise<Response>
   ])
 }
 
+/* 2026-و19 — محاولة إضافية أوتوماتيكية لكل جزء: فشل شبكة لحظي
+ * مبيفشّلش الرفع كله (المستر كان شايف «فشل الرفع» كتير ببلاش) */
+async function uploadChunkWithRetry(url: string, options: RequestInit): Promise<Response> {
+  try {
+    return await uploadWithTimeout(url, options)
+  } catch (err) {
+    await new Promise((r) => setTimeout(r, 900))
+    return uploadWithTimeout(url, options)
+  }
+}
+
 export async function chunkedUpload(
   file: File,
   category: string,
@@ -33,7 +44,7 @@ export async function chunkedUpload(
     fd.append('fileName', file.name)
     fd.append('category', category)
 
-    const res = await uploadWithTimeout('/api/upload/chunk', { method: 'POST', body: fd })
+    const res = await uploadChunkWithRetry('/api/upload/chunk', { method: 'POST', body: fd })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'فشل الرفع')
     if (onProgress) onProgress(100)
@@ -58,7 +69,7 @@ export async function chunkedUpload(
     if (statusMsg) statusMsg(`جاري رفع الجزء ${i + 1} من ${totalChunks}...`)
     if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 95))
 
-    const res = await uploadWithTimeout('/api/upload/chunk', { method: 'POST', body: fd })
+    const res = await uploadChunkWithRetry('/api/upload/chunk', { method: 'POST', body: fd })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || `خطأ في رفع الجزء ${i + 1}`)
 
