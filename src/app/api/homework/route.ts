@@ -6,6 +6,13 @@ import { isAdmin } from '@/lib/video-guard'
    (ممنوع db:push — كل قاعدة بيانات بتترقّى تلقائيًا هنا) */
 async function ensureHomeworkFeatureColumns() {
   try { await db.$executeRawUnsafe('ALTER TABLE Homework ADD COLUMN scheduledAt DATETIME') } catch (e) {}
+  /* (2026-و26) استهداف الطلاب — نفس نمط الفيديوهات (VideoSchedule.studentIds) */
+  try { await db.$executeRawUnsafe("ALTER TABLE Homework ADD COLUMN targetStudentIds TEXT DEFAULT ''") } catch (e) {}
+}
+
+/* (2026-و26) قراءة قايمة الاستهداف من صف */
+function parseTargetIds(raw: unknown): string[] {
+  try { var p = JSON.parse(String(raw || '[]')); return Array.isArray(p) ? p : [] } catch (e) { return [] }
 }
 
 // Normalize grade names so old and new naming conventions match
@@ -48,6 +55,8 @@ export async function GET(request: NextRequest) {
     // زي /api/videos بالظبط) — الأدمن بس اللي يشوف العناصر المجدولة
     const adminId = searchParams.get('adminId')
     const admin = await isAdmin(adminId)
+    /* (2026-و26) طالب محدد؟ (للفلترة حسب الاستهداف) */
+    const studentId = searchParams.get('studentId') || ''
 
     const where: Record<string, unknown> = {}
     if (grade) {
@@ -81,14 +90,24 @@ export async function GET(request: NextRequest) {
       db.homework.count({ where }),
     ])
 
+    /* (2026-و26) استهداف الطلاب (نفس نمط الفيديوهات): الواجب الموجه
+       لطلاب محددين مش بيوصل غير للي اسمه في القايمة — فلترة على السيرفر */
+    let visibleHw = homework as unknown as any[]
+    if (!admin) {
+      visibleHw = visibleHw.filter(function (h) {
+        var t = parseTargetIds(h && (h as any).targetStudentIds)
+        return t.length === 0 || (!!studentId && t.indexOf(studentId) !== -1)
+      })
+    }
+
     /* (25-ب1) للأدمن بس: بادج «مجدول» — العناصر اللي موعدها في المستقبل
        بترجع مع flag scheduled: true عشان اللوحة تعرضها بوضوح */
     const outHomework = admin
-      ? homework.map(function (h: any) {
+      ? visibleHw.map(function (h: any) {
           var isScheduled = h && h.scheduledAt ? new Date(h.scheduledAt).getTime() > Date.now() : false
           return { ...h, scheduled: isScheduled }
         })
-      : homework
+      : visibleHw
 
     return NextResponse.json({ homework: outHomework, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
   } catch (error: any) {
@@ -101,7 +120,7 @@ export async function POST(request: NextRequest) {
   try {
     await ensureHomeworkFeatureColumns()
     const body = await request.json()
-    const { title, content, grade, filePath, fileType, answerKeyPath, answerKeyType, thumbnail, questions, scheduledAt } = body
+    const { title, content, grade, filePath, fileType, answerKeyPath, answerKeyType, thumbnail, questions, scheduledAt, targetStudentIds } = body
 
     if (!title || !grade) {
       return NextResponse.json({ error: 'Title and grade are required' }, { status: 400 })
@@ -116,9 +135,20 @@ export async function POST(request: NextRequest) {
       } catch (e) {}
     }
 
+    /* (2026-و26) استهداف الطلاب: array ids → JSON string (فاضي = الكل) */
+    var targetIds = '[]'
+    if (targetStudentIds !== undefined && targetStudentIds !== null) {
+      var tArr: unknown[] = []
+      if (Array.isArray(targetStudentIds)) tArr = targetStudentIds
+      else { try { var tp = JSON.parse(String(targetStudentIds)); if (Array.isArray(tp)) tArr = tp } catch (e) {} }
+      var tClean = tArr.map(function (x) { return String(x == null ? '' : x).trim() }).filter(Boolean)
+      tClean = tClean.filter(function (x: string, i: number) { return tClean.indexOf(x) === i })
+      targetIds = JSON.stringify(tClean)
+    }
+
     const homework = await safeWrite(function () {
       return db.homework.create({
-        data: { title, content: content || '', grade, filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '', questions: questions || '', scheduledAt: scheduledDate },
+        data: { title, content: content || '', grade, filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '', questions: questions || '', scheduledAt: scheduledDate, targetStudentIds: targetIds },
       })
     })
 

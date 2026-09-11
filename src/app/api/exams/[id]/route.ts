@@ -8,6 +8,7 @@ async function ensureExamFeatureColumns() {
   try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN showResult INTEGER DEFAULT 0') } catch (e) {}
   try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN timeLimitMin INTEGER DEFAULT 0') } catch (e) {}
   try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN scheduledAt DATETIME') } catch (e) {}
+  try { await db.$executeRawUnsafe("ALTER TABLE Exam ADD COLUMN targetStudentIds TEXT DEFAULT ''") } catch (e) {}
 }
 
 // GET /api/exams/[id] - 获取单个考试
@@ -82,6 +83,16 @@ export async function PATCH(
           return NextResponse.json({ error: 'صيغة الموعد غير صحيحة' }, { status: 400 })
         }
       }
+    }
+
+    /* (2026-و26) استهداف الطلاب: array ids → JSON string (فاضي = الكل يشوفه) */
+    if (body.targetStudentIds !== undefined) {
+      var arr: unknown[] = []
+      if (Array.isArray(body.targetStudentIds)) arr = body.targetStudentIds
+      else { try { var pp = JSON.parse(String(body.targetStudentIds)); if (Array.isArray(pp)) arr = pp } catch (e) {} }
+      var cleanIds = arr.map(function (x) { return String(x == null ? '' : x).trim() }).filter(Boolean)
+      cleanIds = cleanIds.filter(function (x: string, i: number) { return cleanIds.indexOf(x) === i })
+      data.targetStudentIds = JSON.stringify(cleanIds)
     }
 
     if (Object.keys(data).length === 0) {
