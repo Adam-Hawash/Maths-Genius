@@ -25,6 +25,7 @@ import {
   LayoutDashboard,
   Shield,
   Youtube,
+  Shapes,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -112,6 +113,15 @@ export function Navbar() {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-2">
+            {/* Geometry Laws — قوانين الهندسة (طلب المستر: حاجة اسمها بالانجليزي جنب الرئيسية) */}
+            <a
+              href="/geometry-laws"
+              title="Geometry Laws — كل قوانين الهندسة: مساحات ومحيطات وحجوم"
+              className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-xl text-sm font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+            >
+              <Shapes className="h-4 w-4" />
+              Geometry Laws
+            </a>
             {currentStudent ? (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">
@@ -224,6 +234,15 @@ export function Navbar() {
         {/* Mobile Menu */}
         {mobileMenu && (
           <div className="md:hidden border-t bg-background/95 backdrop-blur-md px-4 py-3 space-y-2">
+            {/* Geometry Laws — قوانين الهندسة (ظاهر للكل: زائر/طالب/أدمن) */}
+            <a
+              href="/geometry-laws"
+              onClick={() => setMobileMenu(false)}
+              className="flex items-center gap-2 min-h-[44px] px-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-sm"
+            >
+              <Shapes className="h-4 w-4" />
+              Geometry Laws — قوانين الهندسة
+            </a>
             {currentStudent ? (
               <>
                 <p className="text-sm text-muted-foreground py-2">

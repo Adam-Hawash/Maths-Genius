@@ -653,6 +653,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
   const [expandedHw, setExpandedHw] = useState<string | null>(null)
   const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number | string>>>({})
   const [hwSubmitting, setHwSubmitting] = useState<string | null>(null)
+  /* 2026-و20 — ممنوع تسليم الواجب لحد ما صور ورقة الحل توصل كاملة */
+  const [hwPhotoBusy, setHwPhotoBusy] = useState<Record<string, boolean>>({})
   const [hwSubmitted, setHwSubmitted] = useState(false)
   const [submittedHwId, setSubmittedHwId] = useState<string | null>(null)
   const [blockedHwId, setBlockedHwId] = useState<string | null>(null)
@@ -1333,6 +1335,9 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                                     return a
                                   })
                                 }}
+                                onUploadStateChange={function(busy: boolean) {
+                                  setHwPhotoBusy(function(prev) { return { ...prev, [hw.id]: busy } })
+                                }}
                                 placeholder="اكتب إجابتك هنا أو ارفع صورة للحل..."
                                 rows={4}
                               />
@@ -1343,7 +1348,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                     </div>
                   )}
 
-                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-8 mt-1" disabled={Object.keys(myAnswers).length === 0 && Object.keys(hwAnswers[hw.id] || {}).length === 0 || hwSubmitting === hw.id} onClick={async function() {
+                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-8 mt-1" disabled={Object.keys(myAnswers).length === 0 && Object.keys(hwAnswers[hw.id] || {}).length === 0 || hwSubmitting === hw.id || hwPhotoBusy[hw.id] === true} onClick={async function() {
                     setHwSubmitting(hw.id)
                     try {
                       // Map display answers back to original indices
@@ -1401,7 +1406,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                       }
                     } catch { toast.error('خطأ في الاتصال') }
                     setHwSubmitting(null)
-                  }}>{hwSubmitting === hw.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم الإجابات (' + Object.keys(myAnswers).length + '/' + allQuestions.length + ')'}</Button>
+                  }}>{hwPhotoBusy[hw.id] ? <span className="flex items-center gap-1.5"><Loader2 className="h-4 w-4 animate-spin" /> مستني صورة ورقة الحل تترفع كاملة...</span> : hwSubmitting === hw.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'تسليم الإجابات (' + Object.keys(myAnswers).length + '/' + allQuestions.length + ')'}</Button>
                 </div>
               )}
             </CardContent>
@@ -1461,6 +1466,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [writingAnswers, setWritingAnswers] = useState<Record<number, string>>({})
   const [submitting, setSubmitting] = useState(false)
+  /* 2026-و20 — ممنوع تسليم الامتحان لحد ما صور ورقة الحل توصل كاملة */
+  const [examPhotoBusy, setExamPhotoBusy] = useState(false)
   const [examQuestions, setExamQuestions] = useState<any[]>([])
   const [examShuffleMap, setExamShuffleMap] = useState<number[]>([])
   const [examSubmitted, setExamSubmitted] = useState(false)
@@ -1670,6 +1677,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                         onChange={function(val: string) {
                           setWritingAnswers(function(prev) { return { ...prev, [displayIdx]: val } })
                         }}
+                        onUploadStateChange={function(busy: boolean) {
+                          setExamPhotoBusy(busy)
+                        }}
                         placeholder="اكتب إجابتك هنا أو ارفع صورة..."
                         rows={4}
                       />
@@ -1683,7 +1693,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
 
         <Button
           className="w-full h-11 sm:h-10"
-          disabled={submitting}
+          disabled={submitting || examPhotoBusy}
           onClick={async () => {
             setSubmitting(true)
             try {
@@ -1754,7 +1764,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
             setSubmitting(false)
           }}
         >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : `تسليم الامتحان (${Object.keys(answers).length + Object.keys(writingAnswers).length}/${examQuestions.length})`}
+          {examPhotoBusy ? <span className="flex items-center justify-center gap-1.5"><Loader2 className="h-4 w-4 animate-spin" /> مستني صورة ورقة الحل تترفع كاملة...</span> : submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : `تسليم الامتحان (${Object.keys(answers).length + Object.keys(writingAnswers).length}/${examQuestions.length})`}
         </Button>
       </div>
     )
