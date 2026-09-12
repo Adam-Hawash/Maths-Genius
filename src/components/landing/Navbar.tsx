@@ -26,14 +26,20 @@ import {
   Shield,
   Youtube,
   Shapes,
+  Trophy,
 } from 'lucide-react'
 import { toast } from 'sonner'
+/* (2026-و29) «أوائل الطلبة» في النافبار — طلب المستر: زرار جنب Geometry
+   يفتح دايلوج بأول 3 طلاب — والقسم اتشال من الصفحة الرئيسية */
+import { TopStudentsDialog } from './TopStudentsDialog'
 
 export function Navbar() {
   const { theme, setTheme } = useTheme()
   const emptySubscribe = () => () => {}
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
   const [mobileMenu, setMobileMenu] = useState(false)
+  /* (2026-و29) دايلوج أوائل الطلبة */
+  const [topStudentsOpen, setTopStudentsOpen] = useState(false)
 
   const {
     currentView,
@@ -122,6 +128,16 @@ export function Navbar() {
               <Shapes className="h-4 w-4" />
               Geometry Laws
             </a>
+            {/* (2026-و29) أوائل الطلبة — دايلوج أول 3 طلاب (والقسم اتشال من الرئيسية) */}
+            <button
+              type="button"
+              onClick={function () { setTopStudentsOpen(true) }}
+              title="أوائل الطلبة — أفضل 3 طلاب"
+              className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-xl text-sm font-bold text-[#8A6D22] dark:text-[#E5BE5A] hover:bg-[#C49A38]/10 transition-colors cursor-pointer"
+            >
+              <Trophy className="h-4 w-4" />
+              أوائل الطلبة
+            </button>
             {currentStudent ? (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">
@@ -187,15 +203,28 @@ export function Navbar() {
           {/* YouTube + Theme Toggle + Mobile Menu Button */}
           <div className="flex items-center gap-2">
             {/* Geometry Laws — ظاهر على طول في الموبايل فوق من غير فتح القائمة
-                (طلب المستر: «عاوزه يبقى باين في الموبايل») */}
+                (طلب المستر: «عاوزه يبقى باين في الموبايل»)
+                (2026-و29) طلب المستر: الأيقونة لوحدها مش كفاية — اكتبوا Geometry جنبها */}
             <a
               href="/geometry-laws"
               title="Geometry Laws — قوانين الهندسة"
               aria-label="Geometry Laws — قوانين الهندسة"
-              className="md:hidden flex items-center justify-center min-h-[44px] min-w-[44px] rounded-xl text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
+              className="md:hidden flex items-center gap-1 min-h-[44px] px-2.5 rounded-xl text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
             >
               <Shapes className="h-5 w-5" />
+              <span dir="ltr" className="text-xs font-bold">Geometry</span>
             </a>
+            {/* (2026-و29) «أوائل الطلبة» في الموبايل جنب Geometry — دايلوج أول 3 طلاب */}
+            <button
+              type="button"
+              onClick={function () { setTopStudentsOpen(true) }}
+              title="أوائل الطلبة — أفضل 3"
+              aria-label="أوائل الطلبة — أفضل 3 طلاب"
+              className="md:hidden flex items-center gap-1 min-h-[44px] px-2.5 rounded-xl text-[#8A6D22] dark:text-[#E5BE5A] bg-[#C49A38]/10 border border-[#C49A38]/40 hover:bg-[#C49A38]/20 transition-colors cursor-pointer"
+            >
+              <Trophy className="h-5 w-5" />
+              <span className="text-xs font-bold">الأوائل</span>
+            </button>
             {youtubeLink && (
               <a
                 href={youtubeLink}
@@ -253,6 +282,15 @@ export function Navbar() {
               <Shapes className="h-4 w-4" />
               Geometry Laws — قوانين الهندسة
             </a>
+            {/* (2026-و29) أوائل الطلبة في قايمة الموبايل كمان */}
+            <button
+              type="button"
+              onClick={function () { setMobileMenu(false); setTopStudentsOpen(true) }}
+              className="flex items-center gap-2 min-h-[44px] px-3 rounded-xl border border-[#C49A38]/40 bg-[#C49A38]/10 text-[#8A6D22] dark:text-[#E5BE5A] font-bold text-sm cursor-pointer"
+            >
+              <Trophy className="h-4 w-4" />
+              أوائل الطلبة
+            </button>
             {currentStudent ? (
               <>
                 <p className="text-sm text-muted-foreground py-2">
@@ -319,6 +357,9 @@ export function Navbar() {
           </div>
         )}
       </header>
+
+      {/* (2026-و29) دايلوج أوائل الطلبة — أول 3 طلاب */}
+      <TopStudentsDialog open={topStudentsOpen} onOpenChange={setTopStudentsOpen} />
 
       {/* Admin Login Dialog - Hidden Entry Point */}
       <AdminLoginDialog />
