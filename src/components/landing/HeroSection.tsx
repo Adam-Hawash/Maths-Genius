@@ -47,7 +47,7 @@ export default function HeroSection() {
       var img2 = new Image()
       img2.onload = function () { setFallbackPhotoExists(true) }
       img2.onerror = function () { setFallbackPhotoExists(false) }
-      img2.src = '/images/instructor.webp'
+      img2.src = '/images/mr-wael-photo.webp'
     } else {
       setFallbackPhotoExists(false)
     }
@@ -55,7 +55,11 @@ export default function HeroSection() {
 
   const dbPhoto = cfg.instructor_photo || ''
   const dbBg = cfg.hero_bg_image || ''
-  const heroPhoto = dbPhoto || '/images/instructor.webp'
+  /* (2026-و31) طلب المستر: «صورة المعلم تكون هي الأساسية والبديلة، ما تحطش حاجة من دماغك»
+     الرابط القديم /images/instructor.webp كان شايل صورة تانية من القالب القديم ومتخزن
+     في كاش الطلاب — فالصورة بقت على رابط جديد خالص mr-wael-photo.webp يكسر الكاش،
+     والأساسية (قاعدة البيانات) والبديلة نفس الملف بالظبط */
+  const heroPhoto = dbPhoto || '/images/mr-wael-photo.webp'
   const heroBg = dbBg || '/images/hero-bg.jpg'
 
   const showBg = !!dbBg || fallbackBgExists

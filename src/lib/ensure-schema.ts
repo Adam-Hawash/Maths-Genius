@@ -115,6 +115,13 @@ var SCHEMA_FIXES = [
   // النافيبار بالعربي: مستر وائل خضير — من غير العصاية (|) ومن غير الإنجليزي (طلب المستر)
   "UPDATE SiteConfig SET value = 'مستر وائل خضير' WHERE key = 'navbar_subtitle' AND (value LIKE '%خضير%' OR value LIKE '%Khadir%' OR value LIKE '%Khodair%' OR value LIKE '%Khudair%' OR value LIKE '%Khodier%' OR value LIKE '%El-Kh%' OR value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%|%')",
   "UPDATE SiteConfig SET value = 'مستر وائل خضير' WHERE key IN ('hero_title_line2', 'instructor_name') AND (value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%الخضيري%')",
+  // ===== (2026-و31) صورة المعلم = الأساسية والبديلة (طلب المستر حرفيًا: «صورة المعلم
+  // تكون هي الأساسية والبديلة، ما تحطش حاجة من دماغك») =====
+  // روابط الصور القديمة (i.imghos.co) كانت متخزنة في الكاش عند الطلاب بصورة مش
+  // بتاعة المستر — بتتحول لملف محلي جديد خالص (mr-wael-photo.webp) يكسر الكاش،
+  // فيبقى الأساسي (قاعدة البيانات) والبديل (الفولباك في الكود) نفس الصورة بالظبط.
+  // مرة واحدة فقط (idempotent): لو الأدمن رفع صورة تانية بعدين مش هتتلمس.
+  "UPDATE SiteConfig SET value = '/images/mr-wael-photo.webp' WHERE key IN ('instructor_photo', 'site_logo', 'favicon_url') AND (value LIKE '%i.imghos.co%' OR value LIKE '%instructor.webp%')",
   // ===== ترحيل لمرة واحدة (idempotent) =====
   // الحسابات الموجودة اللي ملهاش ربط إنشاء: نثبّت الربط الحالي كـ"جهاز إنشاء"
   // عشان مفيش حساب يتحجب فجأة بعد الترقية. الربط ده بعدها **ثابت** — أي جهاز
