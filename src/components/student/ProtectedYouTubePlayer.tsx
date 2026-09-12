@@ -1030,7 +1030,7 @@ export function ProtectedYouTubePlayer({
             <img src={poster} alt="فيديو الدرس" className="w-full h-full object-cover bg-black" draggable={false} />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src="/images/mr-wael-cover.png" alt="Mr.Wael Khodair" className="w-full h-full object-contain bg-black" draggable={false} />
+            <img src="/images/mr-wael-cover-v2.png" alt="Mr.Wael Khodair" className="w-full h-full object-contain bg-black" draggable={false} />
           )}
           <div className={'absolute inset-0 ' + (poster ? 'bg-black/30' : 'bg-black/45')}>
             <div
