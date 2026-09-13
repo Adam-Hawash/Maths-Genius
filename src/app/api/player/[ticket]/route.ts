@@ -1664,7 +1664,9 @@ function cloudVariants(src){
 }
 function cloudUrlFor(h){
   if(!cloudBase) return '';
-  if(!h) return cloudBase;
+  /* (تصليب) -1 أو 0 = الجودة الأصلية — من غير أي transformations
+     (من غير الشرط ده كان -1 بيتبني لينك بايظ c_scale,h_-1) */
+  if(!h || h < 0) return cloudBase;
   return cloudBase.replace('/video/upload/', '/video/upload/c_scale,h_' + h + ',q_auto/');
 }
 /* (و35) تبديل الجودة في نفس المكان — نفس الثانية ونفس حالة التشغيل */
