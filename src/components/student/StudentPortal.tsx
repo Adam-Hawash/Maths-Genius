@@ -2973,7 +2973,7 @@ function StudentGuide({ onClose, onEnterPortal }: { onClose: () => void; onEnter
     {
       icon: Megaphone,
       title: 'التنبيهات',
-      desc: 'تاب "التنبيهات" فيه كل الإعلانات المهمة من المستر - مواعيد، اخبار، وملاحظات مهمة. دايماً تابعها.',
+      desc: 'تاب "التنبيهات" فيه كل الإعلانات المهمة من المستر - مواعيد، أخبار، وملاحظات مهمة. دايماً تابعها.',
       color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30',
     },
     {
