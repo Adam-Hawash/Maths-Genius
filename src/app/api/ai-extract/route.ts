@@ -407,7 +407,11 @@ function buildSingleFilePrompt(grade: string, type: string): string {
   lines.push('- TABLES: if the question shows a table, return "table" reproducing it EXACTLY: {"headers":["x","f(x)","(x, f(x))"],"rows":[[{"t":"-2"},{"t":"","blank":true},{"t":"","blank":true}]]}.')
   lines.push('  * Printed cells → {"t":"<exact printed text>"}. Cells the STUDENT must fill → {"t":"","blank":true}.')
   lines.push('  * Do NOT blank printed cells, and do NOT fill the blank cells — the student writes inside them.')
-  lines.push('- GRAPHS/DIAGRAMS: if the question contains a graph, plot, or diagram, NEVER flatten it into text: return "figure":{"page":<page number>,"bbox":{"x":..,"y":..,"w":..,"h":..}} where bbox is the bounding rectangle of the figure as FRACTIONS of the WHOLE page image (each value 0..1, x/y = top-left corner, w/h = size).')
+  /* (و43) حاجز صارم للرسومات — كل رسمة/منحنى/شكل هندسي لازم يرجع figure/optionFigures بـ bbox — ممنوع تحويل الرسمة لوصف نصي */
+  lines.push('HARD RULE — FIGURES: for EVERY question (and every MCQ option) that contains or depends on any drawing, graph, plotted curve, geometric shape, diagram, chart, or image-based table: you MUST return figure/optionFigures data: question-level "figure":{"page":<page number>,"bbox":{"x":..,"y":..,"w":..,"h":..}} and option-level "optionFigures":[{"page":<page number>,"bbox":{"x":..,"y":..,"w":..,"h":..}} or null, ...] aligned with the options array.')
+  lines.push('bbox = tight rectangle around the drawing INCLUDING its axes/labels, as FRACTIONS of the WHOLE page image (each value 0..1, x/y = top-left corner, w/h = size).')
+  lines.push('NEVER convert a drawing into text: do NOT describe the graph, do NOT write coordinate tables or step-by-step plotting inside question text or modelAnswer. modelAnswer = concise final results only (example: "axis of symmetry: x = 3, maximum value = 4").')
+  lines.push('If unsure whether something is a figure, treat it AS a figure. Options that are pure images get empty string text plus their optionFigures entry.')
   lines.push('- modelAnswer must include the expected table values when applicable (e.g. "f(-1)=5, f(0)=3 → points (-1,5), (0,3)").')
   lines.push('')
   lines.push('SMART ANSWER RULE (very important — the teacher relies on this):')
@@ -418,7 +422,7 @@ function buildSingleFilePrompt(grade: string, type: string): string {
   lines.push('- Grade: ' + grade + ' | Type: ' + type)
   lines.push('')
   lines.push('Return ONE single valid JSON object — no text before or after, no markdown fences, no fields outside the object:')
-  lines.push('{"title":"...","content":"...","questions":[{"type":"mcq","question":"...","options":["A","B","C","D"],"correct":0,"points":1,"modelAnswer":"step by step solution","sourcePage":1},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"full step by step solution","acceptedAnswers":["5","x=5"],"sourcePage":1,"table":{"headers":["x","f(x)"],"rows":[[{"t":"-1"},{"t":"","blank":true}]]},"figure":{"page":1,"bbox":{"x":0.05,"y":0.3,"w":0.4,"h":0.35}}}],"answerKey":""}')
+  lines.push('{"title":"...","content":"...","questions":[{"type":"mcq","question":"...","options":["A","B","C","D"],"optionFigures":[null,null,{"page":1,"bbox":{"x":0.1,"y":0.2,"w":0.2,"h":0.15}},null],"correct":0,"points":1,"modelAnswer":"step by step solution","sourcePage":1},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"full step by step solution","acceptedAnswers":["5","x=5"],"sourcePage":1,"table":{"headers":["x","f(x)"],"rows":[[{"t":"-1"},{"t":"","blank":true}]]},"figure":{"page":1,"bbox":{"x":0.05,"y":0.3,"w":0.4,"h":0.35}}}],"answerKey":""}')
   return lines.join('\n')
 }
 
@@ -469,7 +473,10 @@ function buildQuestionsOnlyPrompt(grade: string, type: string): string {
   lines.push('- TABLES: if the question shows a table, return "table" reproducing it EXACTLY: {"headers":["x","f(x)","(x, f(x))"],"rows":[[{"t":"-2"},{"t":"","blank":true},{"t":"","blank":true}]]}.')
   lines.push('  * Printed cells → {"t":"<exact printed text>"}. Cells the STUDENT must fill → {"t":"","blank":true}.')
   lines.push('  * Do NOT blank printed cells, and do NOT fill the blank cells — the student writes inside them.')
-  lines.push('- GRAPHS/DIAGRAMS: if the question contains a graph, plot, or diagram, NEVER flatten it into text: return "figure":{"page":<page number>,"bbox":{"x":..,"y":..,"w":..,"h":..}} where bbox is the bounding rectangle of the figure as FRACTIONS of the WHOLE page image (each value 0..1, x/y = top-left corner, w/h = size).')
+  /* (و43) نفس حاجز الرسومات في برومبت الأسئلة-only */
+  lines.push('HARD RULE — FIGURES: for EVERY question (and every MCQ option) that contains or depends on any drawing, graph, plotted curve, geometric shape, diagram, chart, or image-based table: you MUST return figure/optionFigures data: question-level "figure":{"page":<page number>,"bbox":{"x":..,"y":..,"w":..,"h":..}} and option-level "optionFigures":[{"page":<page number>,"bbox":{"x":..,"y":..,"w":..,"h":..}} or null, ...] aligned with the options array.')
+  lines.push('bbox = tight rectangle around the drawing INCLUDING its axes/labels, as FRACTIONS of the WHOLE page image (each value 0..1, x/y = top-left corner, w/h = size).')
+  lines.push('NEVER convert a drawing into text: do NOT describe the graph, do NOT write coordinate tables or step-by-step plotting inside question text. If unsure whether something is a figure, treat it AS a figure. Options that are pure images get empty string text plus their optionFigures entry.')
   lines.push('')
   lines.push('Return ONE single valid JSON object — no text before or after, no markdown fences, no fields outside the object:')
   lines.push('{"title":"...","content":"...","questions":[{"type":"mcq","question":"...","options":["A","B","C","D"],"correct":0,"points":1,"modelAnswer":"","sourcePage":1},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"","acceptedAnswers":[],"sourcePage":1,"table":{"headers":["x","f(x)"],"rows":[[{"t":"-1"},{"t":"","blank":true}]]},"figure":{"page":1,"bbox":{"x":0.05,"y":0.3,"w":0.4,"h":0.35}}}]}')
@@ -515,7 +522,7 @@ function buildAnswersOnlyPrompt(grade: string, type: string, questions: any[]): 
      يشمل قيم الجدول المتوقعة، والرسومات ممنوع تتحول لنص */
   lines.push('WORKSHEET STRUCTURE (2026-و40-w):')
   lines.push('- Some questions have a fillable TABLE (shown above with ____ for the blank cells the student must fill). For those, the modelAnswer MUST include the expected table values row by row (e.g. "f(-1)=5, f(0)=3 → points (-1,5), (0,3)").')
-  lines.push('- If a question has a figure/graph, NEVER flatten it into text — only provide the numeric/verbal answer; the figure itself is kept as an image crop.')
+  lines.push('- If a question has a figure/graph, NEVER flatten it into text and NEVER describe the drawing: modelAnswer = concise final results only (example: "axis of symmetry: x = 3, maximum value = 4"); the figure itself is kept as an image crop.')
   lines.push('')
   /* (استخراج أدق 2026-و10 — شكوى المستر: «تستخرج منه الإجابة… ما تكونش بالحر»):
      الإجابة لازم تتقرا من ورقة الإجابات حرفياً — ممنوع تخمين الحرف */

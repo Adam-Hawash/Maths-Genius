@@ -90,20 +90,32 @@ export async function POST(request) {
       if (isFinite(spN) && spN > 0) ws.sourcePage = spN
       if (q.srcName && String(q.srcName).trim()) ws.srcName = String(q.srcName).trim()
       if (q.table && Array.isArray(q.table.rows)) ws.table = q.table
-      if (q.figure && q.figure.bbox) {
-        var fig: any = { page: parseInt(String(q.figure.page || 1), 10) || 1, bbox: q.figure.bbox }
+      /* (و43) الرسمة مسموح bbox (قص آلي) **أو** url بس (رفع يدوي من شاشة
+         المراجعة — من غير bbox) — اللي مفيش منهما بترمى */
+      if (q.figure && (q.figure.bbox || (typeof q.figure.url === 'string' && /^\/api\/files\//.test(q.figure.url)))) {
+        var fig: any = { page: parseInt(String(q.figure.page || 1), 10) || 1 }
+        if (q.figure.bbox) fig.bbox = q.figure.bbox
         if (typeof q.figure.url === 'string' && /^\/api\/files\//.test(q.figure.url)) fig.url = q.figure.url
         ws.figure = fig
       }
       if (Array.isArray(q.optionFigures)) {
+        /* (و43) محاذاة كاملة مع options: null مكان الاختيار من غير صورة —
+           واختيار بصورة url-only (رفع يدوي) بيتخزن زي ما هو من غير bbox */
         var ofs: any[] = []
+        var hasOf = false
         q.optionFigures.forEach(function (ofg: any) {
-          if (!ofg || !ofg.bbox) return
-          var o: any = { bbox: ofg.bbox }
-          if (typeof ofg.url === 'string' && /^\/api\/files\//.test(ofg.url)) o.url = ofg.url
-          ofs.push(o)
+          var keep: any = null
+          if (ofg && ofg.bbox) {
+            keep = { bbox: ofg.bbox }
+            if (typeof ofg.url === 'string' && /^\/api\/files\//.test(ofg.url)) keep.url = ofg.url
+            hasOf = true
+          } else if (ofg && typeof ofg.url === 'string' && /^\/api\/files\//.test(ofg.url)) {
+            keep = { url: ofg.url }
+            hasOf = true
+          }
+          ofs.push(keep)
         })
-        if (ofs.length > 0) ws.optionFigures = ofs
+        if (hasOf) ws.optionFigures = ofs
       }
       return ws
     }

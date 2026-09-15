@@ -19,7 +19,11 @@ function ensureBookTable() {
   if (!_bookTableReady) {
     _bookTableReady = (async function () {
       try {
-        await db.$executeRawUnsafe("CREATE TABLE IF NOT EXISTS Book (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', filePath TEXT NOT NULL DEFAULT '', fileName TEXT NOT NULL DEFAULT '', fileType TEXT NOT NULL DEFAULT 'application/pdf', sizeBytes INTEGER NOT NULL DEFAULT 0, grade TEXT NOT NULL DEFAULT '', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL)")
+        await db.$executeRawUnsafe("CREATE TABLE IF NOT EXISTS Book (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', filePath TEXT NOT NULL DEFAULT '', fileName TEXT NOT NULL DEFAULT '', sourceUrl TEXT NOT NULL DEFAULT '', fileType TEXT NOT NULL DEFAULT 'application/pdf', sizeBytes INTEGER NOT NULL DEFAULT 0, grade TEXT NOT NULL DEFAULT '', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL)")
+      } catch (e) {}
+      /* (و43) قواعد قديمة اتعملت من غير sourceUrl — ALTER متسامح (بيفشل بصمت لو موجود) */
+      try {
+        await db.$executeRawUnsafe("ALTER TABLE Book ADD COLUMN sourceUrl TEXT NOT NULL DEFAULT ''")
       } catch (e) {}
     })()
   }
@@ -43,6 +47,18 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/* (و43) تحويل لينكات جوجل درايف للمشاركة إلى تحميل مباشر (direct download):
+   file/d/<id> أو open?id=<id> أو docs document/d/<id> → uc?export=download&id=<id> */
+function normalizeBookSourceUrl(raw: string): string | null {
+  var url = String(raw || '').trim()
+  if (!/^https?:\/\//i.test(url)) return null
+  var m = url.match(/drive\.google\.com\/file\/d\/([\w-]+)/)
+        || url.match(/drive\.google\.com\/open\?id=([\w-]+)/)
+        || url.match(/docs\.google\.com\/document\/d\/([\w-]+)/)
+  if (m && m[1]) return 'https://drive.google.com/uc?export=download&id=' + m[1]
+  return url
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -58,6 +74,32 @@ export async function POST(request: NextRequest) {
     if (!title || !String(title).trim()) {
       return NextResponse.json({ error: 'العنوان مطلوب' }, { status: 400 })
     }
+
+    /* (و43) وضع اللينك الخارجي: sourceUrl موجود → من غير رفع ملف خالص
+       (الكتب الكبيرة 200MB+ مش بتتخزن في قاعدة البيانات — بنحفظ اللينك بس) */
+    var sourceUrlRaw = body && body.sourceUrl ? String(body.sourceUrl) : ''
+    if (sourceUrlRaw.trim()) {
+      var sourceUrl = normalizeBookSourceUrl(sourceUrlRaw)
+      if (!sourceUrl) {
+        return NextResponse.json({ error: 'اللينك غير صالح — لازم يبدأ بـ http:// أو https://' }, { status: 400 })
+      }
+      const linkBook = await safeWrite(function () {
+        return db.book.create({
+          data: {
+            title: String(title).trim(),
+            description: String(description || ''),
+            filePath: '',
+            fileName: '',
+            sourceUrl: sourceUrl,
+            fileType: 'application/pdf',
+            sizeBytes: 0,
+            grade: String(grade || ''),
+          },
+        })
+      })
+      return NextResponse.json({ message: 'تم إضافة الكتاب باللينك الخارجي', book: linkBook }, { status: 201 })
+    }
+
     if (!filePath || String(filePath).indexOf('/api/files/') !== 0) {
       return NextResponse.json({ error: 'مسار الملف مطلوب (ارفع الملف الأول)' }, { status: 400 })
     }
