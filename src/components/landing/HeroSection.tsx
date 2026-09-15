@@ -246,7 +246,7 @@ export default function HeroSection() {
                 rel="noopener noreferrer"
                 className="text-xs text-white/40 font-light tracking-wider hover:text-primary transition-colors"
               >
-                {cfg.footer_made_by_label || 'Made by Adam Hawash'}
+                {cfg.footer_made_by_label || 'Developed by Adam Hawash'}
               </a>
             </div>
 
