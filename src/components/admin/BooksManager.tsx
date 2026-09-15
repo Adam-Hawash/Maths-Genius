@@ -7,6 +7,8 @@
 // وبعدها يتسجل صف Book عبر /api/admin/books — والطالب يشوفه في تاب
 // «الكتب والملازم» في البورتال (BooksTab).
 // الرفع بنفس نظام chunkedUpload بتاع المنصة (أجزاء 2MB + تحقق بايت-ببايت).
+// (و43) وضعين: 📁 رفع ملف (≤60MB — بيتخزن في Media) أو 🔗 لينك خارجي
+// (الكتب الكبيرة 200MB+ مش بتتخزن في قاعدة البيانات خالص — sourceUrl بس).
 // ============================================================
 
 import { useAppStore, GRADES } from '@/stores/app-store'
@@ -39,9 +41,12 @@ export function BooksManager() {
   const [saving, setSaving] = useState(false)
   const [uploadPct, setUploadPct] = useState(-1)
   const [uploadMsg, setUploadMsg] = useState('')
+  /* (و43) وضع الإضافة: file = رفع ملف | link = لينك خارجي */
+  const [addMode, setAddMode] = useState<'file' | 'link'>('file')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [grade, setGrade] = useState('')
+  const [sourceUrl, setSourceUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -65,6 +70,38 @@ export function BooksManager() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminId])
 
+  /* (و43) حفظ كتاب بلينك خارجي — POST /api/admin/books بـ sourceUrl (من غير ملف) */
+  var handleSaveLink = async function () {
+    if (!adminId) { toast.error('مفيش جلسة أدمن'); return }
+    if (!title.trim()) { toast.error('اكتب عنوان الكتاب الأول'); return }
+    if (!sourceUrl.trim()) { toast.error('الصق لينك الكتاب الأول'); return }
+
+    setSaving(true)
+    try {
+      var res = await fetch('/api/admin/books?adminId=' + encodeURIComponent(adminId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim(),
+          sourceUrl: sourceUrl.trim(),
+          grade: grade,
+        }),
+      })
+      var data = await res.json()
+      if (res.ok && (data.success || data.book)) {
+        toast.success('تم إضافة الكتاب باللينك الخارجي!')
+        setTitle(''); setDescription(''); setGrade(''); setSourceUrl('')
+        await loadBooks()
+      } else {
+        toast.error(data.error || 'خطأ في حفظ الكتاب')
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'خطأ في الاتصال')
+    }
+    setSaving(false)
+  }
+
   var handleUpload = async function () {
     if (!adminId) { toast.error('مفيش جلسة أدمن'); return }
     if (!title.trim()) { toast.error('اكتب عنوان الكتاب الأول'); return }
@@ -72,7 +109,7 @@ export function BooksManager() {
 
     var sizeMb = file.size / 1024 / 1024
     if (sizeMb > MAX_BOOK_MB) {
-      toast.error('الملف أكبر من ' + MAX_BOOK_MB + ' ميجا — قسّمه لأسامي أصغر أو ارفع نسخة أخف')
+      toast.error('الملف أكبر من ' + MAX_BOOK_MB + ' ميجا — استخدم وضع «لينك خارجي» للكتب الكبيرة')
       return
     }
     if (sizeMb > CONFIRM_BOOK_MB && !window.confirm('الملف ' + sizeMb.toFixed(1) + ' ميجا — الرفع ممكن ياخد وقت. تكمل؟')) {
@@ -138,7 +175,26 @@ export function BooksManager() {
         <CardTitle className="text-lg flex items-center gap-2"><BookOpen className="h-5 w-5 text-sky-500" />الكتب والملازم | Books</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* ===== نموذج الرفع ===== */}
+        {/* ===== (و43) مبدّل الوضع: رفع ملف أو لينك خارجي ===== */}
+        <div className="flex gap-2 p-1 rounded-lg bg-muted">
+          <button
+            type="button"
+            onClick={function () { setAddMode('file') }}
+            className={"flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-all " + (addMode === 'file' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
+          >
+            📁 رفع ملف (للملفات الصغيرة ≤ 60MB)
+          </button>
+          <button
+            type="button"
+            onClick={function () { setAddMode('link') }}
+            className={"flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-all " + (addMode === 'link' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
+          >
+            🔗 لينك خارجي (مستحسن للكتب الكبيرة)
+          </button>
+        </div>
+
+        {/* ===== نموذج الرفع (ملف) ===== */}
+        {addMode === 'file' && (
         <div className="p-4 rounded-xl border-2 border-dashed border-sky-400/40 bg-sky-50 dark:bg-sky-950/20 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -177,6 +233,42 @@ export function BooksManager() {
             {saving ? 'جاري الرفع...' : 'رفع الكتاب'}
           </Button>
         </div>
+        )}
+
+        {/* ===== (و43) نموذج اللينك الخارجي — من غير رفع ولا تخزين في قاعدة البيانات ===== */}
+        {addMode === 'link' && (
+        <div className="p-4 rounded-xl border-2 border-dashed border-violet-400/40 bg-violet-50 dark:bg-violet-950/20 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">عنوان الكتاب *</Label>
+              <Input value={title} onChange={function (e) { setTitle(e.target.value) }} placeholder="مثال: كتاب الشرح الكامل" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">الصف (اختياري)</Label>
+              <select value={grade} onChange={function (e) { setGrade(e.target.value) }} className="w-full h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
+                <option value="">كل الصفوف</option>
+                {GRADES.map(function (g) { return <option key={g} value={g}>{g}</option> })}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">وصف مختصر (اختياري)</Label>
+            <Input value={description} onChange={function (e) { setDescription(e.target.value) }} placeholder="مثال: 300 صفحة — كامل المنهج" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">اللينك *</Label>
+            <Input value={sourceUrl} onChange={function (e) { setSourceUrl(e.target.value) }} placeholder="https://drive.google.com/file/d/... أو أي لينك تحميل مباشر" dir="ltr" />
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            💡 الكتاب الكبير (200MB+) مش بيتخزن في قاعدة البيانات خالص — بنحفظ اللينك بس والطلاب بيحملوا منه فورًا.
+            وللاستخراج منه: نزّله على جهازك وافتحه في وضع (كتاب — صفحات محددة).
+          </p>
+          <Button className="w-full" onClick={handleSaveLink} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <BookOpen className="h-4 w-4 ml-1" />}
+            {saving ? 'جاري الحفظ...' : 'حفظ الكتاب باللينك'}
+          </Button>
+        </div>
+        )}
 
         {/* ===== القايمة ===== */}
         <div className="flex items-center justify-between">
@@ -194,6 +286,8 @@ export function BooksManager() {
         ) : (
           <div className="space-y-2">
             {books.map(function (b: any) {
+              /* (و43) كتب اللينك الخارجي — بادج 🔗 بدل الحجم (sizeBytes = 0) */
+              var isLinkBook = !!b.sourceUrl
               return (
                 <div key={b.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
                   <div className="h-9 w-9 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
@@ -203,12 +297,19 @@ export function BooksManager() {
                     <p className="font-medium text-sm truncate">{b.title}</p>
                     <div className="flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground">
                       {b.grade && <Badge variant="outline" className="text-[10px]">{b.grade}</Badge>}
-                      <span>{formatBookSize(b.sizeBytes)}</span>
+                      {isLinkBook
+                        ? <Badge variant="outline" className="text-[10px] border-violet-400/60 text-violet-600 dark:text-violet-400" title={b.sourceUrl}>🔗 لينك خارجي</Badge>
+                        : <span>{formatBookSize(b.sizeBytes)}</span>}
                       {b.createdAt && <span>{new Date(b.createdAt).toLocaleDateString('ar-EG')}</span>}
                       {b.description && <span className="truncate max-w-[200px] hidden sm:inline">{b.description}</span>}
                     </div>
                   </div>
-                  <a href={b.filePath + (b.filePath.indexOf('?') !== -1 ? '&' : '?') + 'dl=1'} target="_blank" rel="noreferrer" className="shrink-0">
+                  <a
+                    href={isLinkBook ? b.sourceUrl : (b.filePath + (b.filePath.indexOf('?') !== -1 ? '&' : '?') + 'dl=1')}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0"
+                  >
                     <Button variant="outline" size="sm" className="h-8 gap-1"><FileDown className="h-3.5 w-3.5" />تحميل</Button>
                   </a>
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={function () { handleDelete(b) }} title="حذف">

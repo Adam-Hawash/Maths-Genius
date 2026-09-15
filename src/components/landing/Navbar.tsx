@@ -28,8 +28,6 @@ import {
   Shapes,
   Trophy,
   CalendarClock,
-  Code2,
-  Heart,
 } from 'lucide-react'
 import { toast } from 'sonner'
 /* (2026-و29) «أوائل الطلبة» في النافبار — طلب المستر: زرار جنب Geometry
@@ -93,21 +91,19 @@ export function Navbar() {
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
-        {/* (و42) توقيع المطور فوق النافبار — زي منصة القائد: لينك لبرتفوليو المطور */}
+        {/* (و43) توقيع المطور فوق النافبار — نص عادي من غير قلب ولا ألوان ولا أيقونات */}
         {currentView === 'landing' && (
-          <div className="w-full bg-[#111827] text-white/90 border-b border-white/10">
+          <div className="w-full border-b border-border/50 bg-background/95">
             <a
               href={cfg.hero_developer_url || 'https://prime-developer-portfolio-11.vercel.app'}
               target="_blank"
               rel="noopener noreferrer"
               title="Developer Portfolio"
-              className="flex items-center justify-center gap-1.5 py-1.5 text-[11px] hover:text-yellow-300 transition-colors group"
+              className="flex items-center justify-center py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors"
             >
-              <Code2 className="h-3 w-3" />
-              <span dir="ltr" className="font-semibold group-hover:underline underline-offset-2">
+              <span dir="ltr">
                 {cfg.footer_made_by_label || 'Developed by Adam Hawash'}
               </span>
-              <Heart className="h-2.5 w-2.5 text-red-400" />
             </a>
           </div>
         )}
@@ -159,15 +155,8 @@ export function Navbar() {
               <Shapes className="h-4 w-4" />
               Geometry Laws
             </a>
-            {/* (و35) رابط مواعيد السنتر — صفحة مستقلة /schedule (زي منصة القائد) */}
-            <a
-              href="/schedule"
-              title="مواعيد السنتر — جدول الحصص الأسبوعي"
-              className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-xl text-sm font-bold text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <CalendarClock className="h-4 w-4" />
-              مواعيد السنتر
-            </a>
+            {/* (و43) مواعيد السنتر اتشالت من النافبار الديسك توب بطلب المستر —
+               بتفضل في قايمة الموبايل وصفحة /schedule شغالة زي ما هي */}
             {currentStudent ? (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">

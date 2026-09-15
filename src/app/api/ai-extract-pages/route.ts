@@ -133,13 +133,18 @@ function buildPagesPrompt(pageNumbers: number[], mode: 'all' | 'top', count: num
   lines.push('- TABLES: if a question shows a printed table, return "table" reproducing it EXACTLY: {"headers":["x","f(x)","(x, f(x))"],"rows":[[{"t":"-2"},{"t":"","blank":true},{"t":"","blank":true}]]}.')
   lines.push('  * Printed cells → {"t":"<exact printed text>"}. Cells the STUDENT must fill → {"t":"","blank":true}.')
   lines.push('  * Do NOT blank printed cells, and do NOT fill the blank cells — the student writes inside them.')
-  lines.push('- GRAPHS/DIAGRAMS: if a question contains a graph, plot, or diagram, NEVER flatten it into text and NEVER describe it as words: return "figure":{"page":<the page number the figure is on>,"bbox":{"x":..,"y":..,"w":..,"h":..}} where bbox is the bounding rectangle of the figure as FRACTIONS of the WHOLE page image (each value 0..1, x/y = top-left corner, w/h = size of the rectangle).')
+  /* (و43) حاجز صارم للرسومات — كل رسمة/منحنى/شكل هندسي لازم يرجع figure/optionFigures
+     بـ bbox — ممنوع تحويل الرسمة لوصف نصي (ده كان بيبوّظ عرض الرسمة للطالب) */
+  lines.push('HARD RULE — FIGURES: for EVERY question (and every MCQ option) that contains or depends on any drawing, graph, plotted curve, geometric shape, diagram, chart, or image-based table: you MUST return figure/optionFigures data: question-level "figure":{"page":N,"bbox":{"x":..,"y":..,"w":..,"h":..}} and option-level "optionFigures":[{"page":N,"bbox":{"x":..,"y":..,"w":..,"h":..}} or null, ...] aligned with the options array.')
+  lines.push('bbox = tight rectangle around the drawing INCLUDING its axes/labels, as FRACTIONS of the whole page image (each value 0..1, x/y = top-left corner, w/h = size of the rectangle).')
+  lines.push('NEVER convert a drawing into text: do NOT describe the graph, do NOT write coordinate tables or step-by-step plotting inside question text or modelAnswer. modelAnswer = concise final results only (example: "axis of symmetry: x = 3, maximum value = 4").')
+  lines.push('If unsure whether something is a figure, treat it AS a figure. Options that are pure images get empty string text plus their optionFigures entry.')
   lines.push('- modelAnswer must include the expected table values when applicable (e.g. "f(-1)=5, f(0)=3 → points (-1,5), (0,3)").')
   lines.push('- MATH FORMAT (the platform renders it as real math): powers as x^2; EVERY fraction as \\frac{numerator}{denominator} (NEVER a/b, and do NOT wrap the whole numerator/denominator in parentheses); square root √, cube root ∛, × ÷ π ≤ ≥ ≠ ≈ ∠ °. No $ signs, no other LaTeX, no markdown.')
   lines.push('- ALL output text in English (same as the rest of the platform).')
   lines.push('')
   lines.push('Return ONE single valid JSON array — no text before or after, no markdown fences. Shape:')
-  lines.push('[{"type":"mcq","question":"...","options":["opt1","opt2","opt3","opt4"],"correct":0,"points":1,"modelAnswer":"step by step solution","sourcePage":' + (pageNumbers[0] || 1) + '},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"full solution","acceptedAnswers":["5","x=5"],"sourcePage":' + (pageNumbers[0] || 1) + ',"table":{"headers":["x","f(x)"],"rows":[[{"t":"-1"},{"t":"","blank":true}]]},"figure":{"page":' + (pageNumbers[0] || 1) + ',"bbox":{"x":0.05,"y":0.3,"w":0.4,"h":0.35}}}]')
+  lines.push('[{"type":"mcq","question":"...","options":["opt1","opt2","opt3","opt4"],"optionFigures":[null,null,{"page":' + (pageNumbers[0] || 1) + ',"bbox":{"x":0.1,"y":0.2,"w":0.2,"h":0.15}},null],"correct":0,"points":1,"modelAnswer":"step by step solution","sourcePage":' + (pageNumbers[0] || 1) + '},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"full solution","acceptedAnswers":["5","x=5"],"sourcePage":' + (pageNumbers[0] || 1) + ',"table":{"headers":["x","f(x)"],"rows":[[{"t":"-1"},{"t":"","blank":true}]]},"figure":{"page":' + (pageNumbers[0] || 1) + ',"bbox":{"x":0.05,"y":0.3,"w":0.4,"h":0.35}}}]')
   return lines.join('\n')
 }
 

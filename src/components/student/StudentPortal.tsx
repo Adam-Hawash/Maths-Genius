@@ -1841,6 +1841,11 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                                             style={{ textAlign: 'left' }}
                                           >
                                             <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span><FractionText text={opt} />
+                                            {(q.optionFigures && q.optionFigures[oi] && q.optionFigures[oi].url) && (
+                                              /* (و43) صورة الاختيار — الاختيارات اللي هي رسومات في الملف الأصلي */
+                                              /* eslint-disable-next-line @next/next/no-img-element */
+                                              <img src={q.optionFigures[oi].url} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block w-full max-h-24 rounded border border-border bg-white object-contain" />
+                                            )}
                                           </button>
                                         )
                                       })}
@@ -1877,6 +1882,11 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                                     style={{ textAlign: 'left' }}
                                   >
                                     <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span><FractionText text={opt} />
+                                    {(q.optionFigures && q.optionFigures[oi] && q.optionFigures[oi].url) && (
+                                      /* (و43) صورة الاختيار — الاختيارات اللي هي رسومات في الملف الأصلي */
+                                      /* eslint-disable-next-line @next/next/no-img-element */
+                                      <img src={q.optionFigures[oi].url} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block w-full max-h-24 rounded border border-border bg-white object-contain" />
+                                    )}
                                   </button>
                                 )
                               })}
@@ -2993,6 +3003,11 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                                 style={{ textAlign: 'left' }}
                               >
                                 <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span><FractionText text={opt} />
+                                {(q.optionFigures && q.optionFigures[oi] && q.optionFigures[oi].url) && (
+                                  /* (و43) صورة الاختيار — الاختيارات اللي هي رسومات في الملف الأصلي */
+                                  /* eslint-disable-next-line @next/next/no-img-element */
+                                  <img src={q.optionFigures[oi].url} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block w-full max-h-24 rounded border border-border bg-white object-contain" />
+                                )}
                               </button>
                             ))}
                           </div>
@@ -3030,6 +3045,11 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                           style={{ textAlign: 'left' }}
                         >
                           <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span><FractionText text={opt} />
+                          {(q.optionFigures && q.optionFigures[oi] && q.optionFigures[oi].url) && (
+                            /* (و43) صورة الاختيار — الاختيارات اللي هي رسومات في الملف الأصلي */
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={q.optionFigures[oi].url} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block w-full max-h-24 rounded border border-border bg-white object-contain" />
+                          )}
                         </button>
                       ))}
                     </div>

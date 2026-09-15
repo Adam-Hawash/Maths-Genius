@@ -361,6 +361,10 @@ model Book {
   description String   @default("")
   filePath    String   @default("")
   fileName    String   @default("")
+  /* (و43) لينك خارجي للكتب الكبيرة (200MB+) — مش بتتخزن في قاعدة البيانات
+     خالص: filePath يفضل فاضي وsourceUrl يحفظ اللينك (Google Drive direct
+     download أو أي http/https) والطالب يفتح/يحمّل منه مباشرة */
+  sourceUrl   String   @default("")
   fileType    String   @default("application/pdf")
   sizeBytes   Int      @default(0)
   grade       String   @default("")
