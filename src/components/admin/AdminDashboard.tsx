@@ -21,7 +21,7 @@ import {
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
   Video as VideoIcon,
-  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart
+  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen
 } from 'lucide-react'
 import { AdminComplaints } from './AdminComplaints'
 import { CMSPanel } from './CMSPanel'
@@ -38,6 +38,10 @@ import { ActivityPanel } from './ActivityPanel'
 import { PaymentsPanel } from '@/components/PaymentsPanel'
 import { StudentTargetPicker, parseTargetStudentIds } from '@/components/admin/StudentTargetPicker'
 import { MathKeyboard } from '@/components/student/MathKeyboard'
+/* (2026-و40) استخراج من صفحات كتاب PDF — تصوير الصفحات على المتصفح بـ pdf.js */
+import { openPdf, renderPageToJpeg } from '@/lib/pdf-pages'
+/* (2026-و40) الكتب والملازم — تاب مكتبة الكتب للطالب */
+import { BooksManager } from './BooksManager'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
@@ -316,6 +320,8 @@ export function AdminDashboard() {
             <TabsTrigger value="ai-extract" className="text-xs sm:text-sm gap-1 text-purple-600 dark:text-purple-400"><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">استخراج AI</span></TabsTrigger>
             <TabsTrigger value="complaints" className="text-xs sm:text-sm gap-1 text-red-600 dark:text-red-400"><Flag className="h-4 w-4" /><span className="hidden sm:inline">الشكاوي</span>{newComplaints > 0 && <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">{newComplaints}</span>}</TabsTrigger>
             <TabsTrigger value="grades-schedule" className="text-xs sm:text-sm gap-1 text-emerald-600 dark:text-emerald-400"><GraduationCap className="h-4 w-4" /><span className="hidden sm:inline">الصفوف والمواعيد</span></TabsTrigger>
+            {/* (2026-و40) الكتب والملازم — مكتبة PDF الطالب يفتحها/يحملها */}
+            <TabsTrigger value="books" className="text-xs sm:text-sm gap-1 text-sky-600 dark:text-sky-400"><BookOpen className="h-4 w-4" /><span className="hidden sm:inline">الكتب والملازم</span></TabsTrigger>
           </TabsList>
 
           <TabsContent value="students"><StudentsManager onStatsRefresh={fetchStats} onViewImage={setImageModalSrc} /></TabsContent>
@@ -346,6 +352,8 @@ export function AdminDashboard() {
           <TabsContent value="complaints"><AdminComplaints /></TabsContent>
           {/* (و24) طلب المستر: إدارة الصفوف الدراسية (إضافة/حذف صف + عربي/إنجليزي/إيموجي) + مواعيد السنتر (حذف/إضافة يوم وحصة) */}
           <TabsContent value="grades-schedule"><GradesSchedulePanel /></TabsContent>
+          {/* (2026-و40) الكتب والملازم */}
+          <TabsContent value="books"><BooksManager /></TabsContent>
         </Tabs>
 
         {/* Admin Settings Dialog */}
@@ -3651,7 +3659,19 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   // YouTube state
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [numQuestions, setNumQuestions] = useState(10)
-  const [inputMode, setInputMode] = useState<'file' | 'youtube'>('file')
+  const [inputMode, setInputMode] = useState<'file' | 'youtube' | 'book'>('file')
+  /* (2026-و40) وضع الكتاب — استخراج من صفحات محددة في كتاب كبير (طلب المستر:
+     بفتح كتاب كبير، أحدد صفحات، يجيب كل الأسئلة أو أهم N سؤال بالترتيب) */
+  const [bookFile, setBookFile] = useState<File | null>(null)
+  const [bookNumPages, setBookNumPages] = useState(0)
+  const [bookFrom, setBookFrom] = useState(1)
+  const [bookTo, setBookTo] = useState(1)
+  const [bookMode, setBookMode] = useState<'all' | 'top'>('all')
+  const [bookCount, setBookCount] = useState(10)
+  const [bookName, setBookName] = useState('')
+  const [bookPdfLoading, setBookPdfLoading] = useState(false)
+  const bookDocRef = useRef<any>(null)
+  const bookFileRef = useRef<HTMLInputElement>(null)
   /* (25-ب1) إعدادات الامتحان قبل الحفظ: إظهار الإجابات + المؤقت + موعد الظهور */
   const [examShowResult, setExamShowResult] = useState(false)
   const [examTimeLimit, setExamTimeLimit] = useState('')
@@ -3663,12 +3683,18 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
     setExtractedQuestions([]); setStatusMsg('')
     setYoutubeUrl(''); setNumQuestions(10); setInputMode('file')
     setExamShowResult(false); setExamTimeLimit(''); setExamScheduledAt('')
+    /* (2026-و40) تصفير وضع الكتاب */
+    setBookFile(null); setBookNumPages(0); setBookFrom(1); setBookTo(1)
+    setBookMode('all'); setBookCount(10); setBookName(''); bookDocRef.current = null
   }
 
   var canProceedStep1 = extractType && grade.trim() && title.trim()
   var canExtractFile = file || fileUrl.trim()
   var canExtractYoutube = youtubeUrl.trim().length > 5
-  var canExtract = inputMode === 'youtube' ? canExtractYoutube : canExtractFile
+  /* (2026-و40) جاهزية وضع الكتاب: ملف مفتوح + نطاق صالح (≤30 صفحة) */
+  var bookPagesSelected = bookNumPages > 0 ? (bookTo - bookFrom + 1) : 0
+  var canExtractBook = !!bookFile && bookNumPages > 0 && bookFrom >= 1 && bookTo >= bookFrom && bookTo <= bookNumPages && bookPagesSelected <= 30
+  var canExtract = inputMode === 'youtube' ? canExtractYoutube : inputMode === 'book' ? canExtractBook : canExtractFile
 
   var handleExtract = async function() {
     if (!canExtract || extracting) return
@@ -3799,6 +3825,119 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
     return m ? m[1] : null
   }
 
+  /* ===== (2026-و40) وضع الكتاب ===== */
+  var handleBookFile = async function(f: File | null) {
+    setBookFile(f); bookDocRef.current = null; setBookNumPages(0); setBookFrom(1); setBookTo(1)
+    if (!f) return
+    setBookPdfLoading(true)
+    try {
+      var opened = await openPdf(f)
+      bookDocRef.current = opened.doc
+      setBookNumPages(opened.numPages)
+      toast.success('اتفتح الكتاب — عدد الصفحات: ' + opened.numPages)
+    } catch (e: any) {
+      toast.error('مقدرتش أفتح ملف الـ PDF: ' + (e.message || ''))
+    }
+    setBookPdfLoading(false)
+  }
+
+  /* مفتاح منع التكرار: نص السؤال مطبّع (فراغات/ترقيم/طول 120) */
+  var bookQuestionKey = function(q: any) {
+    return String((q && (q.question || q.q)) || '').toLowerCase().replace(/\s+/g, ' ').replace(/[^\u0600-\u06FFa-z0-9]/g, '').substring(0, 120)
+  }
+
+  var handleExtractBook = async function() {
+    if (!canExtractBook || extracting) return
+    var doc = bookDocRef.current
+    if (!doc) { toast.error('افتح ملف الكتاب الأول'); return }
+    var from = bookFrom, to = bookTo
+    var total = to - from + 1
+    var CHUNK = 5
+    var chunks = Math.ceil(total / CHUNK)
+    setExtracting(true)
+    try {
+      var collected: any[] = []
+      var seenKeys: any = {}
+      var skippedChunks = 0
+      for (var c = 0; c < chunks; c++) {
+        var cFrom = from + c * CHUNK
+        var cTo = Math.min(to, cFrom + CHUNK - 1)
+        setStatusMsg('جاري قراءة الصفحات ' + cFrom + '–' + cTo + '… (' + (c + 1) + '/' + chunks + ')')
+        var pages: any[] = []
+        for (var pn = cFrom; pn <= cTo; pn++) {
+          var img = await renderPageToJpeg(doc, pn, 1400, 0.72)
+          pages.push({ n: pn, image: img })
+        }
+        var extractedChunk: any = null
+        for (var attempt = 0; attempt < 2 && !extractedChunk; attempt++) {
+          try {
+            var ctrlB = new AbortController()
+            var tmrB = setTimeout(function() { ctrlB.abort() }, 180000)
+            var resB = await fetch('/api/ai-extract-pages', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pages: pages, mode: 'all', bookTitle: bookName.trim() }),
+              signal: ctrlB.signal,
+            })
+            clearTimeout(tmrB)
+            var dataB = await resB.json()
+            if (resB.ok && dataB.extracted) extractedChunk = dataB.extracted
+          } catch (eB: any) {
+            if (eB && eB.name === 'AbortError') throw eB
+          }
+          if (!extractedChunk && attempt === 0) await new Promise(function (r) { setTimeout(r, 1200) })
+        }
+        if (!extractedChunk) { skippedChunks++; continue }
+        var qs = extractedChunk.questions || []
+        for (var qi = 0; qi < qs.length; qi++) {
+          var key = bookQuestionKey(qs[qi])
+          if (key && seenKeys[key]) continue
+          if (key) seenKeys[key] = true
+          collected.push(qs[qi])
+        }
+      }
+      /* أهم N سؤال: اختيار عابر للدفعات — نداء نص-only واحد على نفس المسار */
+      if (bookMode === 'top' && collected.length > bookCount) {
+        setStatusMsg('جاري اختيار أهم ' + bookCount + ' سؤال…')
+        var picked: any[] | null = null
+        try {
+          var ctrlS = new AbortController()
+          var tmrS = setTimeout(function() { ctrlS.abort() }, 180000)
+          var resS = await fetch('/api/ai-extract-pages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selectTop: { questions: collected, count: bookCount } }),
+            signal: ctrlS.signal,
+          })
+          clearTimeout(tmrS)
+          var dataS = await resS.json()
+          if (resS.ok && dataS.extracted && Array.isArray(dataS.extracted.questions) && dataS.extracted.questions.length > 0) picked = dataS.extracted.questions
+        } catch (eS: any) {
+          if (eS && eS.name === 'AbortError') throw eS
+        }
+        collected = picked || collected.slice(0, bookCount)
+      }
+      if (collected.length === 0) {
+        toast.error('مقدرتش أستخرج أسئلة من الصفحات دي — جرب نطاق تاني أو تأكد إن الصفحات فيها أسئلة مطبوعة واضحة')
+        setStatusMsg('')
+        setExtracting(false)
+        return
+      }
+      if (!title.trim()) setTitle(bookName.trim() || ('كتاب — صفحات ' + from + '–' + to))
+      setExtractedQuestions(collected)
+      setStatusMsg('')
+      setStep(3)
+      var okMsg = 'تم استخراج ' + collected.length + ' سؤال من صفحات الكتاب!'
+      if (skippedChunks > 0) okMsg += ' (فشلت ' + skippedChunks + ' دفعة صفحات — جرب نطاقها تاني)'
+      toast.success(okMsg)
+    } catch (err: any) {
+      if (err && err.name === 'AbortError') { toast.error('انتهت مهلة الاستخراج - حاول مرة أخرى') }
+      else { toast.error('خطأ: ' + (err.message || '')) }
+      setStatusMsg('')
+    }
+    setExtracting(false)
+  }
+
   var renderStep1 = function() {
     return (
       <div className="space-y-4">
@@ -3855,6 +3994,10 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
           <button type="button" onClick={function() { setInputMode('youtube') }} className={"flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-all " + (inputMode === 'youtube' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
             <PlayCircle className="h-4 w-4" /> يوتيوب
           </button>
+          {/* (2026-و40) وضع الكتاب — صفحات محددة من كتاب كبير */}
+          <button type="button" onClick={function() { setInputMode('book') }} className={"flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-all " + (inputMode === 'book' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <BookOpen className="h-4 w-4" /> كتاب
+          </button>
         </div>
 
         {inputMode === 'file' ? (
@@ -3902,7 +4045,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
               )}
             </div>
           </div>
-        ) : (
+        ) : inputMode === 'youtube' ? (
           <div className="p-4 rounded-xl border-2 border-dashed border-red-300 bg-red-50 dark:bg-red-950/20 space-y-3">
             <div className="text-center">
               <PlayCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
@@ -3929,12 +4072,61 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
               </div>
             </div>
           </div>
+        ) : (
+          /* ===== (2026-و40) وضع الكتاب — صفحات محددة من كتاب PDF كبير ===== */
+          <div className="p-4 rounded-xl border-2 border-dashed border-sky-400/40 bg-sky-50 dark:bg-sky-950/20 space-y-3">
+            <div className="text-center">
+              <BookOpen className="h-8 w-8 text-sky-500 mx-auto mb-2" />
+              <p className="text-sm font-medium">📚 كتاب — صفحات محددة</p>
+              <p className="text-[10px] text-muted-foreground">افتح كتاب PDF كبير وحدد الصفحات — المنصة تقراها صفحة صفحة وتستخرج الأسئلة بترتيب الكتاب</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input ref={bookFileRef} type="file" accept=".pdf" className="hidden" onChange={function(e) { handleBookFile(e.target.files?.[0] || null) }} />
+              <Button type="button" variant="outline" onClick={function() { bookFileRef.current?.click() }} className="flex-1 border-sky-400/40 text-sky-700 dark:text-sky-400">
+                {bookPdfLoading ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <BookOpen className="h-4 w-4 ml-2" />}
+                {bookFile ? bookFile.name : 'اختر ملف الكتاب (PDF)'}
+              </Button>
+            </div>
+            {bookFile && <p className="text-xs text-muted-foreground text-center">{(bookFile.size / 1024 / 1024).toFixed(1)} MB</p>}
+            {bookNumPages > 0 && <p className="text-xs text-center font-medium text-sky-600 dark:text-sky-400">عدد صفحات الكتاب: {bookNumPages}</p>}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">من صفحة</Label>
+                <Input type="number" min={1} max={bookNumPages || undefined} value={bookFrom} onChange={function(e) { var v = parseInt(e.target.value) || 1; setBookFrom(v); if (bookTo < v) setBookTo(v) }} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">إلى صفحة</Label>
+                <Input type="number" min={1} max={bookNumPages || undefined} value={bookTo} onChange={function(e) { setBookTo(parseInt(e.target.value) || 1) }} />
+              </div>
+            </div>
+            {bookNumPages > 0 && (bookFrom < 1 || bookTo > bookNumPages || bookTo < bookFrom) && (
+              <p className="text-[11px] text-red-500">النطاق غير صحيح — الصفحات من 1 إلى {bookNumPages}</p>
+            )}
+            {bookPagesSelected > 30 && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 p-2 rounded-md">اخترت {bookPagesSelected} صفحة — دي كتير. اشتغل على مراحل (مثلاً 1–30 وبعدين 31–60) عشان الذاكرة والوقت.</p>
+            )}
+            <div className="flex gap-2 flex-wrap">
+              <label className={"flex items-center gap-1.5 text-sm cursor-pointer p-2 rounded-md border " + (bookMode === 'all' ? 'border-primary bg-primary/5' : 'border-border')}>
+                <input type="radio" name="bookMode" checked={bookMode === 'all'} onChange={function() { setBookMode('all') }} />
+                كل الأسئلة في الصفحات
+              </label>
+              <label className={"flex items-center gap-1.5 text-sm cursor-pointer p-2 rounded-md border " + (bookMode === 'top' ? 'border-primary bg-primary/5' : 'border-border')}>
+                <input type="radio" name="bookMode" checked={bookMode === 'top'} onChange={function() { setBookMode('top') }} />
+                أهم
+                <Input type="number" min={1} max={100} value={bookCount} onClick={function(e) { e.stopPropagation() }} onChange={function(e) { setBookCount(Math.max(1, parseInt(e.target.value) || 10)) }} className="h-7 w-16 text-xs" />
+                سؤال
+              </label>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">اسم الكتاب (اختياري — بيتخزن كعنوان)</Label>
+              <Input placeholder="مثال: كتاب الشرح — الفصل الأول" value={bookName} onChange={function(e) { setBookName(e.target.value) }} />
+            </div>
+          </div>
         )}
-
         {statusMsg && <div className="flex items-center gap-2 p-3 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400"><Loader2 className="h-4 w-4 animate-spin" /><p className="text-sm">{statusMsg}</p></div>}
-        <Button className="w-full" size="lg" onClick={handleExtract} disabled={!canExtract || extracting}>
-          {extracting ? <Loader2 className="h-5 w-5 ml-2 animate-spin" /> : <Sparkles className="h-5 w-5 ml-2" />}
-          {extracting ? 'جاري الاستخراج...' : (inputMode === 'youtube' ? 'استخراج من يوتيوب' : 'استخراج الاسئلة')}
+        <Button className="w-full" size="lg" onClick={function() { if (inputMode === 'book') handleExtractBook(); else handleExtract() }} disabled={!canExtract || extracting}>
+          {extracting ? <Loader2 className="h-5 w-5 ml-2 animate-spin" /> : inputMode === 'book' ? <BookOpen className="h-5 w-5 ml-2" /> : <Sparkles className="h-5 w-5 ml-2" />}
+          {extracting ? 'جاري الاستخراج...' : (inputMode === 'book' ? 'استخراج من الصفحات' : (inputMode === 'youtube' ? 'استخراج من يوتيوب' : 'استخراج الاسئلة'))}
         </Button>
       </div>
     )
