@@ -37,6 +37,8 @@ export var SCHEMA_TABLES = [
   // (2026-و40) الكتب والملازم — مكتبة PDF للطالب (تاب أدمن + تاب طالب)
   // (و43) sourceUrl: لينك خارجي للكتب الكبيرة — من غير تخزين الملف في قاعدة البيانات
   'CREATE TABLE IF NOT EXISTS Book (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT \'\', filePath TEXT NOT NULL DEFAULT \'\', fileName TEXT NOT NULL DEFAULT \'\', sourceUrl TEXT NOT NULL DEFAULT \'\', fileType TEXT NOT NULL DEFAULT \'application/pdf\', sizeBytes INTEGER NOT NULL DEFAULT 0, grade TEXT NOT NULL DEFAULT \'\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL)',
+  // (2026-و44) الإشعارات — رد الشكوى/الكتب الجديدة/امتحانات وواجبات جديدة
+  'CREATE TABLE IF NOT EXISTS Notification (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, type TEXT NOT NULL DEFAULT \'general\', title TEXT NOT NULL, body TEXT NOT NULL DEFAULT \'\', read INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
 ]
 
 var SCHEMA_COLUMNS = [
@@ -166,9 +168,11 @@ export var SCHEMA_INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_vgs_video ON VideoGroupSchedule(videoId)',
   'CREATE INDEX IF NOT EXISTS idx_vgs_group ON VideoGroupSchedule(groupId)',
   'CREATE INDEX IF NOT EXISTS idx_parent_student ON Parent(studentId)',
+  'CREATE INDEX IF NOT EXISTS idx_notification_student ON Notification(studentId, read)',
+  'CREATE INDEX IF NOT EXISTS idx_notification_created ON Notification(createdAt)',
 ]
 
-export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book']
+export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book', 'Notification']
 
 /* (2026-و38) مفتاح البصمة اتبدل — البصمة القديمة كانت اتخزنت على الإنتاج
  * بعد ما كود و37 نزل (والجدول وقتها مش معمول لسه في CORE_TABLES فالترميم
@@ -183,7 +187,10 @@ export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homew
  * دخل SCHEMA_TABLES + SCHEMA_COLUMNS، وتغيير المفتاح بيضمن إن أول ريكوست
  * بعد النشر يعمل الفحص الكامل وينفذ ALTER TABLE إضافة العمود على Turso
  * حتى لو الجدول نفسه موجود من و40 (درس حادثة و38/و40). */
-var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w43'
+/* (و44) مفتاح البصمة اتبدّل تالت — جدول Notification (الإشعارات) دخل
+ * SCHEMA_TABLES + CORE_TABLES — نفس درس و38/و40: من غير تغيير المفتاح
+ * الجدول الجديد عمرك ما بيتعمل على Turso بعد النشر. */
+var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w44'
 
 /* ============================================================
  * 2026-و23 — **إصلاح بطء المنصة** (طلب المستر: «المنصة بطيئة، تسجيل
