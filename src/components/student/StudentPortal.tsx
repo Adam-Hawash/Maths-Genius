@@ -20,6 +20,7 @@ import type { Video as VideoType, Homework, Exam, Announcement, Discussion, Exam
 import { MathKeyboard } from '@/components/student/MathKeyboard'
 import { SecurePlayerModal } from '@/components/student/SecurePlayerModal'
 import { StudentComplaints } from '@/components/student/StudentComplaints'
+import { BooksTab } from '@/components/student/BooksTab'
 import { FractionText } from '@/components/FractionText'
 import { normalizeCorrectKey } from '@/lib/correct-key'
 
@@ -55,6 +56,9 @@ export function StudentPortal() {
   }, [])
   const [completedExamIds, setCompletedExamIds] = useState<Set<string>>(new Set())
   const [completedHwIds, setCompletedHwIds] = useState<Set<string>>(new Set())
+  /* (2026-و40) نتايج الامتحانات وصلت **مؤكدة**؟ — القفل التسلسلي للامتحانات
+     ممنوع يشتغل قبل تأكيد التحميل (نفس ضمانة الواجبات في HomeworkTab) */
+  const [examResultsLoaded, setExamResultsLoaded] = useState(false)
 
   const grade = currentStudent?.grade || ''
   const studentId = currentStudent?.id || ''
@@ -62,6 +66,8 @@ export function StudentPortal() {
   useEffect(() => {
     if (!grade || !studentId) return
     let cancelled = false
+    /* (2026-و40) كل تحميل جديد = الحالة "مش عارفين" تاني لحد ما الرد يتأكد */
+    setExamResultsLoaded(false)
     ;(async () => {
       try {
         const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes, payRes, accessRes, progressRes, hwResultsRes] = await Promise.all([
@@ -69,7 +75,7 @@ export function StudentPortal() {
           fetch(`/api/homework?grade=${encodeURIComponent(grade)}&pageSize=50&studentId=${encodeURIComponent(studentId)}`).then(r => r.json()),
           fetch(`/api/exams?grade=${encodeURIComponent(grade)}&pageSize=50&studentId=${encodeURIComponent(studentId)}`).then(r => r.json()),
           fetch(`/api/announcements?grade=${encodeURIComponent(grade)}&pageSize=10`).then(r => r.json()),
-          fetch(`/api/exam-results?studentId=${studentId}`).then(r => r.json()),
+          fetch(`/api/exam-results?studentId=${studentId}`).then(function(r) { return r.ok ? r.json() : { results: [], _fetchFailed: true } }).catch(function() { return { results: [], _fetchFailed: true } }),
           fetch(`/api/activities?studentId=${studentId}&action=watched_video&pageSize=200`).then(r => r.json()),
           fetch(`/api/payments?studentId=${studentId}&status=approved&pageSize=200`).then(r => r.json()),
           fetch(`/api/video-access?studentId=${studentId}`).then(r => r.json()).catch(() => ({ accesses: [] })),
@@ -110,6 +116,10 @@ export function StudentPortal() {
         })
         if (doneHw.length > 0) {
           setCompletedHwIds(function (prev) { var n = new Set(prev); doneHw.forEach(function (id) { n.add(id) }); return n })
+        }
+        /* (2026-و40) نتايج الامتحانات اتأكدت سليمة — القفل التسلسلي مسموح يشتغل */
+        if (resultsRes && Array.isArray(resultsRes.results) && !(resultsRes as any)._fetchFailed) {
+          setExamResultsLoaded(true)
         }
       } catch { /* silent */ }
       if (!cancelled) setLoading(false)
@@ -303,6 +313,8 @@ export function StudentPortal() {
     { id: 'videos', label: 'الدروس', icon: Video },
     { id: 'homework', label: 'الواجبات', icon: ClipboardList },
     { id: 'exams', label: 'الامتحانات', icon: FileText },
+    /* (2026-و40) الكتب والملازم — مكتبة PDF الطالب يفتحها/يحملها */
+    { id: 'books', label: 'الكتب والملازم', icon: BookOpen },
     { id: 'announcements', label: 'التنبيهات', icon: Megaphone },
     { id: 'discussions', label: 'المجتمع', icon: MessageSquare },
     { id: 'complaints', label: 'الشكاوي', icon: Flag },
@@ -346,7 +358,8 @@ export function StudentPortal() {
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} />}
         {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} studentId={studentId} completedHwIds={completedHwIds} onHwSubmitted={(id) => setCompletedHwIds(prev => new Set([...prev, id]))} />}
-        {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} completedExamIds={completedExamIds} onExamSubmitted={(id) => setCompletedExamIds(prev => new Set([...prev, id]))} studentId={studentId} onGoHome={() => setActiveTab('videos')} />}
+        {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} completedExamIds={completedExamIds} onExamSubmitted={(id) => setCompletedExamIds(prev => new Set([...prev, id]))} studentId={studentId} resultsLoaded={examResultsLoaded} onGoHome={() => setActiveTab('videos')} />}
+        {activeTab === 'books' && <BooksTab grade={grade} />}
         {activeTab === 'announcements' && <AnnouncementsTab announcements={dashboardData.announcements} />}
         {activeTab === 'discussions' && <DiscussionsTab grade={grade} studentId={studentId} studentName={currentStudent?.name || ''} />}
         {activeTab === 'complaints' && <StudentComplaints studentId={studentId} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} grade={grade} />}
@@ -872,6 +885,9 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
   // الواجب ميفتحش غير لما الواجب اللي قبله يتسلّم. الترتيب: من الأقدم للأحدث
   // (ترتيب نزول الواجبات نفسه). الواجبات اللي ملهاش أسئلة (ملف بس) بتتخطى
   // عشان التسلسل ميقلعش على حاجة مش قابلة للتسليم.
+  /* (2026-و40) نتايج الواجب وصلت مؤكدة؟ — القفل التسلسلي ممنوع يشتغل قبلها
+     (الـ effect اللي بيجيبها تحت — والحالة معرّفة هنا فوق الـ memo اللي بيقراها) */
+  const [hwResultsLoaded, setHwResultsLoaded] = useState(false)
   var orderedHw = useMemo(function() {
     return homework.slice().sort(function(a, b) {
       var ta = new Date((a as any).createdAt || 0).getTime()
@@ -889,6 +905,10 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
 
   var hwLockMap = useMemo(function() {
     var map: Record<string, boolean> = {}
+    /* (2026-و40) قبل تأكيد تحميل نتايج التسليم — مفيش 🔒 ومفيش منع فتح
+       (الخريطة فاضية = مفيش حاجة مقفولة) عشان سباق التحميل ما يقفلش
+       واجب على طالب سلّمه */
+    if (!hwResultsLoaded) return map
     var prevTrackable: string | null = null
     orderedHw.forEach(function(h) {
       var track = hwTrackable(h)
@@ -900,7 +920,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
       if (track) prevTrackable = h.id
     })
     return map
-  }, [orderedHw, completedHwIds])
+  }, [orderedHw, completedHwIds, hwResultsLoaded])
 
   // الواجب اللي قبل كل واجب (عشان نعرض اسمه على كارت المقفول)
   var hwPrevMap = useMemo(function() {
@@ -946,19 +966,44 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     }
   }, [])
 
-  useEffect(() => {
+  /* (2026-و40) حارس نتايج الواجب على العميل: القفل التسلسلي ممنوع يشتغل
+     غير بعد ما نتايج التسليم توصل **مؤكدة** — أي فشل/رد error:'retry'
+     = "مش عارفين" = كله مفتوح (نفس fail-open بتاع السيرفر). ده بيقتل
+     سباق التحميل اللي كان بيقفل واجب على طالب سلّمه (شكوى المستر:
+     «سلّم الواجب الأول وبيتقاله سلّمه»)
+     (الحالة نفسها hwResultsLoaded معرّفة فوق قبل hwLockMap) */
+  useEffect(function() {
     if (!studentId) return
-    fetch('/api/homework-results?studentId=' + studentId)
-      .then(function(r) { return r.json() })
-      .then(function(data) {
-        var map: Record<string, { score: number; maxScore: number; resultId?: string }> = {}
-        ;(data.results || []).forEach(function(r: any) {
-          map[r.homeworkId] = { score: r.score, maxScore: r.maxScore, resultId: r.id }
-          onHwSubmitted(r.homeworkId)
+    var cancelled = false
+    var retryTimer: any = null
+    setHwResultsLoaded(false)
+    var loadOnce = function(isRetry: boolean) {
+      fetch('/api/homework-results?studentId=' + studentId)
+        .then(function(r) { return r.json() })
+        .then(function(data) {
+          if (cancelled) return
+          /* رد {results:[], error:'retry'} = السيرفر نفسه مش متأكد (خطأ DB حقيقي) — نفضل "مش عارفين" + معاودة واحدة */
+          if (data && data.error === 'retry') {
+            if (!isRetry) retryTimer = setTimeout(function() { loadOnce(true) }, 2500)
+            return
+          }
+          var map: Record<string, { score: number; maxScore: number; resultId?: string }> = {}
+          ;(data.results || []).forEach(function(r: any) {
+            map[r.homeworkId] = { score: r.score, maxScore: r.maxScore, resultId: r.id }
+            onHwSubmitted(r.homeworkId)
+          })
+          setHwResults(map)
+          /* بس بعد رد ناجح مؤكد — القفل التسلسلي مسموح يشتغل */
+          setHwResultsLoaded(true)
         })
-        setHwResults(map)
-      })
-      .catch(function() {})
+        .catch(function() {
+          if (cancelled) return
+          if (!isRetry) retryTimer = setTimeout(function() { loadOnce(true) }, 2500)
+        })
+    }
+    loadOnce(false)
+    return function() { cancelled = true; if (retryTimer) clearTimeout(retryTimer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId])
 
   /* (2026-و25) — كتابة التصحيح الخلفي (writingResults) توصل للطالب هنا:
@@ -1877,7 +1922,7 @@ function normalizeExamWritingItems(raw: any): any[] {
 }
 
 /* ========== EXAMS TAB ========== */
-function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId, onGoHome }: { exams: Exam[]; results: ExamResult[]; completedExamIds: Set<string>; onExamSubmitted: (examId: string) => void; studentId: string; onGoHome?: () => void }) {
+function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId, resultsLoaded, onGoHome }: { exams: Exam[]; results: ExamResult[]; completedExamIds: Set<string>; onExamSubmitted: (examId: string) => void; studentId: string; resultsLoaded?: boolean; onGoHome?: () => void }) {
   const [takingExam, setTakingExam] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [writingAnswers, setWritingAnswers] = useState<Record<number, string>>({})
@@ -2049,6 +2094,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
 
   var examLockMap = useMemo(function() {
     var map: Record<string, boolean> = {}
+    /* (2026-و40) قبل تأكيد تحميل نتايج الامتحانات — كله مفتوح (بدون 🔒 وبدون منع)
+       عشان سباق/فشل التحميل ما يقفلش امتحان على طالب قدمه أصلاً (fail-open) */
+    if (resultsLoaded === false) return map
     var prevTrackable: string | null = null
     orderedExams.forEach(function(e) {
       var track = false
@@ -2065,7 +2113,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       if (track) prevTrackable = e.id
     })
     return map
-  }, [orderedExams, completedExamIds, results])
+  }, [orderedExams, completedExamIds, results, resultsLoaded])
 
   var examPrevMap = useMemo(function() {
     var map: Record<string, string> = {}
