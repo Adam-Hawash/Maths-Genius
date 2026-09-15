@@ -128,11 +128,18 @@ function buildPagesPrompt(pageNumbers: number[], mode: 'all' | 'top', count: num
   lines.push('- IGNORE page headers, footers, page numbers, logos, advertisements, and decorations.')
   lines.push('- A question that spans two pages = ONE question; set "sourcePage" to the FIRST page it appears on.')
   lines.push('- EVERY question object MUST include "sourcePage": the page number the question appears on (from the labels).')
+  lines.push('')
+  lines.push('WORKSHEET STRUCTURE (very important — many worksheet questions contain TABLES and GRAPHS):')
+  lines.push('- TABLES: if a question shows a printed table, return "table" reproducing it EXACTLY: {"headers":["x","f(x)","(x, f(x))"],"rows":[[{"t":"-2"},{"t":"","blank":true},{"t":"","blank":true}]]}.')
+  lines.push('  * Printed cells → {"t":"<exact printed text>"}. Cells the STUDENT must fill → {"t":"","blank":true}.')
+  lines.push('  * Do NOT blank printed cells, and do NOT fill the blank cells — the student writes inside them.')
+  lines.push('- GRAPHS/DIAGRAMS: if a question contains a graph, plot, or diagram, NEVER flatten it into text and NEVER describe it as words: return "figure":{"page":<the page number the figure is on>,"bbox":{"x":..,"y":..,"w":..,"h":..}} where bbox is the bounding rectangle of the figure as FRACTIONS of the WHOLE page image (each value 0..1, x/y = top-left corner, w/h = size of the rectangle).')
+  lines.push('- modelAnswer must include the expected table values when applicable (e.g. "f(-1)=5, f(0)=3 → points (-1,5), (0,3)").')
   lines.push('- MATH FORMAT (the platform renders it as real math): powers as x^2; EVERY fraction as \\frac{numerator}{denominator} (NEVER a/b, and do NOT wrap the whole numerator/denominator in parentheses); square root √, cube root ∛, × ÷ π ≤ ≥ ≠ ≈ ∠ °. No $ signs, no other LaTeX, no markdown.')
   lines.push('- ALL output text in English (same as the rest of the platform).')
   lines.push('')
   lines.push('Return ONE single valid JSON array — no text before or after, no markdown fences. Shape:')
-  lines.push('[{"type":"mcq","question":"...","options":["opt1","opt2","opt3","opt4"],"correct":0,"points":1,"modelAnswer":"step by step solution","sourcePage":' + (pageNumbers[0] || 1) + '},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"full solution","acceptedAnswers":["5","x=5"],"sourcePage":' + (pageNumbers[0] || 1) + '}]')
+  lines.push('[{"type":"mcq","question":"...","options":["opt1","opt2","opt3","opt4"],"correct":0,"points":1,"modelAnswer":"step by step solution","sourcePage":' + (pageNumbers[0] || 1) + '},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"full solution","acceptedAnswers":["5","x=5"],"sourcePage":' + (pageNumbers[0] || 1) + ',"table":{"headers":["x","f(x)"],"rows":[[{"t":"-1"},{"t":"","blank":true}]]},"figure":{"page":' + (pageNumbers[0] || 1) + ',"bbox":{"x":0.05,"y":0.3,"w":0.4,"h":0.35}}}]')
   return lines.join('\n')
 }
 
@@ -158,16 +165,22 @@ async function callGeminiParts(parts: any[]): Promise<{ ok: boolean; text?: stri
   return { ok: false, error: result.error || 'unknown' }
 }
 
-/* توحيد سؤال على شكل المنصة القانوني + الحفاظ على sourcePage */
+/* توحيد سؤال على شكل المنصة القانوني + الحفاظ على sourcePage + حقول ورقة العمل (و40-w) */
 function finalizeQuestion(q: any): any | null {
   if (!q || typeof q !== 'object') return null
   var qText = normalizeMath(q.question || q.q || '')
   if (!qText || !String(qText).trim()) return null
   var sourcePage = typeof q.sourcePage === 'number' ? q.sourcePage : (parseInt(String(q.sourcePage), 10) || 0)
+  /* (2026-و40-w) pass-through حقول ورقة العمل: srcName/table/figure/optionFigures */
+  var ws: any = {}
+  if (q.srcName && String(q.srcName).trim()) ws.srcName = String(q.srcName).trim()
+  if (q.table && Array.isArray(q.table.rows)) ws.table = q.table
+  if (q.figure && q.figure.bbox) ws.figure = q.figure
+  if (Array.isArray(q.optionFigures)) ws.optionFigures = q.optionFigures
   var isWriting = q.type === 'writing' || q.type === 'essay'
   if (!isWriting && (!Array.isArray(q.options) || q.options.length === 0)) isWriting = true
   if (isWriting) {
-    return {
+    return Object.assign({
       type: 'writing',
       question: qText,
       options: [],
@@ -176,12 +189,12 @@ function finalizeQuestion(q: any): any | null {
       modelAnswer: normalizeMath(q.modelAnswer || q.answer || ''),
       acceptedAnswers: (Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []).map(function (a: any) { return normalizeMath(String(a)) }),
       sourcePage: sourcePage,
-    }
+    }, ws)
   }
   var opts = (q.options || []).map(function (o: any) { return normalizeMath(String(o == null ? '' : o)) }).filter(function (o: string) { return o.trim() !== '' }).slice(0, 4)
   var correct = typeof q.correct === 'number' ? q.correct : (parseInt(String(q.correct), 10) || -1)
   if (correct >= opts.length) correct = -1
-  return {
+  return Object.assign({
     type: 'mcq',
     question: qText,
     options: opts,
@@ -189,7 +202,7 @@ function finalizeQuestion(q: any): any | null {
     points: (typeof q.points === 'number' && q.points > 0) ? q.points : 1,
     modelAnswer: normalizeMath(q.modelAnswer || ''),
     sourcePage: sourcePage,
-  }
+  }, ws)
 }
 
 /* استخراج دفعة صفحات واحدة (≤5) — مع محاولة إعادة واحدة قبل التخطي */

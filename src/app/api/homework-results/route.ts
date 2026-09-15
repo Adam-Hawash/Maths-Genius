@@ -17,6 +17,24 @@ function lookupByOrigIdx(ans: any, idx: number): any {
   return undefined
 }
 
+/* (2026-و40-w) حقول ورقة العمل في المراجعة — نفس نمط exam-results */
+function wsReviewFields(q: any, origIdx: number, studentAns: any): any {
+  var out: any = { origIdx: origIdx }
+  if (q) {
+    if (q.table) out.table = q.table
+    if (q.figure) out.figure = q.figure
+    if (q.srcName) out.srcName = q.srcName
+    if (q.sourcePage !== undefined) out.sourcePage = q.sourcePage
+  }
+  try {
+    if (studentAns && !Array.isArray(studentAns) && typeof studentAns === 'object' && studentAns.__tableAnswers && typeof studentAns.__tableAnswers === 'object') {
+      var ta = studentAns.__tableAnswers[String(origIdx)] !== undefined ? studentAns.__tableAnswers[String(origIdx)] : studentAns.__tableAnswers[origIdx]
+      if (ta) out.tableAnswers = ta
+    }
+  } catch (e) {}
+  return out
+}
+
 // GET /api/homework-results?studentId=xxx - Student: own results (basic info)
 // GET /api/homework-results?homeworkId=xxx - Admin: all results for a homework with per-student details
 //
@@ -190,13 +208,13 @@ export async function GET(request: NextRequest) {
               ? String.fromCharCode(65 + correctIdx) + ') ' + opts[correctIdx]
               : (q.modelAnswer || 'No correct answer stored'))
 
-          allQuestions.push({
+          allQuestions.push(Object.assign({
             type: 'mcq',
             question: qText,
             studentAnswer: studentAnswerText,
             correctAnswer: correctAnswerText,
             isCorrect: isCorrect,
-          })
+          }, wsReviewFields(q, item.origIdx, studentAns)))
 
           if (!isCorrect) {
             wrongQuestions.push({
@@ -237,7 +255,7 @@ export async function GET(request: NextRequest) {
           var aiFeedback = stored ? (stored.aiFeedback || stored.feedback || '') : ''
           var awardedNow = stored ? (stored.awardedPoints || 0) : 0
 
-          allQuestions.push({
+          allQuestions.push(Object.assign({
             type: 'writing',
             question: qText,
             studentAnswer: studentText,
@@ -247,7 +265,7 @@ export async function GET(request: NextRequest) {
             aiIsCorrect: aiIsCorrect,
             aiFeedback: aiFeedback,
             imageGraded: isGradedNow && !!aiExtracted,
-          })
+          }, wsReviewFields(wq, wOrigIdx, studentAns)))
 
           writingAnswers.push({
             question: qText,
