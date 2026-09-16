@@ -16,6 +16,10 @@ export async function POST(request) {
     var grade = formData.get('grade') || ''
     var title = formData.get('title') || ''
     var questionsJson = formData.get('questions') || '[]'
+    /* (و51) المصدر الأصلي للأسئلة — بيتخزن مع السجل عشان الـ backfill
+       الشامل (/api/backfill-figures) يقدر يرجع يقص أي رسمة ناقصة منه بعدين */
+    var srcPath = String(formData.get('filePath') || '').trim()
+    var srcType = String(formData.get('fileType') || '').trim()
 
     /* (25-ب1) إعدادات الامتحان الجديدة (تتبعت من AIExtractionPanel):
        showResult (سوتش إظهار الإجابات) + timeLimitMin (مؤقت بالدقائق)
@@ -57,6 +61,17 @@ export async function POST(request) {
 
     if (!Array.isArray(questions) || questions.length === 0) {
       return NextResponse.json({ error: 'No questions to save' }, { status: 400 })
+    }
+
+    /* (و51) لو المصدر لينك /api/files/<id> — نجيب النوع الحقيقي من Media */
+    if (srcPath && !srcType) {
+      try {
+        var mId = String(srcPath.match(/\/api\/files\/([\w-]+)/) ? srcPath.match(/\/api\/files\/([\w-]+)/)[1] : '')
+        if (mId) {
+          var srcMedia = await db.media.findUnique({ where: { id: mId } })
+          if (srcMedia) srcType = String(srcMedia.fileType || 'application/octet-stream')
+        }
+      } catch (e) {}
     }
 
     /* (و46) سؤال اختياراته صور/رسومات (optionFigures) = اختياري **مطلقًا مقالي** —
@@ -191,6 +206,9 @@ export async function POST(request) {
             grade: grade,
             content: questions.length + ' questions extracted by AI',
             questions: questionsStr,
+            /* (و51) المصدر الأصلي — خط إنقاذ الـ backfill للرسمات الناقصة */
+            filePath: srcPath,
+            fileType: srcType,
             passScore: 50,
             /* (25-ب1) إعدادات الامتحان: إظهار الإجابات + المؤقت + جدولة الظهور */
             showResult: showResult,
@@ -212,6 +230,9 @@ export async function POST(request) {
             grade: grade,
             content: questions.length + ' questions extracted by AI',
             questions: questionsStr,
+            /* (و51) المصدر الأصلي — خط إنقاذ الـ backfill للرسمات الناقصة */
+            filePath: srcPath,
+            fileType: srcType,
             /* (25-ب1) موعد ظهور الواجب للطلاب (اختياري — فاضي = فورًا) */
             scheduledAt: scheduledDate,
           }

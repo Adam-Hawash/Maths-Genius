@@ -10,6 +10,8 @@
 import { NextResponse } from 'next/server'
 import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
 import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
+/* (و51) parser مقاوم لأي JSON مكسور — إصلاح جذري لـ «Could not parse AI response» */
+import { parseAIJsonRobust } from '@/lib/ai-json'
 /* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات (حتى لو صور) = اختياري */
 import { isWritingQuestion } from '@/lib/question-figures'
 /* (و49) القص على السيرفر — الرسمة توصل جاهزة للأدمن والطالب من غير ما تعتمد
@@ -36,12 +38,25 @@ function getMimeType(file: File): string {
 
 async function callGemini(apiKey: string, parts: any[]): Promise<any> {
   // Central helper: Gemini 3.6 first + auto model discovery + key rotation on quota (429)
-  console.log('[AI Extract] Calling Gemini (3.6 first, keys rotate on 429)')
+  // (و51) response_mime_type: application/json — الموديل بيرجّع JSON صافي من غير
+  //       أي نص حوالين/تنصيص ناقص — دي وقاية من المصدر قبل أي تصليح.
+  console.log('[AI Extract] Calling Gemini (3.6 first, JSON mode, keys rotate on 429)')
   var result = await callGeminiCentral({
     parts: parts,
-    generationConfig: { temperature: 0.1, maxOutputTokens: 16384 },
+    generationConfig: { temperature: 0.1, maxOutputTokens: 16384, response_mime_type: 'application/json' },
     timeoutMs: 90000,
+    thinking: 'low',
   })
+  /* (و51) لو الموديل رفض الـ mime نفسه (400 نادر) → محاولة أخيرة من غيره */
+  if (!result.ok) {
+    console.warn('[AI Extract] JSON-mode failed, retrying without response_mime_type:', result.error)
+    result = await callGeminiCentral({
+      parts: parts,
+      generationConfig: { temperature: 0.1, maxOutputTokens: 16384 },
+      timeoutMs: 90000,
+      thinking: 'low',
+    })
+  }
   if (result.ok) {
     console.log('[AI Extract] Model', result.model, 'succeeded')
     return { ok: true, text: result.text }
@@ -68,67 +83,11 @@ function normalizeMath(s: string): string {
   return out
 }
 
+/* (و51) الـ parser القديم اتشال — مكانه parseAIJsonRobust من '@/lib/ai-json'
+   بيشمل كل طبقات و50 + إصلاح البتر الذكي + حروف التحكم الخام + code fences
+   + تنصيص أحادي — كل واحدة معزولة ففشل واحدة مش بيمنع اللي بعدها */
 function parseAIJson(text: string): any | null {
-  if (!text || !text.trim()) return null
-  var jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) return null
-  // repair LaTeX-eating JSON escapes BEFORE parsing (\frac → \\frac …)
-  var raw = repairModelJson(jsonMatch[0])
-  // 1) direct parse
-  try {
-    return JSON.parse(raw)
-  } catch (e) {}
-  // 2) trailing-garbage tolerance (model sometimes closes the root object
-  //    then appends extra fields like ,{"answerKey":""} — walk back over
-  //    earlier '}' positions until a prefix parses)
-  var attempts = 0
-  for (var i = raw.length - 1; i > 0 && attempts < 200; i--) {
-    if (raw.charAt(i) === '}') {
-      attempts++
-      try {
-        return JSON.parse(raw.substring(0, i + 1))
-      } catch (e) {}
-    }
-  }
-  // 3) truncation repair: append missing closing brackets/quotes
-  var stack: string[] = []
-  var inStr = false
-  var esc = false
-  for (var j = 0; j < raw.length; j++) {
-    var ch = raw.charAt(j)
-    if (inStr) {
-      if (esc) esc = false
-      else if (ch === '\\') esc = true
-      else if (ch === '"') inStr = false
-    } else {
-      if (ch === '"') inStr = true
-      else if (ch === '{') stack.push('}')
-      else if (ch === '[') stack.push(']')
-      else if (ch === '}' || ch === ']') {
-        if (stack.length) stack.pop()
-      }
-    }
-  }
-  if (stack.length > 0 && stack.length <= 8) {
-    var repaired = raw
-    if (inStr || esc) repaired += '"'
-    while (stack.length) {
-      repaired += stack.pop()
-    }
-    try {
-      return JSON.parse(repaired)
-    } catch (e) {}
-  }
-  // 4) (و50) إصلاح المفاتيح اللي فقدت علامة التنصيص — النموذج ساعات بيرجّع
-  //    {"x":0.089,y":0.246,w":0.198} (بداية تنصيص ناقصة بعد فاصلة/قوس)
-  //    وده كان بيفشل الـ parse كله ويرجّع 500 رغم إن الاستخراج سليم
-  try {
-    var quoted = raw
-      .replace(/([\[{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*"\s*:/g, '$1"$2":')   // ,y": → ,"y":
-      .replace(/([\[{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":')        // ,y: → ,"y":
-    return JSON.parse(quoted)
-  } catch (e) {}
-  return null
+  return parseAIJsonRobust(text)
 }
 
 export async function POST(request) {
@@ -189,6 +148,19 @@ export async function POST(request) {
       }
       var extracted = parseAIJson(singleRes.text)
       if (!extracted) {
+        /* (و51) فرصة أخيرة: إعادة النداء بتأكيد صريح «JSON فقط» — بعض
+           الصور/الملفات بترجّع رد الموديل مش قابل للتصليح من أول مرة */
+        console.error('[AI Extract] Parse failed on first pass, retrying with reinforced prompt. Raw head:', (singleRes.text || '').substring(0, 300))
+        var retryRes = await callGemini(apiKey, [
+          { text: singlePrompt + '\n\nCRITICAL: Output ONLY the raw JSON object. No prose, no markdown, no comments. Start with { and end with }.' },
+          qPart,
+        ])
+        if (retryRes.ok) {
+          extracted = parseAIJson(retryRes.text)
+        }
+      }
+      if (!extracted) {
+        console.error('[AI Extract] Parse failed after retry. Raw head:', (singleRes.text || '').substring(0, 400))
         return NextResponse.json({ error: 'Could not parse AI response', raw: (singleRes.text || '').substring(0, 500) }, { status: 500 })
       }
       // If we got questions but some have empty modelAnswer (the document had

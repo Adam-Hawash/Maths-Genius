@@ -8,6 +8,8 @@
 import { NextResponse } from 'next/server'
 import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
 import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
+/* (و51) parser مقاوم — بيصلح أي JSON مكسور بدل ما يرمي «Could not parse AI response» */
+import { parseAIJsonRobust } from '@/lib/ai-json'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -87,7 +89,8 @@ export async function POST(request) {
     console.log('[Extract Questions] Calling Gemini (3.6 first, keys rotate on 429)')
     var result = await callGeminiCentral({
       parts: parts,
-      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+      /* (و51) JSON mode — الموديل بيرجّع JSON صافي + تفكير منخفض أسرع */
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192, response_mime_type: 'application/json' },
       timeoutMs: 60000,
     })
 
@@ -102,12 +105,12 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No response from AI' }, { status: 500 })
     }
 
-    var jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
+    /* (و51) الـ parser الجديد بيجرّب كل طبقات التصليح قبل ما يستسلم */
+    var parsed = parseAIJsonRobust(text)
+    if (!parsed) {
+      console.error('[Extract Questions] Parse failed. Raw head:', text.substring(0, 400))
       return NextResponse.json({ error: 'Could not parse AI response' }, { status: 500 })
     }
-
-    var parsed = JSON.parse(repairModelJson(jsonMatch[0]))
     var questions = (parsed.questions || []).map(function(q) {
       var opts = Array.isArray(q.options) ? q.options.slice() : ['N/A', 'N/A', 'N/A', 'N/A']
       while (opts.length < 4) { opts.push('N/A') }
