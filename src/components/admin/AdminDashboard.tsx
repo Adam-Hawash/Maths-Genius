@@ -4685,6 +4685,26 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
           </button>
         )}
         {statusMsg && <div className="flex items-center gap-2 p-3 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400"><Loader2 className="h-4 w-4 animate-spin" /><p className="text-sm">{statusMsg}</p></div>}
+        {/* (و49) بانر صريح لو أي رسمة فضلت من غير صورة — ممنوع الفشل الصامت:
+           المستر كان بيقول «بيقول في صورة بس مش شايفها» من غير ما يعرف يعمل إيه */}
+        {function () {
+          var missingFigs = 0
+          extractedQuestions.forEach(function (q: any) {
+            if (!q) return
+            if (q.figure && q.figure.bbox && !q.figure.url) missingFigs++
+            if (Array.isArray(q.optionFigures)) q.optionFigures.forEach(function (of: any) { if (of && of.bbox && !of.url) missingFigs++ })
+          })
+          if (missingFigs === 0) return null
+          return (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-400/40 text-amber-700 dark:text-amber-400">
+              <span className="text-base leading-none mt-0.5">📐</span>
+              <div className="text-xs space-y-1">
+                <p className="font-bold">{missingFigs} رسمة لسه مظهرتش — دوس «📐 الرسمة مش ظاهرة؟ دوس هنا» جنب السؤال وإتقص تاني من الملف الأصلي فورًا.</p>
+                <p className="opacity-80">لو فضلت ظاهرة بعد المحاولة، ارفع الصورة يدوي بـ 📷 جنب كل اختيار أو السؤال — الصور بتنحفظ وتوصل للطلاب طبيعي.</p>
+              </div>
+            </div>
+          )
+        }()}
         <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
           {extractedQuestions.map(function(q, qi) {
             var qType = isWritingQuestion(q) ? 'writing' : 'mcq' /* (و45) اختيارات صور = اختياري */

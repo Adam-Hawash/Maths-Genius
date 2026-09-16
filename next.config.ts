@@ -10,7 +10,14 @@ const nextConfig: NextConfig = {
     '@prisma/adapter-libsql',
     '@libsql/isomorphic-fetch',
     '@libsql/isomorphic-ws',
+    /* (و49) القص السيرفري للرسومات — pdf.js legacy + napi canvas لازم يفضلوا خارجية */
+    'pdfjs-dist',
+    '@napi-rs/canvas',
   ],
+  /* (و49) خطوط pdf.js القياسية لازم توصل مع الدالة على Vercel (نصوص الرسمة تترسم صح) */
+  outputFileTracingIncludes: {
+    '/api/ai-extract': ['./node_modules/pdfjs-dist/standard_fonts/**'],
+  },
   experimental: {
     serverActions: { bodySizeLimit: '500mb' },
     optimizePackageImports: ['lucide-react', 'framer-motion', 'embla-carousel-react', 'react-day-picker', 'date-fns'],
