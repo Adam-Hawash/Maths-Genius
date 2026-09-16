@@ -103,6 +103,45 @@ async function sourceToCanvas(src: { kind: 'bitmap'; bitmap: ImageBitmap } | { k
   return canvas
 }
 
+/* ============================================================
+ * (و52) تنقيط المحتوى — نفس منطق server-figures.refineByContent:
+ * توسيع bbox بهامش ثم تقليم الهوامش البيضا — الرسمة تطلع كاملة وموسّطة
+ * ============================================================ */
+function refineByContentDom(canvas: HTMLCanvasElement, sx: number, sy: number, sw: number, sh: number): { x: number; y: number; w: number; h: number } {
+  var fallback = { x: sx, y: sy, w: sw, h: sh }
+  try {
+    var ctx = canvas.getContext('2d')
+    if (!ctx || sw < 16 || sh < 16) return fallback
+    var img = ctx.getImageData(sx, sy, sw, sh)
+    var d = img.data
+    var rowHas = new Uint8Array(sh)
+    var colHas = new Uint8Array(sw)
+    var step = sw > 1000 ? 2 : 1
+    for (var y = 0; y < sh; y++) {
+      var base = y * sw * 4
+      for (var x = 0; x < sw; x += step) {
+        var i = base + x * 4
+        var lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
+        if (lum < 236) { rowHas[y] = 1; colHas[x] = 1 }
+      }
+    }
+    var top = -1, bottom = -1, left = -1, right = -1
+    for (var y2 = 0; y2 < sh; y2++) if (rowHas[y2]) { if (top < 0) top = y2; bottom = y2 }
+    for (var x2 = 0; x2 < sw; x2++) if (colHas[x2]) { if (left < 0) left = x2; right = x2 }
+    if (top < 0 || left < 0 || bottom < top || right < left) return fallback
+    var mX = Math.max(10, Math.round(0.015 * sw))
+    var mY = Math.max(10, Math.round(0.015 * sh))
+    var rx = Math.max(sx, sx + left - mX)
+    var ry = Math.max(sy, sy + top - mY)
+    var rEx = Math.min(sx + sw, sx + right + 1 + mX)
+    var rEy = Math.min(sy + sh, sy + bottom + 1 + mY)
+    var rw = rEx - rx, rh = rEy - ry
+    if (rw < 8 || rh < 8) return fallback
+    return { x: rx, y: ry, w: rw, h: rh }
+  } catch (eR) { return fallback }
+}
+
+
 /**
  * التأكد إن كل figure.url معباية: لكل سؤال فيه figure.bbox ومن غير url
  * بنقص الرسمة من صفحة المصدر ونرفعها ونعبي figure.url بالمسار.
@@ -174,7 +213,8 @@ export async function ensureFigureUrls(
       try {
         var numPages = Number(pdfDoc.numPages) || 0
         if (page >= 1 && (numPages <= 0 || page <= numPages)) {
-          var dataUrl = await renderPageToJpeg(pdfDoc, page, 1600, 0.85)
+          /* (و52) رندر أعلى 2000/0.9 — ده المصدر اللي القص بيتقص منه */
+          var dataUrl = await renderPageToJpeg(pdfDoc, page, 2000, 0.9)
           canvas = await sourceToCanvas({ kind: 'dataurl', dataUrl: dataUrl })
         }
       } catch (e) { canvas = null }
@@ -184,7 +224,7 @@ export async function ensureFigureUrls(
       }
       if (!canvas && fallbackDoc) {
         try {
-          var dataUrl2 = await renderPageToJpeg(fallbackDoc, page, 1600, 0.85)
+          var dataUrl2 = await renderPageToJpeg(fallbackDoc, page, 2000, 0.9)
           canvas = await sourceToCanvas({ kind: 'dataurl', dataUrl: dataUrl2 })
         } catch (eFb2) { canvas = null }
       }
@@ -209,14 +249,22 @@ export async function ensureFigureUrls(
       var pageCanvas = await getPageCanvas(page)
       if (!pageCanvas) { done++; if (onProgress) onProgress(done, total); continue }
 
-      var sw = Math.round(bbox.w * pageCanvas.width)
-      var sh = Math.round(bbox.h * pageCanvas.height)
-      var sx = Math.min(Math.max(0, Math.round(bbox.x * pageCanvas.width)), pageCanvas.width - 1)
-      var sy = Math.min(Math.max(0, Math.round(bbox.y * pageCanvas.height)), pageCanvas.height - 1)
+      /* (و52) padding حوالين bbox — رسمة السؤال هامش أكبر، رسومات الاختيارات أقل
+         (عشان ماحضنش رسمة الاختيار اللي جنبه في الشبكة) */
+      var padFrac = tgt.kind === 'q' ? 0.025 : 0.012
+      var sx0 = Math.max(0, Math.floor((bbox.x - padFrac) * pageCanvas.width))
+      var sy0 = Math.max(0, Math.floor((bbox.y - padFrac) * pageCanvas.height))
+      var ex0 = Math.min(pageCanvas.width, Math.ceil((bbox.x + bbox.w + padFrac) * pageCanvas.width))
+      var ey0 = Math.min(pageCanvas.height, Math.ceil((bbox.y + bbox.h + padFrac) * pageCanvas.height))
+      var sw0 = ex0 - sx0, sh0 = ey0 - sy0
+      if (sw0 < 8 || sh0 < 8) { done++; if (onProgress) onProgress(done, total); continue }
+      /* (و52) رصّ القص على المحتوى الفعلي — تقليم البيض جوه المنطقة الموسعة */
+      var reg = refineByContentDom(pageCanvas, sx0, sy0, sw0, sh0)
+      var sw = reg.w, sh = reg.h, sx = reg.x, sy = reg.y
       if (sw < 8 || sh < 8) { done++; if (onProgress) onProgress(done, total); continue }
 
-      /* تصغير لأقصى ضلع 1200 — الحفاظ على النسبة */
-      var scale = Math.min(1, 1200 / Math.max(sw, sh))
+      /* تصغير لأقصى ضلع 1600 — الحفاظ على النسبة */
+      var scale = Math.min(1, 1600 / Math.max(sw, sh))
       var outW = Math.max(8, Math.round(sw * scale))
       var outH = Math.max(8, Math.round(sh * scale))
       var out = document.createElement('canvas')
@@ -225,10 +273,12 @@ export async function ensureFigureUrls(
       if (!octx) { done++; if (onProgress) onProgress(done, total); continue }
       octx.fillStyle = '#ffffff'
       octx.fillRect(0, 0, outW, outH)
+      octx.imageSmoothingEnabled = true
+      octx.imageSmoothingQuality = 'high'
       octx.drawImage(pageCanvas, sx, sy, sw, sh, 0, 0, outW, outH)
 
       var blob = await new Promise<Blob | null>(function (resolve) {
-        out.toBlob(function (b: Blob | null) { resolve(b) }, 'image/jpeg', 0.85)
+        out.toBlob(function (b: Blob | null) { resolve(b) }, 'image/jpeg', 0.92)
       })
       if (!blob) { done++; if (onProgress) onProgress(done, total); continue }
 

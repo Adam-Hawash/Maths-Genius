@@ -46,6 +46,8 @@ import BidiText from '@/components/BidiText'
 import { WorksheetTableReadonly, WorksheetFigure, parseTableValuesFromText } from '@/components/worksheet/WorksheetParts'
 /* (2026-و40) الكتب والملازم — تاب مكتبة الكتب للطالب */
 import { BooksManager } from './BooksManager'
+/* (و52) محرر قص الرسمات اليدوي — المستر يظبط أي رسمة مقصوصة غلط بإيده في ثواني */
+import FigureCropEditor, { type FigureCropTarget } from './FigureCropEditor'
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
@@ -3895,6 +3897,26 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
     setBackfillBusy(false)
   }
   const [retryingCrop, setRetryingCrop] = useState<boolean>(false)
+  /* (و52) محرر القص اليدوي — الهدف المفتوح دلوقتي (سؤال أو اختيار) */
+  const [cropEdit, setCropEdit] = useState<FigureCropTarget | null>(null)
+
+  /* (و52) تطبيق نتيجة محرر القص اليدوي — الرسمة الجديدة تتكتب في السؤال فورًا */
+  var applyFigureCrop = function (t: FigureCropTarget, url: string, bbox: { x: number; y: number; w: number; h: number }, page: number) {
+    setExtractedQuestions(function (prev) {
+      return prev.map(function (q: any, i: number) {
+        if (i !== t.qi || !q) return q
+        if (t.kind === 'q') {
+          return Object.assign({}, q, { figure: Object.assign({}, q.figure || {}, { url: url, bbox: bbox, page: page }) })
+        }
+        var ofs = Array.isArray(q.optionFigures) ? q.optionFigures.slice() : []
+        while (ofs.length <= t.oi) ofs.push(null)
+        ofs[t.oi] = Object.assign({}, ofs[t.oi] || {}, { url: url, bbox: bbox, page: page })
+        return Object.assign({}, q, { optionFigures: ofs })
+      })
+    })
+    setCropEdit(null)
+    toast.success('الرسمة اتقصّت من الصفحة الأصلية واتحفظت ✓ — هتوصل للطالب بالشكل ده بالظبط')
+  }
 
   var resetAll = function() {
     setStep(1); setExtractType('exam'); setGrade(''); setTitle('')
@@ -4068,7 +4090,9 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
             setStatusMsg('بيقرأ صفحات الملف ' + cFromF + '–' + cToF + '… (' + (cf + 1) + '/' + chunksF + ')')
             var pagesF: any[] = []
             for (var pf = cFromF; pf <= cToF; pf++) {
-              var imgF = await renderPageToJpeg(docF, pf, 1400, 0.72)
+              /* (و52) 1700/0.85 بدل 1400/0.72 — دي نفس الصور اللي السيرفر بيقص منها الرسمات،
+                 الجودة الواطية كانت سبب «الرسومات جودتها وحشة» في الملفات الكبيرة */
+              var imgF = await renderPageToJpeg(docF, pf, 1700, 0.85)
               pagesF.push({ n: pf, image: imgF })
             }
             var chunkDataF: any = null
@@ -4494,7 +4518,8 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
         setStatusMsg('جاري قراءة الصفحات ' + cFrom + '–' + cTo + '… (' + (c + 1) + '/' + chunks + ')')
         var pages: any[] = []
         for (var pn = cFrom; pn <= cTo; pn++) {
-          var img = await renderPageToJpeg(doc, pn, 1400, 0.72)
+          /* (و52) 1700/0.85 — نفس الصور مصدر للقص السيرفري */
+          var img = await renderPageToJpeg(doc, pn, 1700, 0.85)
           pages.push({ n: pn, image: img })
         }
         var extractedChunk: any = null
@@ -4835,7 +4860,7 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
             <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-400/40 text-amber-700 dark:text-amber-400">
               <span className="text-base leading-none mt-0.5">📐</span>
               <div className="text-xs space-y-1">
-                <p className="font-bold">{missingFigs} رسمة لسه مظهرتش — دوس «📐 الرسمة مش ظاهرة؟ دوس هنا» جنب السؤال وإتقص تاني من الملف الأصلي فورًا.</p>
+                <p className="font-bold">{missingFigs} رسمة لسه مظهرتش — دوس «📐 الرسمة مش ظاهرة؟ دوس هنا» جنب السؤال وإتقص تاني من الملف الأصلي فورًا، أو «✂️ عدّل القص» وحددها بإيدك.</p>
                 <p className="opacity-80">لو فضلت ظاهرة بعد المحاولة، ارفع الصورة يدوي بـ 📷 جنب كل اختيار أو السؤال — الصور بتنحفظ وتوصل للطلاب طبيعي.</p>
               </div>
             </div>
@@ -4910,10 +4935,14 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
                   <div className="p-2 rounded-md bg-violet-500/5 border border-violet-500/20">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[9px] font-semibold text-muted-foreground mb-1">📐 رسمة السؤال:</p>
-                      {/* (و43) إزالة الرسمة المرفوعة يدويًا */}
-                      {q.figure && q.figure.url && (
-                        <button type="button" onClick={function() { updateQuestion(qi, 'figure', null) }} className="mb-1 text-[9px] text-destructive hover:underline">✕ إزالة</button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {/* (و52) محرر قص يدوي — أي قص أوتوماتيك طلع ناقص/متلخبط يتظبط بإيد المستر في ثواني */}
+                        <button type="button" onClick={function() { setCropEdit({ qi: qi, kind: 'q', oi: -1, page: parseInt(String((q.figure && q.figure.page) || q.sourcePage || 1), 10) || 1, bbox: (q.figure && q.figure.bbox) || null }) }} className="text-[9px] font-bold text-violet-600 dark:text-violet-400 hover:underline">✂️ عدّل القص</button>
+                        {/* (و43) إزالة الرسمة المرفوعة يدويًا */}
+                        {q.figure && q.figure.url && (
+                          <button type="button" onClick={function() { updateQuestion(qi, 'figure', null) }} className="mb-1 text-[9px] text-destructive hover:underline">✕ إزالة</button>
+                        )}
+                      </div>
                     </div>
                     <WorksheetFigure figure={q.figure} />
                   </div>
@@ -4948,6 +4977,12 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
                                 📷
                                 <input type="file" accept="image/*" hidden onChange={function(e) { var f = e.target.files && e.target.files[0]; e.target.value = ''; uploadOptionFigure(qi, oi, f) }} />
                               </label>
+                              {/* (و52) ✂️ تعديل قص رسمة الاختيار — لما القص الأوتوماتيك يطلع ناقص أو متلخبط */}
+                              {ofImg && (ofImg.url || ofImg.bbox) && (
+                                <button type="button" title="تعديل قص رسمة الاختيار"
+                                  onClick={function() { setCropEdit({ qi: qi, kind: 'of', oi: oi, page: parseInt(String(ofImg.page || q.sourcePage || 1), 10) || 1, bbox: ofImg.bbox || null }) }}
+                                  className="shrink-0 h-8 px-1.5 inline-flex items-center justify-center rounded-md border border-violet-400/50 text-[11px] transition-colors hover:bg-violet-500/10">✂️</button>
+                              )}
                             </div>
                             {ofImg && ofImg.url && (
                               <span className="relative inline-flex pr-6">
@@ -5086,6 +5121,16 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
         {step === 3 && renderStep3()}
+        {/* (و52) محرر قص الرسمات اليدوي — يشتغل من مصدر القص الأخير أو الملف المخزن على السيرفر */}
+        {cropEdit && (
+          <FigureCropEditor
+            target={cropEdit}
+            source={{ file: (lastCropSourceRef.current && lastCropSourceRef.current.file) || null, doc: (lastCropSourceRef.current && lastCropSourceRef.current.doc) || null }}
+            sourceMediaId={sourceMediaRef.current || ''}
+            onSaved={function (url, bbox, page) { applyFigureCrop(cropEdit, url, bbox, page) }}
+            onClose={function () { setCropEdit(null) }}
+          />
+        )}
       </CardContent>
     </Card>
   )
