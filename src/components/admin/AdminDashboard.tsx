@@ -21,7 +21,7 @@ import {
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
   Video as VideoIcon, LinkIcon,
-  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown
+  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown, Wrench
 } from 'lucide-react'
 import { AdminComplaints } from './AdminComplaints'
 import { CMSPanel } from './CMSPanel'
@@ -394,7 +394,7 @@ export function AdminDashboard() {
           <TabsContent value="cms"><CMSPanel /></TabsContent>
           <TabsContent value="social"><SocialLinksPanel /></TabsContent>
           <TabsContent value="payments"><PaymentsPanel onRefresh={fetchStats} /></TabsContent>
-          <TabsContent value="ai-extract"><AIExtractionPanel onRefresh={fetchStats} /></TabsContent>
+          <TabsContent value="ai-extract"><AIExtractionPanel onRefresh={fetchStats} adminId={(currentAdmin && currentAdmin.id) || ''} /></TabsContent>
           <TabsContent value="complaints"><AdminComplaints /></TabsContent>
           {/* (و24) طلب المستر: إدارة الصفوف الدراسية (إضافة/حذف صف + عربي/إنجليزي/إيموجي) + مواعيد السنتر (حذف/إضافة يوم وحصة) */}
           <TabsContent value="grades-schedule"><GradesSchedulePanel /></TabsContent>
@@ -3809,7 +3809,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
 }
 
 /* ========== AI EXTRACTION PANEL ========== */
-function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; adminId?: string }) {
   const gradesList = useGradesList()
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [extractType, setExtractType] = useState<'exam' | 'homework'>('exam')
@@ -3864,6 +3864,36 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   /* (و50) ملف المصدر متخزن على السيرفر (Media) — خط الإنقاذ: أي رسمة ناقصة
      بتتقص من السيرفر مباشرة من غير أي اعتماد على متصفح المستر */
   const sourceMediaRef = useRef<string>('')
+  /* (و51) إصلاح شامل للبيانات القديمة: أسئلة اتحفظت قبل إصلاح القص فيها
+     bbox من غير url — فالطالب كان شايف «في صورة» من غير صورة فعلية.
+     الزرار بيلف على كل الواجبات/الامتحانات (وكل نموذج) بيقص من الملف
+     الأصلي المتخزن في Media ويكتب الأسئلة المصلحة في الداتابيز */
+  const [backfillBusy, setBackfillBusy] = useState(false)
+  var runBackfill = async function () {
+    if (backfillBusy) return
+    if (!adminId) { toast.error('مفيش جلسة أدمن — سجل دخول تاني', { duration: 8000 }); return }
+    setBackfillBusy(true)
+    try {
+      var res = await fetch('/api/backfill-figures', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId: adminId }),
+      })
+      var d = await res.json()
+      if (!res.ok) { toast.error(d.error || 'فشل الإصلاح — جرب تاني', { duration: 8000 }); return }
+      if (d.cropped > 0) {
+        toast.success('اتصلحت ' + d.cropped + ' رسمة في ' + d.fixed + ' سجل (اتفحص ' + d.scanned + ') ✓ — الصور هتظهر للطلاب دلوقتي', { duration: 10000 })
+      } else if (d.withMissing === 0) {
+        toast.success('كل الأسئلة سليمة — مفيش رسمة ناقصة في أي واجب أو امتحان ✓', { duration: 8000 })
+      } else {
+        toast.warning('فيه ' + d.failed + ' رسمة محتاجة ملفاتها الأصلية مش متخزنة — ابعتها يدوي من محرر الأسئلة', { duration: 10000 })
+      }
+      if (d.remaining > 0) toast.info('فيه ' + d.remaining + ' رسمة لسه — دوس الإصلاح تاني عشان يكمل', { duration: 10000 })
+      onRefresh()
+    } catch (e) {
+      toast.error('فشل الإصلاح — جرب تاني', { duration: 8000 })
+    }
+    setBackfillBusy(false)
+  }
   const [retryingCrop, setRetryingCrop] = useState<boolean>(false)
 
   var resetAll = function() {
@@ -4316,6 +4346,12 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       var fd = new FormData()
       fd.append('type', extractType); fd.append('grade', grade); fd.append('title', title)
       fd.append('questions', JSON.stringify(qsForSave))
+      /* (و51) تخزين المصدر مع السجل نفسه — الـ backfill الشامل بيبقى يقدر
+         يرجع يقص أي رسمة ناقصة من الملف الأصلي في أي وقت بعد كده
+         (النوع الحقيقي بيتجاب من Media على السيرفر) */
+      if (sourceMediaRef.current) {
+        fd.append('filePath', '/api/files/' + sourceMediaRef.current)
+      }
       /* (25-ب1) إعدادات الامتحان: إظهار الإجابات + المؤقت + موعد الظهور
          (بتخزن من /api/ai/extract-and-save وبتتعدل لاحقًا من تاب الامتحانات) */
       if (extractType === 'exam') {
@@ -4596,6 +4632,17 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
             <BookOpen className="h-4 w-4" /> كتاب
           </button>
         </div>
+
+        {/* (و51) إصلاح شامل — أسئلة قديمة اتحفظت ورسماتها ناقصة عند الطلاب */}
+        <button
+          type="button"
+          onClick={runBackfill}
+          disabled={backfillBusy}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-60"
+        >
+          {backfillBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+          {backfillBusy ? 'جاري فحص وإصلاح رسمات كل الأسئلة...' : '🛠 رسمة مش ظاهرة عند الطالب؟ دوس هنا — إصلاح شامل لكل الأسئلة القديمة'}
+        </button>
 
         {inputMode === 'file' ? (
           <div className="space-y-4">

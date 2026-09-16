@@ -26,6 +26,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
 import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
+/* (و51) المحللات المقاومة */
+import { parseAIJsonArrayRobust } from '@/lib/ai-json'
 /* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات صور = اختياري مش مقالي */
 import { isWritingQuestion } from '@/lib/question-figures'
 /* (و50) القص السيرفري للرسومات من صور الصفحات نفسها — الرسمة توصل جاهزة
@@ -49,62 +51,10 @@ function normalizeMath(s: string): string {
   return out
 }
 
-/* محلل JSON متسامح **لمصفوفات** — نفس أسلوب parseAIJson في /api/ai-extract:
-   شيل الفنوص، دوّر على حدود المصفوفة، جرّب المشي لورا على ']' سابقة،
-   وصلّح الأقواس الناقصة (قص إخراج الموديل في النص) */
+/* (و51) المحلل المقاوم من '@/lib/ai-json' حل محل المحلل المحلي — نفس الطبقات
+   + حروف التحكم الخام + مفاتيح بلا تنصيص + بتر ذكي + تنصيص أحادي */
 function parseAIJsonArray(text: string): any[] | null {
-  if (!text || !text.trim()) return null
-  var t = String(text).trim()
-  // 1) شيل أسوار markdown لو موجودة
-  t = t.replace(/```(?:json)?/gi, '')
-  var start = t.indexOf('[')
-  if (start === -1) return null
-  var raw = repairModelJson(t.substring(start))
-  // 2) قص آخر ']' وحاول مباشرة
-  var end = raw.lastIndexOf(']')
-  if (end !== -1) {
-    try { var direct = JSON.parse(raw.substring(0, end + 1)); if (Array.isArray(direct)) return direct } catch (e) {}
-  }
-  // 3) مشي لورا على مواضع ']' (نفاية زبالة بعد إغلاق المصفوفة)
-  var attempts = 0
-  for (var i = raw.length - 1; i > 0 && attempts < 200; i--) {
-    if (raw.charAt(i) === ']') {
-      attempts++
-      try {
-        var picked = JSON.parse(raw.substring(0, i + 1))
-        if (Array.isArray(picked)) return picked
-      } catch (e) {}
-    }
-  }
-  // 4) إصلاح القص: ضيف الأقواس/الاقتباسات الناقصة بنفس خوارزمية parseAIJson
-  var stack: string[] = []
-  var inStr = false
-  var esc = false
-  for (var j = 0; j < raw.length; j++) {
-    var ch = raw.charAt(j)
-    if (inStr) {
-      if (esc) esc = false
-      else if (ch === '\\') esc = true
-      else if (ch === '"') inStr = false
-    } else {
-      if (ch === '"') inStr = true
-      else if (ch === '{') stack.push('}')
-      else if (ch === '[') stack.push(']')
-      else if (ch === '}' || ch === ']') {
-        if (stack.length) stack.pop()
-      }
-    }
-  }
-  if (stack.length > 0 && stack.length <= 8) {
-    var repaired = raw
-    if (inStr || esc) repaired += '"'
-    while (stack.length) repaired += stack.pop()
-    try {
-      var fixed = JSON.parse(repaired)
-      if (Array.isArray(fixed)) return fixed
-    } catch (e) {}
-  }
-  return null
+  return parseAIJsonArrayRobust(text)
 }
 
 function stripDataUrl(img: string): string {
@@ -168,7 +118,8 @@ function buildSelectTopPrompt(count: number): string {
 async function callGeminiParts(parts: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
   var result = await callGeminiCentral({
     parts: parts,
-    generationConfig: { temperature: 0.1, maxOutputTokens: 16384 },
+    /* (و51) JSON mode — منع أي JSON مكسور من المصدر */
+    generationConfig: { temperature: 0.1, maxOutputTokens: 16384, response_mime_type: 'application/json' },
     timeoutMs: 90000,
   })
   if (result.ok) return { ok: true, text: result.text }
