@@ -28,6 +28,9 @@ import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
 import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
 /* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات صور = اختياري مش مقالي */
 import { isWritingQuestion } from '@/lib/question-figures'
+/* (و50) القص السيرفري للرسومات من صور الصفحات نفسها — الرسمة توصل جاهزة
+   للأدمن والطالب من غير أي اعتماد على متصفح المستر في مسار الملفات الكبيرة */
+import { cropFiguresServerSide } from '@/lib/server-figures'
 
 export const runtime = 'nodejs'
 export const maxDuration = 180
@@ -220,7 +223,7 @@ function finalizeQuestion(q: any): any | null {
 }
 
 /* استخراج دفعة صفحات واحدة (≤5) — مع محاولة إعادة واحدة قبل التخطي */
-async function extractBatch(pages: any[], mode: 'all' | 'top', count: number): Promise<{ questions: any[]; ok: boolean }> {
+async function extractBatch(pages: any[], mode: 'all' | 'top', count: number): Promise<{ questions: any[]; ok: boolean; crop?: any }> {
   var pageNumbers = pages.map(function (p) { return p.n })
   var parts: any[] = [{ text: buildPagesPrompt(pageNumbers, mode, count) }]
   for (var i = 0; i < pages.length; i++) {
@@ -237,7 +240,17 @@ async function extractBatch(pages: any[], mode: 'all' | 'top', count: number): P
           var fq = finalizeQuestion(arr[qi])
           if (fq) finalized.push(fq)
         }
-        return { questions: finalized, ok: true }
+        /* (و50) القص السيرفري — من صور الصفحات الجاهزة هنا على السيرفر مباشرة */
+        var crop: any = null
+        try {
+          var cropPages = pages.map(function (p) { return { n: p.n, base64: stripDataUrl(p.image) } })
+          crop = await cropFiguresServerSide({ pages: cropPages, name: 'pages.jpg', mime: 'image/jpeg' }, finalized)
+          console.log('[AI Extract Pages] Server-side crop:', JSON.stringify(crop))
+        } catch (eCropP: any) {
+          crop = { cropped: 0, failed: -1, total: -1, error: String((eCropP && eCropP.message) || eCropP).substring(0, 200) }
+          console.error('[AI Extract Pages] Server-side crop failed (non-fatal):', (eCropP && eCropP.message) || eCropP)
+        }
+        return { questions: finalized, ok: true, crop: crop }
       }
     }
     if (attempt === 0) await new Promise(function (r) { setTimeout(r, 1200) })
@@ -304,9 +317,16 @@ export async function POST(request: NextRequest) {
 
     var allQuestions: any[] = []
     var skippedBatches = 0
+    /* (و50) تجميع إحصائية القص من كل الدفعات — الفشل ميبقاش صامت */
+    var cropAgg = { cropped: 0, failed: 0, total: 0 }
     for (var bi = 0; bi < batches.length; bi++) {
       var batchRes = await extractBatch(batches[bi], mode, count)
       if (!batchRes.ok) { skippedBatches++; continue }
+      if (batchRes.crop && typeof batchRes.crop.total === 'number' && batchRes.crop.total > 0) {
+        cropAgg.cropped += batchRes.crop.cropped || 0
+        cropAgg.failed += Math.max(0, batchRes.crop.failed || 0)
+        cropAgg.total += batchRes.crop.total
+      }
       for (var qj = 0; qj < batchRes.questions.length; qj++) allQuestions.push(batchRes.questions[qj])
     }
 
@@ -343,6 +363,8 @@ export async function POST(request: NextRequest) {
         content: '',
         questions: allQuestions,
         answerKey: '',
+        /* (و50) إحصائية القص السيرفري في الرد — الفشل ميبقاش صامت أبدًا */
+        figuresCrop: cropAgg.total > 0 ? cropAgg : null,
         stats: {
           mcq: mcqCount,
           writing: writingCount,

@@ -80,12 +80,15 @@ export interface ServerCropResult { cropped: number; failed: number; total: numb
 
 /**
  * قص كل الرسمات الناقصة في الأسئلة من ملف المصدر — **على السيرفر**.
- * src: base64 أو Buffer للـ PDF/الصورة + اسم/نوع الملف.
+ * src: base64 أو Buffer للـ PDF/الصورة + اسم/نوع الملف — أو **صفحات جاهزة**:
+ *   src.pages = [{ n: رقم الصفحة, base64: JPEG بدون dataURL prefix }] (و50)
+ *   — مسار «الملفات الكبيرة/الكتاب» بيبعت صفحات متصورة أصلًا فبنقص منها مباشرة
+ *   من غير pdf.js ولا rasterizer — أسرع وأثبت.
  * بيرجع إحصائية (قصّ ناجح/فشل/إجمالي) عشان الرد يوضّح للأدمن لو حاجة فشلت.
  * أي فشل في رسمة واحدة مش بيوقف الباقي — والفشل الكلي مش بيكسر الاستخراج.
  */
 export async function cropFiguresServerSide(
-  src: { base64?: string; buffer?: Buffer; name?: string; mime?: string },
+  src: { base64?: string; buffer?: Buffer; name?: string; mime?: string; pages?: { n: number; base64: string }[] },
   questions: any[]
 ): Promise<ServerCropResult> {
   var result: ServerCropResult = { cropped: 0, failed: 0, total: 0 }
@@ -93,6 +96,36 @@ export async function cropFiguresServerSide(
     var targets = collectTargets(questions)
     result.total = targets.length
     if (targets.length === 0) return result
+
+    /* (و50) وضع الصفحات الجاهزة (مسار ai-extract-pages) — قص مباشر من صور الصفحات */
+    if (Array.isArray(src.pages) && src.pages.length > 0) {
+      var canvasByPage: Record<number, any> = {}
+      var { createCanvas: cc1 } = await import('@napi-rs/canvas')
+      for (var pi = 0; pi < src.pages.length; pi++) {
+        var pg = src.pages[pi]
+        if (!pg || typeof pg.n !== 'number' || !pg.base64) continue
+        try {
+          var pbuf = Buffer.from(pg.base64, 'base64')
+          if (!pbuf || pbuf.length === 0) continue
+          var { loadImage: li1 } = await import('@napi-rs/canvas')
+          var pimg = await li1(pbuf)
+          var pc = cc1(pimg.width, pimg.height)
+          var pctx = pc.getContext('2d')
+          pctx.fillStyle = '#ffffff'
+          pctx.fillRect(0, 0, pc.width, pc.height)
+          pctx.drawImage(pimg, 0, 0)
+          canvasByPage[pg.n] = pc
+        } catch (eP) { /* صفحة فاسدة → رسماتها تفشل والباقي يتم */ }
+      }
+      var getFromPages = async function (pageNo: number): Promise<any | null> {
+        return canvasByPage[pageNo] || null
+      }
+      for (var tpi = 0; tpi < targets.length; tpi++) {
+        var okP = await cropOne(targets[tpi], getFromPages)
+        if (okP) result.cropped++; else result.failed++
+      }
+      return result
+    }
 
     var buf = toBuffer(src)
     if (!buf || buf.length === 0) {
