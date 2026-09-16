@@ -12,6 +12,9 @@ import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
 import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
 /* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات (حتى لو صور) = اختياري */
 import { isWritingQuestion } from '@/lib/question-figures'
+/* (و49) القص على السيرفر — الرسمة توصل جاهزة للأدمن والطالب من غير ما تعتمد
+   على متصفح المستر (كان أي فشل pdf.js/رفع بيقع بصمت ويفضل placeholder) */
+import { cropFiguresServerSide } from '@/lib/server-figures'
 
 export const runtime = 'nodejs'
 export const maxDuration = 180
@@ -145,10 +148,13 @@ export async function POST(request) {
 
     // ============= Load question file (or URL) =============
     var qPart: any = null
+    /* (و49) مصدر القص السيرفري — الملف/اللينك أصله واصل هنا فبنقص منه هنا */
+    var cropSrc: { base64: string; name: string; mime: string } | null = null
     var hasQuestionFile = questionFile && questionFile.size > 0
     if (hasQuestionFile) {
       var qBase64 = await toBase64(questionFile)
       qPart = { inlineData: { mimeType: getMimeType(questionFile), data: qBase64 } }
+      cropSrc = { base64: qBase64, name: String((questionFile as any).name || 'source'), mime: getMimeType(questionFile) }
     } else if (fileUrl.trim()) {
       try {
         var fetchRes = await fetch(fileUrl.trim())
@@ -158,6 +164,7 @@ export async function POST(request) {
         var ct = fetchRes.headers.get('content-type') || ''
         var qMime = ct.includes('pdf') ? 'application/pdf' : ct.includes('png') ? 'image/png' : ct.includes('webp') ? 'image/webp' : ct.includes('image') ? ct : 'image/jpeg'
         qPart = { inlineData: { mimeType: qMime, data: qBase64Url } }
+        cropSrc = { base64: qBase64Url, name: fileUrl.trim().split('?')[0].split('/').pop() || 'source-link', mime: qMime }
       } catch (err) {
         return NextResponse.json({ error: 'Failed to download question file' }, { status: 400 })
       }
@@ -200,6 +207,18 @@ export async function POST(request) {
               return q
             })
           }
+        }
+      }
+      /* (و49) القص على السيرفر — قبل الرد: كل figure/optionFigures ليه bbox
+         ومن غير url بيتقص من الملف الأصلي هنا وبيترفع على Media. فشل الرسمة
+         الواحدة مش بيوقف الباقي، وفشل القص كله مش بيكسر الاستخراج —
+         العميل (ensureFigureUrls) بيفضل شبكة أمان تانية للرسمات الناقصة. */
+      if (cropSrc) {
+        try {
+          var cropRes = await cropFiguresServerSide(cropSrc, extracted.questions)
+          console.log('[AI Extract] Server-side crop:', JSON.stringify(cropRes))
+        } catch (eCrop: any) {
+          console.error('[AI Extract] Server-side crop failed (non-fatal):', (eCrop && eCrop.message) || eCrop)
         }
       }
       return finalizeExtracted(extracted, type, grade, false)

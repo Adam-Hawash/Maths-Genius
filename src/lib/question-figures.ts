@@ -58,11 +58,18 @@ export function isWritingQuestion(q: any): boolean {
   return true
 }
 
-/* تطبيع bbox: كل القيم 0..1 وw/h أكبر من صفر — وإلا null (مفيش قص) */
+/* تطبيع bbox ذكي (و49): كل القيم 0..1 وw/h أكبر من صفر — وإلا null (مفيش قص)
+   + لو النموذج رجّع مقياس 0..1000 (بروتوكول Gemini) أو pixels بنحوله تلقائي
+   — ده كان بيخلي القص يتلغي بصمت مع إن الرسمة سليمة */
 function sanitizeBbox(bbox: any): { x: number; y: number; w: number; h: number } | null {
   if (!bbox || typeof bbox !== 'object') return null
-  var x = Number(bbox.x), y = Number(bbox.y), w = Number(bbox.w), h = Number(bbox.h)
-  if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h)) return null
+  var gv = function (v: any): number { var n = Number(v); return isFinite(n) ? n : NaN }
+  var x = gv(bbox.x), y = gv(bbox.y), w = gv(bbox.w), h = gv(bbox.h)
+  if ([x, y, w, h].some(function (n) { return isNaN(n) })) return null
+  var maxV = Math.max(x, y, w, h)
+  if (maxV > 1.5) { x = x / 1000; y = y / 1000; w = w / 1000; h = h / 1000 }
+  if ((w <= 0 || w > 1.5) && x >= 0 && x <= 1 && w > x) { var w2 = w / 1000; if (w2 > 0 && w2 <= 1) { w = w2 - x } }
+  if ((h <= 0 || h > 1.5) && y >= 0 && y <= 1 && h > y) { var h2 = h / 1000; if (h2 > 0 && h2 <= 1) { h = h2 - y } }
   x = Math.min(1, Math.max(0, x)); y = Math.min(1, Math.max(0, y))
   w = Math.min(1, Math.max(0, w)); h = Math.min(1, Math.max(0, h))
   if (w <= 0.005 || h <= 0.005) return null
