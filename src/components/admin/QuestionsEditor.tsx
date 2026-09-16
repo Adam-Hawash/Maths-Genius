@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Plus, Trash2, Save } from 'lucide-react'
 import { FractionText } from '@/components/FractionText'
-import { WorksheetFigure } from '@/components/worksheet/WorksheetParts'
+import { WorksheetFigure, WorksheetTableEditor } from '@/components/worksheet/WorksheetParts'
 import { repairCorruptMath } from '@/lib/math-text'
 /* (و46) رفع صورة اختيار من المحرر نفسه — نفس مسار شاشة الاستخراج */
 import { chunkedUpload } from '@/lib/chunked-upload'
@@ -37,6 +37,12 @@ export interface EditableQuestion {
      من المحرر ده (ده كان سبب «باجي أحفظه ما بيتظهرش برضه») */
   optionFigures?: any[]
   figure?: any
+  /* (2026-و55) جدول السؤال + مصدره — كانت بتتمسح هي كمان عند أي حفظ
+     من المحرر (سبب ضياع جداول ورقة العمل). دلوقتي بتتفض + تبقى قابلة
+     للتعديل من المحرر نفسه */
+  table?: any
+  sourcePage?: number
+  srcName?: string
 }
 
 /** (و46) هل السؤال ده اختياراته صور/رسومات؟ — نفس قاعدة question-figures بس من غير
@@ -69,6 +75,11 @@ export function parseQuestionsRaw(raw: any): EditableQuestion[] {
       }
       var figPass: any = undefined
       if (q.figure && typeof q.figure === 'object' && (q.figure.url || q.figure.bbox)) figPass = q.figure
+      /* (2026-و55) الجدول + مصدر الصفحة بيتفضوا — ممنوع يضيعوا عند الحفظ */
+      var tablePass: any = undefined
+      if (q.table && typeof q.table === 'object' && Array.isArray(q.table.rows) && q.table.rows.length > 0) tablePass = q.table
+      var sourcePagePass: number | undefined = typeof q.sourcePage === 'number' && q.sourcePage > 0 ? q.sourcePage : undefined
+      var srcNamePass: string | undefined = q.srcName && String(q.srcName).trim() ? String(q.srcName) : undefined
       // heal JSON-corrupted math ("rac{", control chars) on load —
       // a simple open+save in this dialog permanently repairs the stored text
       return {
@@ -81,6 +92,9 @@ export function parseQuestionsRaw(raw: any): EditableQuestion[] {
         acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers.map(function (a) { return repairCorruptMath(String(a)) }) : [],
         optionFigures: ofPass,
         figure: figPass,
+        table: tablePass,
+        sourcePage: sourcePagePass,
+        srcName: srcNamePass,
       }
     })
   } catch (e) {
@@ -221,6 +235,25 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
     }
   }
 
+  /* (2026-و55) إضافة جدول جديد للسؤال — عشان المستر يعرف يعمل جدول بنفسه
+     ويكتب عناوينه وخلاياه من غير ما يعرف JSON */
+  const addTable = function (qi: number) {
+    setQuestions(function (prev) {
+      return prev.map(function (q, i) {
+        if (i !== qi) return q
+        return Object.assign({}, q, {
+          table: {
+            headers: ['اكس', 'ف(x)'],
+            rows: [
+              [{ t: '', blank: true }, { t: '', blank: true }],
+              [{ t: '', blank: true }, { t: '', blank: true }],
+            ],
+          },
+        })
+      })
+    })
+  }
+
   const removeQuestionFigure = function (qi: number) {
     setQuestions(function (prev) {
       return prev.map(function (q, i) {
@@ -269,6 +302,10 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
             acceptedAnswers: q.acceptedAnswers.filter(function (a) { return a.trim() }),
             /* (و46) رسمة السؤال بتتفضل — مكانها مش بيتلمس */
             figure: q.figure || undefined,
+            /* (2026-و55) الجدول + مصدر الصفحة بيتحفظوا — وممكن المستر يكون عدلهم */
+            table: q.table || undefined,
+            sourcePage: q.sourcePage || undefined,
+            srcName: q.srcName || undefined,
           }
         }
         var base: any = {
@@ -279,6 +316,10 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
           points: q.points || 1,
           modelAnswer: q.modelAnswer || '',
           figure: q.figure || undefined,
+          /* (2026-و55) الجدول + مصدر الصفحة بيحفظوا حتى لأسئلة الاختيارات */
+          table: q.table || undefined,
+          sourcePage: q.sourcePage || undefined,
+          srcName: q.srcName || undefined,
         }
         /* (و46) رسومات الاختيارات بتتفضل في الحفظ — دايمًا بمحاذاة الاختيارات */
         if (Array.isArray(q.optionFigures) && q.optionFigures.some(function (o: any) { return o && (o.url || o.bbox) })) {
@@ -397,6 +438,23 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
                     📷 رفع رسمة للسؤال (اختياري)
                     <input type="file" accept="image/*" hidden onChange={function (e) { var f = e.target.files && e.target.files[0]; e.target.value = ''; uploadQuestionFigure(qi, f) }} />
                   </label>
+                )}
+
+                {/* (2026-و55) محرر الجدول — المستر يعدل العناوين والخلايا، يمسح،
+                    يكتب، ويحدد أنهي خانات الطالب يكتبها (👤) وأنها ظاهرة زي ما هي (📄).
+                    لو مفيش جدول — زرار إضافة جدول جديد */}
+                {q.table ? (
+                  <div className="rounded-md border border-sky-500/25 bg-sky-500/5 p-2">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <p className="text-[9px] font-bold text-muted-foreground">📋 جدول السؤال:</p>
+                      <button type="button" onClick={function () { update(qi, { table: undefined }) }} className="text-[9px] text-destructive hover:underline">✕ حذف الجدول</button>
+                    </div>
+                    <WorksheetTableEditor table={q.table} onChange={function (t: any) { update(qi, { table: t }) }} />
+                  </div>
+                ) : (
+                  <button type="button" onClick={function () { addTable(qi) }} className="text-[10px] font-bold text-sky-600 dark:text-sky-400 border border-sky-400/40 rounded-md px-2 py-1 hover:bg-sky-500/10">
+                    ＋ إضافة جدول للسؤال
+                  </button>
                 )}
 
                 {!isWriting && (

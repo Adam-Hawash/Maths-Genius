@@ -43,7 +43,7 @@ import { openPdf, renderPageToJpeg } from '@/lib/pdf-pages'
 /* (2026-و40-w) ورقة العمل: قص رسومات الأسئلة + عرض الجداول/الرسومات في المراجعة */
 import { ensureFigureUrls, isWritingQuestion } from '@/lib/question-figures'
 import BidiText from '@/components/BidiText'
-import { WorksheetTableReadonly, WorksheetFigure, parseTableValuesFromText } from '@/components/worksheet/WorksheetParts'
+import { WorksheetTableReadonly, WorksheetTableEditor, WorksheetFigure, parseTableValuesFromText } from '@/components/worksheet/WorksheetParts'
 /* (2026-و40) الكتب والملازم — تاب مكتبة الكتب للطالب */
 import { BooksManager } from './BooksManager'
 /* (و52) محرر قص الرسمات اليدوي — المستر يظبط أي رسمة مقصوصة غلط بإيده في ثواني */
@@ -3899,6 +3899,8 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
   const [retryingCrop, setRetryingCrop] = useState<boolean>(false)
   /* (و52) محرر القص اليدوي — الهدف المفتوح دلوقتي (سؤال أو اختيار) */
   const [cropEdit, setCropEdit] = useState<FigureCropTarget | null>(null)
+  /* (2026-و55) محرر الجدول في شاشة المراجعة — رقم السؤال اللي جدوله مفتوح للتعديل */
+  const [tableEditQi, setTableEditQi] = useState<number>(-1)
 
   /* (و52) تطبيق نتيجة محرر القص اليدوي — الرسمة الجديدة تتكتب في السؤال فورًا */
   var applyFigureCrop = function (t: FigureCropTarget, url: string, bbox: { x: number; y: number; w: number; h: number }, page: number) {
@@ -4205,6 +4207,8 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
       if (field === 'acceptedAnswers') return Object.assign({}, q, { acceptedAnswers: value })
       /* (و43) دعم حقل figure — رفع صورة الرسمة يدويًا من شاشة المراجعة */
       if (field === 'figure') return Object.assign({}, q, { figure: value })
+      /* (2026-و55) محرر الجدول من شاشة المراجعة — عدّل/امسح/اكتب خلايا وعناوين */
+      if (field === 'table') return Object.assign({}, q, { table: value })
       if (field.startsWith('option_')) {
         var oi = parseInt(field.split('_')[1])
         var newOpts = [...(q.options || [])]; newOpts[oi] = value
@@ -4939,11 +4943,21 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
                   </div>
                 )}
 
-                {/* (2026-و40-w) معاينة الجدول (الخانات المظللة الطالب يكتبها) + الرسمة المقصوصة */}
+                {/* (2026-و40-w) معاينة الجدول (الخانات المظللة الطالب يكتبها) + الرسمة المقصوصة
+                    (2026-و55) + محرر الجدول: المستر يعدل العناوين والخلايا ويمسح ويكتب */}
                 {hasTablePreview && (
                   <div className="p-2 rounded-md bg-sky-500/5 border border-sky-500/20">
-                    <p className="text-[9px] font-semibold text-muted-foreground mb-1">📋 معاينة الجدول — الخانات المظللة الطالب يكتبها:</p>
-                    <WorksheetTableReadonly table={q.table} />
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="text-[9px] font-semibold text-muted-foreground">📋 الجدول — الخانات المظللة الطالب يكتبها:</p>
+                      <button type="button" onClick={function() { setTableEditQi(function(prev: number) { return prev === qi ? -1 : qi }) }} className="text-[9px] font-bold text-sky-600 dark:text-sky-400 hover:underline">
+                        {tableEditQi === qi ? '▴ إقفال المحرر' : '✏️ عدّل الجدول'}
+                      </button>
+                    </div>
+                    {tableEditQi === qi ? (
+                      <WorksheetTableEditor table={q.table} onChange={function(t: any) { updateQuestion(qi, 'table', t) }} />
+                    ) : (
+                      <WorksheetTableReadonly table={q.table} />
+                    )}
                   </div>
                 )}
                 {hasFigurePreview && (
