@@ -17,6 +17,7 @@
 
 import { openPdf, renderPageToJpeg } from '@/lib/pdf-pages'
 import { chunkedUpload } from '@/lib/chunked-upload'
+import { splitMergedRegion } from '@/lib/figure-demerger'
 
 export interface FigureCropSource {
   file?: File | null   // ملف المصدر (PDF أو صورة) — وضع الملف
@@ -260,7 +261,18 @@ export async function ensureFigureUrls(
       if (sw0 < 8 || sh0 < 8) { done++; if (onProgress) onProgress(done, total); continue }
       /* (و52) رصّ القص على المحتوى الفعلي — تقليم البيض جوه المنطقة الموسعة */
       var reg = refineByContentDom(pageCanvas, sx0, sy0, sw0, sh0)
-      var sw = reg.w, sh = reg.h, sx = reg.x, sy = reg.y
+      /* (و53) فك الالتحام — لو المنطقة التهمت رسمة مجاورة (رسمتين جنب بعض
+         والسؤال فيه رسمة واحدة) بنقص الكتلة اللي bbox السؤال بيشاور عليها بس */
+      var pc53: HTMLCanvasElement = pageCanvas
+      var regD = splitMergedRegion(function (gx: number, gy: number, gw: number, gh: number) {
+        try {
+          var gctx = pc53.getContext('2d')
+          if (!gctx) return null
+          var gimg = gctx.getImageData(gx, gy, gw, gh)
+          return { d: gimg.data, w: gimg.width, h: gimg.height }
+        } catch (eG) { return null }
+      }, reg, { x0: bbox.x * pc53.width, y0: bbox.y * pc53.height, x1: (bbox.x + bbox.w) * pc53.width, y1: (bbox.y + bbox.h) * pc53.height })
+      var sw = regD.w, sh = regD.h, sx = regD.x, sy = regD.y
       if (sw < 8 || sh < 8) { done++; if (onProgress) onProgress(done, total); continue }
 
       /* تصغير لأقصى ضلع 1600 — الحفاظ على النسبة */
