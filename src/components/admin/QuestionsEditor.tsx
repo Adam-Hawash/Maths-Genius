@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Plus, Trash2, Save } from 'lucide-react'
 import { FractionText } from '@/components/FractionText'
+import { WorksheetFigure } from '@/components/worksheet/WorksheetParts'
 import { repairCorruptMath } from '@/lib/math-text'
 /* (و46) رفع صورة اختيار من المحرر نفسه — نفس مسار شاشة الاستخراج */
 import { chunkedUpload } from '@/lib/chunked-upload'
@@ -154,6 +155,37 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
     }
   }
 
+  /* (و48) رسمة السؤال في المحرر: عرض + رفع + إزالة — عشان المستر يقدر
+     يصلح أسئلة قديمة رسمتها مش ظاهرة (bbox من غير url من استخراج قديم) */
+  const uploadQuestionFigure = async function (qi: number, f: File | null) {
+    if (!f) return
+    try {
+      var up = await chunkedUpload(f, 'exam-figures')
+      if (up && up.filePath && /^\/api\/files\//.test(up.filePath)) {
+        setQuestions(function (prev) {
+          return prev.map(function (q, i) {
+            if (i !== qi) return q
+            return Object.assign({}, q, { figure: { url: up.filePath } })
+          })
+        })
+        toast.success('رسمة السؤال اتضافت — هتظهر للطالب زي الملف')
+      } else {
+        toast.error('فشل رفع الرسمة — جرب تاني')
+      }
+    } catch (e) {
+      toast.error('فشل رفع الرسمة — جرب تاني')
+    }
+  }
+
+  const removeQuestionFigure = function (qi: number) {
+    setQuestions(function (prev) {
+      return prev.map(function (q, i) {
+        if (i !== qi) return q
+        return Object.assign({}, q, { figure: undefined })
+      })
+    })
+  }
+
   /* (و46) إزالة صورة اختيار من المحرر */
   const removeOptionFigure = function (qi: number, oi: number) {
     setQuestions(function (prev) {
@@ -282,6 +314,29 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
                       </div>
                     )}
                   </div>
+                )}
+
+                {/* (و48) رسمة السؤال: الصورة الحقيقية لو متوفرة، placeholder لو ناقصة
+                     + زرار رفع/إزالة — المستر يقدر يصلح أي رسمة ناقصة من هنا */}
+                {(q.figure && (q.figure.url || q.figure.bbox)) ? (
+                  <div className="rounded-md border border-violet-500/25 bg-violet-500/5 p-2">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="text-[9px] font-bold text-muted-foreground" dir="rtl" style={{ textAlign: 'right' }}>📐 رسمة السؤال:</p>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[9px] font-bold text-primary cursor-pointer hover:underline">
+                          📷 استبدال
+                          <input type="file" accept="image/*" hidden onChange={function (e) { var f = e.target.files && e.target.files[0]; e.target.value = ''; uploadQuestionFigure(qi, f) }} />
+                        </label>
+                        <button type="button" onClick={function () { removeQuestionFigure(qi) }} className="text-[9px] text-destructive hover:underline">✕ إزالة</button>
+                      </div>
+                    </div>
+                    <WorksheetFigure figure={q.figure} className="mt-0" />
+                  </div>
+                ) : (
+                  <label className="text-[9px] font-bold text-muted-foreground cursor-pointer hover:text-foreground">
+                    📷 رفع رسمة للسؤال (اختياري)
+                    <input type="file" accept="image/*" hidden onChange={function (e) { var f = e.target.files && e.target.files[0]; e.target.value = ''; uploadQuestionFigure(qi, f) }} />
+                  </label>
                 )}
 
                 {!isWriting && (

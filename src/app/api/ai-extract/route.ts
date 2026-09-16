@@ -2,11 +2,10 @@
 // FILE: src/app/api/ai-extract/route.ts
 // ROUTE: POST /api/ai-extract
 // PURPOSE: Extract questions and answers from uploaded files
-//          Supports 3 modes:
-//            1) Single file (questions + answers mixed) - one AI call
-//            2) Separate question file + answer file - TWO AI calls, then merge locally
-//            3) Single file URL or two URLs
-//          Returns merged questions/answers JSON
+//          Single file mode (questions + answers mixed) - one AI call
+//          + smart answer pass (extract-or-solve) for questions with no answer
+//          Returns questions/answers JSON
+//          (و48) ملف الإجابات الاختياري اتشال بطلب المستر — مفيش وضع الملفين
 
 import { NextResponse } from 'next/server'
 import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
@@ -119,94 +118,17 @@ function parseAIJson(text: string): any | null {
   return null
 }
 
-// Merge questions from questions-doc with answers from answers-doc
-// Match by index (Q1 → A1) or by question text fuzzy match
-function mergeQuestionsAndAnswers(questions: any[], answers: any[]): any[] {
-  if (!Array.isArray(questions)) questions = []
-  if (!Array.isArray(answers)) answers = []
-
-  return questions.map(function(q, i) {
-    // Try to find matching answer by index first
-    var ans = answers[i]
-    // If no answer at that index, try fuzzy match by question text
-    if (!ans && q.question) {
-      var qNorm = q.question.trim().toLowerCase().replace(/\s+/g, ' ').substring(0, 80)
-      for (var j = 0; j < answers.length; j++) {
-        var aQ = (answers[j].question || answers[j].q || '').trim().toLowerCase().replace(/\s+/g, ' ').substring(0, 80)
-        if (aQ && (aQ === qNorm || aQ.includes(qNorm) || qNorm.includes(aQ))) {
-          ans = answers[j]
-          break
-        }
-      }
-    }
-
-    /* (و45) سؤال له اختيارات (نص أو صور/رسومات) = اختياري دايمًا — ممنوع يتحول مقالي */
-    var qType = isWritingQuestion(q) ? 'writing' : 'mcq'
-    var modelAnswer = (ans && (ans.modelAnswer || ans.answer || ans.solution)) || q.modelAnswer || ''
-    var acceptedAnswers = (ans && Array.isArray(ans.acceptedAnswers) ? ans.acceptedAnswers : (Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []))
-    var wsFields: any = {}
-    ;['sourcePage', 'srcName', 'table', 'figure', 'optionFigures'].forEach(function (k: string) {
-      if (q[k] !== undefined && q[k] !== null) wsFields[k] = q[k]
-    })
-    if (qType === 'writing') {
-      return Object.assign({
-        type: 'writing',
-        question: q.question || '',
-        options: [],
-        correct: -1,
-        points: q.points || 5,
-        modelAnswer: modelAnswer,
-        acceptedAnswers: acceptedAnswers,
-      }, wsFields)
-    }
-    // MCQ
-    /* (استخراج أدق 2026-و10) ممنوع الافتراضي الصامت على A: لو ورقة الإجابات
-       ماجابتش إجابة واثقة للسؤال → correct:-1 + needsReview عشان شاشة
-       المراجعة تنبّه المستر يثبّتها بإيده قبل الحفظ — بدل ما تطلع إجابة عشوائية */
-    var correctIdx = typeof q.correct === 'number' ? q.correct : -1
-    var needsReview = false
-    var keyQuote = ''
-    var confidence = ''
-    if (ans && typeof ans.correct === 'number' && ans.correct >= 0) {
-      correctIdx = ans.correct
-      keyQuote = ans.keyQuote || ''
-      confidence = ans.confidence || 'high'
-      if (confidence === 'low') needsReview = true
-    } else {
-      needsReview = true
-      confidence = 'low'
-    }
-    if (correctIdx >= 0 && Array.isArray(q.options) && correctIdx >= q.options.length) { needsReview = true }
-    var outQ: any = Object.assign({
-      type: 'mcq',
-      question: q.question || '',
-      options: (q.options || ['N/A', 'N/A', 'N/A', 'N/A']).slice(0, 4),
-      correct: correctIdx,
-      points: q.points || 1,
-      modelAnswer: modelAnswer,
-    }, wsFields)
-    if (needsReview) outQ.needsReview = true
-    if (keyQuote) outQ.keyQuote = keyQuote
-    if (confidence) outQ.confidence = confidence
-    return outQ
-  })
-}
-
 export async function POST(request) {
   try {
     var formData = await request.formData()
     var questionFile = formData.get('file') || formData.get('questionFile')
-    var answerFile = formData.get('answerFile')
     var fileUrl = formData.get('fileUrl') || formData.get('questionUrl') || ''
-    var answerUrl = formData.get('answerUrl') || ''
     var type = formData.get('type') || 'exam'
     var grade = formData.get('grade') || ''
 
     console.log('[AI Extract] Request received:', {
       hasQuestionFile: !!(questionFile && questionFile.size > 0),
-      hasAnswerFile: !!(answerFile && answerFile.size > 0),
       fileUrl: fileUrl ? 'yes' : 'no',
-      answerUrl: answerUrl ? 'yes' : 'no',
       type: type,
       grade: grade,
     })
@@ -241,31 +163,8 @@ export async function POST(request) {
       }
     }
 
-    // ============= Load answer file (or URL) if present =============
-    var aPart: any = null
-    var hasAnswerFile = answerFile && answerFile.size > 0
-    if (hasAnswerFile) {
-      var aBase64 = await toBase64(answerFile)
-      aPart = { inlineData: { mimeType: getMimeType(answerFile), data: aBase64 } }
-    } else if (answerUrl.trim()) {
-      try {
-        var aFetchRes = await fetch(answerUrl.trim())
-        if (!aFetchRes.ok) throw new Error('Download answer failed: ' + aFetchRes.status)
-        var aBuf = await aFetchRes.arrayBuffer()
-        var aBase64Url = Buffer.from(new Uint8Array(aBuf)).toString('base64')
-        var aCt = aFetchRes.headers.get('content-type') || ''
-        var aMime = aCt.includes('pdf') ? 'application/pdf' : aCt.includes('png') ? 'image/png' : aCt.includes('webp') ? 'image/webp' : aCt.includes('image') ? aCt : 'image/jpeg'
-        aPart = { inlineData: { mimeType: aMime, data: aBase64Url } }
-      } catch (err) {
-        // ignore answer file download errors, continue with just questions
-      }
-    }
-
-    var twoFilesMode = !!qPart && !!aPart
-
-    // ============= Mode 1: SINGLE FILE (questions + answers together) =============
-    if (!twoFilesMode) {
-      var singlePrompt = buildSingleFilePrompt(grade, type)
+    // ============= SINGLE FILE (questions + answers together) =============
+    var singlePrompt = buildSingleFilePrompt(grade, type)
       var singleParts = [{ text: singlePrompt }, qPart]
       var singleRes = await callGemini(apiKey, singleParts)
       if (!singleRes.ok) {
@@ -304,48 +203,6 @@ export async function POST(request) {
         }
       }
       return finalizeExtracted(extracted, type, grade, false)
-    }
-
-    // ============= Mode 2: TWO FILES (separate questions + answers) =============
-    // Step A: Extract questions only from the questions file
-    var questionsPrompt = buildQuestionsOnlyPrompt(grade, type)
-    var questionsParts = [{ text: questionsPrompt }, qPart]
-    var questionsRes = await callGemini(apiKey, questionsParts)
-    if (!questionsRes.ok) {
-      return NextResponse.json({ error: 'AI error extracting questions: ' + questionsRes.error }, { status: 500 })
-    }
-    var questionsData = parseAIJson(questionsRes.text)
-    if (!questionsData || !Array.isArray(questionsData.questions) || questionsData.questions.length === 0) {
-      return NextResponse.json({ error: 'Could not extract questions from questions file', raw: (questionsRes.text || '').substring(0, 500) }, { status: 500 })
-    }
-
-    // Step B: Extract answers only from the answers file
-    var answersPrompt = buildAnswersOnlyPrompt(grade, type, questionsData.questions)
-    var answersParts = [{ text: answersPrompt }, aPart]
-    var answersRes = await callGemini(apiKey, answersParts)
-    var answersData: any = { answers: [] }
-    if (answersRes.ok) {
-      answersData = parseAIJson(answersRes.text) || { answers: [] }
-      if (!Array.isArray(answersData.answers)) {
-        // Maybe the AI returned them as "questions" array - try that
-        if (Array.isArray(answersData.questions)) {
-          answersData.answers = answersData.questions
-        } else {
-          answersData.answers = []
-        }
-      }
-    }
-
-    // Step C: Merge questions + answers locally
-    var mergedQuestions = mergeQuestionsAndAnswers(questionsData.questions, answersData.answers || [])
-
-    var extracted2 = {
-      title: questionsData.title || (type + ' - ' + grade),
-      content: questionsData.content || '',
-      questions: mergedQuestions,
-      answerKey: typeof answersData === 'object' ? (answersData.answerKey || '') : '',
-    }
-    return finalizeExtracted(extracted2, type, grade, true)
   } catch (error) {
     console.error('AI extract error:', error)
     return NextResponse.json({ error: 'Error: ' + (error.message || 'Unknown') }, { status: 500 })
@@ -425,64 +282,6 @@ function buildSingleFilePrompt(grade: string, type: string): string {
   lines.push('')
   lines.push('Return ONE single valid JSON object — no text before or after, no markdown fences, no fields outside the object:')
   lines.push('{"title":"...","content":"...","questions":[{"type":"mcq","question":"...","options":["A","B","C","D"],"optionFigures":[null,null,{"page":1,"bbox":{"x":0.1,"y":0.2,"w":0.2,"h":0.15}},null],"correct":0,"points":1,"modelAnswer":"step by step solution","sourcePage":1},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"full step by step solution","acceptedAnswers":["5","x=5"],"sourcePage":1,"table":{"headers":["x","f(x)"],"rows":[[{"t":"-1"},{"t":"","blank":true}]]},"figure":{"page":1,"bbox":{"x":0.05,"y":0.3,"w":0.4,"h":0.35}}}],"answerKey":""}')
-  return lines.join('\n')
-}
-
-function buildQuestionsOnlyPrompt(grade: string, type: string): string {
-  var lines = []
-  lines.push('You are an expert math teacher. I will give you ONE document containing math QUESTIONS ONLY (no answers).')
-  lines.push('Extract ONLY the questions from this document. Do NOT extract or invent any answers.')
-  lines.push('')
-  lines.push('IMPORTANT: Extract ONLY the questions that actually exist in the document. Do NOT invent, create, or add any questions that are not in the document.')
-  lines.push('If the document has 5 questions, extract exactly those 5. If it has 20, extract all 20.')
-  lines.push('')
-  lines.push('There are TWO types of questions you should extract:')
-  lines.push('1. "mcq" - Multiple Choice Questions: the document shows ANSWER CHOICES under the question (A/B/C/D letters, numbered choices, boxes, or any listed options).')
-  lines.push('2. "writing" - Essay/Written Questions: NO answer choices are printed under the question — the student writes the full solution themselves.')
-  lines.push('DECISIVE CLASSIFICATION RULE (follow it EXACTLY): choices/options printed under the question → "mcq". NO choices printed → "writing". The VERB in the question NEVER decides the type: math questions that say "Solve", "Find x", "Calculate", "Simplify" are STILL "mcq" whenever choices are listed under them. Only classify "writing" when the document truly shows no choices at all.')
-  lines.push('IMAGE-CHOICE RULE (2026-W45 — mandatory): a question whose choices are PICTURES / FIGURES / GRAPHS (not text) is STILL "mcq": return "options" as an array of empty strings with the SAME length as the number of picture-choices, and put each choice picture in "optionFigures" aligned by index. NEVER label a picture-choices question as "writing" and NEVER flatten its choices into text.')
-  lines.push('')
-  lines.push('For "mcq" questions:')
-  lines.push('- Copy the EXACT question text from the document (translate to English if needed)')
-  lines.push('- Copy the EXACT options from the document (translate to English if needed)')
-  lines.push('- If the document has fewer than 4 options, add plausible wrong options')
-  lines.push('- If the document has no options, create 4 options (correct index will be filled later from answer key, just set 0 for now)')
-  lines.push('- Set correct to 0 (will be corrected later from answer key)')
-  lines.push('- Set modelAnswer to empty string "" (will be filled from answer key)')
-  lines.push('')
-  lines.push('For "writing" questions:')
-  lines.push('- Copy the EXACT question text from the document')
-  lines.push('- Set options to empty array []')
-  lines.push('- Set correct to -1')
-  lines.push('- Set modelAnswer to empty string "" (will be filled from answer key)')
-  lines.push('- Set acceptedAnswers to empty array [] (will be filled from answer key)')
-  lines.push('')
-  lines.push('Rules:')
-  lines.push('- ALL output text in English')
-  lines.push('- MATH FORMAT (very important — the platform renders this format as real math):')
-  lines.push('  * Powers: use the ^ symbol — x^2, y^5, 2^12. The platform renders them as REAL superscripts.')
-  lines.push('  * Fractions: EVERY fraction must use the marker \\frac{numerator}{denominator} — rendered as a REAL stacked fraction (numerator above a bar, denominator below). Example: \\frac{3}{4}.')
-  lines.push('    Do NOT wrap the whole numerator or denominator in parentheses: write \\frac{2^4}{2^3} NOT \\frac{(2^4)}{(2^3)}.')
-  lines.push('    NEVER write fractions as a/b or \u00be or with \u00f7 — ALWAYS use the \\frac{numerator}{denominator} marker (also inside options arrays).')
-  lines.push('  * Use \u221a for square root, \u221b for cube root, \u00d7 for multiplication, \u00f7 for division, \u03c0 for pi.')
-  lines.push('  * Do NOT use any other LaTeX: no $ signs, no \\sqrt, no \\times, no \\left, no \\right, no markdown. The ONLY LaTeX allowed is \\frac{numerator}{denominator}.')
-  lines.push('- Do NOT add questions from outside the document')
-  lines.push('- Do NOT skip any question from the document')
-  lines.push('- Preserve the order of questions as they appear in the document')
-  lines.push('- Grade: ' + grade + ' | Type: ' + type)
-  lines.push('')
-  lines.push('WORKSHEET STRUCTURE (very important — many worksheet questions contain TABLES and GRAPHS):')
-  lines.push('- For EVERY question include "sourcePage": the 1-based page number of the source document where the question appears (a single-page document → 1).')
-  lines.push('- TABLES: if the question shows a table, return "table" reproducing it EXACTLY: {"headers":["x","f(x)","(x, f(x))"],"rows":[[{"t":"-2"},{"t":"","blank":true},{"t":"","blank":true}]]}.')
-  lines.push('  * Printed cells → {"t":"<exact printed text>"}. Cells the STUDENT must fill → {"t":"","blank":true}.')
-  lines.push('  * Do NOT blank printed cells, and do NOT fill the blank cells — the student writes inside them.')
-  /* (و43) نفس حاجز الرسومات في برومبت الأسئلة-only */
-  lines.push('HARD RULE — FIGURES: for EVERY question (and every MCQ option) that contains or depends on any drawing, graph, plotted curve, geometric shape, diagram, chart, or image-based table: you MUST return figure/optionFigures data: question-level "figure":{"page":<page number>,"bbox":{"x":..,"y":..,"w":..,"h":..}} and option-level "optionFigures":[{"page":<page number>,"bbox":{"x":..,"y":..,"w":..,"h":..}} or null, ...] aligned with the options array.')
-  lines.push('bbox = tight rectangle around the drawing INCLUDING its axes/labels, as FRACTIONS of the WHOLE page image (each value 0..1, x/y = top-left corner, w/h = size).')
-  lines.push('NEVER convert a drawing into text: do NOT describe the graph, do NOT write coordinate tables or step-by-step plotting inside question text. If unsure whether something is a figure, treat it AS a figure. Options that are pure images get empty string text plus their optionFigures entry.')
-  lines.push('')
-  lines.push('Return ONE single valid JSON object — no text before or after, no markdown fences, no fields outside the object:')
-  lines.push('{"title":"...","content":"...","questions":[{"type":"mcq","question":"...","options":["A","B","C","D"],"correct":0,"points":1,"modelAnswer":"","sourcePage":1},{"type":"writing","question":"...","options":[],"correct":-1,"points":5,"modelAnswer":"","acceptedAnswers":[],"sourcePage":1,"table":{"headers":["x","f(x)"],"rows":[[{"t":"-1"},{"t":"","blank":true}]]},"figure":{"page":1,"bbox":{"x":0.05,"y":0.3,"w":0.4,"h":0.35}}}]}')
   return lines.join('\n')
 }
 
