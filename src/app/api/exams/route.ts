@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { notifyStudents } from '@/lib/notify'
 import { isAdmin } from '@/lib/video-guard'
+/* (2026-و55) إخفاء إجابات الـ AI في الجداول عن الطالب — تنظيف سيرفري */
+import { questionsJsonForStudent } from '@/lib/table-sanitize'
 
 /* (25-ب1) أعمدة الميزات الجديدة (إظهار الإجابات / المؤقت / جدولة الظهور) —
    defensive ALTERs بنفس نمط الكود في المشروع: لو العمود موجود الأصلًا
@@ -185,6 +187,19 @@ export async function GET(request: NextRequest) {
     // توزيع النموذج للطالب (عشوائي ثابت أو نموذج واحد ثابت للكل حسب اختيار
     // المستر) — وإلا الامتحان زي ما هو
     let outExams = studentId ? visibleExams.map(function (e: any) { return applyModelForStudent(e, studentId) }) : visibleExams
+
+    /* (2026-و55) للطالب (مش أدمن): الجداول اللي الـ AI مجاوبها كله بتتفضى —
+       الطالب هو اللي يكتب فيها، والقيم الأصلية بتفضل في الداتابيز للإدمن */
+    if (!admin) {
+      outExams = (outExams as any[]).map(function (e: any) {
+        if (!e || typeof e.questions !== 'string' || e.questions.indexOf('table') === -1) return e
+        try {
+          return Object.assign({}, e, { questions: questionsJsonForStudent(e.questions) as string })
+        } catch (sErr) {
+          return e
+        }
+      })
+    }
 
     /* (25-ب1) للأدمن بس: بادج «مجدول» — العناصر اللي موعدها في المستقبل
        بترجع مع flag scheduled: true عشان اللوحة تعرضها بوضوح */

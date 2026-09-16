@@ -354,7 +354,11 @@ export function WorksheetTableReadonly({ table, values, className }: { table: an
               <tr key={r}>
                 {cells.map(function (cell: any, c: number) {
                   var isBlank = cell && typeof cell === 'object' && cell.blank === true
-                  var v = isBlank && values && values[r] ? String(values[r][c] || '').trim() : ''
+                  /* (2026-و55) قيمة الطالب بتقرا من أي خانة (مش blank بس) —
+                     عشان جداول الـ AI اللي كانت مجاوبة كله وبقت فاضية للطالب:
+                     إجابته بتظهر في المراجعة عند الإدمن كمان مش بس عند الطالب */
+                  var sv = values && values[r] ? String(values[r][c] || '').trim() : ''
+                  var v = isBlank ? sv : sv || cellText(cell)
                   if (isBlank) {
                     return (
                       <td key={c} className={'border border-slate-300 dark:border-slate-600 px-2 py-1 text-center text-[12px] font-semibold ' + (v ? 'bg-amber-50 dark:bg-amber-900/20 text-foreground' : 'bg-muted/30 text-muted-foreground')}>
@@ -364,7 +368,7 @@ export function WorksheetTableReadonly({ table, values, className }: { table: an
                   }
                   return (
                     <td key={c} className="border border-slate-300 dark:border-slate-600 px-2 py-1 text-center text-[12px]" dir="auto">
-                      <FractionText text={cellText(cell)} />
+                      <FractionText text={v} />
                     </td>
                   )
                 })}
@@ -373,6 +377,208 @@ export function WorksheetTableReadonly({ table, values, className }: { table: an
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/* ============================================================
+   (2026-و55) محرر الجدول للأدمن — بطلب المستر:
+   «عايز اعرف أعدل في الجدول من صفحة الأدمن — أمسح حاجة، أكتب حاجة،
+   أكتب العناوين» + «الجدول يبقى فاضي الطالب هو اللي يكتب فيه».
+   ------------------------------------------------------------
+   • كل خلية: input للقيمة + زرار تبديل 📄/👤 (ظاهرة للطالب / يكتبها الطالب)
+   • العناوين قابلة للكتابة + صفوف وأعمدة تتضاف وتمسح
+   • زرار 🧹 «فضّي كل القيم» — الجدول كله يبقى خانات للطالب
+   • القيم المكتوبة بتفضل محفوظة كمفتاح إجابة (الإدمن يشوفها — الطالب لأ)
+   ============================================================ */
+
+export interface TableEditorCell { t: string; blank: boolean }
+
+function normalizeEditorTable(table: any): { headers: string[]; rows: TableEditorCell[][] } {
+  var headers = Array.isArray(table && table.headers)
+    ? (table.headers as any[]).map(function (h: any) { return String(h === undefined || h === null ? '' : (typeof h === 'object' ? (h as any).t : h)) })
+    : []
+  var rawRows = Array.isArray(table && table.rows) ? table.rows : []
+  var rows: TableEditorCell[][] = rawRows.map(function (row: any) {
+    var arr = Array.isArray(row) ? row : []
+    return arr.map(function (cell: any): TableEditorCell {
+      if (cell && typeof cell === 'object') {
+        return { t: String(cell.t === undefined || cell.t === null ? '' : cell.t), blank: cell.blank === true }
+      }
+      return { t: String(cell === undefined || cell === null ? '' : cell), blank: false }
+    })
+  })
+  /* توحيد عرض الأعمدة: أطول صف/هيدر هو المرجع */
+  var cols = headers.length
+  rows.forEach(function (row) { if (row.length > cols) cols = row.length })
+  if (cols === 0) cols = 2
+  while (headers.length < cols) headers.push('')
+  rows.forEach(function (row) {
+    while (row.length < cols) row.push({ t: '', blank: false })
+  })
+  if (rows.length === 0) rows.push(headers.map(function () { return { t: '', blank: false } }))
+  return { headers: headers, rows: rows }
+}
+
+interface TableEditorProps {
+  table: any
+  onChange: (nextTable: any) => void
+  disabled?: boolean
+}
+
+export function WorksheetTableEditor({ table, onChange, disabled }: TableEditorProps) {
+  var norm = normalizeEditorTable(table)
+  var headers = norm.headers
+  var rows = norm.rows
+  var cols = headers.length
+
+  var emit = function (h: string[], rws: TableEditorCell[][]) {
+    if (onChange) {
+      onChange({
+        headers: h,
+        rows: rws.map(function (row) {
+          return row.map(function (cell) {
+            return cell.blank ? { t: '', blank: true } : { t: cell.t }
+          })
+        }),
+      })
+    }
+  }
+
+  var setHeader = function (ci: number, v: string) {
+    var h = headers.slice(); h[ci] = v
+    emit(h, rows)
+  }
+  var setCell = function (r: number, c: number, v: string) {
+    var rws = rows.map(function (row) { return row.slice() })
+    rws[r][c] = { t: v, blank: rws[r][c].blank }
+    emit(headers, rws)
+  }
+  var toggleCell = function (r: number, c: number) {
+    var rws = rows.map(function (row) { return row.slice() })
+    rws[r][c] = { t: rws[r][c].t, blank: !rws[r][c].blank }
+    emit(headers, rws)
+  }
+  var addRow = function () {
+    var rws = rows.map(function (row) { return row.slice() })
+    rws.push(headers.map(function () { return { t: '', blank: true } }))
+    emit(headers, rws)
+  }
+  var delRow = function (r: number) {
+    if (rows.length <= 1) return
+    emit(headers, rows.filter(function (_, i) { return i !== r }).map(function (row) { return row.slice() }))
+  }
+  var addCol = function () {
+    var h = headers.slice(); h.push('')
+    var rws = rows.map(function (row) { var n = row.slice(); n.push({ t: '', blank: true }); return n })
+    emit(h, rws)
+  }
+  var delCol = function (ci: number) {
+    if (cols <= 1) return
+    emit(headers.filter(function (_, i) { return i !== ci }), rows.map(function (row) { return row.filter(function (_, i) { return i !== ci }) }))
+  }
+  var clearAll = function () {
+    emit(headers, rows.map(function (row) { return row.map(function () { return { t: '', blank: true } }) }))
+  }
+
+  var blanks = 0
+  rows.forEach(function (row) { row.forEach(function (cell) { if (cell.blank) blanks++ }) })
+
+  return (
+    <div className="space-y-2" dir="rtl">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-[10px] font-semibold text-muted-foreground">
+          ✏️ عدّل الجدول: اكتب في أي خانة، وزرار 👤= الطالب يكتبها / 📄= ظاهرة للطالب
+        </p>
+        <div className="flex items-center gap-1.5">
+          <button type="button" disabled={disabled} onClick={clearAll} className="text-[10px] font-bold rounded-md border border-amber-400/60 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 px-2 py-1 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50">
+            🧹 فضّي كل القيم (الطالب يكتبها)
+          </button>
+          <button type="button" disabled={disabled} onClick={addRow} className="text-[10px] font-bold rounded-md border border-border px-2 py-1 hover:bg-muted disabled:opacity-50">+ صف</button>
+          <button type="button" disabled={disabled} onClick={addCol} className="text-[10px] font-bold rounded-md border border-border px-2 py-1 hover:bg-muted disabled:opacity-50">+ عمود</button>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr>
+              {headers.map(function (h: string, hi: number) {
+                return (
+                  <th key={hi} className="border border-slate-300 dark:border-slate-600 bg-muted p-0 align-middle" style={{ minWidth: 84 }}>
+                    <div className="flex items-stretch">
+                      <input
+                        type="text"
+                        value={h}
+                        disabled={disabled}
+                        onChange={function (e) { setHeader(hi, e.target.value) }}
+                        placeholder={'عنوان ' + (hi + 1)}
+                        className="min-h-9 w-full bg-transparent px-2 py-1.5 text-center text-[12px] font-bold outline-none disabled:opacity-60"
+                        aria-label={'عنوان عمود ' + (hi + 1)}
+                      />
+                      <button
+                        type="button"
+                        disabled={disabled || cols <= 1}
+                        onClick={function () { delCol(hi) }}
+                        title="مسح العمود"
+                        className="shrink-0 w-6 text-[10px] text-destructive/70 hover:text-destructive disabled:opacity-30"
+                        aria-label="مسح العمود"
+                      >✕</button>
+                    </div>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(function (row, r) {
+              return (
+                <tr key={r}>
+                  {row.map(function (cell, c) {
+                    return (
+                      <td key={c} className={'border border-slate-300 dark:border-slate-600 p-0 ' + (cell.blank ? 'bg-amber-50/70 dark:bg-amber-900/10' : '')} style={{ minWidth: 84 }}>
+                        <div className="flex items-stretch">
+                          <input
+                            type="text"
+                            value={cell.t}
+                            disabled={disabled}
+                            onChange={function (e) { setCell(r, c, e.target.value) }}
+                            placeholder={cell.blank ? '👤 للطالب' : ''}
+                            className="min-h-9 w-full bg-transparent px-2 py-1.5 text-center text-[12px] outline-none disabled:opacity-60"
+                            aria-label={'خانة صف ' + (r + 1) + ' عمود ' + (c + 1)}
+                          />
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={function () { toggleCell(r, c) }}
+                            title={cell.blank ? 'الطالب يكتبها — دوس خليها ظاهرة للطالب' : 'ظاهرة للطالب — دوس خليها خانة يكتبها الطالب'}
+                            className={'shrink-0 w-7 text-[11px] disabled:opacity-40 ' + (cell.blank ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400')}
+                            aria-label={cell.blank ? 'تحويل لقيمة ظاهرة' : 'تحويل لخانة للطالب'}
+                          >{cell.blank ? '👤' : '📄'}</button>
+                        </div>
+                      </td>
+                    )
+                  })}
+                  <td className="border-none p-0 align-middle">
+                    <button
+                      type="button"
+                      disabled={disabled || rows.length <= 1}
+                      onClick={function () { delRow(r) }}
+                      title="مسح الصف"
+                      className="w-6 text-[10px] text-destructive/70 hover:text-destructive disabled:opacity-30"
+                      aria-label="مسح الصف"
+                    >✕</button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[9px] text-muted-foreground">
+        {blanks > 0
+          ? '✔ ' + blanks + ' خانة يكتبها الطالب — القيم المكتوبة (📄) هتظهر للطالب زي ما هي ومش هتتصحح منه'
+          : 'كل الخلايا معباية قيم — الطالب هيشوفها جاهزة. لو عايزه يكتبها بنفسه دوس 🧹 أو حوّل الخلايا لـ 👤'}
+      </p>
     </div>
   )
 }

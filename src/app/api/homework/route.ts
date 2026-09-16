@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { notifyStudents } from '@/lib/notify'
 import { isAdmin } from '@/lib/video-guard'
+/* (2026-و55) إخفاء إجابات الـ AI في الجداول عن الطالب — تنظيف سيرفري */
+import { questionsJsonForStudent } from '@/lib/table-sanitize'
 
 /* (25-ب1) جدولة الظهور للواجبات — defensive ALTER بنفس نمط المشروع
    (ممنوع db:push — كل قاعدة بيانات بتترقّى تلقائيًا هنا) */
@@ -131,7 +133,16 @@ export async function GET(request: NextRequest) {
           var isScheduled = h && h.scheduledAt ? new Date(h.scheduledAt).getTime() > Date.now() : false
           return { ...h, scheduled: isScheduled }
         })
-      : visibleHw
+      : /* (2026-و55) للطالب: الجداول اللي الـ AI مجاوبها كله بتتفضى —
+           الطالب هو اللي يكتب فيها، والقيم الأصلية بتفضل في الداتابيز للإدمن */
+        visibleHw.map(function (h: any) {
+          if (!h || typeof h.questions !== 'string' || h.questions.indexOf('table') === -1) return h
+          try {
+            return Object.assign({}, h, { questions: questionsJsonForStudent(h.questions) as string })
+          } catch (e) {
+            return h
+          }
+        })
 
     return NextResponse.json({ homework: outHomework, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
   } catch (error: any) {
