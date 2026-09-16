@@ -31,6 +31,13 @@ const nextConfig: NextConfig = {
       './node_modules/@napi-rs/canvas-linux-x64-gnu/**',
       './node_modules/@napi-rs/canvas-linux-x64-musl/**',
     ],
+    /* (و50) خط إنقاذ الرسمات من السيرفر — نفس أصول القص */
+    '/api/crop-figures': [
+      './node_modules/pdfjs-dist/**',
+      './node_modules/@napi-rs/canvas/**',
+      './node_modules/@napi-rs/canvas-linux-x64-gnu/**',
+      './node_modules/@napi-rs/canvas-linux-x64-musl/**',
+    ],
   },
   experimental: {
     serverActions: { bodySizeLimit: '500mb' },

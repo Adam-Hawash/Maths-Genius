@@ -15,6 +15,7 @@ import { isWritingQuestion } from '@/lib/question-figures'
 /* (و49) القص على السيرفر — الرسمة توصل جاهزة للأدمن والطالب من غير ما تعتمد
    على متصفح المستر (كان أي فشل pdf.js/رفع بيقع بصمت ويفضل placeholder) */
 import { cropFiguresServerSide } from '@/lib/server-figures'
+import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const maxDuration = 180
@@ -232,6 +233,26 @@ export async function POST(request) {
         } catch (eCrop: any) {
           figuresCrop = { cropped: 0, failed: -1, total: -1, error: String((eCrop && eCrop.message) || eCrop).substring(0, 200) }
           console.error('[AI Extract] Server-side crop failed (non-fatal):', (eCrop && eCrop.message) || eCrop)
+        }
+        /* (و50) تخزين الملف الأصلي على السيرفر — خط الإنقاذ: أي وقت ناقص رسمة
+           (حتى لو الحفظ أو بعدين) /api/crop-figures يقدر يقص منه تاني */
+        try {
+          var srcB64 = cropSrc.base64 || ''
+          if (srcB64 && srcB64.length > 0 && srcB64.length < 6 * 1024 * 1024) {
+            var srcMedia = await db.media.create({
+              data: {
+                filename: String(cropSrc.name || 'source').substring(0, 120),
+                filePath: 'extraction-source/' + Date.now(),
+                fileType: cropSrc.mime || 'application/octet-stream',
+                fileSize: String(srcB64.length),
+                data: srcB64,
+                category: 'extraction-source',
+              },
+            })
+            extracted.sourceMediaId = srcMedia.id
+          }
+        } catch (eStore: any) {
+          console.error('[AI Extract] source store failed (non-fatal):', (eStore && eStore.message) || eStore)
         }
       }
       return finalizeExtracted(extracted, type, grade, false, figuresCrop)

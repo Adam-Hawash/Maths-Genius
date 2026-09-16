@@ -45,7 +45,11 @@ function mcqChoiceList(q: any): { text: string; figUrl: string }[] {
     var t = String(opts[i] == null ? '' : opts[i])
     var f = figs[i] && figs[i].url ? String(figs[i].url) : ''
     var isPlaceholder = t.trim() === '' || t === 'N/A' || t === 'لا يوجد'
-    out.push({ text: f && isPlaceholder ? '' : t, figUrl: f })
+    /* (و50) حماية الطالب: اختيار صورة الـ url بتاعها ناقص (بيانات قديمة) —
+       ممنوع يظهر فاضي خالص: بنكتب «صورة الاختيار A» عشان الطالب يعرف إنه اختيار صورة
+       ولو فاضي تمامًا بنكتب «اختيار A» — عمره ما يبقى مكان فارغ من غير معنى */
+    var fallback = f ? ('🖼 صورة الاختيار ' + String.fromCharCode(65 + i)) : ('اختيار ' + String.fromCharCode(65 + i))
+    out.push({ text: f && isPlaceholder ? '' : (isPlaceholder && t.trim() === '' ? fallback : t), figUrl: f })
   }
   return out
 }
