@@ -78,6 +78,55 @@ function toBuffer(src: { base64?: string; buffer?: Buffer }): Buffer {
 
 export interface ServerCropResult { cropped: number; failed: number; total: number }
 
+/* ============================================================
+ * (و52) جودة القص — إصلاح «الرسومات متلخبطة وجودتها وحشة ومش كاملة»:
+ * 1) padding حوالين bbox — الـ AI بيرجع bbox ضيّق فالقص بيقص من الرسمة نفسها
+ * 2) رصّ على المحتوى الفعلي (refineByContent): جوّه المنطقة الموسعة بنلاقي
+ *    البكسلات الغير بيضا ونعمل tight bounds حوالين الرسمة + هامش صغير —
+ *    ده بيفسّر bbox المزاح أوتوماتيك بدل ما يطلع قص فاضي/ناقص
+ * 3) الجودة: JPEG 0.92 + كاب 1600 بدل 0.85/1200 — ورندر صفحة أعلى (2000)
+ * ============================================================ */
+
+/* منطقة قص بعد التنقيط — فشل التنقيط بيرجّع المنطقة الأصلية (آمن) */
+interface CropRegion { x: number; y: number; w: number; h: number }
+
+/** تقليم الهوامش البيضا داخل منطقة القص — بيرجّع tight region حوالين المحتوى */
+function refineByContent(canvas: any, sx: number, sy: number, sw: number, sh: number): CropRegion {
+  var fallback: CropRegion = { x: sx, y: sy, w: sw, h: sh }
+  try {
+    var ctx = canvas.getContext('2d')
+    if (!ctx || sw < 16 || sh < 16) return fallback
+    var img = ctx.getImageData(sx, sy, sw, sh)
+    var d = img.data
+    var rowHas = new Uint8Array(sh)
+    var colHas = new Uint8Array(sw)
+    /* خطوة 2 للمستطيلات العريضة — سرعة من غير فقدان دقة ملموس */
+    var step = sw > 1000 ? 2 : 1
+    for (var y = 0; y < sh; y++) {
+      var base = y * sw * 4
+      for (var x = 0; x < sw; x += step) {
+        var i = base + x * 4
+        var lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
+        if (lum < 236) { rowHas[y] = 1; colHas[x] = 1 }
+      }
+    }
+    var top = -1, bottom = -1, left = -1, right = -1
+    for (var y2 = 0; y2 < sh; y2++) if (rowHas[y2]) { if (top < 0) top = y2; bottom = y2 }
+    for (var x2 = 0; x2 < sw; x2++) if (colHas[x2]) { if (left < 0) left = x2; right = x2 }
+    if (top < 0 || left < 0 || bottom < top || right < left) return fallback
+    /* هامش أخير حوالين المحتوى — 1.5% من المنطقة أو 10px على الأقل */
+    var mX = Math.max(10, Math.round(0.015 * sw))
+    var mY = Math.max(10, Math.round(0.015 * sh))
+    var rx = Math.max(sx, sx + left - mX)
+    var ry = Math.max(sy, sy + top - mY)
+    var rEx = Math.min(sx + sw, sx + right + 1 + mX)
+    var rEy = Math.min(sy + sh, sy + bottom + 1 + mY)
+    var rw = rEx - rx, rh = rEy - ry
+    if (rw < 8 || rh < 8) return fallback
+    return { x: rx, y: ry, w: rw, h: rh }
+  } catch (eR) { return fallback }
+}
+
 /**
  * قص كل الرسمات الناقصة في الأسئلة من ملف المصدر — **على السيرفر**.
  * src: base64 أو Buffer للـ PDF/الصورة + اسم/نوع الملف — أو **صفحات جاهزة**:
@@ -192,7 +241,8 @@ export async function cropFiguresServerSide(
           var page = await doc.getPage(n)
           var base = page.getViewport({ scale: 1 })
           var longest = Math.max(base.width, base.height) || 1600
-          var scale = Math.min(3, 1600 / longest)
+          /* (و52) رندر أعلى — مصدر القص نفسه هو اللي بيحدد نعومة الرسمة */
+          var scale = Math.min(4, 2000 / longest)
           var vp = page.getViewport({ scale: scale })
           var canvas = createCanvas(Math.max(1, Math.ceil(vp.width)), Math.max(1, Math.ceil(vp.height)))
           var ctx = canvas.getContext('2d')
@@ -235,21 +285,33 @@ async function cropOne(
     if (!pageCanvas) return false
 
     var { createCanvas } = await import('@napi-rs/canvas')
-    var sw = Math.round(bbox.w * pageCanvas.width)
-    var sh = Math.round(bbox.h * pageCanvas.height)
-    var sx = Math.min(Math.max(0, Math.round(bbox.x * pageCanvas.width)), pageCanvas.width - 1)
-    var sy = Math.min(Math.max(0, Math.round(bbox.y * pageCanvas.height)), pageCanvas.height - 1)
+    /* (و52) padding حوالين bbox — رسمة السؤال هامش أكبر، رسومات الاختيارات
+       أقل (العناوين جنب بعض عشان ماحضنش رسمة الاختيار اللي جنبه) */
+    var padFrac = tgt.kind === 'q' ? 0.025 : 0.012
+    var pW = pageCanvas.width, pH = pageCanvas.height
+    var sx = Math.max(0, Math.floor((bbox.x - padFrac) * pW))
+    var sy = Math.max(0, Math.floor((bbox.y - padFrac) * pH))
+    var ex = Math.min(pW, Math.ceil((bbox.x + bbox.w + padFrac) * pW))
+    var ey = Math.min(pH, Math.ceil((bbox.y + bbox.h + padFrac) * pH))
+    var sw = ex - sx, sh = ey - sy
     if (sw < 8 || sh < 8) return false
 
-    var scale = Math.min(1, 1200 / Math.max(sw, sh))
+    /* (و52) رصّ القص على المحتوى الفعلي — تقليم البيض جوه المنطقة الموسعة */
+    var reg = refineByContent(pageCanvas, sx, sy, sw, sh)
+    sx = reg.x; sy = reg.y; sw = reg.w; sh = reg.h
+    if (sw < 8 || sh < 8) return false
+
+    var scale = Math.min(1, 1600 / Math.max(sw, sh))
     var outW = Math.max(8, Math.round(sw * scale))
     var outH = Math.max(8, Math.round(sh * scale))
     var out = createCanvas(outW, outH)
     var octx = out.getContext('2d')
     octx.fillStyle = '#ffffff'
     octx.fillRect(0, 0, outW, outH)
+    octx.imageSmoothingEnabled = true
+    octx.imageSmoothingQuality = 'high'
     octx.drawImage(pageCanvas, sx, sy, sw, sh, 0, 0, outW, outH)
-    var outBuf: Buffer = out.toBuffer('image/jpeg', 0.85)
+    var outBuf: Buffer = out.toBuffer('image/jpeg', 0.92)
     if (!outBuf || outBuf.length < 100) return false
 
     var url = await saveFigure(outBuf)
