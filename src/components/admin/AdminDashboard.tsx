@@ -1724,8 +1724,6 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
       var fd = new FormData()
       if (formFile) { fd.append('file', formFile) }
       else if (formFileUrl.trim()) { fd.append('fileUrl', formFileUrl.trim()) }
-      if (answerKeyFile) { fd.append('answerFile', answerKeyFile) }
-      else if (answerKeyUrl.trim()) { fd.append('answerUrl', answerKeyUrl.trim()) }
       fd.append('type', 'exam')
       fd.append('grade', formGrade)
       var ctrl = new AbortController()
@@ -3304,8 +3302,6 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       else if (formFileUrl.trim()) { fd.append('fileUrl', formFileUrl.trim()) }
       else { toast.error('ارفع ملف الأسئلة أولاً أو حط رابط'); setAiExtracting(false); setUploadMsg(''); return }
       // Send answer key file if available
-      if (answerKeyFile) { fd.append('answerFile', answerKeyFile) }
-      else if (answerKeyUrl.trim()) { fd.append('answerUrl', answerKeyUrl.trim()) }
       fd.append('type', 'exam')
       fd.append('grade', formGrade)
       var ctrl = new AbortController()
@@ -3361,8 +3357,6 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       var fd = new FormData()
       if (formFile) { fd.append('file', formFile) }
       else if (formFileUrl.trim()) { fd.append('fileUrl', formFileUrl.trim()) }
-      if (answerKeyFile) { fd.append('answerFile', answerKeyFile) }
-      else if (answerKeyUrl.trim()) { fd.append('answerUrl', answerKeyUrl.trim()) }
       fd.append('type', 'exam')
       fd.append('grade', formGrade)
       var ctrl = new AbortController()
@@ -3823,14 +3817,14 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   const [title, setTitle] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [fileUrl, setFileUrl] = useState('')
-  const [answerFile, setAnswerFile] = useState<File | null>(null)
-  const [answerUrl, setAnswerUrl] = useState('')
+  /* (و48) ملف الإجابات الاختياري اتشال بطلب المستر: «شيل لي إن أنا أقدر أعمل
+     استخراج من ملف إجابات اختياري، شيله» — الاستخراج من ملف واحد بس،
+     والإجابات الناقصة بتتملأ بالحل الذكي (extract-or-solve) زي ما هي */
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [extractedQuestions, setExtractedQuestions] = useState<Array<any>>([])
   const [statusMsg, setStatusMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
-  const answerFileRef = useRef<HTMLInputElement>(null)
   // YouTube state
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [numQuestions, setNumQuestions] = useState(10)
@@ -3864,15 +3858,16 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   const [savedBooks, setSavedBooks] = useState<any[]>([])
   const [savedBooksLoading, setSavedBooksLoading] = useState(false)
   const [showSavedBooks, setShowSavedBooks] = useState(false)
-  /* (و47) حل الأسئلة بالذكاء الاصطناعي من صفحة الأدمن — طلب المستر:
-     «ضايف ملف مش محلول → الذكاء الاصطناعي يحله وأنا أقدر أغير في الحل
-     عشان يظهر للطلبة + يشوف الرسمة الصحيحة في الاختيارات ويحط عليها» */
-  const [aiSolving, setAiSolving] = useState(false)
+  /* (و48) مصدر القص الأخير — بنحتفظ بيه عشان زرار «قص الرسمة تاني» في
+     شاشة المراجعة يقدر يعيد المحاولة لأي رسمة فشل قصّها لحظة الاستخراج */
+  const lastCropSourceRef = useRef<{ file?: File | null; doc?: any | null }>({})
+  const [retryingCrop, setRetryingCrop] = useState<boolean>(false)
 
   var resetAll = function() {
     setStep(1); setExtractType('exam'); setGrade(''); setTitle('')
-    setFile(null); setFileUrl(''); setAnswerFile(null); setAnswerUrl('')
+    setFile(null); setFileUrl('')
     setExtractedQuestions([]); setStatusMsg('')
+    lastCropSourceRef.current = {}
     setYoutubeUrl(''); setNumQuestions(10); setInputMode('file')
     setExamShowResult(false); setExamTimeLimit(''); setExamScheduledAt('')
     /* (2026-و40) تصفير وضع الكتاب */
@@ -3899,11 +3894,25 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       /* (و44) قص رسومات السؤال أوتوماتيك — (و45) رسومات الاختيارات اتشالت من العدّاد
          والإلزام بالكامل بطلب المستر: مش مطلوب رفع صورة للسؤال ولا للختيار —
          القص أوتوماتيك بس لما ينفع، ومن غير أي تنبيه أو منع */
+      /* (و48) عدّاد القص بيشمل رسمة السؤال **ورسومات الاختيارات** — ده كان السبب
+         الرئيسي لـ«اختيارات الرسومات مش بتظهر ولا للأدمن ولا للطالب»:
+         السؤال اللي اختياراته صور من غير رسمة سؤال كان العدّاد مش بيشوفه،
+         فالقص مش بيحصل أصلًا وبتفضل bbox من غير url (placeholder بس).
+         (و45 زي ما هو: القص أوتوماتيك وصامت — من غير إلزام أو تنبيه) */
       var needCrop = 0
       newQs.forEach(function (q: any) {
         if (!q) return
         if (q.figure && q.figure.bbox && !q.figure.url) needCrop++
+        if (Array.isArray(q.optionFigures)) {
+          q.optionFigures.forEach(function (of: any) {
+            if (of && of.bbox && !of.url) needCrop++
+          })
+        }
       })
+      lastCropSourceRef.current = {
+        file: (cropSource && cropSource.file) || null,
+        doc: (cropSource && cropSource.doc) || null,
+      }
       if (needCrop > 0) {
         setStatusMsg('جهز الرسومات 0 من ' + needCrop + '…')
         await ensureFigureUrls(newQs, cropSource || {}, function (done: number, total: number) {
@@ -3937,7 +3946,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
      مع الحفاظ على الأسئلة المستخرجة زي ما هي */
   var startAppendFile = function () {
     setAppendingFile(true)
-    setFile(null); setFileUrl(''); setAnswerFile(null); setAnswerUrl('')
+    setFile(null); setFileUrl('')
     setBookFile(null); setBookNumPages(0); setBookFrom(1); setBookTo(1); bookDocRef.current = null
     setStatusMsg('اختار الملف التاني وابعت استخراج — أسئلته هتتنزّل تحت الحالية (' + extractedQuestions.length + ' سؤال)')
     setStep(2)
@@ -4040,7 +4049,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
           if (!title.trim() && !appendingFile) setTitle(String(file.name || '').replace(/\.pdf$/i, '') || 'ملف PDF')
           setStatusMsg('')
           /* (و43) قص الرسومات من مستند الملف المفتوح + دمج أكتر من ملف عبر النقطة المشتركة */
-          await finishExtraction(collectedF, { doc: docF })
+          await finishExtraction(collectedF, { doc: docF, file: file })
           var okMsgF = (appendingFile ? 'تمت إضافة ' : 'تم استخراج ') + collectedF.length + (appendingFile ? ' سؤال من الملف الجديد!' : ' سؤال من الملف!')
           toast.success(okMsgF)
           try { docF.destroy() } catch (eDxF2) {}
@@ -4050,9 +4059,6 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
         var fd = new FormData()
         if (file) { fd.append('file', file) }
         else if (fileUrl.trim()) { fd.append('fileUrl', fileUrl.trim()) }
-        // Answer file (optional - if provided, AI will match questions with answers)
-        if (answerFile) { fd.append('answerFile', answerFile) }
-        else if (answerUrl.trim()) { fd.append('answerUrl', answerUrl.trim()) }
         fd.append('type', extractType)
         fd.append('grade', grade)
         var ctrl2 = new AbortController()
@@ -4062,15 +4068,26 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
         var data2 = await res2.json()
         if (res2.ok && data2.extracted && data2.extracted.questions && data2.extracted.questions.length > 0) {
           setStatusMsg('')
-          /* (2026-و40-w) قص الرسومات من ملف المصدر + دمج أكتر من ملف عبر النقطة المشتركة */
-          await finishExtraction(data2.extracted.questions, { file: file || null })
+          /* (2026-و40-w) قص الرسومات من ملف المصدر + دمج أكتر من ملف عبر النقطة المشتركة
+             (و48) الاستخراج من لينك: بيجيب الملف الأصلي عن طريق بروكسي المنصة
+             (/api/books/proxy — بتحل CORS) عشان قص الرسمات يشتغل زي الملف
+             المرفوع بالظبط — من غيرها كان القص بيتخطى خالص في وضع اللينك */
+          var cropFile: File | null = file || null
+          if (!cropFile && fileUrl.trim()) {
+            try {
+              var resLink = await fetch('/api/books/proxy?url=' + encodeURIComponent(fileUrl.trim()), { cache: 'no-store' })
+              if (resLink.ok) {
+                var blobLink = await resLink.blob()
+                var isPdfLink = (blobLink.type || '').includes('pdf') || /\.pdf(\?|$)/i.test(fileUrl.trim())
+                cropFile = new File([blobLink], 'source-' + Date.now() + (isPdfLink ? '.pdf' : '.jpg'), { type: isPdfLink ? 'application/pdf' : (blobLink.type || 'image/jpeg') })
+              }
+            } catch (eLink) { /* من غير مصدر القص بيتخطى — نفس سلوك الفشل الصامت */ }
+          }
+          await finishExtraction(data2.extracted.questions, { file: cropFile })
           var stats = data2.extracted.stats || {}
           var msg = 'تم استخراج ' + data2.extracted.questions.length + ' سؤال بنجاح!'
           if (stats.mcq || stats.writing) {
             msg += ' (' + (stats.mcq || 0) + ' اختيارات، ' + (stats.writing || 0) + ' مقالية)'
-          }
-          if (stats.twoFilesMode) {
-            msg += ' — تم دمج الأسئلة مع ملف الإجابات'
           }
           toast.success(msg)
         } else {
@@ -4165,93 +4182,34 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   var addWritingQuestion = function() { setExtractedQuestions([...extractedQuestions, { type: 'writing', question: '', options: [], correct: -1, points: 5, modelAnswer: '', acceptedAnswers: [] }]) }
 
   /* ============================================================
-   * (و47) الحل بالذكاء الاصطناعي — زرار في شاشة المراجعة:
-   *  بيبعت الأسئلة دفعات (3 سؤال في كل طلب) على /api/ai/solve-questions،
-   *  والسيرفر بيقرا رسومات الأسئلة والاختيارات من Media ويبص عليها بعينه:
-   *   • اختيارات نصية → يحدد الإجابة الصحيحة
-   *   • اختيارات رسومات → يشوف الرسمة الصحيحة ويحط عليها (correct)
-   *   • مقالي → يكتب حل بسيط خطوة بخطوة يفهمه الطالب
-   *  والأستاذ يعدل أي حل من نفس الشاشة قبل الحفظ.
+   * (و48) إعادة محاولة قص الرسمات لسؤال واحد — شبكة أمان بطلب المستر:
+   *   «أكد لي إن الصور تظهر» — لو القص فشل لحظة الاستخراج (نت نت/مصدر مش متاح)
+   *   المستر يدوس زرار واحد والرسمة تتقص من المصدر الأصلي وترفع وتظهر
+   *   للأدمن والطالب على طول — والمصدر محفوظ في lastCropSourceRef.
    * ============================================================ */
-  var aiSolveAll = async function () {
-    if (aiSolving || extractedQuestions.length === 0) return
-    setAiSolving(true)
-    var total = extractedQuestions.length
-    var solvedCount = 0, failCount = 0
-    try {
-      var BATCH = 3
-      for (var start = 0; start < total; start += BATCH) {
-        var endSlice = Math.min(total, start + BATCH)
-        setStatusMsg('الذكاء الاصطناعي بيحل… ' + (start + 1) + '–' + endSlice + ' من ' + total + ' سؤال')
-        var payload = extractedQuestions.slice(start, endSlice).map(function (q: any, bi: number) {
-          var isWriting = q.type === 'writing' || q.type === 'essay'
-          return {
-            i: start + bi,
-            type: isWriting ? 'writing' : 'mcq',
-            question: String(q.question || q.q || ''),
-            options: Array.isArray(q.options) ? q.options : [],
-            figureUrl: q.figure && q.figure.url ? String(q.figure.url) : '',
-            optionFigureUrls: Array.isArray(q.optionFigures) ? q.optionFigures.map(function (ofg: any) { return ofg && ofg.url ? String(ofg.url) : '' }) : [],
-          }
-        })
-        var okBatch = false
-        for (var attempt = 0; attempt < 2 && !okBatch; attempt++) {
-          try {
-            var ctrl = new AbortController()
-            var tmr = setTimeout(function () { ctrl.abort() }, 200000)
-            var res = await fetch('/api/ai/solve-questions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ questions: payload }),
-              signal: ctrl.signal,
-            })
-            clearTimeout(tmr)
-            var data = await res.json()
-            if (res.ok && data && Array.isArray(data.solved) && data.solved.length > 0) {
-              var solvedMap: any = {}
-              data.solved.forEach(function (s: any) { if (s && s.i >= 0) solvedMap[s.i] = s })
-              setExtractedQuestions(function (prev) {
-                return prev.map(function (q: any, idx: number) {
-                  var s = solvedMap[idx]
-                  if (!s) return q
-                  var upd: any = Object.assign({}, q)
-                  var isW = q.type === 'writing' || q.type === 'essay'
-                  if (!isW) {
-                    var c = parseInt(String(s.correct), 10)
-                    var optCount = Array.isArray(q.options) && q.options.length > 0 ? q.options.length : (Array.isArray(q.optionFigures) ? q.optionFigures.filter(Boolean).length : 0)
-                    if (isFinite(c) && c >= 0 && (optCount <= 0 || c < optCount)) upd.correct = c
-                  }
-                  var ma = String(s.modelAnswer || '').trim()
-                  if (ma) upd.modelAnswer = ma
-                  return upd
-                })
-              })
-              solvedCount += Object.keys(solvedMap).length
-              okBatch = true
-            } else if (res.ok) {
-              okBatch = true /* الرد فاضي — نعدي على الباتش ده من غير فشل */
-            }
-          } catch (eB: any) {
-            if (eB && eB.name === 'AbortError') throw eB
-          }
-          if (!okBatch && attempt === 0) await new Promise(function (r) { setTimeout(r, 1500) })
-        }
-        if (!okBatch) failCount += endSlice - start
-      }
-      setStatusMsg('')
-      if (solvedCount > 0) {
-        var msg = 'الذكاء الاصطناعي حل ' + solvedCount + ' سؤال ✅ — راجع الحلول وعدّل أي حاجة قبل الحفظ'
-        if (failCount > 0) msg += ' — (' + failCount + ' سؤال معملش حل، جرب دوس الحل تاني)'
-        toast.success(msg)
-      } else {
-        toast.error('مقدرتش أحل الأسئلة — جرب تاني')
-      }
-    } catch (err: any) {
-      setStatusMsg('')
-      if (err && err.name === 'AbortError') toast.error('انتهت مهلة الحل — جرب تاني')
-      else toast.error('خطأ في الحل: ' + (err.message || ''))
-    }
-    setAiSolving(false)
+  var retryCropQuestion = async function (qi: number) {
+    var target = extractedQuestions[qi]
+    if (!target) return
+    if (retryingCrop) return
+    var src = lastCropSourceRef.current || {}
+    if (!src.file && !src.doc) { toast.error('مفيش مصدر للقص — الرسمة دي من استخراج قديم. ارفعها يدوي بزرار 📷 أو استخرج تاني'); return }
+    var needs = !!(target.figure && target.figure.bbox && !target.figure.url) ||
+      (Array.isArray(target.optionFigures) && target.optionFigures.some(function (of: any) { return of && of.bbox && !of.url }))
+    if (!needs) { toast.info('السؤال ده رسماته ظاهرة بالفعل'); return }
+    setRetryingCrop(true)
+    setStatusMsg('بيجهز رسمات السؤال ' + (qi + 1) + '…')
+    var clone: any
+    try { clone = JSON.parse(JSON.stringify(target)) } catch (e) { clone = Object.assign({}, target) }
+    try { await ensureFigureUrls([clone], src) } catch (e) {}
+    setExtractedQuestions(function (prev) {
+      return prev.map(function (q: any, i: number) { return i === qi ? clone : q })
+    })
+    setStatusMsg('')
+    setRetryingCrop(false)
+    var gotNew = !!(clone.figure && clone.figure.url) ||
+      (Array.isArray(clone.optionFigures) && clone.optionFigures.some(function (of: any) { return of && of.url }))
+    if (gotNew) toast.success('الرسمة اتقصت واترفعت ✓ — هتظهر في المراجعة وللطالب')
+    else toast.error('مقدرتش أقص الرسمة من الملف الأصلي — ارفعها يدوي بزرار 📷')
   }
 
   var handleSave = async function() {
@@ -4474,7 +4432,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
       if (!title.trim() && !appendingFile) setTitle(bookName.trim() || ('كتاب — صفحات ' + from + '–' + to))
       setStatusMsg('')
       /* (2026-و40-w) قص الرسومات من مستند الكتاب المفتوح + دمج أكتر من ملف */
-      await finishExtraction(collected, { doc: doc })
+      await finishExtraction(collected, { doc: doc, file: bookFile })
       var okMsg = (appendingFile ? 'تمت إضافة ' : 'تم استخراج ') + collected.length + (appendingFile ? ' سؤال من الملف الجديد!' : ' سؤال من صفحات الكتاب!')
       if (skippedChunks > 0) okMsg += ' (فشلت ' + skippedChunks + ' دفعة صفحات — جرب نطاقها تاني)'
       toast.success(okMsg)
@@ -4573,29 +4531,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
               </div>
             </div>
 
-            {/* Answer key file (optional) */}
-            <div className="p-4 rounded-xl border-2 border-dashed border-amber-400/30 bg-amber-50 dark:bg-amber-950/20 space-y-3">
-              <div className="text-center">
-                <FileDown className="h-7 w-7 text-amber-500 mx-auto mb-2" />
-                <p className="text-sm font-medium">ملف الإجابات (اختياري)</p>
-                <p className="text-[10px] text-muted-foreground">لو رفعت ملف إجابات منفصل، الـ AI هيطابق كل سؤال بإجابته</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <input ref={answerFileRef} type="file" accept=".pdf,.doc,.docx,image/*" className="hidden" onChange={function(e) { setAnswerFile(e.target.files?.[0] || null); setAnswerUrl('') }} />
-                <Button type="button" variant="outline" onClick={function() { answerFileRef.current?.click() }} className="flex-1 border-amber-400/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/20"><FileDown className="h-4 w-4 ml-2" />{answerFile ? answerFile.name : 'اختر ملف الإجابات'}</Button>
-              </div>
-              {answerFile && <p className="text-xs text-muted-foreground text-center">{(answerFile.size / 1024 / 1024).toFixed(1)} MB</p>}
-              <div className="flex items-center gap-3"><div className="flex-grow h-px bg-amber-200" /><span className="text-[11px] text-muted-foreground">أو</span><div className="flex-grow h-px bg-amber-200" /></div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">أو لصق رابط ملف الإجابات</Label>
-                <Input placeholder="https://example.com/answers.pdf" value={answerUrl} onChange={function(e) { setAnswerUrl(e.target.value); if (e.target.value.trim()) { setAnswerFile(null) } }} dir="ltr" />
-              </div>
-              {answerFile && (
-                <p className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 p-2 rounded-md">
-                  ✓ سيتم استخراج الأسئلة من ملف، والإجابات من الملف ده، ودمجهم مع بعض
-                </p>
-              )}
-            </div>
+            {/* (و48) ملف الإجابات الاختياري اتشال بطلب المستر — الاستخراج من ملف الأسئلة بس */}
           </div>
         ) : inputMode === 'youtube' ? (
           <div className="p-4 rounded-xl border-2 border-dashed border-red-300 bg-red-50 dark:bg-red-950/20 space-y-3">
@@ -4759,6 +4695,9 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
             var hasTablePreview = !!(q.table && Array.isArray(q.table.rows) && q.table.rows.length > 0)
             /* (و43) معاينة الرسمة: bbox مقصوص آليًا أو url مرفوع يدويًا */
             var hasFigurePreview = !!(q.figure && (q.figure.bbox || q.figure.url))
+            /* (و48) بادج الرسمة يشمل رسومات الاختيارات + هل في رسمات لسه من غير قص */
+            var hasOptFigures = Array.isArray(q.optionFigures) && q.optionFigures.some(function (of: any) { return of && (of.url || of.bbox) })
+            var hasMissingCrop = !!(q.figure && q.figure.bbox && !q.figure.url) || (Array.isArray(q.optionFigures) && q.optionFigures.some(function (of: any) { return of && of.bbox && !of.url }))
             return (
               <Fragment key={qi}>
                 {showFileDivider && (
@@ -4776,7 +4715,12 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
                   <span className="text-[10px] text-muted-foreground">{q.points || 1} نقطة</span>
                   {/* (2026-و40-w) بادج ورقة العمل: فيها جدول / فيها رسمة + صفحة المصدر */}
                   {hasTablePreview && <Badge variant="outline" className="text-[9px] border-sky-500/40 text-sky-600">📋 فيها جدول</Badge>}
-                  {hasFigurePreview && <Badge variant="outline" className="text-[9px] border-violet-500/40 text-violet-600">📐 فيها رسمة</Badge>}
+                  {(hasFigurePreview || hasOptFigures) && <Badge variant="outline" className="text-[9px] border-violet-500/40 text-violet-600">📐 فيها رسمة</Badge>}
+                  {hasMissingCrop && (
+                    <button type="button" onClick={function() { retryCropQuestion(qi) }} disabled={retryingCrop} className="text-[9px] font-bold text-violet-600 dark:text-violet-400 border border-violet-400/50 rounded-full px-2 py-0.5 hover:bg-violet-500/10 disabled:opacity-50">
+                      {retryingCrop ? 'بيجهز…' : '📐 الرسمة مش ظاهرة؟ دوس هنا'}
+                    </button>
+                  )}
                   {typeof q.sourcePage === 'number' && q.sourcePage > 0 && (
                     <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-600">صفحة {q.sourcePage}{curSrc ? ' — ' + curSrc : ''}</Badge>
                   )}
@@ -4855,6 +4799,14 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
                                 <img src={ofImg.url} alt="صورة الاختيار" className="h-10 rounded border border-border bg-white object-contain" />
                                 <button type="button" title="إزالة صورة الاختيار" onClick={function() { removeOptionFigure(qi, oi) }} className="absolute top-0 right-0 h-4 w-4 rounded-full bg-destructive text-white text-[9px] leading-none flex items-center justify-center">✕</button>
                               </span>
+                            )}
+                            {/* (و48) رسمة اختيار من غير قص: placeholder واضح بدل ما تختفي —
+                               المستر كان بيقول «بيقول لي إن في صورة بس مش أوصل للصورة»
+                               — كده شايف إن في رسمة + زرار القص فوق يجيبه */}
+                            {ofImg && ofImg.bbox && !ofImg.url && (
+                              <div className="flex items-center justify-center rounded-md border-2 border-dashed border-violet-300 dark:border-violet-700 bg-violet-50/60 dark:bg-violet-950/20 text-violet-500 dark:text-violet-400 text-[10px] font-semibold px-2 py-1.5 text-center">
+                                📐 رسمة الاختيار {String.fromCharCode(65 + oi)} — صفحة {parseInt(String((ofImg.page) || q.sourcePage || 1), 10) || 1}
+                              </div>
                             )}
                             {hasMathMarkup(opt || '') && (
                               <p className="text-xs text-foreground pr-6" dir="ltr" style={{ textAlign: 'left' }}><FractionText text={opt || ''} /></p>
@@ -4942,29 +4894,12 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
           </div>
         )}
         <div className="flex gap-2 pt-2">
-          {/* (و47) الحل بالذكاء الاصطناعي — قبل الحفظ: بيحل كل الأسئلة (اختيارات/رسومات/مقالي)
-             والأستاذ يعدل في الحل من الشاشة دي قبل ما يحفظ للطلبة */}
-          <Button
-            variant="outline"
-            className="border-violet-500/60 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10"
-            onClick={aiSolveAll}
-            disabled={aiSolving || saving || extractedQuestions.length === 0}
-            title="الذكاء الاصطناعي يحل كل الأسئلة: يحدد إجابة الاختيارات (ويشوف رسومات الاختيارات بعينه ويحط على الصحيحة) ويكتب حل بسيط للمقالي — وبعد كده تعدل براحتك"
-          >
-            {aiSolving ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Sparkles className="h-4 w-4 ml-1" />}
-            {aiSolving ? 'بيحل…' : 'حل بالذكاء الاصطناعي'}
-          </Button>
           <Button className="flex-1" onClick={handleSave} disabled={saving || extractedQuestions.length === 0}>
             {saving ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Save className="h-4 w-4 ml-1" />}
             {saving ? 'جاري الحفظ...' : 'حفظ في قاعدة البيانات'}
           </Button>
           <Button variant="outline" onClick={resetAll}>الغاء</Button>
         </div>
-        <p className="text-[10px] text-muted-foreground mt-1">
-          {aiSolving
-            ? 'الذكاء الاصطناعي بيحل الأسئلة دفعة دفعة — سيبه يخلص ثم راجع الحلول'
-            : '💡 ملف مش محلول؟ دوس «حل بالذكاء الاصطناعي» — يحل كل الأسئلة ويحدد رسمة الاختيار الصحيحة، وبعدين عدّل أي حل قبل الحفظ'}
-        </p>
       </div>
     )
   }

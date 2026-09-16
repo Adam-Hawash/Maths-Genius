@@ -125,12 +125,17 @@ export async function ensureFigureUrls(
   var total = targets.length
   if (total === 0) return
 
-  /* تجهيز مصدر الصفحات: مستند PDF مفتوح أو bitmap صورة */
+  /* تجهيز مصدر الصفحات: مستند PDF مفتوح أو bitmap صورة
+     (و48) لو فيه doc **و**file مع بعض: الـ doc ممكن يكون متدمر (destroyed)
+     بعد الاستخراج — فبنحتفظ بالملف كمصدر احتياطي ونعيد فتحه لو الرندر فشل */
   var pdfDoc: any = null
   var imgBitmap: ImageBitmap | null = null
+  var fallbackFile: File | null = null
+  var fallbackDoc: any = null
   try {
     if (source.doc) {
       pdfDoc = source.doc
+      if (source.file) fallbackFile = source.file
     } else if (source.file) {
       var f = source.file
       var isPdf = /\.(pdf)$/i.test(f.name || '') || f.type === 'application/pdf'
@@ -156,22 +161,33 @@ export async function ensureFigureUrls(
 
   var getPageCanvas = async function (page: number): Promise<HTMLCanvasElement | null> {
     if (pageCanvasCache[page]) return pageCanvasCache[page]
-    try {
-      if (pdfDoc) {
+    var canvas: HTMLCanvasElement | null = null
+    /* 1) المحاولة من المستند المفتوح */
+    if (pdfDoc) {
+      try {
         var numPages = Number(pdfDoc.numPages) || 0
-        if (page < 1 || (numPages > 0 && page > numPages)) return null
-        var dataUrl = await renderPageToJpeg(pdfDoc, page, 1600, 0.85)
-        var canvas = await sourceToCanvas({ kind: 'dataurl', dataUrl: dataUrl })
-        pageCanvasCache[page] = canvas
-        return canvas
+        if (page >= 1 && (numPages <= 0 || page <= numPages)) {
+          var dataUrl = await renderPageToJpeg(pdfDoc, page, 1600, 0.85)
+          canvas = await sourceToCanvas({ kind: 'dataurl', dataUrl: dataUrl })
+        }
+      } catch (e) { canvas = null }
+      /* 2) (و48) المستند فشل (متدمر/مقفول) → إعادة فتح الملف الأصلي */
+      if (!canvas && fallbackFile && !fallbackDoc) {
+        try { fallbackDoc = (await openPdf(fallbackFile)).doc } catch (eFb) { fallbackDoc = null }
       }
-      if (imgBitmap && page === 1) {
-        var c2 = await sourceToCanvas({ kind: 'bitmap', bitmap: imgBitmap })
-        pageCanvasCache[page] = c2
-        return c2
+      if (!canvas && fallbackDoc) {
+        try {
+          var dataUrl2 = await renderPageToJpeg(fallbackDoc, page, 1600, 0.85)
+          canvas = await sourceToCanvas({ kind: 'dataurl', dataUrl: dataUrl2 })
+        } catch (eFb2) { canvas = null }
       }
-    } catch (e) {}
-    return null
+    }
+    /* 3) صورة مفردة (صفحة 1) */
+    if (!canvas && imgBitmap && page === 1) {
+      try { canvas = await sourceToCanvas({ kind: 'bitmap', bitmap: imgBitmap }) } catch (eB) { canvas = null }
+    }
+    if (canvas) pageCanvasCache[page] = canvas
+    return canvas
   }
 
   var done = 0
