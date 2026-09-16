@@ -118,6 +118,15 @@ function parseAIJson(text: string): any | null {
       return JSON.parse(repaired)
     } catch (e) {}
   }
+  // 4) (و50) إصلاح المفاتيح اللي فقدت علامة التنصيص — النموذج ساعات بيرجّع
+  //    {"x":0.089,y":0.246,w":0.198} (بداية تنصيص ناقصة بعد فاصلة/قوس)
+  //    وده كان بيفشل الـ parse كله ويرجّع 500 رغم إن الاستخراج سليم
+  try {
+    var quoted = raw
+      .replace(/([\[{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*"\s*:/g, '$1"$2":')   // ,y": → ,"y":
+      .replace(/([\[{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":')        // ,y: → ,"y":
+    return JSON.parse(quoted)
+  } catch (e) {}
   return null
 }
 
@@ -213,15 +222,19 @@ export async function POST(request) {
          ومن غير url بيتقص من الملف الأصلي هنا وبيترفع على Media. فشل الرسمة
          الواحدة مش بيوقف الباقي، وفشل القص كله مش بيكسر الاستخراج —
          العميل (ensureFigureUrls) بيفضل شبكة أمان تانية للرسمات الناقصة. */
+      /* (و50) إحصائية القص تبقى في الرد نفسه — ممنوع الفشل الصامت تاني */
+      var figuresCrop = null
       if (cropSrc) {
         try {
           var cropRes = await cropFiguresServerSide(cropSrc, extracted.questions)
+          figuresCrop = cropRes
           console.log('[AI Extract] Server-side crop:', JSON.stringify(cropRes))
         } catch (eCrop: any) {
+          figuresCrop = { cropped: 0, failed: -1, total: -1, error: String((eCrop && eCrop.message) || eCrop).substring(0, 200) }
           console.error('[AI Extract] Server-side crop failed (non-fatal):', (eCrop && eCrop.message) || eCrop)
         }
       }
-      return finalizeExtracted(extracted, type, grade, false)
+      return finalizeExtracted(extracted, type, grade, false, figuresCrop)
   } catch (error) {
     console.error('AI extract error:', error)
     return NextResponse.json({ error: 'Error: ' + (error.message || 'Unknown') }, { status: 500 })
@@ -375,7 +388,7 @@ function buildAnswersOnlyPrompt(grade: string, type: string, questions: any[]): 
   return lines.join('\n')
 }
 
-function finalizeExtracted(extracted: any, type: string, grade: string, twoFilesMode: boolean): any {
+function finalizeExtracted(extracted: any, type: string, grade: string, twoFilesMode: boolean, figuresCrop?: any): any {
   if (!extracted.title) { extracted.title = type + ' - ' + grade }
   if (!extracted.content) { extracted.content = '' }
   if (!Array.isArray(extracted.questions)) { extracted.questions = [] }
@@ -428,5 +441,7 @@ function finalizeExtracted(extracted: any, type: string, grade: string, twoFiles
   var mcqCount = extracted.questions.filter(function(q) { return q.type === 'mcq' }).length
   var writingCount = extracted.questions.filter(function(q) { return q.type === 'writing' }).length
   extracted.stats = { mcq: mcqCount, writing: writingCount, total: extracted.questions.length, twoFilesMode: twoFilesMode }
+  /* (و50) إحصائية القص السيرفري في الرد — الفشل ميبقاش صامت أبدًا */
+  if (figuresCrop) { extracted.figuresCrop = figuresCrop }
   return NextResponse.json({ success: true, extracted: extracted })
 }

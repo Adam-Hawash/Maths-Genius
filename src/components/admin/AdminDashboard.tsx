@@ -4090,6 +4090,11 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
             msg += ' (' + (stats.mcq || 0) + ' اختيارات، ' + (stats.writing || 0) + ' مقالية)'
           }
           toast.success(msg)
+          /* (و50) لو القص السيرفري فشل في رسومات — رسالة صريحة فورًا، ممنوع الصمت */
+          var fc = data2.extracted.figuresCrop
+          if (fc && (fc.failed > 0 || fc.error)) {
+            toast.warning('استخراج تم، لكن ' + (fc.failed > 0 ? fc.failed : 'بعض') + ' رسمة ماقصّتهاش من الملف — دوس «📐 الرسمة مش ظاهرة؟ دوس هنا» جنب السؤال وبتتقص فورًا', { duration: 8000 })
+          }
         } else {
           toast.error(data2.error || 'لم يتم استخراج أسئلة')
           setStatusMsg('')

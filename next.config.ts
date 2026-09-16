@@ -24,7 +24,8 @@ const nextConfig: NextConfig = {
       './node_modules/@napi-rs/canvas-linux-x64-gnu/**',
       './node_modules/@napi-rs/canvas-linux-x64-musl/**',
     ],
-    '/api/diag-crop': [
+    /* (و50) مسار الملفات الكبيرة بقى بيقص كمان على السيرفر → محتاج نفس الأصول */
+    '/api/ai-extract-pages': [
       './node_modules/pdfjs-dist/**',
       './node_modules/@napi-rs/canvas/**',
       './node_modules/@napi-rs/canvas-linux-x64-gnu/**',
