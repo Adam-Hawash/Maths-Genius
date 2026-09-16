@@ -14,9 +14,22 @@ const nextConfig: NextConfig = {
     'pdfjs-dist',
     '@napi-rs/canvas',
   ],
-  /* (و49) خطوط pdf.js القياسية لازم توصل مع الدالة على Vercel (نصوص الرسمة تترسم صح) */
+  /* (و50) كل أصول القص السيرفري لازم توصل مع الدالة على Vercel:
+     خطوط pdf.js + باكجات napi canvas الأصلية (.node binaries) — من غيرها
+     import('@napi-rs/canvas') بيقع في اللambda والقص بيفشل بصمت بالكامل */
   outputFileTracingIncludes: {
-    '/api/ai-extract': ['./node_modules/pdfjs-dist/standard_fonts/**'],
+    '/api/ai-extract': [
+      './node_modules/pdfjs-dist/**',
+      './node_modules/@napi-rs/canvas/**',
+      './node_modules/@napi-rs/canvas-linux-x64-gnu/**',
+      './node_modules/@napi-rs/canvas-linux-x64-musl/**',
+    ],
+    '/api/diag-crop': [
+      './node_modules/pdfjs-dist/**',
+      './node_modules/@napi-rs/canvas/**',
+      './node_modules/@napi-rs/canvas-linux-x64-gnu/**',
+      './node_modules/@napi-rs/canvas-linux-x64-musl/**',
+    ],
   },
   experimental: {
     serverActions: { bodySizeLimit: '500mb' },
