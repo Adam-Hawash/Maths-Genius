@@ -3861,10 +3861,14 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
   /* (و48) مصدر القص الأخير — بنحتفظ بيه عشان زرار «قص الرسمة تاني» في
      شاشة المراجعة يقدر يعيد المحاولة لأي رسمة فشل قصّها لحظة الاستخراج */
   const lastCropSourceRef = useRef<{ file?: File | null; doc?: any | null }>({})
+  /* (و50) ملف المصدر متخزن على السيرفر (Media) — خط الإنقاذ: أي رسمة ناقصة
+     بتتقص من السيرفر مباشرة من غير أي اعتماد على متصفح المستر */
+  const sourceMediaRef = useRef<string>('')
   const [retryingCrop, setRetryingCrop] = useState<boolean>(false)
 
   var resetAll = function() {
     setStep(1); setExtractType('exam'); setGrade(''); setTitle('')
+    sourceMediaRef.current = ''
     setFile(null); setFileUrl('')
     setExtractedQuestions([]); setStatusMsg('')
     lastCropSourceRef.current = {}
@@ -3918,6 +3922,32 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
         await ensureFigureUrls(newQs, cropSource || {}, function (done: number, total: number) {
           setStatusMsg('جهز الرسومات ' + done + ' من ' + total + '…')
         })
+        /* (و50) لو لسه ناقص بعد محاولة المتصفح → السيرفر يقص من الملف الأصلي
+           المتخزن (sourceMediaId) — صامت وسريع — ده اللي يضمن إن الصور تظهر
+           حتى لو pdf.js أو الرفع فشل في المتصفح */
+        var stillMissing = 0
+        try {
+          newQs.forEach(function (q: any) {
+            if (!q) return
+            if (q.figure && q.figure.bbox && !q.figure.url) stillMissing++
+            if (Array.isArray(q.optionFigures)) q.optionFigures.forEach(function (of: any) { if (of && of.bbox && !of.url) stillMissing++ })
+          })
+        } catch (eC) { stillMissing = 0 }
+        if (stillMissing > 0 && sourceMediaRef.current) {
+          try {
+            var rResc = await fetch('/api/crop-figures', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sourceMediaId: sourceMediaRef.current, questions: newQs }),
+            })
+            var dResc = await rResc.json()
+            if (rResc.ok && dResc.success && Array.isArray(dResc.questions)) {
+              newQs = dResc.questions
+              if (dResc.figuresCrop && dResc.figuresCrop.cropped > 0) {
+                toast.success('السيرفر جهز ' + dResc.figuresCrop.cropped + ' رسمة من الملف الأصلي ✓')
+              }
+            }
+          } catch (eResc) { /* صامت — البلاكس هتفضل ظاهرة وزرار 📐 موجود */ }
+        }
         setStatusMsg('')
       }
     } catch (eCrop: any) {
@@ -3946,7 +3976,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
      مع الحفاظ على الأسئلة المستخرجة زي ما هي */
   var startAppendFile = function () {
     setAppendingFile(true)
-    setFile(null); setFileUrl('')
+    setFile(null); setFileUrl(''); sourceMediaRef.current = ''
     setBookFile(null); setBookNumPages(0); setBookFrom(1); setBookTo(1); bookDocRef.current = null
     setStatusMsg('اختار الملف التاني وابعت استخراج — أسئلته هتتنزّل تحت الحالية (' + extractedQuestions.length + ' سؤال)')
     setStep(2)
@@ -4083,6 +4113,9 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
               }
             } catch (eLink) { /* من غير مصدر القص بيتخطى — نفس سلوك الفشل الصامت */ }
           }
+          /* (و50) خط الإنقاذ: ملف المصدر متخزن على السيرفر — أي رسمة ناقصة
+             بتتقص من عند السيرفر مباشرة لاحقًا (المراجعة/الحفظ) */
+          sourceMediaRef.current = String((data2.extracted && data2.extracted.sourceMediaId) || '')
           await finishExtraction(data2.extracted.questions, { file: cropFile })
           var stats = data2.extracted.stats || {}
           var msg = 'تم استخراج ' + data2.extracted.questions.length + ' سؤال بنجاح!'
@@ -4197,12 +4230,33 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
     if (!target) return
     if (retryingCrop) return
     var src = lastCropSourceRef.current || {}
-    if (!src.file && !src.doc) { toast.error('مفيش مصدر للقص — الرسمة دي من استخراج قديم. ارفعها يدوي بزرار 📷 أو استخرج تاني'); return }
     var needs = !!(target.figure && target.figure.bbox && !target.figure.url) ||
       (Array.isArray(target.optionFigures) && target.optionFigures.some(function (of: any) { return of && of.bbox && !of.url }))
     if (!needs) { toast.info('السؤال ده رسماته ظاهرة بالفعل'); return }
     setRetryingCrop(true)
     setStatusMsg('بيجهز رسمات السؤال ' + (qi + 1) + '…')
+    /* (و50) الأولوية للسيرفر: الملف الأصلي متخزن عنده — القص يحصل عنده
+       حتى لو متصفح المستر كله بايظ — وبيقص **كل** الرسمات الناقصة دفعة واحدة */
+    var serverFixed = false
+    if (sourceMediaRef.current) {
+      try {
+        var rRes2 = await fetch('/api/crop-figures', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sourceMediaId: sourceMediaRef.current, questions: extractedQuestions }),
+        })
+        var dRes2 = await rRes2.json()
+        if (rRes2.ok && dRes2.success && Array.isArray(dRes2.questions)) {
+          setExtractedQuestions(dRes2.questions)
+          var croppedN = dRes2.figuresCrop && dRes2.figuresCrop.cropped ? dRes2.figuresCrop.cropped : 0
+          if (croppedN > 0) {
+            serverFixed = true
+            toast.success('السيرفر قصّ ' + croppedN + ' رسمة من الملف الأصلي ✓ — هتظهر في المراجعة وللطالب')
+          }
+        }
+      } catch (eSrv) { /* نكمل لمسار المتصفح */ }
+    }
+    if (serverFixed) { setStatusMsg(''); setRetryingCrop(false); return }
+    if (!src.file && !src.doc) { toast.error('مفيش مصدر للقص — الرسمة دي من استخراج قديم. ارفعها يدوي بزرار 📷 أو استخرج تاني'); setStatusMsg(''); setRetryingCrop(false); return }
     var clone: any
     try { clone = JSON.parse(JSON.stringify(target)) } catch (e) { clone = Object.assign({}, target) }
     try { await ensureFigureUrls([clone], src) } catch (e) {}
@@ -4231,9 +4285,37 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
     }
     setSaving(true); setStatusMsg('جاري الحفظ في قاعدة البيانات...')
     try {
+      /* (و50) إنقاذ أخير قبل الحفظ: أي رسمة ناقصة بتتقص من السيرفر أوتوماتيك —
+         الحفظ عمره ما يتحفظ برسمات ناقصة والمصدر موجود */
+      var qsForSave = extractedQuestions
+      if (sourceMediaRef.current) {
+        var missingN = 0
+        extractedQuestions.forEach(function (q: any) {
+          if (!q) return
+          if (q.figure && q.figure.bbox && !q.figure.url) missingN++
+          if (Array.isArray(q.optionFigures)) q.optionFigures.forEach(function (of: any) { if (of && of.bbox && !of.url) missingN++ })
+        })
+        if (missingN > 0) {
+          setStatusMsg('بيجهز ' + missingN + ' رسمة من الملف الأصلي قبل الحفظ…')
+          try {
+            var rRes3 = await fetch('/api/crop-figures', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sourceMediaId: sourceMediaRef.current, questions: extractedQuestions }),
+            })
+            var dRes3 = await rRes3.json()
+            if (rRes3.ok && dRes3.success && Array.isArray(dRes3.questions)) {
+              qsForSave = dRes3.questions
+              setExtractedQuestions(dRes3.questions)
+              if (dRes3.figuresCrop && dRes3.figuresCrop.cropped > 0) {
+                toast.success('السيرفر جهز ' + dRes3.figuresCrop.cropped + ' رسمة قبل الحفظ ✓')
+              }
+            }
+          } catch (eRes3) { /* الحفظ يكمل زي ما هو */ }
+        }
+      }
       var fd = new FormData()
       fd.append('type', extractType); fd.append('grade', grade); fd.append('title', title)
-      fd.append('questions', JSON.stringify(extractedQuestions))
+      fd.append('questions', JSON.stringify(qsForSave))
       /* (25-ب1) إعدادات الامتحان: إظهار الإجابات + المؤقت + موعد الظهور
          (بتخزن من /api/ai/extract-and-save وبتتعدل لاحقًا من تاب الامتحانات) */
       if (extractType === 'exam') {
@@ -4677,6 +4759,8 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
             {inputMode === 'youtube' && <Badge variant="outline" className="text-xs border-red-300 text-red-600"><PlayCircle className="h-3 w-3 ml-1" />يوتيوب</Badge>}
           </div>
           <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-0">{extractedQuestions.length} سؤال</Badge>
+          {/* (و50) بصمة الإصدار — المستر والأدمن يشوفوا فورًا إن الكود الجديد (القص السيرفري المضمون) هو الشغال */}
+          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-0" title="نسخة القص السيرفري المضمون — الصور بتتحفظ من السيرفر حتى لو المتصفح فشل">و50 ✓</Badge>
         </div>
         <p className="text-xs text-muted-foreground">راجع الأسئلة المستخرجة وعدلها قبل الحفظ. اختر الإجابة الصحيحة بجانب كل اختيار للـ MCQ، أو راجع الإجابة النموذجية للأسئلة المقالية.</p>
         {/* (2026-و40-w) زرار بارز في أعلى المراجعة: استخراج من ملف تاني — الأسئلة الجديدة بتتنضاف تحت الحالية (ممنوع الاستبدال) */}

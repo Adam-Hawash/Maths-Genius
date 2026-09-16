@@ -102,6 +102,50 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
   const initial = useMemo(() => parseQuestionsRaw(initialQuestionsRaw), [initialQuestionsRaw, open])
   const [questions, setQuestions] = useState<EditableQuestion[]>(initial)
   const [saving, setSaving] = useState(false)
+  /* (و50) إصلاح الرسمات الناقصة من ملف أصلي — للاستخراجات القديمة المحفوظة
+     اللي رسماتها placeholders (اللي الطالب مش شايفها) */
+  const [repairing, setRepairing] = useState(false)
+
+  /* (و50) عدد الرسمات الناقصة (bbox من غير url) */
+  const missingFigs = useMemo(function () {
+    var n = 0
+    questions.forEach(function (q) {
+      if (q.figure && q.figure.bbox && !q.figure.url) n++
+      if (Array.isArray(q.optionFigures)) q.optionFigures.forEach(function (of: any) {
+        if (of && of.bbox && !of.url) n++
+      })
+    })
+    return n
+  }, [questions])
+
+  /* (و50) رفع الملف الأصلي → السيرفر يقص كل الرسمات الناقصة → حفظ أوتوماتيك */
+  const repairFiguresFromFile = async function (f: File | null) {
+    if (!f) return
+    if (repairing) return
+    setRepairing(true)
+    try {
+      var fd = new FormData()
+      fd.append('file', f)
+      fd.append('questions', JSON.stringify(questions))
+      var res = await fetch('/api/crop-figures', { method: 'POST', body: fd })
+      var data = await res.json()
+      if (res.ok && data.success && Array.isArray(data.questions)) {
+        var fixedN = data.figuresCrop && data.figuresCrop.cropped ? data.figuresCrop.cropped : 0
+        setQuestions(data.questions)
+        if (fixedN > 0) {
+          toast.success('السيرفر قصّ ' + fixedN + ' رسمة من الملف الأصلي ✓ — بيتحفظ دلوقتي أوتوماتيك…')
+          await saveQuestions(data.questions)
+        } else {
+          toast.error('مقدرتش أقص رسمات من الملف ده — اتأكد إنه نفس ملف المصدر (PDF أو صورة)')
+        }
+      } else {
+        toast.error((data && data.error) || 'فشل إصلاح الرسمات')
+      }
+    } catch (e: any) {
+      toast.error('خطأ في الاتصال: ' + (e.message || ''))
+    }
+    setRepairing(false)
+  }
 
   useEffect(function () {
     if (open) {
@@ -204,11 +248,16 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
   }
 
   const save = async function () {
-    var emptyQ = questions.some(function (q) { return !q.question.trim() })
+    await saveQuestions(questions)
+  }
+
+  /* (و50) الحفظ منفصل عشان زرار الإصلاح يعيد استخدامه بقائمة محدثة */
+  const saveQuestions = async function (qs: EditableQuestion[]) {
+    var emptyQ = qs.some(function (q) { return !q.question.trim() })
     if (emptyQ) { toast.error('فيه سؤال فاضي — اكتب نصه أو احذفه'); return }
     setSaving(true)
     try {
-      var payload = questions.map(function (q) {
+      var payload = qs.map(function (q) {
         if (q.type === 'writing') {
           return {
             type: 'writing',
@@ -265,6 +314,17 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
           <p className="text-xs text-muted-foreground">
             عدّل نص السؤال أو الإجابة الصحيحة أو الإجابة النموذجية. بعد الحفظ، اعمل "إعادة تصحيح بالذكاء" لنتيجة أي طالب عشان يتصحح تاني بالتعديلات الجديدة.
           </p>
+          {/* (و50) إصلاح الرسمات الناقصة من الملف الأصلي — للاستخراجات القديمة
+             اللي رسماتها placeholders والطالب مش شايفها */}
+          {missingFigs > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-violet-300 dark:border-violet-700 bg-violet-50/60 dark:bg-violet-950/20 px-2 py-1.5">
+              <span className="text-[11px] font-bold text-violet-600 dark:text-violet-400">📐 فيه {missingFigs} رسمة ناقصة (بتظهر للطالب فاضية) — افتح ملف الـ PDF الأصلي نفسه والسيرفر يقصهم ويحفظهم أوتوماتيك:</span>
+              <label className="inline-flex items-center gap-1 cursor-pointer text-[11px] font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-md px-2 py-1 transition-colors">
+                {repairing ? 'بيقص ويحفظ…' : '📁 اختار الملف الأصلي'}
+                <input type="file" accept="application/pdf,image/*" hidden disabled={repairing} onChange={function (e) { var f = e.target.files && e.target.files[0]; e.target.value = ''; repairFiguresFromFile(f) }} />
+              </label>
+            </div>
+          )}
         </DialogHeader>
 
         <div className="space-y-3">
