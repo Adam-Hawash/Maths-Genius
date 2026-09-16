@@ -133,6 +133,16 @@ export async function DELETE(
       return NextResponse.json({ error: 'Student not found' }, { status: 404 })
     }
 
+    /* (2026-و56) تسليمات الواجبات ملهاش علاقة cascade بالطالب في البريزما —
+       من غير السطر ده مسح الطالب بيسيب تسليمات «شبح» تظهر عند المستر
+       في نتايج أي واجب حقيقي سلّمه الطالب قبل ما حسابه يتمسح.
+       (نتايج الامتحانات بتتمسح لوحدها — عندها cascade في السكيما) */
+    try {
+      await db.$executeRawUnsafe('DELETE FROM HomeworkResult WHERE studentId = ?', id)
+    } catch (e) {
+      console.error('HomeworkResult cleanup on student delete:', e)
+    }
+
     await db.student.delete({ where: { id } })
 
     return NextResponse.json({ message: 'Student deleted' })
