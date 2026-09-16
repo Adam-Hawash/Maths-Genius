@@ -57,11 +57,10 @@ function splitImageMarkers(src: string): { img?: string; txt?: string }[] {
 function MarkerImage({ url }: { url: string }) {
   var [failed, setFailed] = React.useState(false)
   if (failed) {
-    return (
-      <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2 align-middle mx-1" dir="ltr">
-        🖼 عرض الصورة
-      </a>
-    )
+    /* (و53) طلب المستر الحرفي: «لما الطالب بيدخل يلاقي الامتحان او الواجب
+       فبيقول له عرض الصوره… لا انا مش عاوزها موجوده» — الصورة اللي فشلت
+      بتتجاهل تمامًا من غير أي لينك «عرض الصورة» يظهر للطالب. */
+    return null
   }
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" title="فتح الصورة بحجم كامل" className="inline-block align-middle mx-1">

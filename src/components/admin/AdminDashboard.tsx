@@ -4342,6 +4342,21 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
       /* (و50) إنقاذ أخير قبل الحفظ: أي رسمة ناقصة بتتقص من السيرفر أوتوماتيك —
          الحفظ عمره ما يتحفظ برسمات ناقصة والمصدر موجود */
       var qsForSave = extractedQuestions
+      /* (و53) القص من المتصفح الأول — من الملف الأصلي المفتوح بجودته الكاملة
+         (نفس جودة المحرر اليدوي) — والسيرفر إنقاذ للّي فات بس */
+      try {
+        var needClientCrop = false
+        extractedQuestions.forEach(function (q: any) {
+          if (!q) return
+          if (q.figure && q.figure.bbox && !q.figure.url) needClientCrop = true
+          if (Array.isArray(q.optionFigures)) q.optionFigures.forEach(function (of: any) { if (of && of.bbox && !of.url) needClientCrop = true })
+        })
+        var lcs = lastCropSourceRef.current || {}
+        if (needClientCrop && (lcs.file || lcs.doc)) {
+          setStatusMsg('بيجهز الرسمات بجودة عالية قبل الحفظ…')
+          await ensureFigureUrls(extractedQuestions, { file: lcs.file || null, doc: lcs.doc || null })
+        }
+      } catch (ePre53) { /* الإنقاذ السيرفري بعد كده يغطي الناقص */ }
       if (sourceMediaRef.current) {
         var missingN = 0
         extractedQuestions.forEach(function (q: any) {

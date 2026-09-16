@@ -13,6 +13,7 @@
 // ============================================================
 
 import { db } from '@/lib/db'
+import { splitMergedRegion } from '@/lib/figure-demerger'
 
 /* تطبيع bbox ذكي — النموذج ساعات بيرجع مقياس 0..1000 (بروتوكول Gemini)
    بدل 0..1 — بنكتشف ده ونحوّله، وإلا بيتقفل في sanitize (قيمة >1) والقص
@@ -85,6 +86,13 @@ export interface ServerCropResult { cropped: number; failed: number; total: numb
  *    البكسلات الغير بيضا ونعمل tight bounds حوالين الرسمة + هامش صغير —
  *    ده بيفسّر bbox المزاح أوتوماتيك بدل ما يطلع قص فاضي/ناقص
  * 3) الجودة: JPEG 0.92 + كاب 1600 بدل 0.85/1200 — ورندر صفحة أعلى (2000)
+ * (و53) فك الالتحام (figure-demerger): «بيقص رسمتين جنب بعض والسؤال فيه
+ *    رسمة واحدة» — بنحط الكتلة المطلوبة لوحدها بدل اتحاد الرسمتين
+ * (و53) ترتيب المسار اتقلب: السيرفر بقى **إنقاذ فقط** — الاستخراج بيرجّع
+ *    bbox من غير urls والمتصفح بيقص الأول من الملف الأصلي بجودته الكاملة
+ *    (كان القص السيرفري وقت الاستخراج بيملا الـ urls وبيمنع قص المتصفح
+ *    الأعلى جودة — وده اللي نزل جودة الرسمات — والمحرر اليدوي بيثبت ده:
+ *    نفس القص من المتصفح بطلع أنضف)
  * ============================================================ */
 
 /* منطقة قص بعد التنقيط — فشل التنقيط بيرجّع المنطقة الأصلية (آمن) */
@@ -298,7 +306,17 @@ async function cropOne(
 
     /* (و52) رصّ القص على المحتوى الفعلي — تقليم البيض جوه المنطقة الموسعة */
     var reg = refineByContent(pageCanvas, sx, sy, sw, sh)
-    sx = reg.x; sy = reg.y; sw = reg.w; sh = reg.h
+    /* (و53) فك الالتحام — لو المنطقة التهمت رسمة مجاورة (رسمتين جنب بعض
+       والسؤال فيه رسمة واحدة) بنقص الكتلة اللي bbox السؤال بيشاور عليها بس */
+    var regD = splitMergedRegion(function (gx: number, gy: number, gw: number, gh: number) {
+      try {
+        var gctx = pageCanvas.getContext('2d')
+        if (!gctx) return null
+        var gimg = gctx.getImageData(gx, gy, gw, gh)
+        return { d: gimg.data, w: gimg.width, h: gimg.height }
+      } catch (eG) { return null }
+    }, reg, { x0: bbox.x * pW, y0: bbox.y * pH, x1: (bbox.x + bbox.w) * pW, y1: (bbox.y + bbox.h) * pH })
+    sx = regD.x; sy = regD.y; sw = regD.w; sh = regD.h
     if (sw < 8 || sh < 8) return false
 
     var scale = Math.min(1, 1600 / Math.max(sw, sh))

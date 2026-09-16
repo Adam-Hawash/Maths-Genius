@@ -14,9 +14,8 @@ import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
 import { parseAIJsonRobust } from '@/lib/ai-json'
 /* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات (حتى لو صور) = اختياري */
 import { isWritingQuestion } from '@/lib/question-figures'
-/* (و49) القص على السيرفر — الرسمة توصل جاهزة للأدمن والطالب من غير ما تعتمد
-   على متصفح المستر (كان أي فشل pdf.js/رفع بيقع بصمت ويفضل placeholder) */
-import { cropFiguresServerSide } from '@/lib/server-figures'
+/* (و53) القص السيرفري اتشال من وقت الاستخراج (قص المتصفح الأول بجودة أعلى
+   والسيرفر بقى إنقاذ بس عبر /api/crop-figures) */
 import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
@@ -191,21 +190,13 @@ export async function POST(request) {
           }
         }
       }
-      /* (و49) القص على السيرفر — قبل الرد: كل figure/optionFigures ليه bbox
-         ومن غير url بيتقص من الملف الأصلي هنا وبيترفع على Media. فشل الرسمة
-         الواحدة مش بيوقف الباقي، وفشل القص كله مش بيكسر الاستخراج —
-         العميل (ensureFigureUrls) بيفضل شبكة أمان تانية للرسمات الناقصة. */
-      /* (و50) إحصائية القص تبقى في الرد نفسه — ممنوع الفشل الصامت تاني */
+      /* (و53) مفيش قص سيرفري وقت الاستخراج — ده كان بيملا url من رندر السيرفر
+         وبيمنع قص المتصفح الأعلى جودة (وهو اللي نزل جودة الرسمات بعد و50).
+         الترتيب الجديد: المتصفح يقص الأول من الملف الأصلي بدقة كاملة
+         (ensureFigureUrls في finishExtraction) → اللي فات /api/crop-figures
+         إنقاذ سيرفري من الملف المخزن تحت. الملف بيتخزن هنا زي ما هو. */
       var figuresCrop = null
       if (cropSrc) {
-        try {
-          var cropRes = await cropFiguresServerSide(cropSrc, extracted.questions)
-          figuresCrop = cropRes
-          console.log('[AI Extract] Server-side crop:', JSON.stringify(cropRes))
-        } catch (eCrop: any) {
-          figuresCrop = { cropped: 0, failed: -1, total: -1, error: String((eCrop && eCrop.message) || eCrop).substring(0, 200) }
-          console.error('[AI Extract] Server-side crop failed (non-fatal):', (eCrop && eCrop.message) || eCrop)
-        }
         /* (و50) تخزين الملف الأصلي على السيرفر — خط الإنقاذ: أي وقت ناقص رسمة
            (حتى لو الحفظ أو بعدين) /api/crop-figures يقدر يقص منه تاني */
         try {

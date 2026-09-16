@@ -30,9 +30,8 @@ import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
 import { parseAIJsonArrayRobust } from '@/lib/ai-json'
 /* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات صور = اختياري مش مقالي */
 import { isWritingQuestion } from '@/lib/question-figures'
-/* (و50) القص السيرفري للرسومات من صور الصفحات نفسها — الرسمة توصل جاهزة
-   للأدمن والطالب من غير أي اعتماد على متصفح المستر في مسار الملفات الكبيرة */
-import { cropFiguresServerSide } from '@/lib/server-figures'
+/* (و53) القص من صور الصفحات الواطية اتشال — قص المتصفح من المستند المفتوح
+   بجودة كاملة هو المصدر الأساسي، والسيرفر إنقاذ بس (/api/crop-figures) */
 
 export const runtime = 'nodejs'
 export const maxDuration = 180
@@ -191,17 +190,12 @@ async function extractBatch(pages: any[], mode: 'all' | 'top', count: number): P
           var fq = finalizeQuestion(arr[qi])
           if (fq) finalized.push(fq)
         }
-        /* (و50) القص السيرفري — من صور الصفحات الجاهزة هنا على السيرفر مباشرة */
-        var crop: any = null
-        try {
-          var cropPages = pages.map(function (p) { return { n: p.n, base64: stripDataUrl(p.image) } })
-          crop = await cropFiguresServerSide({ pages: cropPages, name: 'pages.jpg', mime: 'image/jpeg' }, finalized)
-          console.log('[AI Extract Pages] Server-side crop:', JSON.stringify(crop))
-        } catch (eCropP: any) {
-          crop = { cropped: 0, failed: -1, total: -1, error: String((eCropP && eCropP.message) || eCropP).substring(0, 200) }
-          console.error('[AI Extract Pages] Server-side crop failed (non-fatal):', (eCropP && eCropP.message) || eCropP)
-        }
-        return { questions: finalized, ok: true, crop: crop }
+        /* (و53) مفيش قص من صور الصفحات الواطية (1700/0.85) — دي كانت بتنزل
+           جودة الرسمات في الملفات الكبيرة/الكتاب (قص من JPEG مضغوط مرتين).
+           المتصفح عنده المستند مفتوح (doc) بجودة كاملة فيقص منه
+           finishExtraction (ensureFigureUrls) — واللي فات له /api/crop-figures
+           والمحرر اليدوي. */
+        return { questions: finalized, ok: true, crop: null }
       }
     }
     if (attempt === 0) await new Promise(function (r) { setTimeout(r, 1200) })
