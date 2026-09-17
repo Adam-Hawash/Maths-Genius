@@ -2533,6 +2533,10 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
      «أنا بدور على طالب معين فبفضل أنزل أنزل — أضيف لي خانة بحث
      أكتب اسم الطالب وهو يظهر لي») — فلترة فورية من غير أي طلب شبكة */
   const [search, setSearch] = useState('')
+  /* (2026-و58) ترتيب آخر امتحان — طلب المستر: «لما أنزل امتحان جديد عاوز
+     ترتيب اللي بيعملوا الامتحان ده يظهر — القديم يتمسح والجديد يظهر تلقائي».
+     بيتحمس مع كل تحميل للصف: آخر امتحان (بالـ createdAt) + نتايجه هو بس. */
+  const [latestRanking, setLatestRanking] = useState<{ examTitle: string; rows: Array<{ studentId: string; name: string; score: number; maxScore: number; submittedAt: string }> } | null>(null)
   const filteredStudents = search.trim()
     ? students.filter(function (s) {
         var q = search.trim().toLowerCase()
@@ -2541,7 +2545,7 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
     : students
 
   const loadData = async () => {
-    if (!grade) { setStudents([]); setSummary(null); return }
+    if (!grade) { setStudents([]); setSummary(null); setLatestRanking(null); return }
     setLoading(true)
     try {
       const res = await fetch(`/api/students/analytics?grade=${encodeURIComponent(grade)}`)
@@ -2550,6 +2554,28 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
       setSummary(data.gradeSummary)
     } catch { toast.error('خطأ في تحميل البيانات') }
     setLoading(false)
+    /* (2026-و58) تحميل ترتيب آخر امتحان — القديم بيتمسح والجديد بيظهر تلقائي */
+    try {
+      const exRes = await fetch(`/api/exams?grade=${encodeURIComponent(grade)}&pageSize=1`)
+      const exData = await exRes.json()
+      const newest = (exData.exams || [])[0]
+      if (newest && newest.id) {
+        const rRes = await fetch(`/api/exam-results?examId=${encodeURIComponent(newest.id)}`)
+        const rData = await rRes.json()
+        const rrows = (rData.results || []).map(function (r: any) {
+          return {
+            studentId: String(r.studentId || ''),
+            name: (r.student && r.student.name) || 'طالب',
+            score: Number(r.score) || 0,
+            maxScore: Number(r.maxScore) || 100,
+            submittedAt: String(r.submittedAt || ''),
+          }
+        })
+        setLatestRanking({ examTitle: String(newest.title || ''), rows: rrows })
+      } else {
+        setLatestRanking(null)
+      }
+    } catch { setLatestRanking(null) }
   }
 
   useEffect(() => { loadData() }, [grade])
@@ -2666,51 +2692,53 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                 </div>
               )}
 
-              {/* (جدول الترتيب 2026-و10 — طلب المستر: «مين الطلاب اللي خلصوا الامتحانات الأول ودرجاتهم بالترتيب») */}
+              {/* (2026-و58) ترتيب آخر امتحان — طلب المستر: لما ينزل امتحان جديد
+                 الترتيب القديم يتمسح والجديد يظهر تلقائي — الترتيب هنا
+                 لأمتحان واحد بس: آخر واحد اتنزل، مرتب بمن خلّص الأول */}
               {(() => {
-                const ranked = filteredStudents
-                  .filter(function (s) { return s.examsTaken > 0 && (s as any).firstExamAt })
-                  .sort(function (a, b) { return Number((a as any).firstExamAt) - Number((b as any).firstExamAt) })
-                if (ranked.length === 0) return null
+                if (!latestRanking) return null
+                const ranked = latestRanking.rows
+                  .slice()
+                  .sort(function (a, b) { return new Date(a.submittedAt || 0).getTime() - new Date(b.submittedAt || 0).getTime() })
                 const medal = function (i: number) { return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1) }
                 return (
                   <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 overflow-hidden">
-                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border-b border-amber-500/30">
-                      <Trophy className="h-4 w-4 text-amber-500" />
-                      <p className="text-sm font-bold">ترتيب تسليم الامتحانات — اللي خلصوا الأول الأول</p>
+                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border-b border-amber-500/30 flex-wrap">
+                      <Trophy className="h-4 w-4 text-amber-500 shrink-0" />
+                      <p className="text-sm font-bold">ترتيب امتحان «{latestRanking.examTitle}» — اللي خلصوا الأول الأول</p>
+                      <span className="text-[10px] text-muted-foreground">(بيتحدّث تلقائيًا مع كل امتحان جديد)</span>
                     </div>
+                    {ranked.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-4">لسه مفيش تسليمات في الامتحان ده — أول ما الطلاب تسلّم هيظهروا هنا بالترتيب</p>
+                    ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead><tr className="border-b text-xs text-muted-foreground">
                           <th className="text-center py-2 px-2 font-medium w-10">#</th>
                           <th className="text-right py-2 px-2 font-medium">الطالب</th>
-                          <th className="text-center py-2 px-1 font-medium">أول تسليم</th>
-                          <th className="text-center py-2 px-1 font-medium">الامتحانات</th>
-                          <th className="text-center py-2 px-1 font-medium">متوسط الدرجات</th>
-                          <th className="text-center py-2 px-1 font-medium">أفضل درجة</th>
+                          <th className="text-center py-2 px-1 font-medium">سلّم في</th>
+                          <th className="text-center py-2 px-1 font-medium">الدرجة</th>
                         </tr></thead>
                         <tbody>
                           {ranked.map((s, i) => (
-                            <tr key={s.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => loadDetail(s.id)}>
+                            <tr key={s.studentId + '-' + i} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => loadDetail(s.studentId)}>
                               <td className="text-center py-2 px-2 font-bold text-xs">{medal(i)}</td>
                               <td className="py-2 px-2">
                                 <p className="font-medium text-xs truncate max-w-[150px]">{s.name}</p>
-                                <p className="text-[10px] text-muted-foreground" dir="ltr">{s.phone}</p>
                               </td>
                               <td className="text-center py-2 px-1">
-                                <span className="text-[10px] font-medium">{new Date((s as any).firstExamAt).toLocaleDateString('ar-EG')}</span>
-                                <p className="text-[9px] text-muted-foreground" dir="ltr">{new Date((s as any).firstExamAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</p>
+                                <span className="text-[10px] font-medium">{new Date(s.submittedAt).toLocaleDateString('ar-EG')}</span>
+                                <p className="text-[9px] text-muted-foreground" dir="ltr">{new Date(s.submittedAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</p>
                               </td>
-                              <td className="text-center py-2 px-1 text-xs font-medium">{s.examsTaken}/{s.totalExams}</td>
                               <td className="text-center py-2 px-1">
-                                <span className={`text-xs font-bold ${(s as any).avgExamScore >= 50 ? 'text-emerald-600' : 'text-red-500'}`}>{(s as any).avgExamScore}</span>
+                                <span className={`text-xs font-bold ${s.score >= s.maxScore / 2 ? 'text-emerald-600' : 'text-red-500'}`}>{s.score}<span className="text-[9px] text-muted-foreground">/{s.maxScore}</span></span>
                               </td>
-                              <td className="text-center py-2 px-1 text-xs font-medium">{(s as any).bestExamScore}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
+                    )}
                   </div>
                 )
               })()}
