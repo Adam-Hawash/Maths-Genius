@@ -37,85 +37,85 @@ const SUP_CHARS = '⁰¹²³⁴⁵⁶⁷⁸⁹'
 
 const SYMBOL_GROUPS: SymbolGroup[] = [
   {
-    title: 'أرقام وعمليات',
+    title: 'Numbers & Operations',
     symbols: [
-      { label: '1', insert: '1', hint: 'واحد' },
-      { label: '2', insert: '2', hint: 'اتنين' },
-      { label: '3', insert: '3', hint: 'تلاتة' },
-      { label: '4', insert: '4', hint: 'أربعة' },
-      { label: '5', insert: '5', hint: 'خمسة' },
-      { label: '6', insert: '6', hint: 'ستة' },
-      { label: '7', insert: '7', hint: 'سبعة' },
-      { label: '8', insert: '8', hint: 'ثمانية' },
-      { label: '9', insert: '9', hint: 'تسعة' },
-      { label: '0', insert: '0', hint: 'صفر' },
-      { label: '.', insert: '.', hint: 'فاصلة عشرية' },
-      { label: ',', insert: ',', hint: 'كوما' },
-      { label: '+', insert: '+', hint: 'زائد' },
-      { label: '−', insert: '-', hint: 'ناقص' },
-      { label: '×', insert: '×', hint: 'ضرب' },
-      { label: '÷', insert: '÷', hint: 'قسمة' },
-      { label: '=', insert: '=', hint: 'يساوي' },
-      { label: '≠', insert: '≠', hint: 'لا يساوي' },
-      { label: '<', insert: '<', hint: 'أصغر من' },
-      { label: '>', insert: '>', hint: 'أكبر من' },
-      { label: '≤', insert: '≤', hint: 'أصغر من أو يساوي' },
-      { label: '≥', insert: '≥', hint: 'أكبر من أو يساوي' },
-      { label: '±', insert: '±', hint: 'زائد أو ناقص' },
-      { label: '(', insert: '(', hint: 'قوس مفتوح' },
-      { label: ')', insert: ')', hint: 'قوس مقفول' },
+      { label: '1', insert: '1', hint: 'One' },
+      { label: '2', insert: '2', hint: 'Two' },
+      { label: '3', insert: '3', hint: 'Three' },
+      { label: '4', insert: '4', hint: 'Four' },
+      { label: '5', insert: '5', hint: 'Five' },
+      { label: '6', insert: '6', hint: 'Six' },
+      { label: '7', insert: '7', hint: 'Seven' },
+      { label: '8', insert: '8', hint: 'Eight' },
+      { label: '9', insert: '9', hint: 'Nine' },
+      { label: '0', insert: '0', hint: 'Zero' },
+      { label: '.', insert: '.', hint: 'Decimal point' },
+      { label: ',', insert: ',', hint: 'Comma' },
+      { label: '+', insert: '+', hint: 'Plus' },
+      { label: '−', insert: '-', hint: 'Minus' },
+      { label: '×', insert: '×', hint: 'Multiply' },
+      { label: '÷', insert: '÷', hint: 'Divide' },
+      { label: '=', insert: '=', hint: 'Equals' },
+      { label: '≠', insert: '≠', hint: 'Not equal' },
+      { label: '<', insert: '<', hint: 'Less than' },
+      { label: '>', insert: '>', hint: 'Greater than' },
+      { label: '≤', insert: '≤', hint: 'Less than or equal' },
+      { label: '≥', insert: '≥', hint: 'Greater than or equal' },
+      { label: '±', insert: '±', hint: 'Plus or minus' },
+      { label: '(', insert: '(', hint: 'Open parenthesis' },
+      { label: ')', insert: ')', hint: 'Close parenthesis' },
     ],
   },
   {
-    title: 'أسس وجذور',
+    title: 'Powers & Roots',
     symbols: [
-      { label: 'x^n', insert: '^', hint: 'أس — اكتب الرقم بعده واخرج بـ ⬇' },
-      { label: 'x^2', insert: '^2', hint: 'مربع' },
-      { label: 'x^3', insert: '^3', hint: 'مكعب' },
-      { label: 'x^4', insert: '^4', hint: 'الأس 4' },
-      { label: 'x^5', insert: '^5', hint: 'الأس 5' },
-      { label: 'x^6', insert: '^6', hint: 'الأس 6' },
-      { label: '√', insert: '√', hint: 'جذر تربيعي' },
-      { label: '∛', insert: '∛', hint: 'جذر تكعيبي' },
-      { label: '∜', insert: '∜', hint: 'جذر رابع' },
+      { label: 'x^n', insert: '^', hint: 'Power - type number after ^' },
+      { label: 'x^2', insert: '^2', hint: 'Squared' },
+      { label: 'x^3', insert: '^3', hint: 'Cubed' },
+      { label: 'x^4', insert: '^4', hint: 'Power 4' },
+      { label: 'x^5', insert: '^5', hint: 'Power 5' },
+      { label: 'x^6', insert: '^6', hint: 'Power 6' },
+      { label: '√', insert: '√', hint: 'Square root' },
+      { label: '∛', insert: '∛', hint: 'Cube root' },
+      { label: '∜', insert: '∜', hint: 'Fourth root' },
     ],
   },
   {
-    title: 'رموز متقدمة',
+    title: 'Advanced Symbols',
     symbols: [
-      { label: '∑', insert: '∑', hint: 'مجموع (سيجما)' },
-      { label: '∫', insert: '∫', hint: 'تكامل' },
-      { label: 'Δ', insert: 'Δ', hint: 'دلتا' },
-      { label: 'θ', insert: 'θ', hint: 'ثيتا' },
-      { label: 'α', insert: 'α', hint: 'ألفا' },
-      { label: 'β', insert: 'β', hint: 'بيتا' },
-      { label: 'γ', insert: 'γ', hint: 'جاما' },
-      { label: 'λ', insert: 'λ', hint: 'لامدا' },
-      { label: 'μ', insert: 'μ', hint: 'ميو' },
-      { label: 'σ', insert: 'σ', hint: 'سيجما' },
-      { label: 'φ', insert: 'φ', hint: 'في' },
-      { label: 'ω', insert: 'ω', hint: 'أوميجا' },
+      { label: '∑', insert: '∑', hint: 'Sigma' },
+      { label: '∫', insert: '∫', hint: 'Integral' },
+      { label: 'Δ', insert: 'Δ', hint: 'Delta' },
+      { label: 'θ', insert: 'θ', hint: 'Theta' },
+      { label: 'α', insert: 'α', hint: 'Alpha' },
+      { label: 'β', insert: 'β', hint: 'Beta' },
+      { label: 'γ', insert: 'γ', hint: 'Gamma' },
+      { label: 'λ', insert: 'λ', hint: 'Lambda' },
+      { label: 'μ', insert: 'μ', hint: 'Mu' },
+      { label: 'σ', insert: 'σ', hint: 'Sigma' },
+      { label: 'φ', insert: 'φ', hint: 'Phi' },
+      { label: 'ω', insert: 'ω', hint: 'Omega' },
     ],
   },
   {
-    title: 'زوايا ونسب',
+    title: 'Angles & Ratios',
     symbols: [
-      { label: '°', insert: '°', hint: 'درجة' },
-      { label: '∠', insert: '∠', hint: 'زاوية' },
-      { label: '⊥', insert: '⊥', hint: 'عمودي' },
-      { label: '∥', insert: '∥', hint: 'متوازي' },
-      { label: 'sin', insert: 'sin', hint: 'جا (جيب الزاوية)' },
-      { label: 'cos', insert: 'cos', hint: 'جتا (جيب التمام)' },
-      { label: 'tan', insert: 'tan', hint: 'ظا (ظل الزاوية)' },
-      { label: 'log', insert: 'log', hint: 'لوغاريتم' },
-      { label: 'ln', insert: 'ln', hint: 'لوغاريتم طبيعي' },
-      { label: '|x|', insert: '|', hint: 'قيمة مطلقة' },
-      { label: 'gcd', insert: 'gcd', hint: 'أكبر قاسم مشترك' },
-      { label: 'lcm', insert: 'lcm', hint: 'أصغر مضاعف مشترك' },
+      { label: '°', insert: '°', hint: 'Degree' },
+      { label: '∠', insert: '∠', hint: 'Angle' },
+      { label: '⊥', insert: '⊥', hint: 'Perpendicular' },
+      { label: '∥', insert: '∥', hint: 'Parallel' },
+      { label: 'sin', insert: 'sin', hint: 'Sine' },
+      { label: 'cos', insert: 'cos', hint: 'Cosine' },
+      { label: 'tan', insert: 'tan', hint: 'Tangent' },
+      { label: 'log', insert: 'log', hint: 'Logarithm' },
+      { label: 'ln', insert: 'ln', hint: 'Natural log' },
+      { label: '|x|', insert: '|', hint: 'Absolute value' },
+      { label: 'gcd', insert: 'gcd', hint: 'GCD' },
+      { label: 'lcm', insert: 'lcm', hint: 'LCM' },
     ],
   },
   {
-    title: 'أرقام',
+    title: 'Numbers',
     symbols: [
       { label: '0', insert: '0' },
       { label: '1', insert: '1' },
@@ -133,7 +133,7 @@ const SYMBOL_GROUPS: SymbolGroup[] = [
   },
 ]
 
-export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجابتك هنا...', rows = 4, onImageUpload, onUploadStateChange }: MathKeyboardProps) {
+export function MathKeyboard({ value, onChange, placeholder = 'Type your answer here...', rows = 4, onImageUpload, onUploadStateChange }: MathKeyboardProps) {
   const [showKeyboard, setShowKeyboard] = useState(false)
   const [activeGroup, setActiveGroup] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -444,7 +444,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
-          title="رفع صورة"
+          title="Upload image"
         >
           {uploading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -464,7 +464,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
           title="آلة حاسبة للرموز الرياضية"
         >
           <Calculator className="h-3.5 w-3.5" />
-          <span>رموز</span>
+          <span>Symbols</span>
         </button>
       </div>
       <input
@@ -655,7 +655,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
               <button
                 type="button"
                 onClick={() => setShowFraction(true)}
-                title="كسر — بسط / مقام"
+                title="Fraction - Numerator / Denominator"
                 className="aspect-square flex flex-col items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-md transition-colors border border-amber-500/20 select-none"
               >
                 <span className="text-[10px] font-bold leading-none">a</span>
@@ -681,7 +681,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
               className="mt-2 w-full py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors flex items-center justify-center gap-1.5"
             >
               <X className="h-3.5 w-3.5" />
-              إغلاق الكيبورد
+              Close keyboard
             </button>
           </div>
         </div>
@@ -692,7 +692,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowFraction(false)}>
           <div className="bg-card border border-border rounded-xl p-4 shadow-2xl w-full max-w-xs" onClick={function(e) { e.stopPropagation() }}>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-bold">اكتب كسرًا</p>
+              <p className="text-sm font-bold">Enter Fraction</p>
               <button type="button" onClick={() => setShowFraction(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
@@ -704,7 +704,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
                 value={fractionTop}
                 onChange={function(e) { setFractionTop(e.target.value) }}
                 onKeyDown={function(e) { if (e.key === 'Enter') { var b = document.getElementById('frac-bottom'); if (b) b.focus() } }}
-                placeholder="البسط"
+                placeholder="Numerator"
                 dir="ltr"
                 className="w-24 text-center text-lg font-bold px-2 py-1.5 rounded-md border-2 border-amber-500/40 bg-amber-50 dark:bg-amber-900/10 focus:outline-none focus:border-amber-500"
                 autoFocus
@@ -716,7 +716,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
                 value={fractionBottom}
                 onChange={function(e) { setFractionBottom(e.target.value) }}
                 onKeyDown={function(e) { if (e.key === 'Enter') handleFractionInsert() }}
-                placeholder="المقام"
+                placeholder="Denominator"
                 dir="ltr"
                 className="w-24 text-center text-lg font-bold px-2 py-1.5 rounded-md border-2 border-amber-500/40 bg-amber-50 dark:bg-amber-900/10 focus:outline-none focus:border-amber-500"
               />
@@ -727,7 +727,7 @@ export function MathKeyboard({ value, onChange, placeholder = 'اكتب إجاب
               disabled={!fractionTop.trim() || !fractionBottom.trim()}
               className="w-full py-2 text-sm font-bold rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              إدراج الكسر
+              Insert Fraction
             </button>
           </div>
         </div>
