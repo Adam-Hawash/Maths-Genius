@@ -235,8 +235,8 @@ const FLAT_SHAPES: Shape[] = [
       { label: 'Diagonal', formula: 'd = a√2' },
     ],
     theorems: [
-      { name: 'Euclid — Equal sides & right angles', formula: 'كل الأضلاع متساوية وكل الزوايا = 90°', note: 'Definition of a square (Euclid Book I).' },
-      { name: 'Euclid — Diagonals', formula: 'd₁ = d₂ , d₁ ∩ d₂ ⊥ و ينصف بعضهم', note: 'Diagonals are equal and bisect each other at right angles.' },
+      { name: 'Euclid — Equal sides & right angles', formula: 'All sides equal & all angles = 90°', note: 'Definition of a square (Euclid Book I).' },
+      { name: 'Euclid — Diagonals', formula: 'd₁ = d₂ , d₁ ∩ d₂ ⊥ & bisect each other', note: 'Diagonals are equal and bisect each other at right angles.' },
       { name: 'Angle sum (Euclid I.32)', formula: 'Sum of angles = 4 × 90° = 360°' },
     ],
   },
@@ -249,8 +249,8 @@ const FLAT_SHAPES: Shape[] = [
       { label: 'Diagonal', formula: 'd = √(l² + w²)' },
     ],
     theorems: [
-      { name: 'Euclid — Opposite sides', formula: 'الأضلاع المتقابلة متساوية ومتوازية', note: 'Euclid I.34 — parallelogram properties.' },
-      { name: 'Euclid — Diagonals', formula: 'd₁ = d₂ و ينصف بعضهم', note: 'Diagonals of a rectangle are equal and bisect each other.' },
+      { name: 'Euclid — Opposite sides', formula: 'Opposite sides equal & parallel', note: 'Euclid I.34 — parallelogram properties.' },
+      { name: 'Euclid — Diagonals', formula: 'd₁ = d₂ & bisect each other', note: 'Diagonals of a rectangle are equal and bisect each other.' },
       { name: 'Angle sum (Euclid I.32)', formula: 'Sum of angles = 360°' },
     ],
   },
@@ -263,11 +263,11 @@ const FLAT_SHAPES: Shape[] = [
       { label: 'Perimeter', formula: 'P = a + b + c' },
     ],
     theorems: [
-      { name: 'Euclid I.32 — Angle Sum', formula: '∠A + ∠B + ∠C = 180°', note: 'مجموع زوايا المثلث = 180° — أهم نظرية في الامتحان.' },
-      { name: 'Euclid I.32 — Exterior Angle', formula: '∠الخارجي = ∠الداخليين المتقابلين', note: 'The exterior angle equals the sum of the two opposite interior angles.' },
-      { name: 'Euclid I.5 — Isosceles', formula: 'لو a = c يبقى ∠A = ∠C', note: 'Pons Asinorum: base angles of an isosceles triangle are equal.' },
-      { name: 'Pythagoras\u2019 Theorem (Euclid I.47)', formula: 'c² = a² + b²  (لو المثلث قائم)', note: 'شوف كارت Right Triangle للقوانين الكاملة.' },
-      { name: 'Euclid VI — Similarity', formula: 'k = نسبة الأضلاع = نسبة الارتفاعات', note: 'نسبة المساحات = k² — شوف Must-Know تحت.' },
+      { name: 'Euclid I.32 — Angle Sum', formula: '∠A + ∠B + ∠C = 180°', note: 'The most important theorem in exams: angles of a triangle sum to 180°.' },
+      { name: 'Euclid I.32 — Exterior Angle', formula: '∠Exterior = ∠1 + ∠2 (the two opposite interior angles)', note: 'The exterior angle equals the sum of the two opposite interior angles.' },
+      { name: 'Euclid I.5 — Isosceles', formula: 'If a = c then ∠A = ∠C', note: 'Pons Asinorum: base angles of an isosceles triangle are equal.' },
+      { name: 'Pythagoras\u2019 Theorem (Euclid I.47)', formula: 'c² = a² + b²  (right triangle only)', note: 'See the Right Triangle card for the full laws.' },
+      { name: 'Euclid VI — Similarity', formula: 'k = ratio of sides = ratio of heights', note: 'Areas ratio = k² — see Must-Know below.' },
     ],
   },
   {
@@ -279,10 +279,10 @@ const FLAT_SHAPES: Shape[] = [
       { label: 'Perimeter', formula: 'P = a + b + c' },
     ],
     theorems: [
-      { name: 'Pythagoras\u2019 Theorem (Euclid I.47)', formula: 'c² = a² + b²', note: 'الوتر تاني = مجموع مربعي الضلعين القائمين — c هي الوتر (أطول ضلع).' },
-      { name: 'Converse of Pythagoras (Euclid I.48)', formula: 'لو c² = a² + b² يبقى ∠C = 90°', note: 'العكس صحيح — لو تحقق التساوي يبقى المثلث قائم والضلع الأكبر هو الوتر.' },
-      { name: 'Euclid III.31 — Semicircle', formula: 'الزاوية اللي قطرها وتر = 90°', note: 'Angle in a semicircle is a right angle.' },
-      { name: '30°-60°-90° Ratio', formula: '1 : √3 : 2', note: 'الأضلاع المقابلة للزوايا بالنسبة دي دايمًا.' },
+      { name: 'Pythagoras\u2019 Theorem (Euclid I.47)', formula: 'c² = a² + b²', note: 'c is the hypotenuse (the longest side) — its square equals the sum of the squares of the two legs.' },
+      { name: 'Converse of Pythagoras (Euclid I.48)', formula: 'If c² = a² + b² then ∠C = 90°', note: 'Converse: if it holds, the triangle is right-angled and the longest side is the hypotenuse.' },
+      { name: 'Euclid III.31 — Semicircle', formula: 'Angle on the diameter = 90°', note: 'Angle in a semicircle is a right angle.' },
+      { name: '30°-60°-90° Ratio', formula: '1 : √3 : 2', note: 'The opposite-side ratio for these angles is always 1 : √3 : 2.' },
     ],
   },
   {
@@ -294,8 +294,8 @@ const FLAT_SHAPES: Shape[] = [
       { label: 'Perimeter', formula: 'P = 3a' },
     ],
     theorems: [
-      { name: 'Euclid I.1 / I.5', formula: 'a = b = c , كل الزوايا = 60°', note: 'All three sides equal → all three angles equal (60° each).' },
-      { name: 'Pythagoras on the half', formula: '[a/2]² + h² = a²', note: 'الارتفاع بينصف القاعدة — بتشتغل بيها فيثاغورس علشان تطلع h.' },
+      { name: 'Euclid I.1 / I.5', formula: 'a = b = c , all angles = 60°', note: 'All three sides equal → all three angles equal (60° each).' },
+      { name: 'Pythagoras on the half', formula: '[a/2]² + h² = a²', note: 'The height bisects the base — use Pythagoras to get h.' },
     ],
   },
   {
@@ -306,8 +306,8 @@ const FLAT_SHAPES: Shape[] = [
       { label: 'Perimeter', formula: 'P = 2(a + b)' },
     ],
     theorems: [
-      { name: 'Euclid I.34', formula: 'الأضلاع المتقابلة متساوية ومتوازية + الزوايا المتقابلة متساوية' },
-      { name: 'Euclid — Diagonals', formula: 'القطرين بينصفوا بعض', note: 'Diagonals bisect each other; each diagonal splits the shape into two congruent triangles.' },
+      { name: 'Euclid I.34', formula: 'Opposite sides equal & parallel + opposite angles equal' },
+      { name: 'Euclid — Diagonals', formula: 'Diagonals bisect each other', note: 'Diagonals bisect each other; each diagonal splits the shape into two congruent triangles.' },
       { name: 'Euclid I.32', formula: 'Sum of angles = 360°' },
     ],
   },
@@ -320,8 +320,8 @@ const FLAT_SHAPES: Shape[] = [
       { label: 'Perimeter', formula: 'P = 4a' },
     ],
     theorems: [
-      { name: 'Euclid — Rhombus properties', formula: 'الأضلاع الأربعة متساوية' },
-      { name: 'Euclid — Diagonals', formula: 'd₁ ⊥ d₂ و بينصفوا بعض و بينصفوا الزوايا', note: 'Diagonals are perpendicular, bisect each other, and bisect the vertex angles.' },
+      { name: 'Euclid — Rhombus properties', formula: 'All four sides equal' },
+      { name: 'Euclid — Diagonals', formula: 'd₁ ⊥ d₂ & bisect each other and the vertex angles', note: 'Diagonals are perpendicular, bisect each other, and bisect the vertex angles.' },
     ],
   },
   {
@@ -330,11 +330,11 @@ const FLAT_SHAPES: Shape[] = [
     laws: [
       { label: 'Area', formula: 'A = [1/2] × (b₁ + b₂) × h' },
       { label: 'Median (Midsegment)', formula: 'm = [1/2] × (b₁ + b₂)' },
-      { label: 'Perimeter', formula: 'P = مجموع الأضلاع الأربعة' },
+      { label: 'Perimeter', formula: 'P = a + b₁ + b₂ + c (sum of the four sides)' },
     ],
     theorems: [
-      { name: 'Euclid — Bases', formula: 'b₁ ∥ b₂', note: 'القاعدتين المتوازيتين بس — الأضلاع التانية مش شرط تكون متوازية.' },
-      { name: 'Median Theorem', formula: 'm ∥ b₁ , b₂  و m = [1/2] × (b₁ + b₂)', note: 'الخط المتوسط موازي للقاعدتين وطوله نص مجموعهم.' },
+      { name: 'Euclid — Bases', formula: 'b₁ ∥ b₂', note: 'Only the two bases are parallel — the legs are not necessarily parallel.' },
+      { name: 'Median Theorem', formula: 'm ∥ b₁ , b₂  & m = [1/2] × (b₁ + b₂)', note: 'The median is parallel to both bases and equals half their sum.' },
     ],
   },
   {
@@ -346,10 +346,10 @@ const FLAT_SHAPES: Shape[] = [
       { label: 'Pi (π)', formula: 'π ≈ [22/7] ≈ 3.14' },
     ],
     theorems: [
-      { name: 'Euclid III.18 — Tangent', formula: 'المماس ⊥ نصف القطر عند نقطة التماس', note: 'A tangent to a circle is perpendicular to the radius at the point of contact.' },
-      { name: 'Euclid III.3 — Chord', formula: 'العمودي من المركز على الوتر بينصفه', note: 'Perpendicular from the centre bisects the chord.' },
-      { name: 'Euclid III.20 — Central Angle', formula: '∠المركزي = 2 × ∠المحيطي', note: 'Central angle = twice the inscribed angle on the same arc.' },
-      { name: 'Euclid III.31 — Semicircle', formula: 'الزاوية في نصف الدائرة = 90°' },
+      { name: 'Euclid III.18 — Tangent', formula: 'Tangent ⊥ radius at the point of contact', note: 'A tangent to a circle is perpendicular to the radius at the point of contact.' },
+      { name: 'Euclid III.3 — Chord', formula: '⊥ from the centre to the chord bisects it', note: 'Perpendicular from the centre bisects the chord.' },
+      { name: 'Euclid III.20 — Central Angle', formula: '∠Central = 2 × ∠Inscribed', note: 'Central angle = twice the inscribed angle on the same arc.' },
+      { name: 'Euclid III.31 — Semicircle', formula: 'Angle in a semicircle = 90°' },
     ],
   },
   {
@@ -361,7 +361,7 @@ const FLAT_SHAPES: Shape[] = [
       { label: 'Perimeter', formula: 'P = L + 2r' },
     ],
     theorems: [
-      { name: 'Euclid III — Proportion', formula: '[θ/360] = [L/2πr] = [A/πr²]', note: 'نسبة الزاوية بتنفع تحسب القوس أو المساحة بالتناسب.' },
+      { name: 'Euclid III — Proportion', formula: '[θ/360] = [L/2πr] = [A/πr²]', note: 'The angle proportion gives the arc length or area by proportion.' },
     ],
   },
 ]
@@ -377,8 +377,8 @@ const SOLID_SHAPES: Shape[] = [
       { label: 'Diagonal', formula: 'd = a√3' },
     ],
     theorems: [
-      { name: 'Euler\u2019s Formula', formula: 'F + V − E = 2  →  6 + 8 − 12 = 2', note: 'أوجه + رؤوس − أحرف = 2 (يناير على كل مجسمات لامتنتهية).' },
-      { name: 'Pythagoras in 3D', formula: 'd² = a² + a² + a² = 3a²', note: 'قطر المكعب بيتحسب بفيثاغورس مرتين.' },
+      { name: 'Euler\u2019s Formula', formula: 'F + V − E = 2  →  6 + 8 − 12 = 2', note: 'Faces + Vertices − Edges = 2 (Euler’s formula for all polyhedra).' },
+      { name: 'Pythagoras in 3D', formula: 'd² = a² + a² + a² = 3a²', note: 'The cube diagonal = Pythagoras applied twice.' },
     ],
   },
   {
@@ -404,7 +404,7 @@ const SOLID_SHAPES: Shape[] = [
       { label: 'Total Surface (TSA)', formula: 'TSA = 2πr(r + h)' },
     ],
     theorems: [
-      { name: 'Net of a Cylinder', formula: 'CSA = مستطيل طوله 2πr وعرضه h', note: 'فك الأسطوانة = مستطيل + دايرتين — منه بييجي قانون المساحة الجانبية.' },
+      { name: 'Net of a Cylinder', formula: 'CSA = a rectangle of length 2πr & width h', note: 'Unroll the cylinder = rectangle + 2 circles — that is where the CSA law comes from.' },
     ],
   },
   {
@@ -417,8 +417,8 @@ const SOLID_SHAPES: Shape[] = [
       { label: 'Total Surface (TSA)', formula: 'TSA = πr(l + r)' },
     ],
     theorems: [
-      { name: 'Pythagoras\u2019 Theorem', formula: 'l² = r² + h²', note: 'الرازم (الراسم) والنق والارتفاع بيعملوا مثلث قائم — فيثاغورس بيطلع الرازم.' },
-      { name: 'Volume Ratio', formula: 'V(المخروط) = [1/3] × V(الأسطوانة)', note: 'المخروط بياخد ثلث حجم الأسطوانة بنفس النق والارتفاع.' },
+      { name: 'Pythagoras\u2019 Theorem', formula: 'l² = r² + h²', note: 'l, r & h form a right triangle — Pythagoras gives the slant height.' },
+      { name: 'Volume Ratio', formula: 'V(cone) = [1/3] × V(cylinder)', note: 'The cone takes one-third of the cylinder volume with the same r & h.' },
     ],
   },
   {
@@ -429,7 +429,7 @@ const SOLID_SHAPES: Shape[] = [
       { label: 'Surface Area', formula: 'S = 4πr²' },
     ],
     theorems: [
-      { name: 'Great Circle', formula: 'أكبر دائرة في الكرة = دايرة عندها نصف قطر الكرة', note: 'مركزها = مركز الكرة ونصف قطرها = r.' },
+      { name: 'Great Circle', formula: 'Great circle = a circle whose radius = the sphere’s radius', note: 'Its centre = the sphere centre & its radius = r.' },
     ],
   },
   {
@@ -437,12 +437,12 @@ const SOLID_SHAPES: Shape[] = [
     draw: DRAW.pyramid,
     laws: [
       { label: 'Volume', formula: 'V = [1/3] × Base Area × h = [1/3] × a² × h' },
-      { label: 'Base Area', formula: 'Base = a² (قاعدة مربعة)' },
+      { label: 'Base Area', formula: 'Base = a² (square base)' },
       { label: 'Slant Height', formula: 'l = √( h² + [a/2]² )' },
     ],
     theorems: [
       { name: 'Euler\u2019s Formula', formula: 'F + V − E = 2  →  5 + 5 − 8 = 2' },
-      { name: 'Pythagoras\u2019 Theorem', formula: 'l² = h² + [a/2]²', note: 'الارتفاع بينصف القاعدة في الهرم القائم — فيثاغورس بيطلع الرازم.' },
+      { name: 'Pythagoras\u2019 Theorem', formula: 'l² = h² + [a/2]²', note: 'The height bisects the base in a right pyramid — Pythagoras gives l.' },
     ],
   },
 ]
@@ -527,7 +527,6 @@ function ShapeCard({ s, onOpen }: { s: Shape; onOpen: (s: Shape) => void }) {
       <CardContent className="p-4 space-y-2.5">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <h3 dir="ltr" className="font-black text-foreground text-base text-left">{s.en}</h3>
-          <span className="text-[11px] font-semibold text-muted-foreground">{s.ar}</span>
         </div>
         <ul className="space-y-1.5">
           {s.laws.map(function (l, i) {
@@ -540,7 +539,7 @@ function ShapeCard({ s, onOpen }: { s: Shape; onOpen: (s: Shape) => void }) {
           className="w-full inline-flex items-center justify-center gap-1.5 min-h-[40px] rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-500/15 transition-colors"
         >
           <ScrollText className="h-3.5 w-3.5" />
-          All Laws + Theorems ({s.theorems.length}) — اضغط هنا
+          All Laws + Theorems ({s.theorems.length}) — Tap here
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </CardContent>
@@ -580,7 +579,7 @@ export function GeometryLaws() {
                 className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors"
               >
                 <ArrowRight className="h-4 w-4" />
-                رجوع للرئيسية
+                Back to Home
               </a>
               <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 rounded-full px-3 py-1.5">
                 <Ruler className="h-3.5 w-3.5" />
@@ -592,7 +591,7 @@ export function GeometryLaws() {
                 Geometry <span className="text-emerald-600 dark:text-emerald-400">Laws</span>
               </h1>
               <p className="text-sm sm:text-base text-muted-foreground font-medium">
-                Every Area, Perimeter & Volume law in English — اضغط على أي شكل يفتح لك كل قوانينه ونظرياته (Pythagoras & Euclid)
+                Every Area, Perimeter & Volume law — tap any shape to open all its laws & theorems (Pythagoras & Euclid)
               </p>
             </div>
             {/* Search */}
@@ -602,8 +601,8 @@ export function GeometryLaws() {
                 type="search"
                 value={query}
                 onChange={function (e) { setQuery(e.target.value) }}
-                placeholder="ابحث: Triangle, Circle, Cone, Pythagoras, مثلث…"
-                aria-label="ابحث في قوانين الهندسة"
+                placeholder="Search: Triangle, Circle, Cone, Pythagoras…"
+                aria-label="Search geometry laws"
                 className="w-full h-11 pr-10 pl-4 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50"
               />
             </div>
@@ -619,7 +618,7 @@ export function GeometryLaws() {
             <h2 dir="ltr" className="text-lg font-bold text-foreground">Plane Shapes — Area & Perimeter</h2>
           </div>
           {flat.length === 0 && solids.length === 0 ? (
-            <p className="text-center text-muted-foreground py-10 text-sm">مفيش شكل بالاسم ده — جرب كلمة تانية (مثل «Triangle» أو «مربع»)</p>
+            <p className="text-center text-muted-foreground py-10 text-sm">No shape found with this name — try another word (e.g. “Triangle”)</p>
           ) : flat.length === 0 ? null : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {flat.map(function (s) { return <ShapeCard key={s.id} s={s} onOpen={setSelected} /> })}
@@ -673,7 +672,6 @@ export function GeometryLaws() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 flex-wrap">
                   <span dir="ltr" className="text-emerald-600 dark:text-emerald-400">{selected.en}</span>
-                  <span className="text-sm font-medium text-muted-foreground">{selected.ar}</span>
                 </DialogTitle>
               </DialogHeader>
               <div className="flex items-center justify-center rounded-xl border border-border/50 bg-gradient-to-br from-emerald-500/8 via-transparent to-amber-500/8 py-2">
@@ -697,7 +695,7 @@ export function GeometryLaws() {
       </Dialog>
 
       <footer className="mt-auto border-t bg-background/60 py-4 text-center text-xs text-muted-foreground">
-        Math Genius — مستر وائل خضير • Geometry Laws — قوانين الهندسة
+        Math Genius — Mr. Wael Khodair • Geometry Laws
       </footer>
     </div>
   )
