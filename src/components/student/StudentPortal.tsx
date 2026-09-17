@@ -1904,7 +1904,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                                         onUploadStateChange={function(busy: boolean) {
                                           setHwPhotoBusy(function(prev) { return { ...prev, [hw.id]: busy } })
                                         }}
-                                        placeholder="اكتب إجابتك هنا أو ارفع صورة للحل..."
+                                        placeholder="Type your answer here or upload a photo of your solution..."
                                         rows={4}
                                       />
                                     </div>
@@ -2014,7 +2014,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                                 onUploadStateChange={function(busy: boolean) {
                                   setHwPhotoBusy(function(prev) { return { ...prev, [hw.id]: busy } })
                                 }}
-                                placeholder="اكتب إجابتك هنا أو ارفع صورة للحل..."
+                                placeholder="Type your answer here or upload a photo of your solution..."
                                 rows={4}
                               />
                             </div>
@@ -3075,7 +3075,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                               onUploadStateChange={function(busy: boolean) {
                                 setExamPhotoBusy(busy)
                               }}
-                              placeholder="اكتب إجابتك هنا أو ارفع صورة..."
+                              placeholder="Type your answer here or upload a photo of your solution..."
                               rows={4}
                             />
                           </div>
@@ -3189,7 +3189,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                         onUploadStateChange={function(busy: boolean) {
                           setExamPhotoBusy(busy)
                         }}
-                        placeholder="اكتب إجابتك هنا أو ارفع صورة..."
+                        placeholder="Type your answer here or upload a photo of your solution..."
                         rows={4}
                       />
                     </div>
