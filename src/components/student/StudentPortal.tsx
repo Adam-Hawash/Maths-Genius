@@ -8,7 +8,7 @@ import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import {
   Video, ClipboardList, FileText, Megaphone, MessageSquare, Send,
-  LogOut, Loader2, FileDown, Bell, PlayCircle, CheckCircle2,
+  LogOut, Loader2, FileDown, PlayCircle, CheckCircle2,
   BookOpen, Target, TrendingUp, GraduationCap, ChevronLeft, ExternalLink,
   User, Phone, Award, Lock, X, ListTodo, Search,
   HelpCircle, ArrowLeft, Rocket, Flag, XCircle, Timer,
@@ -23,8 +23,10 @@ import { StudentComplaints } from '@/components/student/StudentComplaints'
 import { BooksTab } from '@/components/student/BooksTab'
 import { FractionText } from '@/components/FractionText'
 import BidiText from '@/components/BidiText'
-/* (2026-و44) جرس الإشعارات + بادج المجتمع — أي حاجة جديدة توصل للطالب */
-import { NotificationsBell } from '@/components/student/NotificationsBell'
+/* (2026-و59) الشارات الحمراء جنب التابات — بدل الجرس المشيل نهائيًا
+   (طلب المستر: «تشيل الجرس خالص… واجب جديد علامة 1 بالأحمر جنب الواجبات،
+   الامتحانات نفس الكلام، المجتمع رسالة 1 ورسالتين 2، الشكاوي رد 1 —
+   زي اللي في صفحة الأدمن») */
 import { normalizeCorrectKey } from '@/lib/correct-key'
 /* (و45) تصنيف موحّد: سؤال له اختيارات صور/رسومات = اختياري مش مقالي */
 import { isWritingQuestion } from '@/lib/question-figures'
@@ -103,51 +105,104 @@ function StudentPortalInner() {
   const grade = currentStudent?.grade || ''
   const studentId = currentStudent?.id || ''
 
-  /* ===== (2026-و44) بادج «المجتمع» — طلب المستر: «لو جه أكتر كل رسالة
-     يجيله إشعار فوق على القسم» — بنقارن آخر رسالة (id) بآخر واحد شافه
-     (localStorage) — وبنفتح التاب بيسجل إنه شاف. بيدور كل 60 ثانية. */
-  const [communityNewCount, setCommunityNewCount] = useState(0)
-  const communitySeenKey = 'mg_lastSeenCommunity_' + (grade || 'all')
+  /* ===== (2026-و59) شارات حمراء بعداد رقمي جنب التابات — بدل الجرس
+     (المستر: «أي حاجة بتنزل بدري بس هو مش مظبوط — شيله خالص»)
+     المنطق زي الأدمن بالظبط: عدّاد للمستجدات بعد آخر مرة فتح التاب
+     (localStorage بآخر وقت اتشاف) + فتح التاب بيصفر العدّاد — بيدور كل 60 ثانية. */
+  const [newHwCount, setNewHwCount] = useState(0)
+  const [newExamCount, setNewExamCount] = useState(0)
+  const [newDiscCount, setNewDiscCount] = useState(0)
+  const [newComplaintCount, setNewComplaintCount] = useState(0)
+  const tabSeenKeys = {
+    homework: 'mg_st_seen_hw_' + (studentId || 'x'),
+    exams: 'mg_st_seen_ex_' + (studentId || 'x'),
+    discussions: 'mg_st_seen_ds_' + (studentId || 'x') + '_' + (grade || 'g'),
+    complaints: 'mg_st_seen_cp_' + (studentId || 'x'),
+  } as Record<string, string>
+  var readSeenMs = function (tab: string): number {
+    try {
+      var v = localStorage.getItem(tabSeenKeys[tab]) || ''
+      var t = new Date(v).getTime()
+      return isFinite(t) ? t : 0
+    } catch (e) { return 0 }
+  }
+  var writeSeenNow = function (tab: string) {
+    try { localStorage.setItem(tabSeenKeys[tab], new Date().toISOString()) } catch (e) {}
+  }
   useEffect(function () {
-    if (!grade || !studentId) return
+    if (!studentId || !grade) return
     var alive = true
     var check = async function () {
       try {
-        var r = await fetch('/api/discussions?grade=' + encodeURIComponent(grade) + '&pageSize=1', { cache: 'no-store' })
-        var j = await r.json()
-        var latest = j && j.discussions && j.discussions[0] ? String(j.discussions[0].id) : ''
+        /* الواجبات + الامتحانات: الجديد = عنصر نزل بعد آخر فتح للتاب
+           (نفس القوايم اللي الطالب شايفها فعلًا — فلاش ميعاد بدري) */
+        var rh = await fetch('/api/homework?grade=' + encodeURIComponent(grade) + '&pageSize=50&studentId=' + encodeURIComponent(studentId), { cache: 'no-store' })
+        var jh = await rh.json()
         if (!alive) return
-        if (latest) {
-          var seen = ''
-          try { seen = localStorage.getItem(communitySeenKey) || '' } catch (e) {}
-          if (seen && latest !== seen) {
-            /* جاب رسايل جديدة بعد آخر زيارة */
-            setCommunityNewCount(1)
-          } else if (!seen) {
-            /* أول مرة — مننبّهش بالغباء، بنسجل بس */
-            try { localStorage.setItem(communitySeenKey, latest) } catch (e) {}
-          }
+        var hwList: any[] = Array.isArray(jh && jh.homework) ? jh.homework : []
+        if (activeTab === 'homework') { writeSeenNow('homework'); setNewHwCount(0) }
+        else {
+          var hwSeen = readSeenMs('homework')
+          if (!hwSeen) writeSeenNow('homework')
+          else setNewHwCount(hwList.filter(function (h: any) { var t = new Date((h && (h.createdAt || '')).toString()).getTime(); return isFinite(t) && t > hwSeen }).length)
         }
-      } catch (e) {}
+        var rex = await fetch('/api/exams?grade=' + encodeURIComponent(grade) + '&pageSize=50&studentId=' + encodeURIComponent(studentId), { cache: 'no-store' })
+        var jex = await rex.json()
+        if (!alive) return
+        var exList: any[] = Array.isArray(jex && jex.exams) ? jex.exams : []
+        if (activeTab === 'exams') { writeSeenNow('exams'); setNewExamCount(0) }
+        else {
+          var exSeen = readSeenMs('exams')
+          if (!exSeen) writeSeenNow('exams')
+          else setNewExamCount(exList.filter(function (e2: any) { var t = new Date((e2 && (e2.createdAt || '')).toString()).getTime(); return isFinite(t) && t > exSeen }).length)
+        }
+        /* المجتمع: رسايل بعد آخر فتح — من غير رسايل الطالب نفسه
+           (رسالة 1، رسالتين 2 — عدّاد رقمي زي الأدمن بالظبط) */
+        var rd = await fetch('/api/discussions?grade=' + encodeURIComponent(grade) + '&pageSize=100', { cache: 'no-store' })
+        var jd = await rd.json()
+        if (!alive) return
+        var dsList: any[] = Array.isArray(jd && jd.discussions) ? jd.discussions : []
+        if (activeTab === 'discussions') { writeSeenNow('discussions'); setNewDiscCount(0) }
+        else {
+          var dsSeen = readSeenMs('discussions')
+          if (!dsSeen) writeSeenNow('discussions')
+          else setNewDiscCount(dsList.filter(function (d: any) {
+            if (!d || d.studentId === studentId) return false
+            var t = new Date((d.createdAt || '').toString()).getTime()
+            return isFinite(t) && t > dsSeen
+          }).length)
+        }
+        /* الشكاوي: شكوى ليه رد من المستر بعد آخر فتح للتاب */
+        var rc = await fetch('/api/complaints?studentId=' + encodeURIComponent(studentId), { cache: 'no-store' })
+        var jc = await rc.json()
+        if (!alive) return
+        var cpList: any[] = Array.isArray(jc && jc.complaints) ? jc.complaints : []
+        if (activeTab === 'complaints') { writeSeenNow('complaints'); setNewComplaintCount(0) }
+        else {
+          var cpSeen = readSeenMs('complaints')
+          if (!cpSeen) writeSeenNow('complaints')
+          else setNewComplaintCount(cpList.filter(function (c: any) {
+            if (!c || !(c.reply || '').trim()) return false
+            var t = new Date((c.updatedAt || c.createdAt || '').toString()).getTime()
+            return isFinite(t) && t > cpSeen
+          }).length)
+        }
+      } catch (e) { /* صامت — الشارات مش سبب لكسر حاجة */ }
     }
     check()
     var t = setInterval(check, 60000)
     return function () { alive = false; clearInterval(t) }
-  }, [grade, studentId, communitySeenKey])
-  /* فتح تاب المجتمع = اتشاف */
+  /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [studentId, grade, activeTab])
+  /* فتح التاب فورًا = صفر الشارة (من غير استنى الدورة) */
   useEffect(function () {
-    if (activeTab !== 'discussions' || !grade) return
-    setCommunityNewCount(0)
-    var markSeen = async function () {
-      try {
-        var r = await fetch('/api/discussions?grade=' + encodeURIComponent(grade) + '&pageSize=1', { cache: 'no-store' })
-        var j = await r.json()
-        var latest = j && j.discussions && j.discussions[0] ? String(j.discussions[0].id) : ''
-        if (latest) { try { localStorage.setItem(communitySeenKey, latest) } catch (e) {} }
-      } catch (e) {}
-    }
-    markSeen()
-  }, [activeTab, grade, communitySeenKey])
+    if (!studentId) return
+    if (activeTab === 'homework') { writeSeenNow('homework'); setNewHwCount(0) }
+    else if (activeTab === 'exams') { writeSeenNow('exams'); setNewExamCount(0) }
+    else if (activeTab === 'discussions') { writeSeenNow('discussions'); setNewDiscCount(0) }
+    else if (activeTab === 'complaints') { writeSeenNow('complaints'); setNewComplaintCount(0) }
+  /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [activeTab, studentId])
 
   useEffect(() => {
     if (!grade || !studentId) return
@@ -406,6 +461,14 @@ function StudentPortalInner() {
     { id: 'complaints', label: 'الشكاوي', icon: Flag },
   ]
 
+  /* (2026-و59) أرقام الشارات الحمراء جنب التابات */
+  const tabBadges: Record<string, number> = {
+    homework: newHwCount,
+    exams: newExamCount,
+    discussions: newDiscCount,
+    complaints: newComplaintCount,
+  }
+
   return (
     <div className="flex-1 flex flex-col">
       {/* Top Bar */}
@@ -419,8 +482,6 @@ function StudentPortalInner() {
           <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">{grade}</Badge>
         </div>
         <div className="flex items-center gap-2">
-          {/* (2026-و44) جرس الإشعارات — رد الشكوى/الكتب/الامتحانات/الواجبات/الإعلانات */}
-          <NotificationsBell studentId={studentId} />
           <Button variant="ghost" size="sm" onClick={logout} className="text-destructive hover:text-destructive hover:bg-destructive/10">
             <LogOut className="h-4 w-4 ml-1" />
             <span className="hidden sm:inline">خروج</span>
@@ -440,9 +501,9 @@ function StudentPortalInner() {
           >
             <tab.icon className="h-4 w-4" />
             {tab.label}
-            {/* (2026-و44) بادج رسايل جديدة فوق على القسم — طلب المستر حرفيًا */}
-            {tab.id === 'discussions' && communityNewCount > 0 && (
-              <span className="ml-1 min-w-[16px] h-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] font-bold inline-flex items-center justify-center">جديد</span>
+            {/* (2026-و59) شارة حمراء بعدّاد رقمي — زي صفحة الأدمن بالظبط */}
+            {tabBadges[tab.id] > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">{tabBadges[tab.id] > 99 ? '99+' : tabBadges[tab.id]}</span>
             )}
           </button>
         ))}
