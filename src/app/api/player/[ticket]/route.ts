@@ -338,7 +338,7 @@ const PLAYER_PAGE = `<!doctype html>
     -webkit-text-stroke:.9px rgba(0,0,0,.32);paint-order:stroke fill;
     text-shadow:0 0 12px rgba(255,255,255,.14)}
   .wmCard{position:absolute;z-index:46}
-  .wmCardT{top:2.8%;left:50%;transform:translateX(-50%) scale(.95)}
+  .wmCardT{top:2.8%;left:50%;transform:translateX(-50%) scale(1.05)}
   /* 2026-و9 — الكروت اليمين والشمال طلعوا فوق: بقى 3 فوق (شمال/نص/يمين)
      و3 تحت — بنفس تصغير ~18% — بطلب المستر: «اللي في النص دول تطلعهم فوق
      يبقوا تلاتة فوق وتلاتة تحت» */
@@ -348,8 +348,11 @@ const PLAYER_PAGE = `<!doctype html>
      كبروا شوية: النص 1.14x والجانبين من .82 لـ .92 */
   /* 2026-و40-w — «صغّر الووترمارك ~35% وقلل ظهورها ~30% — بتشوش الطلاب»:
      كل الكروت أصغر (خط+padding) وأخف (opacity أقل) — بس لسه ظاهرة للإثبات */
-  .wmCardMR{top:2.8%;right:0;transform:scale(.72);transform-origin:top right;opacity:.62}
-  .wmCardML{top:2.8%;left:0;transform:scale(.72);transform-origin:top left;opacity:.62}
+  /* 2026-و58 — طلب المستر: «كبّر كروت الـ QR — تلاتة فوق وتلاتة تحت — شوية بس
+     مش كبيره، واللي على الجنب سيبهم زي ما هما» — كروت الـ QR اكبرت
+     (سكيل + مقاس الـ QR والخطوط) والشيبس الجانبية ملمسناهاش خالص */
+  .wmCardMR{top:2.8%;right:0;transform:scale(.9);transform-origin:top right;opacity:.62}
+  .wmCardML{top:2.8%;left:0;transform:scale(.9);transform-origin:top left;opacity:.62}
   /* 2026-و9 — كارتين صغيرين في نص الفيديو يمين وشمال على الطرف خالص —
      فيهم رقم الطالب بس (من غير اسم ولا QR) — بطلب المستر */
   .wmNumChip{position:absolute;z-index:46;transform:translateY(-50%)}
@@ -374,14 +377,14 @@ const PLAYER_PAGE = `<!doctype html>
   .wmCardB1{bottom:52px;left:0;opacity:.6}
   .wmCardB2{bottom:52px;left:50%;transform:translateX(-50%);opacity:.6}
   .wmCardB3{bottom:52px;right:0;opacity:.6}
-  .wmCard .in{display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.5);
-    border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:8px;padding:2px 6px;
+  .wmCard .in{display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.5);
+    border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:8px;padding:3px 8px;
     direction:rtl;white-space:nowrap}
-  .wmCard .qr{width:clamp(15px,1.9vw,22px);height:clamp(15px,1.9vw,22px);border-radius:3px;
-    background:#fff;padding:1.5px;display:block}
-  .wmCard .nm{font-size:clamp(7px,.72vw,8.5px);font-weight:800;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap}
-  .wmCard .sep{opacity:.55;font-size:clamp(6px,.65vw,7.5px)}
-  .wmCard .ph{font-size:clamp(6.5px,.68vw,8px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.92;white-space:nowrap}
+  .wmCard .qr{width:clamp(19px,2.4vw,28px);height:clamp(19px,2.4vw,28px);border-radius:3px;
+    background:#fff;padding:2px;display:block}
+  .wmCard .nm{font-size:clamp(8.5px,.9vw,10.5px);font-weight:800;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap}
+  .wmCard .sep{opacity:.55;font-size:clamp(7px,.8vw,9px)}
+  .wmCard .ph{font-size:clamp(8px,.85vw,9.5px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.92;white-space:nowrap}
   /* المستطيلات السودة تحت خالص يمين وشمال — تغطية علامة الاشتراك/اللوجو
      بتاعة يوتيوب تغطية كاملة + بتمنع الدوس عليها (فيه يوتيوب بس) */
   /* (2026-و9) الشريط السفلي بقى بنفس سمك العلوي بالظبط — طلب المستر:
