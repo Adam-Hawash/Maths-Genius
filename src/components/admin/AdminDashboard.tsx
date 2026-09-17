@@ -5059,7 +5059,7 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
                       <MathKeyboard
                         value={q.modelAnswer || ''}
                         onChange={function(val: string) { updateQuestion(qi, 'modelAnswer', val) }}
-                        placeholder="اكتب الحل الكامل خطوة بخطوة..."
+                        placeholder="Write the full solution step by step..."
                         rows={3}
                       />
                     </div>
