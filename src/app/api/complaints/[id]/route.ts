@@ -63,3 +63,17 @@ export async function PATCH(request: Request, ctx: any) {
     return NextResponse.json({ error: 'حصلت مشكلة في السيرفر' }, { status: 500 })
   }
 }
+
+/* (2026-و59) DELETE — مسح شكوى (نفس نمط مسح الامتحانات/المناقشات) */
+export async function DELETE(_request: Request, ctx: any) {
+  try {
+    var p = ctx && ctx.params && typeof ctx.params.then === 'function' ? await ctx.params : ctx.params
+    var id = String((p && p.id) || '')
+    if (!id) return NextResponse.json({ error: 'مفيش رقم شكوى' }, { status: 400 })
+    await db.$executeRawUnsafe('DELETE FROM Complaint WHERE id = ?', id)
+    return NextResponse.json({ message: 'تم حذف الشكوى' })
+  } catch (error) {
+    console.error('[Complaints] DELETE error:', error)
+    return NextResponse.json({ error: 'حصلت مشكلة في السيرفر' }, { status: 500 })
+  }
+}
