@@ -2,9 +2,9 @@ import type { Metadata } from 'next'
 import { GeometryLaws } from '@/components/landing/GeometryLaws'
 
 export var metadata: Metadata = {
-  title: 'Geometry Laws — قوانين الهندسة | Math Genius',
+  title: 'Geometry Laws | Math Genius',
   description:
-    'كل قوانين الهندسة في صفحة واحدة: مساحات ومحيطات كل الأشكال، الحجوم ومساحات السطح، ونظرية فيثاغورس — من منصة Math Genius مستر وائل خضير.',
+    'All geometry laws on one page: area and perimeter of every shape, volumes and surface areas, and the Pythagorean theorem — from Math Genius platform by Mr. Wael Khodair.',
 }
 
 export default function GeometryLawsPage() {
