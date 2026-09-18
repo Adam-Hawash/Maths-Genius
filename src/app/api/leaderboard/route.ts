@@ -25,51 +25,14 @@
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { ensureLedgerTable, syncLedger } from '@/lib/points-ledger'
 
 // كاش داخلي بسيط (60 ثانية) — الصفحة الرئيسية بتتفتح كتير ومفيش داعي نضرب
 // الداتابيز بكل زيارة. نفس نمط الكاش المحلي في باقي المنصة.
+// (و60: منطق الدفتر نفسه اتنقل لـ lib/points-ledger.ts عشان يتشارك مع /api/points)
 var CACHE_TTL_MS = 60000
 var cachedAt = 0
 var cachedRows: any[] | null = null
-
-// إنشاء جدول الدفتر لو مش موجود (نفس نمط ensureTable في باقي المنصة)
-async function ensureLedgerTable() {
-  await db.$executeRawUnsafe(
-    'CREATE TABLE IF NOT EXISTS PointsLedger (' +
-    'resultId TEXT PRIMARY KEY, ' +
-    'studentId TEXT NOT NULL, ' +
-    'kind TEXT NOT NULL, ' +
-    'points REAL DEFAULT 0, ' +
-    'updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP)'
-  )
-}
-
-// مزامنة المرآة: أي نتيجة موجودة دلوقتي في ExamResult/HomeworkResult
-// بتتكتب في الدفتر (INSERT OR REPLACE = التعديلات بتتحدث نفس الصف).
-// صفوف نتايج اتمسحت من المصدر (امتحان/واجب اتشال) **بتفضل** في الدفتر عمدًا.
-async function syncLedger() {
-  await ensureLedgerTable()
-  try {
-    await db.$executeRawUnsafe(
-      'INSERT OR REPLACE INTO PointsLedger (resultId, studentId, kind, points, updatedAt) ' +
-      "SELECT er.id, er.studentId, 'exam', COALESCE(er.score, 0), CURRENT_TIMESTAMP " +
-      'FROM ExamResult er WHERE er.studentId IS NOT NULL AND er.studentId != \'\''
-    )
-  } catch (e) { console.error('ledger sync exam error:', e) }
-  try {
-    await db.$executeRawUnsafe(
-      'INSERT OR REPLACE INTO PointsLedger (resultId, studentId, kind, points, updatedAt) ' +
-      "SELECT hr.id, hr.studentId, 'homework', COALESCE(hr.score, 0), CURRENT_TIMESTAMP " +
-      'FROM HomeworkResult hr WHERE hr.studentId IS NOT NULL AND hr.studentId != \'\''
-    )
-  } catch (e) { console.error('ledger sync homework error:', e) }
-  // طالب اتمسح → نقاطه تتمسح من الدفتر (ممنوع أشباح في الترتيب)
-  try {
-    await db.$executeRawUnsafe(
-      'DELETE FROM PointsLedger WHERE studentId NOT IN (SELECT id FROM Student)'
-    )
-  } catch (e) { console.error('ledger ghost cleanup error:', e) }
-}
 
 export async function GET() {
   // رد الكاش لو لسه صالح

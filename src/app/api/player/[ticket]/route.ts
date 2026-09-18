@@ -351,8 +351,12 @@ const PLAYER_PAGE = `<!doctype html>
   /* 2026-و58 — طلب المستر: «كبّر كروت الـ QR — تلاتة فوق وتلاتة تحت — شوية بس
      مش كبيره، واللي على الجنب سيبهم زي ما هما» — كروت الـ QR اكبرت
      (سكيل + مقاس الـ QR والخطوط) والشيبس الجانبية ملمسناهاش خالص */
-  .wmCardMR{top:2.8%;right:0;transform:scale(.9);transform-origin:top right;opacity:.62}
-  .wmCardML{top:2.8%;left:0;transform:scale(.9);transform-origin:top left;opacity:.62}
+  /* 2026-و60-b — طلب المستر: «الواترمارك والـ QR مش واضحين… ميتين خالص —
+     وضّحهم زي اللي فوق في النص» + «كبّر الخط اللي فوق نص سم»:
+     كل الكروت بقى بنفس وضوح الكارت العلوي (opacity كاملة + خلفية أ solid)
+     + الخط أكبر (~نص سم) والـ QR أكبر — الشيبس الجانبية برضه أوضح وأكبر */
+  .wmCardMR{top:2.8%;right:0;transform:scale(1);transform-origin:top right}
+  .wmCardML{top:2.8%;left:0;transform:scale(1);transform-origin:top left}
   /* 2026-و9 — كارتين صغيرين في نص الفيديو يمين وشمال على الطرف خالص —
      فيهم رقم الطالب بس (من غير اسم ولا QR) — بطلب المستر */
   .wmNumChip{position:absolute;z-index:46;transform:translateY(-50%)}
@@ -365,26 +369,26 @@ const PLAYER_PAGE = `<!doctype html>
   .wmNameChip{position:absolute;z-index:46;max-width:36vw;overflow:hidden}
   .wmNameR{right:0;top:68%;border-radius:7px 0 0 7px}
   .wmNameL{left:0;top:68%;border-radius:0 7px 7px 0}
-  .wmNameChip .in{display:inline-block;background:rgba(0,0,0,.5);color:#fff;
-    border:1px solid rgba(255,255,255,.16);border-left:0;border-right:0;padding:2px 6px;
-    font-size:clamp(6.5px,.65vw,7.5px);font-weight:700;direction:rtl;unicode-bidi:plaintext;
-    letter-spacing:0;white-space:nowrap;opacity:.6;max-width:36vw;overflow:hidden;
+  .wmNameChip .in{display:inline-block;background:rgba(0,0,0,.75);color:#fff;
+    border:1px solid rgba(255,255,255,.32);border-left:0;border-right:0;padding:3px 9px;
+    font-size:clamp(9px,1.05vw,13px);font-weight:800;direction:rtl;unicode-bidi:plaintext;
+    letter-spacing:0;white-space:nowrap;max-width:36vw;overflow:hidden;
     text-overflow:ellipsis}
-  .wmNumChip .in{display:inline-block;background:rgba(0,0,0,.5);color:#fff;
-    border:1px solid rgba(255,255,255,.16);border-left:0;border-right:0;padding:2px 6px;
-    font-size:clamp(6.5px,.65vw,7.5px);font-weight:700;direction:ltr;unicode-bidi:plaintext;
-    letter-spacing:0;white-space:nowrap;opacity:.6}
-  .wmCardB1{bottom:52px;left:0;opacity:.6}
-  .wmCardB2{bottom:52px;left:50%;transform:translateX(-50%);opacity:.6}
-  .wmCardB3{bottom:52px;right:0;opacity:.6}
-  .wmCard .in{display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.5);
-    border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:8px;padding:3px 8px;
-    direction:rtl;white-space:nowrap}
-  .wmCard .qr{width:clamp(19px,2.4vw,28px);height:clamp(19px,2.4vw,28px);border-radius:3px;
-    background:#fff;padding:2px;display:block}
-  .wmCard .nm{font-size:clamp(8.5px,.9vw,10.5px);font-weight:800;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap}
-  .wmCard .sep{opacity:.55;font-size:clamp(7px,.8vw,9px)}
-  .wmCard .ph{font-size:clamp(8px,.85vw,9.5px);font-weight:700;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;opacity:.92;white-space:nowrap}
+  .wmNumChip .in{display:inline-block;background:rgba(0,0,0,.75);color:#fff;
+    border:1px solid rgba(255,255,255,.32);border-left:0;border-right:0;padding:3px 9px;
+    font-size:clamp(9px,1.05vw,13px);font-weight:800;direction:ltr;unicode-bidi:plaintext;
+    letter-spacing:0;white-space:nowrap}
+  .wmCardB1{bottom:52px;left:0}
+  .wmCardB2{bottom:52px;left:50%;transform:translateX(-50%)}
+  .wmCardB3{bottom:52px;right:0}
+  .wmCard .in{display:inline-flex;align-items:center;gap:8px;background:rgba(0,0,0,.78);
+    border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:9px;padding:5px 11px;
+    direction:rtl;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.5)}
+  .wmCard .qr{width:clamp(26px,3.3vw,38px);height:clamp(26px,3.3vw,38px);border-radius:4px;
+    background:#fff;padding:3px;display:block}
+  .wmCard .nm{font-size:clamp(12px,1.5vw,18px);font-weight:800;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap}
+  .wmCard .sep{opacity:.6;font-size:clamp(10px,1.2vw,14px)}
+  .wmCard .ph{font-size:clamp(11px,1.35vw,16px);font-weight:800;direction:ltr;unicode-bidi:plaintext;letter-spacing:0;white-space:nowrap}
   /* المستطيلات السودة تحت خالص يمين وشمال — تغطية علامة الاشتراك/اللوجو
      بتاعة يوتيوب تغطية كاملة + بتمنع الدوس عليها (فيه يوتيوب بس) */
   /* (2026-و9) الشريط السفلي بقى بنفس سمك العلوي بالظبط — طلب المستر:
@@ -403,8 +407,10 @@ const PLAYER_PAGE = `<!doctype html>
      **(2026-و3 — طلب المستر: «قصره شوية، ما تخليهوش نازل كده طويل»)** —
      الشريط بقى رفيع (40–50px بدل 96px) — التغطية زي ما هي بس من غير ماياخد
      مساحة كبيرة من الفيديو */
+  /* 2026-و60-b — «الخط اللي فوق ده كبّره نص سم» — الشريط العلوي بقى أنصه
+     (58–68px بدل 40–50px) وكلمة Math Genius أكبر شوية */
   #topShield{position:absolute;top:0;left:0;right:0;z-index:22;pointer-events:auto;
-    height:max(40px,min(7.5%,50px));
+    height:max(58px,min(10%,68px));
     /* 2026-و40-w — «وضّح الفيديو»: أفتح وأقل بلور — التغطية زي ما هي بس
        الفيديو يبان واضح تحتها (الطلاب كانوا بيشكوا إن الووترمارك بتشتت) */
     background:rgba(0,0,0,.60);
@@ -414,9 +420,9 @@ const PLAYER_PAGE = `<!doctype html>
     border-bottom:1px solid rgba(255,255,255,.10)}
   #topShield::after{content:'';position:absolute;top:100%;left:0;right:0;height:12px;
     background:linear-gradient(to bottom,rgba(0,0,0,.45),rgba(0,0,0,0))}
-  #topShield .brand{color:rgba(255,255,255,.92);font-weight:900;
+  #topShield .brand{color:rgba(255,255,255,.95);font-weight:900;
     font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
-    font-size:clamp(12px,1.9vw,17px);letter-spacing:.5px;direction:ltr;white-space:nowrap;
+    font-size:clamp(15px,2.3vw,22px);letter-spacing:.5px;direction:ltr;white-space:nowrap;
     text-shadow:0 1px 3px rgba(0,0,0,.6);pointer-events:none}
   /* درع تحت كامل (2026-و7 — طلب المستر: «عاوزك تحط لي زي blur كده زي بتاع
      المستطيل الأسود اللي من فوق ومن تحت... يداري كل حاجة بس ما يكونش
