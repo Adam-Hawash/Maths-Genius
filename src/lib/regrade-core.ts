@@ -104,7 +104,7 @@ export function gradesLookPending(jsonText: any): boolean {
 }
 
 // تصحيح كل الأسئلة المقالية بشكل حاسم (نص → smart grader، صورة → VLM)
-async function gradeWritingDecisive(writing: QItem[], answers: any): Promise<{ verdicts: any[]; writingScore: number }> {
+export async function gradeWritingDecisive(writing: QItem[], answers: any): Promise<{ verdicts: any[]; writingScore: number }> {
   var textWorkload: any[] = []
   var imageWorkload: any[] = []
 
@@ -274,7 +274,7 @@ async function gradeWritingDecisive(writing: QItem[], answers: any): Promise<{ v
   return { verdicts: verdicts, writingScore: writingScore }
 }
 
-function applyOverrides(verdicts: any[], overridesJson: string, all: any[], writingDefault: number) {
+export function applyOverrides(verdicts: any[], overridesJson: string, all: any[], writingDefault: number) {
   var overrides: any = {}
   try { overrides = JSON.parse(overridesJson || '{}') || {} } catch (e) { overrides = {} }
   if (typeof overrides !== 'object' || Array.isArray(overrides)) overrides = {}
@@ -299,7 +299,7 @@ function applyOverrides(verdicts: any[], overridesJson: string, all: any[], writ
   return overrideContrib
 }
 
-function mcqContrib(mcq: QItem[], answers: any): { contrib: Record<string, number>; mcqScore: number; maxFromMcq: number } {
+export function mcqContrib(mcq: QItem[], answers: any): { contrib: Record<string, number>; mcqScore: number; maxFromMcq: number } {
   var contrib: Record<string, number> = {}
   var mcqScore = 0
   var maxFromMcq = 0
@@ -322,7 +322,7 @@ function mcqContrib(mcq: QItem[], answers: any): { contrib: Record<string, numbe
   return { contrib: contrib, mcqScore: mcqScore, maxFromMcq: maxFromMcq }
 }
 
-function sumMax(all: any[], mcqCount: number, verdicts: any[]): number {
+export function sumMax(all: any[], mcqCount: number, verdicts: any[]): number {
   var maxScore = 0
   all.forEach(function (q, idx) {
     var isWriting = q.type === 'writing' || q.type === 'essay'

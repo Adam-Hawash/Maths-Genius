@@ -38,6 +38,19 @@ import { isWritingQuestion } from '@/lib/question-figures'
  *    القايمة من optionFigures نفسها — الطالب يلاقي الاختيارات قدامه.
  * 2) لو الاختيار نصه فاضي/N/A ومعاه صورة → النص بيتخفى والرسمة الصغيرة هي الاختيار.
  * ============================================================ */
+/* (2026-و60) فاحص أوسع لحالة «لسه بيتصحح» — بيشمل الأحكام الناقصة
+   (من غير درجة / من غير ملاحظة AI على صورة) مش بس pending بالحرف —
+   ده كان سبب إن الأسئلة المقالي تبان «غلط من غير ملاحظات» للمستر */
+function hwVerdictPending(wa: any): boolean {
+  if (!wa) return false
+  if (wa.gradingStatus !== 'graded') return true
+  if (wa.needsGrading === true) return true
+  if (wa.awardedPoints === undefined || wa.awardedPoints === null) return true
+  var ans = String(wa.answer || '')
+  if (ans.indexOf('[📷') !== -1 && !String(wa.aiFeedback || wa.feedback || '').trim()) return true
+  return false
+}
+
 function mcqChoiceList(q: any): { text: string; figUrl: string }[] {
   var opts = q && Array.isArray(q.options) ? q.options : []
   var figs = q && Array.isArray(q.optionFigures) ? q.optionFigures : []
@@ -1203,8 +1216,14 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     if (cached && cached.length > 0) return
     ;(async function() {
       var done = await fetchHwReviewOnce(hwId)
-      /* تحديث تلقائي واحد بس بعد ~12 ثانية لو التصحيح لسه شغال */
-      if (!done) setTimeout(async function() { await fetchHwReviewOnce(hwId) }, 12000)
+      /* (و60) تحديثات تلقائية بعد ~12 ثانية و~30 ثانية لو التصحيح لسه شغال —
+         كل فتح للنتيجة بيشغّل «مكمّل التصحيح» على السيرفر فبيكمّل الناقص */
+      if (!done) {
+        setTimeout(async function() {
+          var done2 = await fetchHwReviewOnce(hwId)
+          if (!done2) setTimeout(async function() { await fetchHwReviewOnce(hwId) }, 30000)
+        }, 12000)
+      }
     })()
   }
   const refreshHwReview = async (hwId: string) => {
@@ -1300,7 +1319,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                 تحت كل سؤال، ولو لسه pending «بيتصحح دلوقتي…» مع تحديث خفيف */}
             {(function() {
               var bWriting = hwWritingAnswers[blockedHwId] || []
-              var bPendingW = bWriting.some(function(wa) { return wa.gradingStatus === 'pending' })
+              var bPendingW = bWriting.some(function(wa) { return hwVerdictPending(wa) })
               var showRefresh = bWriting.length === 0 || bPendingW
               return (
                 <div className="mt-3 space-y-2">
@@ -1308,7 +1327,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                     <p className="text-sm font-semibold text-foreground">مراجعة الأسئلة المقالية:</p>
                   )}
                   {bWriting.map(function(wa: any, wi: number) {
-                    var waPending = wa.gradingStatus === 'pending' || wa.needsGrading === true
+                    var waPending = hwVerdictPending(wa)
                     return (
                       <Card key={'w' + wi} className={waPending ? 'border-amber-200 dark:border-amber-900/40' : wa.isCorrect ? 'border-emerald-200 dark:border-emerald-900/40' : 'border-red-200 dark:border-red-900/40'}>
                         <CardContent className="p-3 space-y-2">
@@ -1375,8 +1394,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
             {/* أحسنت ONLY when the student got the FULL final grade (score === maxScore) */}
             {(function() {
               var bWriting = hwWritingAnswers[blockedHwId] || []
-              var bWritingBad = bWriting.some(function(wa) { return wa.isCorrect === false && wa.answer && String(wa.answer).trim() })
-              var bPending = bWriting.some(function(wa) { return wa.gradingStatus === 'pending' })
+              var bWritingBad = bWriting.some(function(wa) { return wa.isCorrect === false && wa.answer && String(wa.answer).trim() && !hwVerdictPending(wa) })
+              var bPending = bWriting.some(function(wa) { return hwVerdictPending(wa) })
               var bFull = !!bScore && bScore.score === bScore.maxScore
               return bWrong.length === 0 && !bWritingBad && !bPending && bFull
             })() && (
@@ -1384,8 +1403,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
             )}
             {bWrong.length === 0 && (function() {
               var bWriting = hwWritingAnswers[blockedHwId] || []
-              var bWritingBad = bWriting.some(function(wa) { return wa.isCorrect === false && wa.answer && String(wa.answer).trim() })
-              var bPending = bWriting.some(function(wa) { return wa.gradingStatus === 'pending' })
+              var bWritingBad = bWriting.some(function(wa) { return wa.isCorrect === false && wa.answer && String(wa.answer).trim() && !hwVerdictPending(wa) })
+              var bPending = bWriting.some(function(wa) { return hwVerdictPending(wa) })
               var bFull = !!bScore && bScore.score === bScore.maxScore
               return !bWritingBad && !bFull && bPending
             })() && (
@@ -1668,14 +1687,14 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         )}
         {/* أحسنت ONLY when the student got the FULL final grade (score === maxScore) */}
         {(function() {
-          var sWritingBad = sWritingAnswers.some(function(wa) { return wa.isCorrect === false && wa.answer && String(wa.answer).trim() })
-          var sPending = sWritingAnswers.some(function(wa) { return wa.gradingStatus === 'pending' })
+          var sWritingBad = sWritingAnswers.some(function(wa) { return wa.isCorrect === false && wa.answer && String(wa.answer).trim() && !hwVerdictPending(wa) })
+          var sPending = sWritingAnswers.some(function(wa) { return hwVerdictPending(wa) })
           var sFull = !!sScore && sScore.score === sScore.maxScore
           return sDisplayQuestions.length === 0 && sWrong.length === 0 && !sWritingBad && !sPending && sFull
         })() && (
           <p className="mx-4 text-sm text-emerald-600 font-medium">أحسنت يا بطل! 🎉 جميع الإجابات صحيحة والدرجة النهائية كاملة</p>
         )}
-        {sDisplayQuestions.length === 0 && sWrong.length === 0 && sWritingAnswers.some(function(wa) { return wa.gradingStatus === 'pending' }) && (
+        {sDisplayQuestions.length === 0 && sWrong.length === 0 && sWritingAnswers.some(function(wa) { return hwVerdictPending(wa) }) && (
           <p className="mx-4 text-sm text-amber-600 font-medium flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> لسه في أسئلة مقالية بتتصحح بالذكاء الاصطناعي — النتيجة النهائية هتتحدث تلقائياً</p>
         )}
 

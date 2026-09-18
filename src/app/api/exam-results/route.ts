@@ -2,7 +2,8 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
-import { regradeExamResult, gradesLookPending, questionsHaveWriting } from '@/lib/regrade-core'
+import { gradesLookPending, questionsHaveWriting } from '@/lib/regrade-core'
+import { finishPendingForExamResult } from '@/lib/finish-pending'
 import { resolveQuestionsForStudent, splitForDisplay } from '@/lib/exam-models'
 import { gradeFallbackDecisive, quickSmartMatch } from '@/lib/smart-grader'
 
@@ -47,7 +48,8 @@ export async function GET(request: NextRequest) {
           var healIds = pendingIds.slice(0, 10)
           after(async function() {
             for (var hi = 0; hi < healIds.length; hi++) {
-              try { await regradeExamResult(healIds[hi]) } catch (e) {}
+              /* (و60) مكمّل التصحيح — ناقص بس + حفظ بعد كل سؤال */
+              try { await finishPendingForExamResult(healIds[hi]) } catch (e) {}
             }
           })
         }
@@ -110,7 +112,8 @@ export async function GET(request: NextRequest) {
         if (pendingShowIds.length > 0) {
           after(async function () {
             for (var hi2 = 0; hi2 < pendingShowIds.length; hi2++) {
-              try { await regradeExamResult(pendingShowIds[hi2]) } catch (e) {}
+              /* (و60) مكمّل التصحيح — ناقص بس + حفظ بعد كل سؤال */
+              try { await finishPendingForExamResult(pendingShowIds[hi2]) } catch (e) {}
             }
           })
         }
@@ -598,7 +601,8 @@ export async function GET(request: NextRequest) {
         var healBatch = healIds2.slice(0, 10)
         after(async function() {
           for (var hi3 = 0; hi3 < healBatch.length; hi3++) {
-            try { await regradeExamResult(healBatch[hi3]) } catch (e) {}
+            /* (و60) مكمّل التصحيح — ناقص بس + حفظ بعد كل سؤال */
+            try { await finishPendingForExamResult(healBatch[hi3]) } catch (e) {}
           }
         })
       }
