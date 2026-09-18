@@ -84,3 +84,41 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create discussion' }, { status: 500 })
   }
 }
+
+/* (و62) تحكم المستر في رسايل المجتمع — «اقدر اعدل في الرسايل، اي مثلا
+   حد باعت رسالة وحشة فانا ممكن اقدر امسحها، اقدر اعدل في الرسايل بتاعة
+   الناس وامسحها من صفحة الادمن» */
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { id, content } = body
+    if (!id || !content || !String(content).trim()) {
+      return NextResponse.json({ error: 'id and content are required' }, { status: 400 })
+    }
+    const existing = await db.discussion.findUnique({ where: { id } })
+    if (!existing) return NextResponse.json({ error: 'Discussion not found' }, { status: 404 })
+    const discussion = await db.discussion.update({
+      where: { id },
+      data: { content: String(content).trim() },
+    })
+    return NextResponse.json({ message: 'Discussion updated', discussion })
+  } catch (error) {
+    console.error('Discussion update error:', error)
+    return NextResponse.json({ error: 'Failed to update discussion' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
+    const existing = await db.discussion.findUnique({ where: { id } })
+    if (!existing) return NextResponse.json({ error: 'Discussion not found' }, { status: 404 })
+    await db.discussion.delete({ where: { id } })
+    return NextResponse.json({ message: 'Discussion deleted' })
+  } catch (error) {
+    console.error('Discussion delete error:', error)
+    return NextResponse.json({ error: 'Failed to delete discussion' }, { status: 500 })
+  }
+}
