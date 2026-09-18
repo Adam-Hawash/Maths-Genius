@@ -3453,20 +3453,9 @@ function DiscussionsTab({ grade, studentId, studentName }: { grade: string; stud
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
 
+  /* (و63) طلب المستر: خانة الكتابة تبقى تحت الشات مش فوق + شيل أي بادج من اسم المستر */
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <Input
-          placeholder="اكتب رسالتك أو سؤالك هنا..."
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          className="flex-1"
-        />
-        <Button onClick={handleSend} disabled={sending || !newMessage.trim()} size="icon">
-          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </Button>
-      </div>
       {items.length === 0 ? (
         <EmptyState message="ابدأ النقاش! اكتب أول رسالة" />
       ) : (
@@ -3482,8 +3471,8 @@ function DiscussionsTab({ grade, studentId, studentName }: { grade: string; stud
                   'bg-muted rounded-br-md'
                 }`}>
                   <div className="flex items-center gap-2 mb-1">
+                    {/* (و63) اسم المستر بس من غير «المعلم» ولا أي بادج — طلب المستر حرفيًا */}
                     <p className={`text-xs font-medium ${isAdmin ? 'text-primary' : isMe ? 'opacity-75' : 'text-foreground'}`}>{d.studentName}</p>
-                    {isAdmin && <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/30 text-primary">المعلم</Badge>}
                   </div>
                   <p className="text-sm leading-relaxed">{d.content}</p>
                   <p className={`text-[10px] mt-1 ${isAdmin ? 'text-primary/60' : isMe ? 'opacity-60' : 'text-muted-foreground'}`}>{new Date(d.createdAt).toLocaleString('ar-EG')}</p>
@@ -3494,6 +3483,19 @@ function DiscussionsTab({ grade, studentId, studentName }: { grade: string; stud
           <div ref={chatEndRef} />
         </div>
       )}
+      {/* (و63) خانة الكتابة تحت — عشان الشات يبقى طبيعي زي أي تطبيق رسايل */}
+      <div className="flex gap-2 pt-2 border-t">
+        <Input
+          placeholder="اكتب رسالتك أو سؤالك هنا..."
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          className="flex-1"
+        />
+        <Button onClick={handleSend} disabled={sending || !newMessage.trim()} size="icon">
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </div>
     </div>
   )
 }

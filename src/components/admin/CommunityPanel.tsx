@@ -59,7 +59,7 @@ export function CommunityPanel() {
       setReplyText('')
       setReplyTo(null)
       loadDiscussions()
-      toast.success('تم إرسال الرد بنجاح')
+      toast.success('تم إرسال رسالتك للمجتمع')
     } catch { toast.error('خطأ في إرسال الرد') }
     setSending(false)
   }
@@ -142,7 +142,8 @@ export function CommunityPanel() {
             {loading ? (
               <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
             ) : discussions.length === 0 ? (
-              <p className="text-center text-muted-foreground py-10 text-sm">لا توجد رسائل في هذا المجتمع بعد</p>
+              /* (و63) طلب المستر: يقدر يبعت أول رسالة حتى لو المجتمع فاضي — مش لازم الطالب يبدأ */
+              <p className="text-center text-muted-foreground py-10 text-sm">لا توجد رسائل في هذا المجتمع بعد — اكتب أول رسالة من تحت والطلاب هيشوفوها</p>
             ) : (
               <>
                 <div className="space-y-3 max-h-[450px] overflow-y-auto custom-scrollbar">
@@ -185,9 +186,9 @@ export function CommunityPanel() {
                             <>
                               <div className="flex items-center gap-2 mb-1">
                                 <p className={`text-xs font-semibold ${isAdmin ? 'text-primary' : 'text-foreground'}`}>
+                                  {/* (و63) اسم المستر بس من غير أي بادج — طلب المستر: «ولا المعلم ولا أدمن ولا أي حاجة» */}
                                   {d.studentName}
                                 </p>
-                                {isAdmin && <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/30 text-primary">Admin</Badge>}
                               </div>
                               <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{d.content}</p>
                               <div className="flex items-center gap-1 mt-1">
@@ -224,28 +225,29 @@ export function CommunityPanel() {
                   })}
                   <div ref={chatEndRef} />
                 </div>
-
-                {replyTo && (
-                  <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 rounded-lg px-3 py-1.5">
-                    <span>الرد على: <strong>{replyTo}</strong></span>
-                    <button onClick={() => setReplyTo(null)} className="mr-auto text-muted-foreground hover:text-foreground">✕</button>
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-2 border-t">
-                  <Input
-                    placeholder="اكتب ردك كمسؤول هنا... | Type your admin reply..."
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleReply()}
-                    className="flex-1"
-                  />
-                  <Button onClick={handleReply} disabled={sending || !replyText.trim()} size="icon">
-                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
-                </div>
               </>
             )}
+
+            {/* (و63) خانة الكتابة دايمًا ظاهرة — حتى لو المجتمع لسه فاضي */}
+            {replyTo && (
+              <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 rounded-lg px-3 py-1.5">
+                <span>الرد على: <strong>{replyTo}</strong></span>
+                <button onClick={() => setReplyTo(null)} className="mr-auto text-muted-foreground hover:text-foreground">✕</button>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2 border-t">
+              <Input
+                placeholder="اكتب رسالتك للمجتمع هنا... | Type your message..."
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleReply()}
+                className="flex-1"
+              />
+              <Button onClick={handleReply} disabled={sending || !replyText.trim()} size="icon">
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
