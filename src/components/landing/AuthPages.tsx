@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { useAppStore, gradesFromConfig } from '@/stores/app-store'
+/* (و64) الترجمة الحقيقية عربي/إنجليزي */
+import { useT } from '@/lib/i18n'
 import { getDeviceId, getDeviceCandidates, getDeviceType, getDeviceTraits } from '@/lib/device'
 import { ArrowRight, Phone, Lock, GraduationCap, Users, Loader2, AlertCircle, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
@@ -128,6 +130,8 @@ function PasswordField(props) {
 }
 
 export function LoginView() {
+  /* (و64) الترجمة */
+  const T = useT()
   var store = useAppStore()
   var setView = store.setView
   var setCurrentStudent = store.setCurrentStudent
@@ -273,8 +277,8 @@ export function LoginView() {
         <DeviceWarningBanner mode="login" />
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-primary/10 mb-4"><GraduationCap className="h-8 w-8 text-primary" /></div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">تسجيل الدخول</h1>
-          <p className="text-sm text-muted-foreground">ادخل لحسابك وكمل تعلم</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">{T('تسجيل الدخول', 'Login')}</h1>
+          <p className="text-sm text-muted-foreground">{T('ادخل لحسابك وكمل تعلم', 'Log in and keep learning')}</p>
         </div>
         <div className="relative rounded-2xl p-[2px] bg-gradient-to-br from-gold-400 via-gold-600 to-gold-400">
           <Card className="rounded-2xl border-0 shadow-lg">
@@ -285,8 +289,8 @@ export function LoginView() {
                     <p className="text-sm font-extrabold text-red-700 dark:text-red-300 leading-relaxed" style={{ whiteSpace: 'pre-line' }}>{deviceBlockMsg}</p>
                   </div>
                 )}
-                <PhoneField value={studentPhone} onChange={setStudentPhone} placeholder="رقم الهاتف" id="login-phone" />
-                <PasswordField value={studentPassword} onChange={setStudentPassword} placeholder="كلمة المرور" id="login-password" />
+                <PhoneField value={studentPhone} onChange={setStudentPhone} placeholder={T('رقم الهاتف', 'Phone number')} id="login-phone" />
+                <PasswordField value={studentPassword} onChange={setStudentPassword} placeholder={T('كلمة المرور', 'Password')} id="login-password" />
                 <button
                   type="button"
                   className="w-full min-h-[44px] font-semibold inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors px-4 py-2 cursor-pointer relative z-10"
@@ -294,9 +298,9 @@ export function LoginView() {
                   disabled={studentLoading}
                   style={{ WebkitTapHighlightColor: 'transparent', position: 'relative', zIndex: 10 }}
                 >
-                  {studentLoading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />استنى شوية...</>) : 'ادخل لحسابك'}
+                  {studentLoading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />{T('استنى شوية...', 'One moment...')}</>) : T('ادخل لحسابك', 'Enter your account')}
                 </button>
-                <p className="text-center text-sm text-muted-foreground">عندك حساب؟ <button onClick={function () { setView('auth-register') }} className="text-primary font-medium hover:underline cursor-pointer">اعمل حساب جديد</button></p>
+                <p className="text-center text-sm text-muted-foreground">{T('عندك حساب؟', 'Have an account?')} <button onClick={function () { setView('auth-register') }} className="text-primary font-medium hover:underline cursor-pointer">{T('اعمل حساب جديد', 'Create one')}</button></p>
                 {/* (و45 بطلب المستر) سطر «انت ولي أمر وعايز تتابع ابنك؟ ادخل من هنا» اتشال من
                    صفحة الدخول — دخول ولي الأمر شغال من نفس الصفحة أوتوماتيك (و44:
                    لو مطابقة الطالب فشلت بيتحقق /api/parents/login تلقائيًا) */}
@@ -304,13 +308,15 @@ export function LoginView() {
             </CardContent>
           </Card>
         </div>
-        <div className="mt-6 text-center"><button onClick={function () { setView('landing') }} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer"><ArrowRight className="h-4 w-4" />العودة للرئيسية</button></div>
+        <div className="mt-6 text-center"><button onClick={function () { setView('landing') }} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer"><ArrowRight className="h-4 w-4" />{T('العودة للرئيسية', 'Back to Home')}</button></div>
       </div>
     </div>
   )
 }
 
 export function RegisterView() {
+  /* (و64) الترجمة */
+  const T = useT()
   var store = useAppStore()
   var setView = store.setView
   var setCurrentStudent = store.setCurrentStudent
@@ -366,7 +372,7 @@ export function RegisterView() {
         <DeviceWarningBanner mode="register" />
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10 mb-3"><Users className="h-7 w-7 text-primary" /></div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">اعمل حساب جديد</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-1">{T('اعمل حساب جديد', 'Create Account')}</h1>
           <p className="text-sm text-muted-foreground">سجل بياناتك وابدأ رحلتك معنا</p>
         </div>
         <div className="relative rounded-2xl p-[2px] bg-gradient-to-br from-gold-400 via-gold-600 to-gold-400">
@@ -417,7 +423,7 @@ export function RegisterView() {
             </CardContent>
           </Card>
         </div>
-        <div className="mt-6 text-center"><button onClick={function () { setView('landing') }} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer"><ArrowRight className="h-4 w-4" />العودة للرئيسية</button></div>
+        <div className="mt-6 text-center"><button onClick={function () { setView('landing') }} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-3 cursor-pointer"><ArrowRight className="h-4 w-4" />{T('العودة للرئيسية', 'Back to Home')}</button></div>
       </motion.div>
     </div>
   )

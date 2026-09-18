@@ -18,6 +18,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+/* (و64) الترجمة الحقيقية عربي/إنجليزي */
+import { useT } from '@/lib/i18n'
 import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/stores/app-store'
 import { UserCheck, Loader2, RefreshCw, LogOut, BookOpenCheck, ClipboardList, AlertCircle, TrendingUp, MonitorPlay, ChevronDown } from 'lucide-react'
@@ -155,6 +157,8 @@ function ResultList({ rows, icon, emptyMsg, type, answersOpen, openId, detailFor
 }
 
 export function ParentPortal() {
+  /* (و64) الترجمة */
+  const T = useT()
   var store = useAppStore()
   var currentParent = store.currentParent
   var setCurrentParent = store.setCurrentParent
@@ -258,17 +262,18 @@ export function ParentPortal() {
                   <UserCheck className="h-6 w-6 text-primary" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-lg font-bold text-foreground">{currentParent.name || 'ولي أمر'}</h1>
-                  <p className="text-xs text-muted-foreground">متابعة حساب الابن في المنصة</p>
+                  <h1 className="text-lg font-bold text-foreground">{currentParent.name || T('ولي أمر', 'Parent')}</h1>
+                  <p className="text-xs text-muted-foreground">{T('متابعة حساب الابن في المنصة', 'Follow your son\'s account')}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* (و64) الزراير الموحدة في النافبار فوق — ممنوع التكرار هنا */}
                   <Button size="sm" variant="outline" onClick={function () { load() }} disabled={loading} className="h-9">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    <span className="sr-only">تحديث</span>
+                    <span className="sr-only">{T('تحديث', 'Refresh')}</span>
                   </Button>
                   <Button size="sm" variant="outline" onClick={function () { setCurrentParent(null); setView('landing') }} className="h-9">
                     <LogOut className="h-4 w-4" />
-                    <span className="hidden sm:inline">خروج</span>
+                    <span className="hidden sm:inline">{T('خروج', 'Logout')}</span>
                   </Button>
                 </div>
               </div>
@@ -282,7 +287,7 @@ export function ParentPortal() {
             <CardContent className="p-5">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] text-muted-foreground mb-0.5">الطالب</p>
+                  <p className="text-[11px] text-muted-foreground mb-0.5">{T('الطالب', 'Student')}</p>
                   {/* (2026-و39) اسم الابن بقى زرار — الضغط عليه بيفتح وضع عرض إجابات الابن */}
                   <button
                     type="button"
