@@ -169,7 +169,7 @@ function StudentReportBody({ data }: { data: StudentReportData }) {
               return (
                 <tr key={i}>
                   <td style={{ fontWeight: 600 }}>{e.title}</td>
-                  <td style={{ textAlign: 'center', fontWeight: 800 }}>{e.score} / {e.maxScore}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 800, whiteSpace: 'nowrap' }}>{e.score} من {e.maxScore}</td>
                   <td style={{ textAlign: 'center' }}>{pctv}%</td>
                   <td style={{ textAlign: 'center', fontWeight: 800, color: e.passed ? '#059669' : '#dc2626' }}>{e.passed ? '✔ ناجح' : '✘ لم يجتز'}</td>
                   <td style={{ textAlign: 'center' }}>{fmtShort(e.submittedAt)}</td>
@@ -195,7 +195,7 @@ function StudentReportBody({ data }: { data: StudentReportData }) {
               return (
                 <tr key={i}>
                   <td style={{ fontWeight: 600 }}>{h.title}</td>
-                  <td style={{ textAlign: 'center', fontWeight: 800 }}>{h.score} / {h.maxScore}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 800, whiteSpace: 'nowrap' }}>{h.score} من {h.maxScore}</td>
                   <td style={{ textAlign: 'center' }}>{pctv}%</td>
                   <td style={{ textAlign: 'center' }}>{fmtShort(h.submittedAt)}</td>
                 </tr>
@@ -309,7 +309,7 @@ function ClassReportBody({ data, gradeLabel }: { data: ClassReportData; gradeLab
                           ) : (
                             <ul style={{ margin: 0, paddingRight: 14, fontSize: 10, lineHeight: 1.5 }}>
                               {s.hw.map(function (h, hi) {
-                                return <li key={hi}>{h.title}: <b>{h.score}/{h.maxScore}</b></li>
+                                return <li key={hi}>{h.title}: <b>{h.score} من {h.maxScore}</b></li>
                               })}
                             </ul>
                           )}
@@ -323,7 +323,7 @@ function ClassReportBody({ data, gradeLabel }: { data: ClassReportData; gradeLab
                                 {s.exams.map(function (e, ei) {
                                   return (
                                     <li key={ei}>
-                                      {e.title}: <b style={{ color: e.passed ? '#059669' : '#dc2626' }}>{e.score}/{e.maxScore}</b> {e.passed ? '✔' : '✘'}
+                                      {e.title}: <b style={{ color: e.passed ? '#059669' : '#dc2626' }}>{e.score} من {e.maxScore}</b> {e.passed ? '✔' : '✘'}
                                     </li>
                                   )
                                 })}

@@ -66,6 +66,14 @@ function roundNum(v: any): number {
   return Math.round(Number(v) || 0)
 }
 
+/* حكم النجاح — لو درجة النجاح المسجلة أكبر من النهاية الكبرى (إعداد ناقص:
+   passScore=50 الافتراضي مع امتحان نهايته 24 مثلًا) نعتبر درجة النجاح
+   50% من النهاية — عشان درجة كاملة ما تظهرش «راسب» في التقرير */
+function examPassed(score: number, maxScore: number, passScore: number): boolean {
+  var eff = passScore > maxScore ? maxScore * 0.5 : passScore
+  return score >= eff
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -138,7 +146,7 @@ export async function GET(request: NextRequest) {
           title: r.examTitle,
           score: roundNum(r.score),
           maxScore: roundNum(r.maxScore) || 100,
-          passed: (Number(r.score) || 0) >= (Number(r.passScore) || 50),
+          passed: examPassed(Number(r.score) || 0, roundNum(r.maxScore) || 100, Number(r.passScore) || 50),
           submittedAt: r.submittedAt || null,
         }
       })
@@ -235,7 +243,7 @@ export async function GET(request: NextRequest) {
             title: r.title,
             score: roundNum(r.score),
             maxScore: roundNum(r.maxScore) || 100,
-            passed: (Number(r.score) || 0) >= (Number(r.passScore) || 50),
+            passed: examPassed(Number(r.score) || 0, roundNum(r.maxScore) || 100, Number(r.passScore) || 50),
           }
         })
         var myHw = hwAll.filter(function (r) { return r.studentId === s.id }).map(function (r) {
