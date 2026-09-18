@@ -364,22 +364,24 @@ img {
 }
 
 @media print {
-  /* تخفي كل عناصر الشاشة (دايلوجات، نافبار، إلخ) */
-  body * {
-    visibility: hidden !important;
+  /* إخفاء كل عناصر الشاشة نهائيًا (display:none = مش بياخدوا مساحة
+     في الورق — يمنع أي صفحات فاضية بعد التقرير) */
+  body > :not(.pdf-print-root) {
+    display: none !important;
   }
   /* التقرير هو الوحيد اللي بيظهر */
-  .pdf-print-root,
-  .pdf-print-root * {
-    visibility: visible !important;
-  }
   .pdf-print-root {
     display: block !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
+    position: static !important;
     width: 100% !important;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
   }
   /* صف الجدول ميتقطعش نص صفحتين */
   .pdf-print-root tr,
