@@ -724,6 +724,15 @@ export async function GET(
               var lookedUpW = lookupByOrigIdx(studentAnsAll2, wrOrig)
               studentText = lookedUpW !== undefined && lookedUpW !== null ? String(lookedUpW) : ''
             } catch (e) {}
+            /* (و60-هـ) إصلاح «كل المقالي غلط في شاشة الأدمن»: الكود كان بيقرأ
+               writingAnswers[wai] — وwai متغير اللوب **القديم اللي خلص** (قيمته
+               بقت = طول القايمة) فكان بيرجع undefined لكل سؤال → كل سؤال مقالي
+               يبان «غلط من غير ملاحظات ولا AI قرأ» في الأدمن مع إن الحكم مخزن
+               صح في writingResults والطالب شايفه طبيعي (بيقرأ المخزن مباشرة).
+               الصح: نجيب حكم السؤال ده بالظبط — بالفهرس الأصلي → نص السؤال */
+            var matchWa = writingAnswers.find(function(wa) { return wa && wa.origIdx === wrOrig })
+              || writingAnswers.find(function(wa) { return wa && (wa.question || '') === qText })
+              || null
             var hwWrItem: any = {
               type: 'writing',
               origIdx: q.__origIdx,
@@ -732,13 +741,13 @@ export async function GET(
               studentAnswer: typeof studentText === 'string' ? studentText : String(studentText || ''),
               correctAnswer: q.modelAnswer || q.answer || '',
               isCorrect: false,
-              // Augment with stored AI grading verdict (if any)
-              aiExtractedAnswer: writingAnswers[wai] && writingAnswers[wai].aiExtractedAnswer,
-              aiIsCorrect: writingAnswers[wai] && writingAnswers[wai].aiIsCorrect === true,
-              aiFeedback: writingAnswers[wai] && writingAnswers[wai].aiFeedback,
-              awardedPoints: writingAnswers[wai] && writingAnswers[wai].aiAwardedPoints || 0,
-              imageGraded: !!(writingAnswers[wai] && writingAnswers[wai].aiExtractedAnswer !== undefined),
-              needsGrading: !!(writingAnswers[wai] && writingAnswers[wai].needsGrading),
+              // (و60-هـ) حكم الـ AI المخزن الحقيقي لهذا السؤال بالظبط
+              aiExtractedAnswer: matchWa ? (matchWa.aiExtractedAnswer || '') : '',
+              aiIsCorrect: !!(matchWa && (matchWa.aiIsCorrect === true || matchWa.isCorrect === true)),
+              aiFeedback: matchWa ? (matchWa.aiFeedback || matchWa.feedback || '') : '',
+              awardedPoints: matchWa ? (matchWa.aiAwardedPoints || matchWa.awardedPoints || 0) : 0,
+              imageGraded: !!(matchWa && matchWa.aiExtractedAnswer),
+              needsGrading: !!(matchWa && matchWa.needsGrading === true),
             }
             if (hwWrItem.aiIsCorrect === true) hwWrItem.isCorrect = true
             applyOverride(hwWrItem, hwOverrides)

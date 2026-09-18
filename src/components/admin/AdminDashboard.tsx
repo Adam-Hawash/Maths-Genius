@@ -97,6 +97,47 @@ function writingVerdictBadge(aq: any): { cls: string; text: string } {
   return { cls: 'bg-red-500/10 text-red-600', text: 'AI: غلط' }
 }
 
+/* (و60-هـ) بلوك حكم المصحح الذكي الموحّد — طلب المستر: «ولا بيقول لي إن الـ
+   AI قرأ الإجابة ولا بيجيب لي ملاحظات». سبب المشكلة: بلوك الملاحظات كان
+   متداخل جوه شرط «AI قرأ الإجابة من الصورة» — يعني إجابة **نصية** من غير
+   صورة كان حكم الـ AI بيظهر في البادج بس من غير أي ملاحظة ولا مؤشر قراءة.
+   دلوقتي: بلوك واحد لكل سؤال مقالي يوضّح إن الـ AI قرأ + الحكم + الملاحظة —
+   للإجابات النصية وصور الشغل الرسمي (جاء من الحكم المخزن الحقيقي بعد
+   إصلاح progress API) */
+function AiWritingVerdictBlock(props: { aq: any }) {
+  var aq = props.aq
+  var feedback = String(aq.aiFeedback || aq.feedback || '')
+  if (feedback === 'لم يجب الطالب') return null
+  if (aq.needsGrading) {
+    return (
+      <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1">⏳ بيتصحح بالذكاء الاصطناعي… حدّث الصفحة بعد لحظات</p>
+    )
+  }
+  var hasVerdict = aq.aiIsCorrect === true || aq.aiIsCorrect === false
+  var hasRead = !!aq.aiExtractedAnswer || hasVerdict || !!feedback.trim()
+  if (!hasRead) return null
+  /* بلوك الصورة يظهر بس لو إجابة الطالب فعلًا فيها صورة — لما الإجابة نصية
+     الـ aiExtractedAnswer المخزن هو نص الطالب نفسه (مكرر وفوقه «إجابة الطالب») */
+  var isImageAnswer = extractAllImagePaths(String(aq.studentAnswer || '')).length > 0
+  return (
+    <div className="mt-1 space-y-1">
+      {aq.aiExtractedAnswer && isImageAnswer && (
+        <div className="p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
+          <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
+          <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><BidiText text={aq.aiExtractedAnswer} /></p>
+        </div>
+      )}
+      <div className="p-1.5 rounded bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-900/40">
+        <p className="text-[9px] font-bold text-sky-700 dark:text-sky-400">
+          🤖 الـ AI قرأ{isImageAnswer ? ' إجابة الصورة' : ' إجابة الطالب'} وصحّحها
+          {aq.aiIsCorrect === true ? ' — الحكم: ✅ صح' : aq.aiIsCorrect === false ? ' — الحكم: ❌ غلط' : ''}
+        </p>
+        {feedback && <p className="text-[9px] text-muted-foreground mt-0.5" dir="auto"><BidiText text={feedback} /></p>}
+      </div>
+    </div>
+  )
+}
+
 /* (و43) كشف «شكله فيه رسمة» من النص — للتحذير في شاشة المراجعة:
    سؤال شكله graphical من غير figure (url ولا bbox) → تحذير + رفع يدوي للرسمة */
 /* (و45) دالة isGraphicalLike اتنشلت — كانت بتشغّل تحذير «السؤال ده محتاج رسم»
@@ -2270,16 +2311,8 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                                                     })}
                                                   </div>
                                                 )}
-                                                {/* AI extracted answer from image */}
-                                                {aq.aiExtractedAnswer && (
-                                                  <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
-                                                    <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
-                                                    <p className="text-foreground whitespace-pre-wrap break-words"><BidiText text={aq.aiExtractedAnswer} /></p>
-                                                    {aq.aiFeedback && (
-                                                      <p className="text-[9px] text-muted-foreground mt-1">التعليق: {aq.aiFeedback}</p>
-                                                    )}
-                                                  </div>
-                                                )}
+                                                {/* (و60-هـ) حكم الـ AI الموحد: مؤشر قراءة + ملاحظات للنصي والصورة */}
+                                                <AiWritingVerdictBlock aq={aq} />
                                                 {aq.correctAnswer && (
                                                   <>
                                                     <p className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5 mt-1">الإجابة النموذجية:</p>
@@ -3045,15 +3078,8 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                             })}
                                           </div>
                                         )}
-                                        {aq.aiExtractedAnswer && (
-                                          <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
-                                            <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
-                                            <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><FractionText text={aq.aiExtractedAnswer} /></p>
-                                            {aq.aiFeedback && (
-                                              <p className="text-[9px] text-muted-foreground mt-1">التعليق: {aq.aiFeedback}</p>
-                                            )}
-                                          </div>
-                                        )}
+                                        {/* (و60-هـ) حكم الـ AI الموحد: مؤشر قراءة + ملاحظات للنصي والصورة */}
+                                        <AiWritingVerdictBlock aq={aq} />
                                         {aq.correctAnswer && (
                                           <p className="text-emerald-600 whitespace-pre-wrap break-words" dir="auto">الإجابة الصحيحة: <FractionText text={aq.correctAnswer} /></p>
                                         )}
@@ -3185,15 +3211,8 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                                             })}
                                           </div>
                                         )}
-                                        {aq.aiExtractedAnswer && (
-                                          <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
-                                            <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
-                                            <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><FractionText text={aq.aiExtractedAnswer} /></p>
-                                            {aq.aiFeedback && (
-                                              <p className="text-[9px] text-muted-foreground mt-1">التعليق: {aq.aiFeedback}</p>
-                                            )}
-                                          </div>
-                                        )}
+                                        {/* (و60-هـ) حكم الـ AI الموحد: مؤشر قراءة + ملاحظات للنصي والصورة */}
+                                        <AiWritingVerdictBlock aq={aq} />
                                         {aq.correctAnswer && (
                                           <p className="text-emerald-600 whitespace-pre-wrap break-words" dir="auto">الإجابة الصحيحة: <FractionText text={aq.correctAnswer} /></p>
                                         )}
