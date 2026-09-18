@@ -534,6 +534,9 @@ function StatCard({ icon: Icon, label, value, color }: { icon: any; label: strin
 }
 
 /* ========== STUDENTS MANAGER ========== */
+/* (2026-و60) نقاط الطالب من الدفتر — للعرض والتحكم (زود/خصم) */
+type PointsInfo = { id: string; name: string; grade: string; totalPoints: number; examPoints: number; homeworkPoints: number; manualPoints: number; manualRows: { resultId: string; points: number; note: string; updatedAt: string }[] }
+
 function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () => void; onViewImage: (src: string) => void }) {
   const gradesList = useGradesList()
   const [students, setStudents] = useState<Student[]>([])
@@ -542,6 +545,13 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
   const [filterGrade, setFilterGrade] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [studentProgress, setStudentProgress] = useState<any>(null)
+  /* (و60) تحكم المستر في النقاط: زود له أو خصم منه — طلب المستر الحرفي */
+  const [pointsMap, setPointsMap] = useState<Record<string, PointsInfo>>({})
+  const [pointsDialogFor, setPointsDialogFor] = useState<Student | null>(null)
+  const [pointsMode, setPointsMode] = useState<'add' | 'sub'>('add')
+  const [pointsAmount, setPointsAmount] = useState('')
+  const [pointsNote, setPointsNote] = useState('')
+  const [pointsBusy, setPointsBusy] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState(false)
 
   const loadStudents = async (showLoader = true) => {
@@ -558,6 +568,18 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
   }
 
   useEffect(() => { loadStudents() }, [filter, filterGrade])
+
+  /* (و60) تحميل نقاط كل الطلاب من الدفتر (تراكمي: قديم + جديد + يدوي) */
+  const loadPoints = async () => {
+    try {
+      const res = await fetch('/api/points')
+      const data = await res.json()
+      var m: Record<string, PointsInfo> = {}
+      ;(data.students || []).forEach(function (s: PointsInfo) { m[s.id] = s })
+      setPointsMap(m)
+    } catch { /* صامت — البادج يظهر لما يوصل */ }
+  }
+  useEffect(() => { loadPoints() }, [])
 
   // ملاحظة: قفل الأجهزة بقى صارم ودايمًا (شغال على السيرفر من غير مفتاح) —
   // الحساب بيتقفل على الجهاز اللي اتعمل بيه بس، والتحكم بيبقى لكل طالب
@@ -602,6 +624,37 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
       toast.success('تم فك الربط — أول جهاز يسجل دخول بعد كده هيبقى هو جهاز الحساب للأبد')
       loadStudents(false)
     } catch { toast.error('خطأ في فك الربط — جرب تاني') }
+  }
+
+  // ===== (و60) التحكم في نقاط الطالب — زود/خصم/تراجع =====
+  const openPointsDialog = (s: Student) => {
+    setPointsDialogFor(s); setPointsMode('add'); setPointsAmount(''); setPointsNote('')
+  }
+  const submitPointsAdjust = async () => {
+    if (!pointsDialogFor || pointsBusy) return
+    var amt = Number(pointsAmount)
+    if (!isFinite(amt) || amt === 0) { toast.error('اكتب قيمة النقاط الأول (مش صفر)'); return }
+    var delta = pointsMode === 'add' ? Math.abs(amt) : -Math.abs(amt)
+    setPointsBusy(true)
+    try {
+      const res = await fetch('/api/points', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: pointsDialogFor.id, delta: delta, note: pointsNote }) })
+      const data = await res.json()
+      if (!res.ok || data.error) { toast.error(String(data.error || 'حصل خطأ')); setPointsBusy(false); return }
+      toast.success((delta > 0 ? 'زودت ' + Math.abs(delta) + ' نقطة لـ ' : 'خصمت ' + Math.abs(delta) + ' نقطة من ') + pointsDialogFor.name)
+      setPointsDialogFor(null)
+      loadPoints()
+    } catch { toast.error('حصل خطأ في حفظ التعديل') }
+    setPointsBusy(false)
+  }
+  const undoManualPoints = async (resultId: string) => {
+    if (!window.confirm('تراجع عن التعديل اليدوي ده؟ النقاط هترجع زي ما كانت قبله.')) return
+    try {
+      const res = await fetch('/api/points', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resultId: resultId }) })
+      const data = await res.json()
+      if (!res.ok || data.error) { toast.error(String(data.error || 'حصل خطأ')); return }
+      toast.success('تم التراجع عن التعديل')
+      loadPoints()
+    } catch { toast.error('حصل خطأ في التراجع') }
   }
 
   const statusColors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', paid: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', refused: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
@@ -720,6 +773,15 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
                 <div className="space-y-1 min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{s.name}</span>
+                    {/* (و60) نقاط الطالب المتراكمة — دوس عليه يفتح التحكم (زود/خصم) */}
+                    {pointsMap[s.id] && (
+                      <button
+                        type="button"
+                        className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#C49A38]/10 text-[#8A6D22] dark:text-[#E5BE5A] hover:bg-[#C49A38]/20 transition-colors cursor-pointer"
+                        title="اضغط للتحكم في نقاط الطالب (زود له أو خصم منه)"
+                        onClick={() => openPointsDialog(s)}
+                      >⭐ {pointsMap[s.id].totalPoints} نقطة</button>
+                    )}
                     <Badge variant="secondary" className={`text-[10px] ${statusColors[s.status]}`}>{statusLabels[s.status]}</Badge>
                     {(s as any).allowAllDevices === true ? (
                       <Badge className="text-[9px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex items-center gap-0.5"><ShieldCheck className="h-2.5 w-2.5" />سماح كل الأجهزة</Badge>
@@ -796,6 +858,62 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
           </div>
         )}
       </CardContent>
+
+      {/* (و60) دايلوج التحكم في نقاط الطالب — زود له أو خصم منه + تراجع عن أي تعديل يدوي */}
+      <Dialog open={!!pointsDialogFor} onOpenChange={(v) => { if (!v) setPointsDialogFor(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              ⭐ التحكم في نقاط: {pointsDialogFor?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* التفصيل التراكمي */}
+            {pointsDialogFor && pointsMap[pointsDialogFor.id] && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                <div className="p-2 rounded-lg bg-muted"><p className="text-lg font-bold text-foreground">{pointsMap[pointsDialogFor.id].totalPoints}</p><p className="text-[10px] text-muted-foreground">الإجمالي</p></div>
+                <div className="p-2 rounded-lg bg-emerald-500/10"><p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{pointsMap[pointsDialogFor.id].examPoints}</p><p className="text-[10px] text-muted-foreground">امتحانات</p></div>
+                <div className="p-2 rounded-lg bg-purple-500/10"><p className="text-lg font-bold text-purple-600 dark:text-purple-400">{pointsMap[pointsDialogFor.id].homeworkPoints}</p><p className="text-[10px] text-muted-foreground">واجبات</p></div>
+                <div className="p-2 rounded-lg bg-amber-500/10"><p className="text-lg font-bold text-amber-600 dark:text-amber-400">{pointsMap[pointsDialogFor.id].manualPoints}</p><p className="text-[10px] text-muted-foreground">تعديل يدوي</p></div>
+              </div>
+            )}
+
+            {/* زود / خصم */}
+            <div className="flex gap-1 bg-muted rounded-lg p-1">
+              <Button variant={pointsMode === 'add' ? 'default' : 'ghost'} size="sm" className="flex-1 text-xs h-8" onClick={() => setPointsMode('add')}>➕ زود</Button>
+              <Button variant={pointsMode === 'sub' ? 'default' : 'ghost'} size="sm" className="flex-1 text-xs h-8" onClick={() => setPointsMode('sub')}>➖ خصم</Button>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">قيمة النقاط</Label>
+              <Input type="number" inputMode="numeric" min={0} placeholder="مثال: 10" value={pointsAmount} onChange={(e) => setPointsAmount(e.target.value)} className="h-9" />
+              <Label className="text-xs">السبب (اختياري — بيظهر في سجل التعديلات)</Label>
+              <Input placeholder="مثال: مشاركة متميزة / خصم تأخير" value={pointsNote} onChange={(e) => setPointsNote(e.target.value)} className="h-9" />
+              <Button className="w-full" disabled={pointsBusy} onClick={submitPointsAdjust}>
+                {pointsBusy ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : (pointsMode === 'add' ? '➕ زود النقاط' : '➖ اخصم النقاط')}
+              </Button>
+            </div>
+
+            {/* سجل التعديلات اليدوية + تراجع */}
+            {pointsDialogFor && pointsMap[pointsDialogFor.id] && pointsMap[pointsDialogFor.id].manualRows.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold mb-2">سجل تعديلاتك اليدوية (اضغط ✕ للتراجع):</p>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                  {pointsMap[pointsDialogFor.id].manualRows.map(function (mr) {
+                    return (
+                      <div key={mr.resultId} className="flex items-center justify-between gap-2 p-2 rounded-lg border bg-card text-xs">
+                        <span className={mr.points >= 0 ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>{mr.points >= 0 ? '+' : ''}{mr.points} نقطة</span>
+                        <span className="flex-1 truncate text-muted-foreground">{mr.note || 'من غير سبب'}</span>
+                        <span className="text-[10px] text-muted-foreground shrink-0">{new Date(mr.updatedAt).toLocaleDateString('ar-EG')}</span>
+                        <button type="button" className="shrink-0 h-6 w-6 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 font-bold cursor-pointer" title="تراجع" onClick={() => undoManualPoints(mr.resultId)}>✕</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
