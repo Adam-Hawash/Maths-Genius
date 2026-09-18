@@ -2,10 +2,14 @@
 
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/stores/app-store'
+/* (و64) الترجمة الحقيقية عربي/إنجليزي */
+import { useT } from '@/lib/i18n'
 import { useEffect, useState } from 'react'
 import { Award, GraduationCap, Users, BookOpen, Clock, CalendarClock } from 'lucide-react'
 
 export default function HeroSection() {
+  /* (و64) الترجمة */
+  const T = useT()
   const {
     setView,
     siteConfig,
@@ -194,7 +198,8 @@ export default function HeroSection() {
             {/* Subtitle */}
             <p className="max-w-xl text-white/70 text-base sm:text-lg leading-relaxed lg:mx-0 mx-auto">
               {cfg.hero_subtitle ||
-                'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.'}
+                T('نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.',
+                  'We make math simple and fun! Algebra, Geometry, Formulas, Cheat Sheets — weekly homework, regular exams, and continuous tracking of your progress.')}
             </p>
 
             {/* CTA Buttons */}
@@ -204,7 +209,7 @@ export default function HeroSection() {
                 className="text-base px-8 py-6 min-h-[44px] bg-[#C49A38] hover:bg-[#D4A843] text-white font-semibold transition-colors duration-200"
                 onClick={() => setView('auth-register')}
               >
-                اعمل حسابك
+                {T('اعمل حسابك', 'Create Account')}
               </Button>
               <Button
                 variant="outline"
@@ -212,7 +217,7 @@ export default function HeroSection() {
                 className="text-base px-8 py-6 min-h-[44px] border-[#C49A38]/40 text-[#E5BE5A] hover:bg-[#C49A38]/10 hover:text-[#E5BE5A] transition-colors duration-200"
                 onClick={() => setView('auth-login')}
               >
-                عندك حساب؟ ادخل هنا
+                {T('عندك حساب؟ ادخل هنا', 'Have an account? Log in')}
               </Button>
             </div>
 

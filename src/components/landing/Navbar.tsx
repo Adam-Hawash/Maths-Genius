@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useSyncExternalStore } from 'react'
+import { useState } from 'react'
 import Image from 'next/image'
-import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,8 +13,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/stores/app-store'
 import {
-  Sun,
-  Moon,
   LogOut,
   UserPlus,
   LogIn,
@@ -30,17 +27,19 @@ import {
   CalendarClock,
 } from 'lucide-react'
 import { toast } from 'sonner'
+/* (و64) زراير الثيم + اللغة الموحدة في كل المنصة + الترجمة الحقيقية */
+import { PlatformToggles } from '@/components/platform-toggles'
+import { useT } from '@/lib/i18n'
 /* (2026-و29) «أوائل الطلبة» في النافبار — طلب المستر: زرار جنب Geometry
    يفتح دايلوج بأول 3 طلاب — والقسم اتشال من الصفحة الرئيسية */
 import { TopStudentsDialog } from './TopStudentsDialog'
 
 export function Navbar() {
-  const { theme, setTheme } = useTheme()
-  const emptySubscribe = () => () => {}
-  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
   const [mobileMenu, setMobileMenu] = useState(false)
   /* (2026-و29) دايلوج أوائل الطلبة */
   const [topStudentsOpen, setTopStudentsOpen] = useState(false)
+  /* (و64) الترجمة الحقيقية — عربي/إنجليزي */
+  const T = useT()
 
   const {
     currentView,
@@ -144,7 +143,7 @@ export function Navbar() {
               className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-xl text-sm font-bold text-[#8A6D22] dark:text-[#E5BE5A] hover:bg-[#C49A38]/10 transition-colors cursor-pointer"
             >
               <Trophy className="h-4 w-4" />
-              أوائل الطلبة
+              {T('أوائل الطلبة', 'Top Students')}
             </button>
             {/* Geometry Laws — قوانين الهندسة (طلب المستر: حاجة اسمها بالانجليزي جنب الرئيسية) */}
             <a
@@ -160,7 +159,7 @@ export function Navbar() {
             {currentStudent ? (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">
-                  مرحباً،{' '}
+                  {T('مرحباً', 'Welcome')},{' '}
                   <span className="font-semibold text-foreground">
                     {currentStudent.name}
                   </span>
@@ -172,7 +171,7 @@ export function Navbar() {
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4 ml-1" />
-                  خروج
+                  {T('خروج', 'Logout')}
                 </Button>
               </div>
             ) : isAdminLoggedIn && currentAdmin ? (
@@ -184,7 +183,7 @@ export function Navbar() {
                   onClick={() => setView('admin-dashboard')}
                 >
                   <LayoutDashboard className="h-4 w-4 ml-1" />
-                  لوحة التحكم
+                  {T('لوحة التحكم', 'Dashboard')}
                 </Button>
                 <Button
                   variant="outline"
@@ -193,7 +192,7 @@ export function Navbar() {
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4 ml-1" />
-                  خروج
+                  {T('خروج', 'Logout')}
                 </Button>
               </div>
             ) : (
@@ -205,7 +204,7 @@ export function Navbar() {
                   onClick={handleLoginClick}
                 >
                   <LogIn className="h-4 w-4 ml-1" />
-                  سجل دخولك
+                  {T('سجل دخولك', 'Login')}
                 </Button>
                 <Button
                   size="sm"
@@ -213,7 +212,7 @@ export function Navbar() {
                   onClick={handleRegisterClick}
                 >
                   <UserPlus className="h-4 w-4 ml-1" />
-                  اعمل حساب
+                  {T('اعمل حساب', 'Sign Up')}
                 </Button>
               </>
             )}
@@ -256,21 +255,8 @@ export function Navbar() {
               </a>
             )}
 
-            {mounted && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="min-h-[44px] min-w-[44px]"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                aria-label="Toggle theme"
-              >
-                {theme === 'dark' ? (
-                  <Sun className="h-5 w-5" />
-                ) : (
-                  <Moon className="h-5 w-5" />
-                )}
-              </Button>
-            )}
+            {/* (و64) زراير الثيم + اللغة — موحدة في كل المنصة */}
+            <PlatformToggles />
 
             {/* Mobile Hamburger */}
             <Button
@@ -299,7 +285,7 @@ export function Navbar() {
               className="flex items-center gap-2 min-h-[44px] px-3 rounded-xl border border-[#C49A38]/40 bg-[#C49A38]/10 text-[#8A6D22] dark:text-[#E5BE5A] font-bold text-sm cursor-pointer"
             >
               <Trophy className="h-4 w-4" />
-              أوائل الطلبة
+              {T('أوائل الطلبة', 'Top Students')}
             </button>
             {/* Geometry Laws — قوانين الهندسة (ظاهر للكل: زائر/طالب/أدمن) */}
             <a
@@ -317,12 +303,12 @@ export function Navbar() {
               className="flex items-center gap-2 min-h-[44px] px-3 rounded-xl border border-border bg-muted/40 text-foreground font-bold text-sm"
             >
               <CalendarClock className="h-4 w-4" />
-              مواعيد السنتر — جدول الحصص
+              {T('مواعيد السنتر — جدول الحصص', 'Center Schedule')}
             </a>
             {currentStudent ? (
               <>
                 <p className="text-sm text-muted-foreground py-2">
-                  مرحباً،{' '}
+                  {T('مرحباً', 'Welcome')},{' '}
                   <span className="font-semibold text-foreground">
                     {currentStudent.name}
                   </span>
@@ -334,7 +320,7 @@ export function Navbar() {
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4 ml-1" />
-                  خروج
+                  {T('خروج', 'Logout')}
                 </Button>
               </>
             ) : isAdminLoggedIn && currentAdmin ? (
@@ -349,7 +335,7 @@ export function Navbar() {
                   }}
                 >
                   <LayoutDashboard className="h-4 w-4 ml-2" />
-                  لوحة التحكم
+                  {T('لوحة التحكم', 'Dashboard')}
                 </Button>
                 <Button
                   variant="outline"
@@ -358,7 +344,7 @@ export function Navbar() {
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4 ml-1" />
-                  خروج
+                  {T('خروج', 'Logout')}
                 </Button>
               </>
             ) : (
@@ -370,7 +356,7 @@ export function Navbar() {
                   onClick={handleLoginClick}
                 >
                   <LogIn className="h-4 w-4 ml-1" />
-                  سجل دخولك
+                  {T('سجل دخولك', 'Login')}
                 </Button>
                 <Button
                   size="sm"
@@ -378,7 +364,7 @@ export function Navbar() {
                   onClick={handleRegisterClick}
                 >
                   <UserPlus className="h-4 w-4 ml-1" />
-                  اعمل حساب
+                  {T('اعمل حساب', 'Sign Up')}
                 </Button>
               </>
             )}

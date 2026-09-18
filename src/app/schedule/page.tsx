@@ -5,6 +5,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useAppStore } from '@/stores/app-store'
 import { useEffect, useState } from 'react'
 import { CalendarClock, Clock, GraduationCap, ArrowRight, BookOpen, Loader2 } from 'lucide-react'
+/* (و64) زراير الثيم + اللغة الموحدة في كل المنصة */
+import { PlatformToggles } from '@/components/platform-toggles'
 import Link from 'next/link'
 
 interface ScheduleSlot {
@@ -146,12 +148,16 @@ export default function SchedulePage() {
               <p className="text-[11px] text-muted-foreground">{brandName}</p>
             </div>
           </div>
-          <Link href="/">
-            <Button variant="outline" size="sm" className="min-h-[44px]">
-              <ArrowRight className="h-4 w-4 ml-1" />
-              العودة للرئيسية
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {/* (و64) الإضاءة الليلية/النهارية + تبديل اللغة — في كل المنصة */}
+            <PlatformToggles />
+            <Link href="/">
+              <Button variant="outline" size="sm" className="min-h-[44px]">
+                <ArrowRight className="h-4 w-4 ml-1" />
+                العودة للرئيسية
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 

@@ -6,6 +6,7 @@ import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AIAssistant } from "@/components/student/AIAssistant";
 import { RecordingGuard } from "@/components/RecordingGuard";
+import { LangBoot } from "@/lib/i18n";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,8 +50,17 @@ export default async function RootLayout({
   var faviconUrl = initialConfig.favicon_url || "/logo.svg";
 
   return (
-    <html lang="ar" dir="rtl" className="dark" suppressHydrationWarning>
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
+        {/* (و64) سكريبت مبكر — الثيم (ليلي/نهاري) واللغة بيتريّكوا قبل أول رسم
+            عشان مفيش وميض غلط: الثيم من مفتاح next-themes «theme» والافتراضي ليلي،
+            واللغة من mg_lang لو مختار إنجليزي الاتجاه بيتقلب LTR */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('theme');var c=(t==='light'?'light':'dark');var el=document.documentElement;el.classList.remove('dark','light');el.classList.add(c);el.style.colorScheme=c;if(localStorage.getItem('mg_lang')==='en'){el.lang='en';el.dir='ltr'}}catch(e){}",
+          }}
+        />
         {/* Cairo via Google Fonts CDN (avoids Turbopack build error) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -80,6 +90,8 @@ export default async function RootLayout({
         style={{ fontFamily: "Cairo, sans-serif" }}
       >
         <ThemeProvider>{children}</ThemeProvider>
+        {/* (و64) قراءة اللغة المحفوظة وتطبيقها على <html> */}
+        <LangBoot />
         {/* (و47) المساعد الذكي رجع زي ما كان — المستر طلب رجوعه بنفس المميزات (شيرين بس هي اللي اتشالت) */}
         <AIAssistant />
         {/* حماية عامة من التسجيل/التصوير + أدوات المطوّر في كل الصفحات */}

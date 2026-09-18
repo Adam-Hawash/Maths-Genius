@@ -17,6 +17,8 @@
 
 import { useMemo, useState } from 'react'
 import { ArrowRight, Search, Ruler, Box, Sparkles, ChevronDown, ScrollText } from 'lucide-react'
+/* (و64) زراير الثيم + اللغة الموحدة في كل المنصة */
+import { PlatformToggles } from '@/components/platform-toggles'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog,
@@ -581,10 +583,14 @@ export function GeometryLaws() {
                 <ArrowRight className="h-4 w-4" />
                 Back to Home
               </a>
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 rounded-full px-3 py-1.5">
-                <Ruler className="h-3.5 w-3.5" />
-                Math Genius
-              </span>
+              <div className="flex items-center gap-2">
+                {/* (و64) الإضاءة الليلية/النهارية + تبديل اللغة — في كل المنصة */}
+                <PlatformToggles />
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 rounded-full px-3 py-1.5">
+                  <Ruler className="h-3.5 w-3.5" />
+                  Math Genius
+                </span>
+              </div>
             </div>
             <div className="text-center space-y-2">
               <h1 dir="ltr" className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
