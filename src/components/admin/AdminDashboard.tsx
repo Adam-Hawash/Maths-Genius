@@ -48,6 +48,8 @@ import BidiText from '@/components/BidiText'
 import { WorksheetTableReadonly, WorksheetTableEditor, WorksheetFigure, parseTableValuesFromText } from '@/components/worksheet/WorksheetParts'
 /* (2026-و40) الكتب والملازم — تاب مكتبة الكتب للطالب */
 import { BooksManager } from './BooksManager'
+/* (و65) التقارير الجاهزة للطباعة — تقرير PDF لكل طالب + التقرير الشامل لكل الطلاب */
+import { StudentReportDialog, ClassReportDialog } from '@/components/admin/StudentReports'
 /* (و52) محرر قص الرسمات اليدوي — المستر يظبط أي رسمة مقصوصة غلط بإيده في ثواني */
 import FigureCropEditor, { type FigureCropTarget } from './FigureCropEditor'
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
@@ -599,6 +601,10 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
   const [pointsNote, setPointsNote] = useState('')
   const [pointsBusy, setPointsBusy] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState(false)
+  /* (و65) التقارير الجاهزة للطباعة — طلب المستر: «أطبع ملف PDF تقرير لحاله لكل طالب» + «ملف لكل الطلاب» */
+  const T = useT()
+  const [reportFor, setReportFor] = useState<Student | null>(null)
+  const [classReportOpen, setClassReportOpen] = useState(false)
 
   const loadStudents = async (showLoader = true) => {
     if (showLoader) setLoading(true)
@@ -806,6 +812,17 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
                 </Button>
               ))}
             </div>
+            {/* (و65) التقرير الشامل — ملف PDF واحد لكل الطلاب (حسب الصف المختار) */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5 border-emerald-400 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+              onClick={() => setClassReportOpen(true)}
+              title="ملف PDF واحد لكل الطلاب: الفيديوهات اللي مش شافهاش + الواجبات المقدمة + الامتحانات والدرجات"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              {filterGrade ? T('تقرير الصف PDF', 'Grade PDF Report') : T('تقرير شامل PDF', 'Full PDF Report')}
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -873,6 +890,8 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => loadStudentProgress(s.id)} title="تفاصيل"><BarChart3 className="h-4 w-4" /></Button>
+                  {/* (و65) تقرير PDF للطالب — امتحاناته + واجباته + نسبة مشاهدة الفيديوهات */}
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => setReportFor(s)} title="تقرير PDF للطالب (امتحاناته وواجباته ونسبة مشاهدة الفيديوهات)"><FileDown className="h-4 w-4" /></Button>
                   {/* فك الربط — التحكم الوحيد: بعد الفك أول جهاز يدخل بيبقى جهاز الحساب للأبد */}
                   {((s as any).deviceId || (s as any).creationDeviceId) && (s as any).allowAllDevices !== true && (
                     <Button size="sm" variant="outline" className="h-8 px-2.5 text-xs border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400" onClick={() => handleUnbind(s.id)} title="فك ربط الجهاز — أول جهاز يسجل دخول بعد كده هيبقى هو جهاز الحساب الجديد للأبد"><RotateCcw className="h-3.5 w-3.5" />فك الربط</Button>
@@ -960,6 +979,10 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* (و65) دايلوجات التقارير الجاهزة للطباعة — تقرير الطالب + التقرير الشامل */}
+      <StudentReportDialog student={reportFor} onOpenChange={(v) => { if (!v) setReportFor(null) }} />
+      <ClassReportDialog grade={filterGrade} open={classReportOpen} onOpenChange={setClassReportOpen} />
     </Card>
   )
 }
@@ -2693,6 +2716,10 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
      ترتيب اللي بيعملوا الامتحان ده يظهر — القديم يتمسح والجديد يظهر تلقائي».
      بيتحمس مع كل تحميل للصف: آخر امتحان (بالـ createdAt) + نتايجه هو بس. */
   const [latestRanking, setLatestRanking] = useState<{ examTitle: string; rows: Array<{ studentId: string; name: string; score: number; maxScore: number; submittedAt: string }> } | null>(null)
+  /* (و65) التقارير الجاهزة للطباعة — تقرير PDF لكل طالب + التقرير الشامل للصف */
+  const T = useT()
+  const [reportFor, setReportFor] = useState<any>(null)
+  const [classReportOpen, setClassReportOpen] = useState(false)
   const filteredStudents = search.trim()
     ? students.filter(function (s) {
         var q = search.trim().toLowerCase()
@@ -2797,6 +2824,18 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                 <option value="">اختر الصف لعرض التحليلات</option>
                 {gradesList.map((g) => <option key={g.ar} value={g.ar}>{(g.emoji ? g.emoji + ' ' : '') + g.ar}</option>)}
               </select>
+              {/* (و65) التقرير الشامل للصف — ملف PDF واحد لكل طلاب الصف */}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!grade}
+                className="h-9 text-xs gap-1.5 border-emerald-400 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                onClick={() => setClassReportOpen(true)}
+                title="ملف PDF واحد لكل طلاب الصف: الفيديوهات اللي مش شافهاش + الواجبات المقدمة + الامتحانات والدرجات"
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                {T('تقرير PDF', 'PDF Report')}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -2941,6 +2980,8 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
                           <span className="text-[10px] text-muted-foreground">{s.lastLogin ? new Date(s.lastLogin).toLocaleDateString('ar-EG') : 'لم يسجل'}</span>
                         </td>
                         <td className="text-center py-2 px-1">
+                          {/* (و65) تقرير PDF للطالب */}
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={(e) => { e.stopPropagation(); setReportFor(s) }} title="تقرير PDF للطالب (امتحاناته وواجباته ونسبة مشاهدة الفيديوهات)"><FileDown className="h-3.5 w-3.5" /></Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); loadDetail(s.id) }}><Eye className="h-3.5 w-3.5" /></Button>
                         </td>
                       </tr>
@@ -3305,6 +3346,10 @@ function MyStudentsPanel({ onViewImage }: { onViewImage?: (src: string) => void 
           </CardContent>
         </Card>
       )}
+
+      {/* (و65) دايلوجات التقارير الجاهزة للطباعة — تقرير الطالب + التقرير الشامل للصف */}
+      <StudentReportDialog student={reportFor} onOpenChange={(v) => { if (!v) setReportFor(null) }} />
+      <ClassReportDialog grade={grade} open={classReportOpen} onOpenChange={setClassReportOpen} />
     </div>
   )
 }
