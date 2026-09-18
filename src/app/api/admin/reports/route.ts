@@ -125,8 +125,8 @@ export async function GET(request: NextRequest) {
           id: v.id,
           title: v.title,
           percent: percent,
-          /* عتبة «شافه» = 90% زي عتبة completed في المشغل */
-          watched: percent >= 90 || (p && !!p.completed),
+          /* عتبة «شافه» = 90% زي عتبة completed في المشغل — Boolean عشان ميرجعش undefined */
+          watched: Boolean(percent >= 90 || (p && !!p.completed)),
           lastWatchedAt: p ? p.lastWatchedAt : null,
         }
       })
