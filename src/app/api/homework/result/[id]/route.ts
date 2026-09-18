@@ -6,9 +6,10 @@
 
 import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
-import { regradeHomeworkResult } from '@/lib/regrade-core'
+import { finishPendingForHomeworkResult, verdictNeedsWork } from '@/lib/finish-pending'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 export async function GET(request, ctx) {
   try {
@@ -49,13 +50,16 @@ export async function GET(request, ctx) {
       }
     } catch (e) {}
 
-    var gradingDone = writingAnswers.every(function(w) { return w.gradingStatus !== 'pending' })
+    // (و60) فحص أوسع: أي حكم ناقص (pending/من غير درجة/صورة من غير ملاحظة AI)
+    // يعتبر ناقص تصحيح — مش بس status === 'pending' بالظبط
+    var gradingDone = writingAnswers.every(function(w) { return !verdictNeedsWork(w) })
 
-    // self-heal: نتايج قديمة لسه pending → إعادة تصحيح تلقائي في الخلفية بعد الرد
+    // self-heal (و60): نتايج ناقصة التصحيح ← مكمّل التصحيح في الخلفية بعد الرد —
+    // بيكمل **الأسئلة الناقصة بس** وبحفظ بعد كل سؤال، فالقطع مبيضيعش تقدم
     if (!gradingDone) {
       try {
         after(async function() {
-          try { await regradeHomeworkResult(resultId) } catch (e) {}
+          try { await finishPendingForHomeworkResult(resultId) } catch (e) {}
         })
       } catch (e) {}
     }

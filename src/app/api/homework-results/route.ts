@@ -3,7 +3,8 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { db, withRetry } from '@/lib/db'
 // (2026-و16) self-heal خلفي: تسليمات الواجب القديمة الناقصة التصحيح بتتصحح
 // تلقائيًا بنفس مسار الذكاء الاصطناعي الحاسم — البادج مش بيفضل معلق للأبد
-import { regradeHomeworkResult, gradesLookPending, questionsHaveWriting } from '@/lib/regrade-core'
+import { gradesLookPending, questionsHaveWriting } from '@/lib/regrade-core'
+import { finishPendingForHomeworkResult, verdictNeedsWork } from '@/lib/finish-pending'
 import { normalizeCorrectKey } from '@/lib/correct-key'
 
 /* (2026-و22) قراءة إجابة الطالب **بالفهرس الأصلي** — نفس helper التسليم */
@@ -115,7 +116,9 @@ export async function GET(request: NextRequest) {
             var healBatch = healIds.slice(0, 10)
             after(async function () {
               for (var hj = 0; hj < healBatch.length; hj++) {
-                try { await regradeHomeworkResult(healBatch[hj]) } catch (e) {}
+                /* (و60) مكمّل التصحيح — بيكمل الناقص بس + حفظ بعد كل سؤال
+                   (إعادة التصحيح الكاملة كانت بتقطع وتضيع كل الشغل) */
+                try { await finishPendingForHomeworkResult(healBatch[hj]) } catch (e) {}
               }
             })
           }
@@ -379,6 +382,38 @@ export async function GET(request: NextRequest) {
       console.error('Homework results (student) read failed after retry:', lastReadErr)
       return NextResponse.json({ results: [], error: 'retry' })
     }
+
+    /* (2026-و60) self-heal من ناحية الطالب — ده أهم مشغل للإصلاح:
+       أول ما الطالب (أو ولي الأمر) يفتح واجباته وأي سؤال مقالي فضل ناقص
+       التصحيح (التصحيح الخلفي اتقطع نص السكة) ← مكمّل التصحيح بيشتغل
+       في الخلفية بعد الرد ويكمّل الأسئلة الناقصة بس — التحديث اللي بعده
+       يلاقي الملاحظات والدرجات اتحطت. */
+    try {
+      var studentRows: any[] = rows || []
+      if (studentRows.length > 0) {
+        var placeholdersH = studentRows.map(function () { return '?' }).join(',')
+        var ids: string[] = studentRows.map(function (r: any) { return String(r.id) })
+        var withWr: any[] = await db.$queryRawUnsafe(
+          'SELECT id, writingResults FROM HomeworkResult WHERE id IN (' + placeholdersH + ')',
+          ...ids
+        ) || []
+        var pendingHw: string[] = []
+        for (var wi3 = 0; wi3 < withWr.length; wi3++) {
+          var wrArr: any[] = []
+          try { wrArr = withWr[wi3].writingResults ? JSON.parse(withWr[wi3].writingResults) : [] } catch (e) { wrArr = [] }
+          var needs = wrArr.length === 0 ? false : wrArr.some(function (w: any) { return verdictNeedsWork(w) })
+          if (needs && pendingHw.length < 5) pendingHw.push(String(withWr[wi3].id))
+        }
+        if (pendingHw.length > 0) {
+          var healHw = pendingHw.slice(0, 5)
+          after(async function () {
+            for (var hj2 = 0; hj2 < healHw.length; hj2++) {
+              try { await finishPendingForHomeworkResult(healHw[hj2]) } catch (e) {}
+            }
+          })
+        }
+      }
+    } catch (e) {}
 
     return NextResponse.json({ results: rows || [] })
   } catch (error) {

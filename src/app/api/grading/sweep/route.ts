@@ -11,7 +11,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { regradeExamResult, regradeHomeworkResult, ensureResultColumns, gradesLookPending, cleanupOrphanResults, questionsHaveWriting } from '@/lib/regrade-core'
+import { ensureResultColumns, gradesLookPending, cleanupOrphanResults, questionsHaveWriting } from '@/lib/regrade-core'
+import { finishPendingForExamResult, finishPendingForHomeworkResult } from '@/lib/finish-pending'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -52,8 +53,9 @@ async function runSweep(limit: number) {
   for (var i = 0; i < batch.length; i++) {
     var c = batch[i]
     try {
-      if (c.kind === 'exam') await regradeExamResult(c.id)
-      else await regradeHomeworkResult(c.id)
+      /* (و60) مكمّل التصحيح — استكمال الناقص بس + حفظ بعد كل سؤال (سريع ومانع للقطع) */
+      if (c.kind === 'exam') await finishPendingForExamResult(c.id)
+      else await finishPendingForHomeworkResult(c.id)
       fixed++
       remaining--
     } catch (e) {
