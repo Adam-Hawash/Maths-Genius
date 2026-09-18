@@ -350,3 +350,50 @@ img {
   border-top: 1.4px solid currentColor;
   padding: 1px 2px 0;
 }
+
+/* ============================================================
+   (و65) طباعة تقارير PDF — تقرير الطالب + التقرير الشامل
+   .pdf-print-root مخفي على الشاشة، وفي الطباعة بيبقى هو الوحيد
+   الظاهر على ورق A4 — عشان العربي يطلع مظبوط 100%
+   ============================================================ */
+.pdf-print-root { display: none; }
+
+@page {
+  size: A4;
+  margin: 10mm;
+}
+
+@media print {
+  /* تخفي كل عناصر الشاشة (دايلوجات، نافبار، إلخ) */
+  body * {
+    visibility: hidden !important;
+  }
+  /* التقرير هو الوحيد اللي بيظهر */
+  .pdf-print-root,
+  .pdf-print-root * {
+    visibility: visible !important;
+  }
+  .pdf-print-root {
+    display: block !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+  }
+  /* صف الجدول ميتقطعش نص صفحتين */
+  .pdf-print-root tr,
+  .pdf-print-root .rp-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* رأس الجدول يتعيد فوق كل صفحة */
+  .pdf-print-root thead {
+    display: table-header-group;
+  }
+  /* الألوان (الشريط الأخضر/الأحمر) تطلع في الطباعة */
+  .pdf-print-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
