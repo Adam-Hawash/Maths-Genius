@@ -152,14 +152,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       await ensurePlayTicketTable(true)
       try { row = await db.playTicket.findUnique({ where: { id: ticket } }) } catch (e2) { row = null }
     }
-    if (!row) return pageError('تذكرة التشغيل مش موجودة — اقفل المشغل وافتح الفيديو من الأول.', 403)
-    // ===== (2026-ط) علاج جذري لـ"الفيديو مش بيفتح خالص" =====
-    // كانت التذكرة بتُستهلك من أول تحميل (single-use) — أي preFetch أو Retry
-    // أو إعادة تحميل للـ iframe قبل ما المشغل يرندر بيحرق التذكرة، والطالب
-    // يشوف "التذكرة اتاستخدمت" للأبد من غير أي حل. دلوقتي: التذكرة صالحة
-    // طوال دقيقتين مهما اتفتحت — الحماية زي ما هي (التذكرة مخصصة للطالب
-    // وبتنتهي تلقائيًا ومفيش أي معرف فيديو بيظهر نتيجة كده)
-    if (new Date(row.expiresAt).getTime() < Date.now()) return pageError('تذكرة التشغيل خلصت صلاحيتها — اقفل المشغل وافتح الفيديو من الأول وهيفتح عادي.', 403)
+    if (!row) return pageError('تذكرة التشغيل مش موجودة — اقفل المشغل وافتح الفيديو من الأول وهيفتح عادي.', 403)
+
+    // (MG-2) إعدادات شكل المشغل والووترمارك — بيتقري عند كل رندر عشان أي
+    // تغيير من لوحة الأدمن يبان فورًا. لو مفيش كونفج → null والمشغل يستخدم
+    // احتياطه الداخلي = سلوك MG-1 بالظبط. بيتقري قبل فرع المعرض عشان
+    // أطوال الشريط/الدرع تتطبق على كل المشغلات (معرض + طالب)
+    var pcfgRaw: any = null
+    try {
+      const pcRow = await db.siteConfig.findUnique({ where: { key: 'player_config' } })
+      if (pcRow && pcRow.value) pcfgRaw = JSON.parse(pcRow.value)
+    } catch (e) { pcfgRaw = null }
+    var pcfg = pcfgRaw ? sanitizePlayerConfig(pcfgRaw) : null
 
     // ===== فيديوهات المعرض (gal_...) =====
     if (row.videoId && row.videoId.indexOf('gal_') === 0) {
@@ -176,6 +180,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         kind: gYt ? 'youtube' : 'file',
         resume: 0,
         wm: { enabled: false, opacity: 0, interval: 14, name: '', phone: '' },
+        /* (MG-2) أطوال الشريط/الدرع بتتطبق على مشغل المعرض كمان (من غير
+           ووترمارك — فيديوهات المعرض ترويجية من غير اسم طالب) */
+        pcfg: pcfg,
       }
       if (gYt) { const gob = obfuscate(gYt); gCfg.blob = gob.b; gCfg.key = gob.k }
       else {
@@ -207,16 +214,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         if (cfgs[i].key === 'wm_interval') wmInterval = Math.max(4, Math.min(60, parseInt(cfgs[i].value || '14') || 14))
       }
     } catch (e) {}
-
-    // (MG-2) إعدادات شكل المشغل والووترمارك — بيتقري عند كل رندر عشان أي
-    // تغيير من لوحة الأدمن يبان فورًا. لو مفيش كونفج → null والمشغل يستخدم
-    // احتياطه الداخلي = سلوك MG-1 بالظبط
-    var pcfgRaw: any = null
-    try {
-      const pcRow = await db.siteConfig.findUnique({ where: { key: 'player_config' } })
-      if (pcRow && pcRow.value) pcfgRaw = JSON.parse(pcRow.value)
-    } catch (e) { pcfgRaw = null }
-    var pcfg = pcfgRaw ? sanitizePlayerConfig(pcfgRaw) : null
 
     // بيانات الطالب للوترمارك (الرقم المسجل بيه هو الأبرز)
     var wmName = '', wmPhone = ''
