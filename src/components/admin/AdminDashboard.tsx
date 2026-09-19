@@ -20,7 +20,7 @@ import {
   BarChart3, RefreshCw, Settings, Upload, MessageSquare,
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
-  Video as VideoIcon, LinkIcon,
+  Video as VideoIcon, LinkIcon, MonitorPlay, Send,
   MessageCircle, Copy,
   ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown, Wrench
 } from 'lucide-react'
@@ -40,6 +40,8 @@ import { CommunityPanel } from './CommunityPanel'
 import { ActivityPanel } from './ActivityPanel'
 import { PaymentsPanel } from '@/components/PaymentsPanel'
 import { StudentTargetPicker, parseTargetStudentIds } from '@/components/admin/StudentTargetPicker'
+import { PlayerSettingsPanel } from '@/components/admin/PlayerSettingsPanel'
+import { normalizeWaPhone, DEFAULT_PARENT_TEMPLATE, fillParentTemplate, buildParentMsgData } from '@/lib/parent-message'
 import { MathKeyboard } from '@/components/student/MathKeyboard'
 /* (2026-و40) استخراج من صفحات كتاب PDF — تصوير الصفحات على المتصفح بـ pdf.js */
 import { openPdf, renderPageToJpeg } from '@/lib/pdf-pages'
@@ -419,6 +421,7 @@ export function AdminDashboard() {
             <TabsTrigger value="grades-schedule" className="text-xs sm:text-sm gap-1 text-emerald-600 dark:text-emerald-400"><GraduationCap className="h-4 w-4" /><span className="hidden sm:inline">{T('الصفوف والمواعيد', 'Grades')}</span></TabsTrigger>
             {/* (2026-و40) الكتب والملازم — مكتبة PDF الطالب يفتحها/يحملها */}
             <TabsTrigger value="books" className="text-xs sm:text-sm gap-1 text-sky-600 dark:text-sky-400"><BookOpen className="h-4 w-4" /><span className="hidden sm:inline">{T('الكتب والملازم', 'Books')}</span></TabsTrigger>
+            <TabsTrigger value="player-settings" className="text-xs sm:text-sm gap-1 text-indigo-600 dark:text-indigo-400"><MonitorPlay className="h-4 w-4" /><span className="hidden sm:inline">{T('إعدادات الفيديو والووترمارك', 'Video & Watermark')}</span></TabsTrigger>
           </TabsList>
 
           <TabsContent value="students"><StudentsManager onStatsRefresh={fetchStats} onViewImage={setImageModalSrc} /></TabsContent>
@@ -451,6 +454,7 @@ export function AdminDashboard() {
           <TabsContent value="grades-schedule"><GradesSchedulePanel /></TabsContent>
           {/* (2026-و40) الكتب والملازم */}
           <TabsContent value="books"><BooksManager /></TabsContent>
+          <TabsContent value="player-settings"><PlayerSettingsPanel /></TabsContent>
         </Tabs>
 
         {/* Admin Settings Dialog */}
@@ -587,44 +591,10 @@ function StatCard({ icon: Icon, label, value, color }: { icon: any; label: strin
 type PointsInfo = { id: string; name: string; grade: string; totalPoints: number; examPoints: number; homeworkPoints: number; manualPoints: number; manualRows: { resultId: string; points: number; note: string; updatedAt: string }[] }
 
 /* ============================================================
-   (MG-1) رسالة واتساب لولي الأمر — أدوات مشتركة
+   (MG-1 + MG-2) رسالة واتساب لولي الأمر — الأدوات اتنقلت لـ lib/parent-message
+   (القالب المصري الودود + تطبيع الرقم + ملامة البلايسهولدرز) — عشان
+   تتبقى مشتركة بين المودال ولوحة الإعدادات وتتخزن في الداتابيز.
    ============================================================ */
-/* اسم المدرّس في توقيع الرسالة — الاسم لوحده من غير أي لقب/بادج جنبه (قاعدة ثابتة في المنصة) */
-var WA_TEACHER_NAME = 'Mr.Wael Khodair'
-/* تطبيع رقم واتساب: مسح المسافات/الزائد/الشرطات — لو 11 رقم بتبدأ بـ 0 (مثال 01012345678)
-   → نشيل الـ 0 ونحط 20 (مصر) → 201012345678 — ولو مش رقم صالح نرجّع فاضي */
-function normalizeWaPhone(raw: string): string {
-  let d = String(raw || '').replace(/[\s+\-()\u200e\u200f]/g, '')
-  d = d.replace(/[٠-٩]/g, (x) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(x)))
-  if (/^0\d{10}$/.test(d)) return '20' + d.slice(1)
-  if (/^20\d{10}$/.test(d)) return d
-  if (/^\d{11,15}$/.test(d)) return d
-  return ''
-}
-/* نص الرسالة الجاهز لولي الأمر: امتحانات + واجبات + نسبة مشاهدة الفيديوهات —
-   الدرجات بتتكتب بـ «من» بدل «/» عشان اتجاه العربي ما يقلبش الأرقام بصريًا (درس و65) */
-function buildParentMessage(studentName: string, report: any): string {
-  const exams: any[] = Array.isArray(report && report.exams) ? report.exams : []
-  const hw: any[] = Array.isArray(report && report.homework) ? report.homework : []
-  const avgPercent = Number(report && report.summary && report.summary.avgPercent) || 0
-  const lines: string[] = []
-  lines.push('سعادة ولي أمر الطالب/ة: ' + studentName)
-  lines.push('السلام عليكم ورحمة الله، تحية طيبة من منصة Maths Genius 🌹')
-  lines.push('')
-  lines.push('📘 نتائج الامتحانات:')
-  if (exams.length) exams.forEach((e) => lines.push('• ' + String(e.title || 'امتحان') + ': ' + (Number(e.score) || 0) + ' من ' + (Number(e.maxScore) || 0)))
-  else lines.push('• لا يوجد')
-  lines.push('')
-  lines.push('📝 الواجبات:')
-  if (hw.length) hw.forEach((h) => lines.push('• ' + String(h.title || 'واجب') + ': ' + (Number(h.score) || 0) + ' من ' + (Number(h.maxScore) || 0)))
-  else lines.push('• لا يوجد')
-  lines.push('')
-  lines.push('🎥 نسبة مشاهدة الفيديوهات: ' + avgPercent + '%')
-  lines.push('')
-  lines.push('نسأل الله لطلابنا دوام التوفيق والنجاح 🌟')
-  lines.push(WA_TEACHER_NAME)
-  return lines.join('\n')
-}
 
 function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () => void; onViewImage: (src: string) => void }) {
   const gradesList = useGradesList()
@@ -764,16 +734,19 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
     } catch { toast.error('حصل خطأ في التراجع') }
   }
 
-  /* (MG-1) رسالة واتساب لولي الأمر: سحب نتايج الطالب + بناء رسالة قابلة للتعديل */
+  /* (MG-1 + MG-2) رسالة ولي الأمر: القالب من الداتابيز (أو الافتراضي المصري)
+     + سحب نتايج الطالب + ملامة البلايسهولدرز — والرسالة قابلة للتعديل */
   const openWaDialog = (s: Student) => {
     setWaFor(s); setWaMessage(''); setWaLoading(true)
-    fetch('/api/admin/reports?type=student&id=' + encodeURIComponent(s.id))
-      .then((r) => r.json())
-      .then((data) => {
-        setWaMessage(buildParentMessage(s.name, data || {}))
+    const reportP = fetch('/api/admin/reports?type=student&id=' + encodeURIComponent(s.id)).then((r) => r.json())
+    const tplP = fetch('/api/admin/parent-msg-template').then((r) => r.json()).catch(() => null)
+    Promise.all([reportP, tplP])
+      .then(([data, tplData]) => {
+        const tpl = (tplData && tplData.template) || (tplData && tplData.fallback) || DEFAULT_PARENT_TEMPLATE
+        setWaMessage(fillParentTemplate(tpl, buildParentMsgData(s.name, data || {})))
       })
       .catch(() => {
-        setWaMessage(buildParentMessage(s.name, null))
+        setWaMessage(fillParentTemplate(DEFAULT_PARENT_TEMPLATE, buildParentMsgData(s.name, null)))
         toast.error('معرفش أجيب نتايج الطالب من السيرفر — الرسالة هتتبعت من غير نتايج')
       })
       .finally(() => setWaLoading(false))
@@ -785,6 +758,41 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
     if (!waPhone) { toast.error('مفيش رقم موبايل صالح لولي الأمر — راجع رقم الطالب في بياناته'); return }
     const url = 'https://wa.me/' + waPhone + '?text=' + encodeURIComponent(waMessage)
     window.open(url, '_blank')
+  }
+  /* (MG-2) الإرسال من المنصة: لو فيه مزود مفعّل بيبعت له فعليًا —
+     لو مفيش السيرفر بيرجع waLink ونفتحه زي الإرسال اليدوي بالظبط */
+  const [waSending, setWaSending] = useState(false)
+  const sendViaPlatform = async () => {
+    if (!waFor) return
+    setWaSending(true)
+    try {
+      const res = await fetch('/api/admin/messages/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: waPhone || '', message: waMessage }) })
+      const d = await res.json()
+      if (d && d.ok && d.mode === 'manual') {
+        toast.info('الإرسال التلقائي مش مفعّل — فتحتلك واتساب جاهز بالإرسال اليدوي')
+        window.open(d.waLink, '_blank')
+      } else if (d && d.ok) {
+        toast.success('اتبعتت الرسالة لولي الأمر عبر المنصة (' + (d.provider || d.mode) + ')')
+      } else {
+        toast.error((d && d.error) || 'فشل الإرسال — جرب الإرسال اليدوي')
+      }
+    } catch { toast.error('حصل خطأ في الاتصال') }
+    setWaSending(false)
+  }
+  /* (MG-2) حفظ الرسالة الحالية كقالب افتراضي — اسم الطالب بيتبدل بـ {student}
+     عشان القالب يفضل عام لكل الطلاب */
+  const [waSavingTpl, setWaSavingTpl] = useState(false)
+  const saveAsTemplate = async () => {
+    if (!waFor) return
+    setWaSavingTpl(true)
+    try {
+      const tpl = waMessage.split(waFor.name).join('{student}')
+      const res = await fetch('/api/admin/parent-msg-template', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ template: tpl }) })
+      const d = await res.json()
+      if (d && d.ok) toast.success('اتحفظ كقالب افتراضي — اسم الطالب اتعوض بـ {student} عشان القالب يفضل عام')
+      else toast.error((d && d.error) || 'حصل خطأ في الحفظ')
+    } catch { toast.error('حصل خطأ في الاتصال') }
+    setWaSavingTpl(false)
   }
   const copyWa = async () => {
     try { await navigator.clipboard.writeText(waMessage); toast.success('تم نسخ الرسالة — ابعتها لولي الأمر') }
@@ -1108,6 +1116,10 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
               <Textarea value={waMessage} onChange={(e) => setWaMessage(e.target.value)} rows={14} className="text-sm leading-relaxed" placeholder="الرسالة بتتجهز هنا…" />
             )}
             <div className="flex gap-2 flex-wrap">
+              <Button className="flex-1 min-w-[140px] gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white" onClick={sendViaPlatform} disabled={waLoading || waSending || !waMessage}>
+                {waSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                إرسال عبر المنصة
+              </Button>
               <Button className="flex-1 min-w-[140px] gap-1.5 bg-green-600 hover:bg-green-700 text-white" onClick={sendWa} disabled={waLoading || !waMessage}>
                 <MessageCircle className="h-4 w-4" />
                 إرسال واتساب
@@ -1116,7 +1128,12 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
                 <Copy className="h-4 w-4" />
                 نسخ الرسالة
               </Button>
+              <Button variant="outline" className="gap-1.5" onClick={saveAsTemplate} disabled={waLoading || waSavingTpl || !waMessage}>
+                {waSavingTpl ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                حفظ كقالب افتراضي
+              </Button>
             </div>
+            <p className="text-xs text-muted-foreground">«إرسال عبر المنصة» بيتبعت من المنصة أوتوماتيك لو فيه مزود رسائل مفعّل في «إعدادات الفيديو والووترمارك» — لو مفيش، هيفتحلك واتساب جاهز. «حفظ كقالب افتراضي» بيخلي الرسالة دي هي القالب الافتراضي لكل الطلاب (اسم الطالب بيتعوض تلقائيًا).</p>
           </div>
         </DialogContent>
       </Dialog>
