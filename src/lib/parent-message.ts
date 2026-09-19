@@ -101,7 +101,11 @@ export function buildParentMsgData(studentName: string, report: any): ParentMsgD
     var avgHwPct = Math.round(hw.reduce(function (s: number, h: any) { return s + pct(h && h.score, h && h.maxScore) }, 0) / hw.length)
     var delivered = 'سلم ' + hw.length + ' واجب' + (hwTotal > hw.length ? ' من ' + hwTotal : '')
     lines.push('• ' + delivered + ' — متوسط درجاته في الواجبات ' + avgHwPct + '%')
-    if (hwTotal > hw.length) lines.push('• فيه ' + (hwTotal - hw.length) + ' واجب لسه ما سلمهوش — لازم يسلّم في أقرب وقت')
+    if (hwTotal > hw.length) {
+      var missing = hwTotal - hw.length
+      var hwWord = missing === 1 ? 'واجب' : missing === 2 ? 'واجبين' : 'واجبات'
+      lines.push('• فيه ' + missing + ' ' + hwWord + ' لسه ما سلمهوش — لازم يسلّم في أقرب وقت')
+    }
     homework = lines.join('\n')
   } else {
     homework = '• لسه ما سلمش أي واجب — لازم يسلّم في أقرب وقت'
