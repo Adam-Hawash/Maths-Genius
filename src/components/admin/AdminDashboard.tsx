@@ -21,6 +21,7 @@ import {
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
   Video as VideoIcon, LinkIcon,
+  MessageCircle, Copy,
   ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown, Wrench
 } from 'lucide-react'
 import { AdminComplaints } from './AdminComplaints'
@@ -585,6 +586,46 @@ function StatCard({ icon: Icon, label, value, color }: { icon: any; label: strin
 /* (2026-و60) نقاط الطالب من الدفتر — للعرض والتحكم (زود/خصم) */
 type PointsInfo = { id: string; name: string; grade: string; totalPoints: number; examPoints: number; homeworkPoints: number; manualPoints: number; manualRows: { resultId: string; points: number; note: string; updatedAt: string }[] }
 
+/* ============================================================
+   (MG-1) رسالة واتساب لولي الأمر — أدوات مشتركة
+   ============================================================ */
+/* اسم المدرّس في توقيع الرسالة — الاسم لوحده من غير أي لقب/بادج جنبه (قاعدة ثابتة في المنصة) */
+var WA_TEACHER_NAME = 'Mr.Wael Khodair'
+/* تطبيع رقم واتساب: مسح المسافات/الزائد/الشرطات — لو 11 رقم بتبدأ بـ 0 (مثال 01012345678)
+   → نشيل الـ 0 ونحط 20 (مصر) → 201012345678 — ولو مش رقم صالح نرجّع فاضي */
+function normalizeWaPhone(raw: string): string {
+  let d = String(raw || '').replace(/[\s+\-()\u200e\u200f]/g, '')
+  d = d.replace(/[٠-٩]/g, (x) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(x)))
+  if (/^0\d{10}$/.test(d)) return '20' + d.slice(1)
+  if (/^20\d{10}$/.test(d)) return d
+  if (/^\d{11,15}$/.test(d)) return d
+  return ''
+}
+/* نص الرسالة الجاهز لولي الأمر: امتحانات + واجبات + نسبة مشاهدة الفيديوهات —
+   الدرجات بتتكتب بـ «من» بدل «/» عشان اتجاه العربي ما يقلبش الأرقام بصريًا (درس و65) */
+function buildParentMessage(studentName: string, report: any): string {
+  const exams: any[] = Array.isArray(report && report.exams) ? report.exams : []
+  const hw: any[] = Array.isArray(report && report.homework) ? report.homework : []
+  const avgPercent = Number(report && report.summary && report.summary.avgPercent) || 0
+  const lines: string[] = []
+  lines.push('سعادة ولي أمر الطالب/ة: ' + studentName)
+  lines.push('السلام عليكم ورحمة الله، تحية طيبة من منصة Maths Genius 🌹')
+  lines.push('')
+  lines.push('📘 نتائج الامتحانات:')
+  if (exams.length) exams.forEach((e) => lines.push('• ' + String(e.title || 'امتحان') + ': ' + (Number(e.score) || 0) + ' من ' + (Number(e.maxScore) || 0)))
+  else lines.push('• لا يوجد')
+  lines.push('')
+  lines.push('📝 الواجبات:')
+  if (hw.length) hw.forEach((h) => lines.push('• ' + String(h.title || 'واجب') + ': ' + (Number(h.score) || 0) + ' من ' + (Number(h.maxScore) || 0)))
+  else lines.push('• لا يوجد')
+  lines.push('')
+  lines.push('🎥 نسبة مشاهدة الفيديوهات: ' + avgPercent + '%')
+  lines.push('')
+  lines.push('نسأل الله لطلابنا دوام التوفيق والنجاح 🌟')
+  lines.push(WA_TEACHER_NAME)
+  return lines.join('\n')
+}
+
 function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () => void; onViewImage: (src: string) => void }) {
   const gradesList = useGradesList()
   const [students, setStudents] = useState<Student[]>([])
@@ -605,6 +646,12 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
   const T = useT()
   const [reportFor, setReportFor] = useState<Student | null>(null)
   const [classReportOpen, setClassReportOpen] = useState(false)
+  /* (MG-1) بحث فوري في الطلاب: بالاسم أو رقم الموبايل أو الصف (من غير طلب سيرفر) */
+  const [search, setSearch] = useState('')
+  /* (MG-1) رسالة واتساب لولي الأمر — النتايج بتتسحب من /api/admin/reports?type=student */
+  const [waFor, setWaFor] = useState<Student | null>(null)
+  const [waLoading, setWaLoading] = useState(false)
+  const [waMessage, setWaMessage] = useState('')
 
   const loadStudents = async (showLoader = true) => {
     if (showLoader) setLoading(true)
@@ -620,6 +667,14 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
   }
 
   useEffect(() => { loadStudents() }, [filter, filterGrade])
+
+  /* (MG-1) الفلترة الفعلية للبحث — غير حساسة لحالة الأحرف + بتفهم الأرقام العربية (٠١٢٣) */
+  const filteredStudents = useMemo(() => {
+    const norm = (v: any) => String(v || '').replace(/[٠-٩]/g, (x) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(x))).trim().toLowerCase()
+    const q = norm(search)
+    if (!q) return students
+    return students.filter((s) => norm(s.name).includes(q) || norm(s.phone).includes(q) || norm(s.grade).includes(q))
+  }, [students, search])
 
   /* (و60) تحميل نقاط كل الطلاب من الدفتر (تراكمي: قديم + جديد + يدوي) */
   const loadPoints = async () => {
@@ -707,6 +762,33 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
       toast.success('تم التراجع عن التعديل')
       loadPoints()
     } catch { toast.error('حصل خطأ في التراجع') }
+  }
+
+  /* (MG-1) رسالة واتساب لولي الأمر: سحب نتايج الطالب + بناء رسالة قابلة للتعديل */
+  const openWaDialog = (s: Student) => {
+    setWaFor(s); setWaMessage(''); setWaLoading(true)
+    fetch('/api/admin/reports?type=student&id=' + encodeURIComponent(s.id))
+      .then((r) => r.json())
+      .then((data) => {
+        setWaMessage(buildParentMessage(s.name, data || {}))
+      })
+      .catch(() => {
+        setWaMessage(buildParentMessage(s.name, null))
+        toast.error('معرفش أجيب نتايج الطالب من السيرفر — الرسالة هتتبعت من غير نتايج')
+      })
+      .finally(() => setWaLoading(false))
+  }
+  /* الرقم المفضل: ولي الأمر (parentPhone) لو صالح — وإلا موبايل الطالب نفسه */
+  const waPhone = waFor ? (normalizeWaPhone(waFor.parentPhone || '') || normalizeWaPhone(waFor.phone || '')) : ''
+  const waPhoneIsParent = !!(waFor && normalizeWaPhone(waFor.parentPhone || ''))
+  const sendWa = () => {
+    if (!waPhone) { toast.error('مفيش رقم موبايل صالح لولي الأمر — راجع رقم الطالب في بياناته'); return }
+    const url = 'https://wa.me/' + waPhone + '?text=' + encodeURIComponent(waMessage)
+    window.open(url, '_blank')
+  }
+  const copyWa = async () => {
+    try { await navigator.clipboard.writeText(waMessage); toast.success('تم نسخ الرسالة — ابعتها لولي الأمر') }
+    catch { toast.error('معرفش أنسخ — انسخ الرسالة يدويًا من الصندوق') }
   }
 
   const statusColors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', paid: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', refused: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
@@ -827,11 +909,23 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
         </div>
       </CardHeader>
       <CardContent>
+        {/* (MG-1) بحث فوري بالاسم أو رقم الموبايل أو الصف — بيفلتر اللستة تحت مباشرة */}
+        <div className="relative mb-3">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ابحث بالاسم أو رقم الموبايل أو الصف..."
+            className="h-9 pr-10 text-sm"
+          />
+        </div>
         {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : students.length === 0 ? (
           <p className="text-center text-muted-foreground py-10 text-sm">لا يوجد طلاب</p>
+        ) : filteredStudents.length === 0 ? (
+          <p className="text-center text-muted-foreground py-10 text-sm">مفيش نتايج مطابقة للبحث — جرب اسم أو رقم أو صف تاني</p>
         ) : (
           <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
-            {students.map((s) => (
+            {filteredStudents.map((s) => (
               <div key={s.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-lg border bg-card">
                 <div className="space-y-1 min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -892,6 +986,11 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => loadStudentProgress(s.id)} title="تفاصيل"><BarChart3 className="h-4 w-4" /></Button>
                   {/* (و65) تقرير PDF للطالب — امتحاناته + واجباته + نسبة مشاهدة الفيديوهات */}
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => setReportFor(s)} title="تقرير PDF للطالب (امتحاناته وواجباته ونسبة مشاهدة الفيديوهات)"><FileDown className="h-4 w-4" /></Button>
+                  {/* (MG-1) رسالة واتساب لولي الأمر — نتايج الامتحانات والواجبات ونسبة المشاهدة في رسالة قابلة للتعديل */}
+                  <Button size="sm" variant="outline" className="h-8 px-2.5 text-xs gap-1 border-green-500 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20" onClick={() => openWaDialog(s)} title="رسالة واتساب لولي الأمر بنتايج الامتحانات والواجبات ونسبة المشاهدة">
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    رسالة لولي الأمر
+                  </Button>
                   {/* فك الربط — التحكم الوحيد: بعد الفك أول جهاز يدخل بيبقى جهاز الحساب للأبد */}
                   {((s as any).deviceId || (s as any).creationDeviceId) && (s as any).allowAllDevices !== true && (
                     <Button size="sm" variant="outline" className="h-8 px-2.5 text-xs border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400" onClick={() => handleUnbind(s.id)} title="فك ربط الجهاز — أول جهاز يسجل دخول بعد كده هيبقى هو جهاز الحساب الجديد للأبد"><RotateCcw className="h-3.5 w-3.5" />فك الربط</Button>
@@ -983,6 +1082,44 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
       {/* (و65) دايلوجات التقارير الجاهزة للطباعة — تقرير الطالب + التقرير الشامل */}
       <StudentReportDialog student={reportFor} onOpenChange={(v) => { if (!v) setReportFor(null) }} />
       <ClassReportDialog grade={filterGrade} open={classReportOpen} onOpenChange={setClassReportOpen} />
+
+      {/* (MG-1) رسالة واتساب لولي الأمر — نص جاهز قابل للتعديل + إرسال أو نسخ */}
+      <Dialog open={!!waFor} onOpenChange={(v) => { if (!v) setWaFor(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-green-600" />
+              رسالة لولي الأمر: {waFor?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              الرقم المستخدم:{' '}
+              {waPhone ? (
+                <span dir="ltr" className="font-bold text-foreground">+{waPhone}</span>
+              ) : (
+                <span className="font-bold text-red-500">مفيش رقم صالح</span>
+              )}
+              {' '}({waPhoneIsParent ? 'ولي الأمر' : 'الطالب'})
+            </p>
+            {waLoading ? (
+              <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            ) : (
+              <Textarea value={waMessage} onChange={(e) => setWaMessage(e.target.value)} rows={14} className="text-sm leading-relaxed" placeholder="الرسالة بتتجهز هنا…" />
+            )}
+            <div className="flex gap-2 flex-wrap">
+              <Button className="flex-1 min-w-[140px] gap-1.5 bg-green-600 hover:bg-green-700 text-white" onClick={sendWa} disabled={waLoading || !waMessage}>
+                <MessageCircle className="h-4 w-4" />
+                إرسال واتساب
+              </Button>
+              <Button variant="outline" className="gap-1.5" onClick={copyWa} disabled={waLoading || !waMessage}>
+                <Copy className="h-4 w-4" />
+                نسخ الرسالة
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
