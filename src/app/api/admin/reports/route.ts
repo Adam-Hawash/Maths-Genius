@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
 
       /* الامتحانات اللي قدمها (مع درجة النجاح من الامتحان نفسه) */
       var examRaw = await db.$queryRawUnsafe(
-        `SELECT er.score, er.maxScore, er.submittedAt, e.title AS examTitle, e.passScore
+        `SELECT er.score, er.maxScore, er.submittedAt, e.title AS examTitle, e.passScore, e.id AS examId, e.grade AS examGrade
          FROM ExamResult er INNER JOIN Exam e ON er.examId = e.id
          WHERE er.studentId = ? ORDER BY er.submittedAt DESC`,
         id
@@ -160,6 +160,27 @@ export async function GET(request: NextRequest) {
       })
 
       var watchedCount = videos.filter(function (v) { return v.watched }).length
+
+      /* (MG-2) كل امتحانات صف الطالب — اللي دخلها ويا درجته + اللي لسه ما دخلهوش
+         (score: null) — عشان رسالة ولي الأمر تقول «دخل» و«لسه ما دخلهوش» */
+      var examTakenMap = {}
+      examRaw.forEach(function (r) { if (r.examId) examTakenMap[r.examId] = r })
+      var allGradeExams = ((await db.$queryRawUnsafe('SELECT id, title, grade FROM Exam')) || [])
+        .filter(function (e) { return gradeMatches(e.grade, st.grade) })
+      var allExams = allGradeExams.map(function (e) {
+        var taken = examTakenMap[e.id]
+        return {
+          id: e.id,
+          title: e.title,
+          score: taken ? roundNum(taken.score) : null,
+          maxScore: taken ? (roundNum(taken.maxScore) || 100) : null,
+          submittedAt: taken ? (taken.submittedAt || null) : null,
+        }
+      })
+      /* الواجبات المنوية لصفه كلها — عشان نقول سلم كام من كام */
+      var allGradeHw = ((await db.$queryRawUnsafe('SELECT id, title, grade FROM Homework')) || [])
+        .filter(function (h) { return gradeMatches(h.grade, st.grade) })
+
       var summary = {
         videosWatched: watchedCount,
         totalVideos: videos.length,
@@ -174,7 +195,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         student: st,
         exams: examRows,
+        allExams: allExams,
         homework: hwRows,
+        homeworkTotal: allGradeHw.length,
         videos: videos,
         summary: summary,
         generatedAt: new Date().toISOString(),
