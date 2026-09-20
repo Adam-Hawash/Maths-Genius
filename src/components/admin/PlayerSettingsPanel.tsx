@@ -28,6 +28,8 @@ import {
   sanitizePlayerConfig,
   type PlayerConfig,
   type WmSize,
+  type WmBlink,
+  type WmLogoContent,
 } from '@/lib/player-config'
 import { DEFAULT_PARENT_TEMPLATE } from '@/lib/parent-message'
 
@@ -185,6 +187,29 @@ export function PlayerSettingsPanel() {
       return { ...prev, nameItems: prev.nameItems.map((it) => (it.id === selected.id ? { ...it, opacity: v } : it)) }
     })
   }
+  /* (MG-3) دورة الظهور والاختفاء — طلب المستر: «أتحكم في المدة بتاعة اختفائها» */
+  const selBlink: WmBlink = (() => {
+    if (!selected) return { on: false, show: 15, hide: 15 }
+    if (selected.kind === 'qrTL') return cfg.qrTL.blink
+    if (selected.kind === 'qrBR') return cfg.qrBR.blink
+    if (selected.kind === 'logo') return cfg.centerLogo.blink
+    const it = cfg.nameItems.find((i) => i.id === selected.id)
+    return it ? it.blink : { on: false, show: 15, hide: 15 }
+  })()
+  function setBlink(patch: Partial<WmBlink>) {
+    if (!selected) return
+    const nb: WmBlink = { ...selBlink, ...patch }
+    setCfg((prev) => {
+      if (selected.kind === 'qrTL') return { ...prev, qrTL: { ...prev.qrTL, blink: nb } }
+      if (selected.kind === 'qrBR') return { ...prev, qrBR: { ...prev.qrBR, blink: nb } }
+      if (selected.kind === 'logo') return { ...prev, centerLogo: { ...prev.centerLogo, blink: nb } }
+      return { ...prev, nameItems: prev.nameItems.map((it) => (it.id === selected.id ? { ...it, blink: nb } : it)) }
+    })
+  }
+  /* (MG-3) محتوى اللوجو الوسطاني: لوجو بس / اسم ورقم بس / الاتنين (زي الأول) */
+  function setLogoContent(c: WmLogoContent) {
+    setCfg((prev) => ({ ...prev, centerLogo: { ...prev.centerLogo, content: c } }))
+  }
 
   const selLabel = selected
     ? selected.kind === 'qrTL' ? 'كارت QR فوق شمال' : selected.kind === 'qrBR' ? 'كارت QR تحت يمين' : selected.kind === 'logo' ? 'لوجو المنصة' : 'اسم ورقم'
@@ -270,6 +295,17 @@ export function PlayerSettingsPanel() {
             <Slider value={[cfg.topShieldHeight]} min={0} max={96} step={2} onValueChange={(v) => setCfg((p) => ({ ...p, topShieldHeight: v[0] }))} />
             <p className="text-xs text-muted-foreground mt-1">صفر = التلقائي (بيتمدد حسب مقاس الشاشة)</p>
           </div>
+          {/* (MG-3) علامة اليوتيوب في الشريط — تشغيل/إيقاف + حجم */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+            <div>
+              <Label className="text-sm">علامة اليوتيوب في شريط التحكم</Label>
+              <p className="text-xs text-muted-foreground">ديكور بس — من غير أي لينك، وبتتوسع وتصغر مع الحجم</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <SizeButtons value={cfg.ytMark.size} onChange={(s) => setCfg((p) => ({ ...p, ytMark: { ...p.ytMark, size: s } }))} />
+              <Switch checked={cfg.ytMark.on} onCheckedChange={(v) => setCfg((p) => ({ ...p, ytMark: { ...p.ytMark, on: v } }))} />
+            </div>
+          </div>
           <div className="flex gap-2 flex-wrap">
             <Button className="gap-1.5" onClick={() => saveConfig()} disabled={savingCfg}><Save className="h-4 w-4" />{savingCfg ? 'بيحفظ…' : 'حفظ إعدادات الفيديو'}</Button>
             <Button variant="outline" className="gap-1.5" onClick={() => { setCfg(DEFAULT_PLAYER_CONFIG); saveConfig(DEFAULT_PLAYER_CONFIG) }}><RotateCcw className="h-4 w-4" />رجّع للافتراضي المقترح</Button>
@@ -298,11 +334,16 @@ export function PlayerSettingsPanel() {
             <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.6) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.6) 1px,transparent 1px)', backgroundSize: '12.5% 25%' }} />
             {cfg.centerLogo.on && (
               <div
-                className={itemCls + ' font-black text-white/95 whitespace-nowrap ' + (isSel({ kind: 'logo' }) ? 'ring-2 ring-sky-400 rounded px-1' : '')}
+                className={itemCls + ' font-black text-white/95 whitespace-nowrap text-center ' + (isSel({ kind: 'logo' }) ? 'ring-2 ring-sky-400 rounded px-1' : '')}
                 style={{ left: `${cfg.centerLogo.x}%`, top: `${cfg.centerLogo.y}%`, opacity: cfg.centerLogo.opacity, fontSize: cfg.centerLogo.size === 'sm' ? 18 : cfg.centerLogo.size === 'md' ? 30 : 44, textShadow: '0 2px 14px rgba(0,0,0,.55)' }}
                 onPointerDown={(e) => onItemPointerDown(e, { kind: 'logo' })}
               >
-                Math Genius
+                {cfg.centerLogo.content !== 'name' && <span style={{ display: 'block' }}>Math Genius</span>}
+                {cfg.centerLogo.content !== 'brand' && (
+                  <span style={{ display: 'block', fontSize: '0.4em', fontWeight: 800, marginTop: 2, opacity: 0.92 }}>
+                    اسم الطالب <span style={{ direction: 'ltr', unicodeBidi: 'plaintext' }}>• 01xxxxxxxxx</span>
+                  </span>
+                )}
               </div>
             )}
             {cfg.qrTL.on && (
@@ -363,7 +404,7 @@ export function PlayerSettingsPanel() {
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => {
               const id = 'nm-' + Date.now()
-              setCfg((p) => ({ ...p, nameItems: [...p.nameItems, { id, x: 50, y: p.nameItems.length ? clamp(12 + p.nameItems.length * 12, 0, 90) : 12, size: 'md', opacity: 0.3 }] }))
+              setCfg((p) => ({ ...p, nameItems: [...p.nameItems, { id, x: 50, y: p.nameItems.length ? clamp(12 + p.nameItems.length * 12, 0, 90) : 12, size: 'md', opacity: 0.3, blink: { on: false, show: 15, hide: 15 } }] }))
               setSelected({ kind: 'name', id })
             }}><Plus className="h-3.5 w-3.5" />ضيف عنصر اسم ورقم</Button>
             {cfg.nameItems.length > 0 && selected && selected.kind === 'name' && (
@@ -386,6 +427,35 @@ export function PlayerSettingsPanel() {
                     <span className="text-xs text-muted-foreground whitespace-nowrap">الشفافية: {Math.round(selOpacity * 100)}%</span>
                     <Slider className="flex-1" value={[Math.round(selOpacity * 100)]} min={5} max={60} step={1} onValueChange={(v) => setOpacity(v[0] / 100)} />
                   </div>
+                </div>
+                {/* (MG-3) محتوى اللوجو الوسطاني */}
+                {selected.kind === 'logo' && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">محتوى اللوجو:</span>
+                    {([['brand', 'لوجو بس'], ['name', 'اسم ورقم بس'], ['both', 'الاتنين (زي الأول)']] as const).map(([k, lbl]) => (
+                      <Button key={k} type="button" size="sm" variant={cfg.centerLogo.content === k ? 'default' : 'outline'} className="h-7 px-2.5 text-xs" onClick={() => setLogoContent(k)}>{lbl}</Button>
+                    ))}
+                  </div>
+                )}
+                {/* (MG-3) دورة الظهور والاختفاء — طلب المستر الحرفي */}
+                <div className="flex flex-wrap items-center gap-3 pt-2 border-t">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={selBlink.on} onCheckedChange={(v) => setBlink({ on: v })} id="blinkSw" />
+                    <Label htmlFor="blinkSw" className="text-xs cursor-pointer">ظهور واختفاء دوريًا</Label>
+                  </div>
+                  {selBlink.on && (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">يثبت ظاهر (ثواني):</span>
+                        <Input type="number" min={1} max={120} value={selBlink.show} onChange={(e) => setBlink({ show: clamp(parseInt(e.target.value || '1', 10), 1, 120) })} className="w-16 h-8 text-xs" dir="ltr" />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">يختفي مدة (ثواني):</span>
+                        <Input type="number" min={1} max={120} value={selBlink.hide} onChange={(e) => setBlink({ hide: clamp(parseInt(e.target.value || '1', 10), 1, 120) })} className="w-16 h-8 text-xs" dir="ltr" />
+                      </div>
+                      <span className="text-[11px] text-muted-foreground">الدورة بتتوقف مؤقتًا لو الفيديو متوقف</span>
+                    </>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">مكان العنصر: X {selected.kind === 'qrTL' ? Math.round(cfg.qrTL.x) : selected.kind === 'qrBR' ? Math.round(cfg.qrBR.x) : selected.kind === 'logo' ? Math.round(cfg.centerLogo.x) : Math.round(cfg.nameItems.find((i) => i.id === (selected as any).id)?.x || 0)}% — Y {selected.kind === 'qrTL' ? Math.round(cfg.qrTL.y) : selected.kind === 'qrBR' ? Math.round(cfg.qrBR.y) : selected.kind === 'logo' ? Math.round(cfg.centerLogo.y) : Math.round(cfg.nameItems.find((i) => i.id === (selected as any).id)?.y || 0)}%</p>
               </div>
