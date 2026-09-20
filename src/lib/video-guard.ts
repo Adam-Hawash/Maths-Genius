@@ -195,12 +195,47 @@ export async function checkSequentialUnlock(
       orderBy: { createdAt: 'asc' },
       select: { id: true, url: true, filePath: true, fileType: true },
     })
+    /* (2026-و67) فيديوهات المجموعات: الفيديو الموجّه لمجموعات والطالب مش منهم
+       (أو لسه موعده مجاه) **مش ظاهر عنده أصلاً** في قايمته — فممنوع يكون شرط
+       في التسلسل، وإلا هيقفل على الفيديو اللي بعده للأبد وهو أصلاً مش شايف
+       اللي قبله. نفس فلاتر /api/videos بالظبط (خطوة أمنية فقط هنا —
+       الفيديو المخفي مش هيتفتح من أي مسار تاني عشان computePlayback
+       والقايمن بتفلتره قبل كده). */
+    var plansByVideo: Record<string, { groupId: string; unlockAt: string | null }[]> = {}
+    var myGroup = ''
+    try {
+      var sgRows: any[] = await db.$queryRawUnsafe('SELECT groupId FROM Student WHERE id = ? LIMIT 1', studentId)
+      if (sgRows && sgRows.length > 0) myGroup = String(sgRows[0].groupId || '')
+    } catch (e) {}
+    try {
+      var schedRows: any[] = await db.$queryRawUnsafe('SELECT videoId, groupId, unlockAt FROM VideoGroupSchedule')
+      for (var ri = 0; ri < (schedRows || []).length; ri++) {
+        var sRow = schedRows[ri]
+        var sVid = String(sRow.videoId || '')
+        if (!plansByVideo[sVid]) plansByVideo[sVid] = []
+        plansByVideo[sVid].push({ groupId: String(sRow.groupId || ''), unlockAt: sRow.unlockAt ? String(sRow.unlockAt) : null })
+      }
+    } catch (e) { /* جدول ناقص — من غير جدولة مجموعات، السلسلة عادية */ }
+    var groupVisible = function (vid: string): boolean {
+      var plans = plansByVideo[vid]
+      if (!plans || plans.length === 0) return true // من غير جدولة مجموعات = للكل
+      if (!myGroup) return false
+      for (var pi = 0; pi < plans.length; pi++) {
+        if (plans[pi].groupId !== myGroup) continue
+        if (!plans[pi].unlockAt) return true // مجموعته من غير ميعاد → ظاهر فورًا
+        var t = new Date(plans[pi].unlockAt as string).getTime()
+        if (isNaN(t)) return true
+        return Date.now() >= t // جه الميعاد → ظاهر، لسه → مخفي
+      }
+      return false // مجموعته مش مستهدفة في الفيديو ده
+    }
     const idx = gradeVideos.findIndex((v) => v.id === videoId)
     // أول فيديو في الترتيب دايمًا مفتوح
     if (idx <= 0) return { ok: true }
     // ندوّر على أقرب فيديو قبله قابل لتتبع النسبة (يوتيوب أو ملف مرفوع)
     for (let i = idx - 1; i >= 0; i--) {
       const v = gradeVideos[i]
+      if (!groupVisible(v.id)) continue // (2026-و67) مش ظاهر للطالب أصلاً — نتخطاه
       const isYT = Boolean(getYouTubeId(v.url || ''))
       const isFile = Boolean(v.filePath || v.fileType)
       if (!isYT && !isFile) continue // لينك خارجي — مش قابل للتتبع، نتخطاه

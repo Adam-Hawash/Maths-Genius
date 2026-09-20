@@ -238,6 +238,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
+    /* ================= link (2026-و67) =================
+       ربط/فك ربط خريطة محفوظة بدرس — طلب المستر: الخريطة ممنوع تظهر على
+       فيديو غير لما هو يربطها بنفسه، ويرجع يقدر يفك الربط في أي وقت.
+       videoId فاضي = فك الربط (الخريطة تفضل محفوظة بس مش بتظهر للطالب). */
+    if (action === 'link') {
+      var linkId = String(body.id || '')
+      if (!linkId) return NextResponse.json({ ok: false, error: 'مفيش خريطة محددة' }, { status: 400 })
+      var linkVideoId = String(body.videoId || '').trim()
+      await safeWrite(function () {
+        return db.$executeRawUnsafe('UPDATE MindMap SET videoId = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', linkVideoId, linkId)
+      })
+      return NextResponse.json({ ok: true, videoId: linkVideoId })
+    }
+
     return NextResponse.json({ ok: false, error: 'أكشن غير معروف' }, { status: 400 })
   } catch (e: any) {
     console.error('[admin/mindmap POST] failed:', String((e && e.message) || e))

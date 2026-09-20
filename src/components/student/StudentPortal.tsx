@@ -1183,6 +1183,10 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
   /* (2026-و40) نتايج الواجب وصلت مؤكدة؟ — القفل التسلسلي ممنوع يشتغل قبلها
      (الـ effect اللي بيجيبها تحت — والحالة معرّفة هنا فوق الـ memo اللي بيقراها) */
   const [hwResultsLoaded, setHwResultsLoaded] = useState(false)
+  /* (2026-و67) أحكام السيرفر المؤكدة للواجبات — الواجب اللي السيرفر قال إنه مفتوح
+     (يعني اللي قبله متسلّم فعلًا) رغم إن الخريطة المحلية شاكة فيه — بيفتح فورًا.
+     ده علاج أي قفل كاذب بسبب أي اختلاف لحظي بين قايمة العميل وسلسلة السيرفر */
+  const [seqOkHwIds, setSeqOkHwIds] = useState<Set<string>>(new Set())
   var orderedHw = useMemo(function() {
     return homework.slice().sort(function(a, b) {
       var ta = new Date((a as any).createdAt || 0).getTime()
@@ -1908,7 +1912,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         var isExpanded = expandedHw === hw.id
         var isSubmitted = completedHwIds.has(hw.id)
         // مقفول بالتسلسل؟ الواجب اللي قبله لسه متسلمش (زي الفيديوهات — طلب المستر)
-        var isHwSeqLocked = hwLockMap[hw.id] === true
+        var isHwSeqLocked = hwLockMap[hw.id] === true && !seqOkHwIds.has(hw.id)
         var prevHwId = hwPrevMap[hw.id]
         var prevHwTitle = prevHwId ? ((homework.find(function(x) { return x.id === prevHwId }) || ({} as any)).title || '') : ''
         var myAnswers = hwAnswers[hw.id] || {}
@@ -2000,7 +2004,25 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
           <Card key={hw.id} className={isHwSeqLocked ? 'border-red-500/30 opacity-90' : isSubmitted ? 'border-emerald-500/30' : hasQuestions ? 'cursor-pointer' : ''}>
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-3" onClick={hasQuestions ? function() {
-                if (isHwSeqLocked) { toast.error('الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله — سلّم الواجب اللي قبله الأول', { duration: 6000 }); return }
+                if (isHwSeqLocked) {
+                  /* (2026-و67) حكم السيرفر هو الفيصل — لو الطالب سلّم اللي قبله فعلًا
+                     نفتح فورًا بدل رسالة القفل الكاذبة */
+                  ;(async function() {
+                    try {
+                      var r = await fetch('/api/exams/seq-check?kind=homework&id=' + encodeURIComponent(hw.id) + '&studentId=' + encodeURIComponent(studentId))
+                      var d = await r.json()
+                      if (d && d.ok) {
+                        setSeqOkHwIds(function(prev) { var n = new Set(prev); n.add(hw.id); return n })
+                        setExpandedHw(hw.id)
+                      } else {
+                        toast.error(String(d.reason || 'الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله'), { duration: 6000 })
+                      }
+                    } catch (e) {
+                      toast.error('الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله — سلّم الواجب اللي قبله الأول', { duration: 6000 })
+                    }
+                  })()
+                  return
+                }
                 if (isSubmitted) { openHwReview(hw.id); return }
                 setExpandedHw(isExpanded ? null : hw.id)
               } : undefined}>
@@ -2432,6 +2454,11 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   const [submittedExamId, setSubmittedExamId] = useState<string | null>(null)
   const [checkingServer, setCheckingServer] = useState(false)
   const [blockedExamId, setBlockedExamId] = useState<string | null>(null)
+  /* (2026-و67) أحكام السيرفر المؤكدة — الامتحان اللي السيرفر قال إنه مفتوح
+     (اللي قبله متقدّم فعلًا) رغم إن الخريطة المحلية شاكة فيه — بيتفتح فورًا.
+     ده علاج «سلم الامتحان اللي قبله وانا اصلا مسلمه» من الطرف الثاني:
+     الزرار المقفول نفسه بيسأل السيرفر الأول قبل ما يقول للطالب لا */
+  const [seqOkExamIds, setSeqOkExamIds] = useState<Set<string>>(new Set())
   /* 2026-و12 — طلب المستر: مفيش أي نتيجة تظهر للطالب خالص
      (الدرجة والتصحيح بيوصلمستر وائل بس من الأدمن)
      (25-b2) استثناء وحيد: لو المستر فعّل showResult للامتحان نفسه — كارت النتيجة الفوري بيظهر بعد التسليم */
@@ -3443,7 +3470,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         const examResult: any = results.find(r => r.examId === exam.id)
         const isCompleted = examResult || completedExamIds.has(exam.id)
         // مقفول بالتسلسل؟ الامتحان اللي قبله لسه متقدمش (زي الفيديوهات — طلب المستر)
-        const isExamSeqLocked = examLockMap[exam.id] === true
+        // (2026-و67) حكم السيرفر المؤكد بيتغلب على شك الخريطة المحلية
+        const isExamSeqLocked = examLockMap[exam.id] === true && !seqOkExamIds.has(exam.id)
         const prevExamId = examPrevMap[exam.id]
         const prevExamTitle = prevExamId ? ((exams.find(function(x) { return x.id === prevExamId }) || ({} as any)).title || '') : ''
         /* 2026-و12 — مفيش نتيجة لحظية ولا تصحيح يتشاف من الطالب */
@@ -3487,7 +3515,27 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                     ) : isExamSeqLocked ? (
                       <button
                         type="button"
-                        onClick={function() { toast.error('الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — امتحان " ' + (prevExamTitle || 'اللي قبله') + ' " الأول', { duration: 6000 }) }}
+                        onClick={function() {
+                          /* (2026-و67) السيرفر هو الفيصل: لو الطالب سلّم اللي قبله فعلًا
+                             نفتح الامتحان فورًا بدل رسالة القفل الكاذبة */
+                          ;(async function() {
+                            try {
+                              setCheckingServer(true)
+                              var r = await fetch('/api/exams/seq-check?kind=exam&id=' + encodeURIComponent(exam.id) + '&studentId=' + encodeURIComponent(studentId))
+                              var d = await r.json()
+                              setCheckingServer(false)
+                              if (d && d.ok) {
+                                setSeqOkExamIds(function(prev) { var n = new Set(prev); n.add(exam.id); return n })
+                                handleStartExam(exam, parsedQuestions)
+                              } else {
+                                toast.error(String(d.reason || 'الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — امتحان " ' + (prevExamTitle || 'اللي قبله') + ' " الأول'), { duration: 6000 })
+                              }
+                            } catch (e) {
+                              setCheckingServer(false)
+                              toast.error('الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — امتحان " ' + (prevExamTitle || 'اللي قبله') + ' " الأول', { duration: 6000 })
+                            }
+                          })()
+                        }}
                         className="inline-flex items-center gap-1.5 text-[11px] font-bold text-red-500 hover:text-red-600 cursor-not-allowed"
                         aria-label="الامتحان مقفول — هيتفتح أول ما تاخد الامتحان اللي قبله"
                       >
