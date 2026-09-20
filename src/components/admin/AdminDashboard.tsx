@@ -22,7 +22,7 @@ import {
   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
   Video as VideoIcon, LinkIcon, MonitorPlay, Send,
   MessageCircle, Copy,
-  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown, Wrench
+  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown, Wrench, Brain, Swords
 } from 'lucide-react'
 import { AdminComplaints } from './AdminComplaints'
 import { CMSPanel } from './CMSPanel'
@@ -51,6 +51,9 @@ import BidiText from '@/components/BidiText'
 import { WorksheetTableReadonly, WorksheetTableEditor, WorksheetFigure, parseTableValuesFromText } from '@/components/worksheet/WorksheetParts'
 /* (2026-و40) الكتب والملازم — تاب مكتبة الكتب للطالب */
 import { BooksManager } from './BooksManager'
+/* (2026-و66) استوديو الخرائط الذهنية + إدارة تحدي المستر */
+import { MindMapStudio } from './MindMapStudio'
+import { TeacherChallengePanel } from './TeacherChallengePanel'
 /* (و65) التقارير الجاهزة للطباعة — تقرير PDF لكل طالب + التقرير الشامل لكل الطلاب */
 import { StudentReportDialog, ClassReportDialog } from '@/components/admin/StudentReports'
 /* (و52) محرر قص الرسمات اليدوي — المستر يظبط أي رسمة مقصوصة غلط بإيده في ثواني */
@@ -422,6 +425,10 @@ export function AdminDashboard() {
             {/* (2026-و40) الكتب والملازم — مكتبة PDF الطالب يفتحها/يحملها */}
             <TabsTrigger value="books" className="text-xs sm:text-sm gap-1 text-sky-600 dark:text-sky-400"><BookOpen className="h-4 w-4" /><span className="hidden sm:inline">{T('الكتب والملازم', 'Books')}</span></TabsTrigger>
             <TabsTrigger value="player-settings" className="text-xs sm:text-sm gap-1 text-indigo-600 dark:text-indigo-400"><MonitorPlay className="h-4 w-4" /><span className="hidden sm:inline">{T('إعدادات الفيديو والووترمارك', 'Video & Watermark')}</span></TabsTrigger>
+            {/* (2026-و66) الخرائط الذهنية — استوديو توليد خرائط الدروس */}
+            <TabsTrigger value="mindmaps" className="text-xs sm:text-sm gap-1 text-violet-600 dark:text-violet-400"><Brain className="h-4 w-4" /><span className="hidden sm:inline">{T('الخرائط الذهنية', 'Mind Maps')}</span></TabsTrigger>
+            {/* (2026-و66) تحدي المستر — نزّل تحدي وادخل بنفسك */}
+            <TabsTrigger value="teacher-challenge" className="text-xs sm:text-sm gap-1 text-amber-600 dark:text-amber-400"><Swords className="h-4 w-4" /><span className="hidden sm:inline">{T('تحدي المستر', 'Challenge')}</span></TabsTrigger>
           </TabsList>
 
           <TabsContent value="students"><StudentsManager onStatsRefresh={fetchStats} onViewImage={setImageModalSrc} /></TabsContent>
@@ -455,6 +462,10 @@ export function AdminDashboard() {
           {/* (2026-و40) الكتب والملازم */}
           <TabsContent value="books"><BooksManager /></TabsContent>
           <TabsContent value="player-settings"><PlayerSettingsPanel /></TabsContent>
+          {/* (2026-و66) الخرائط الذهنية — لينك يوتيوب/نص → خريطة تفاعلية للطالب */}
+          <TabsContent value="mindmaps"><MindMapStudio /></TabsContent>
+          {/* (2026-و66) تحدي المستر — سؤال صعب أسبوعي + لوحة ترتيب + دخول المستر بنفسه */}
+          <TabsContent value="teacher-challenge"><TeacherChallengePanel /></TabsContent>
         </Tabs>
 
         {/* Admin Settings Dialog */}

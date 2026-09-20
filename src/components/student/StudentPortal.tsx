@@ -10,7 +10,7 @@ import {
   Video, ClipboardList, FileText, Megaphone, MessageSquare, Send,
   LogOut, Loader2, FileDown, PlayCircle, CheckCircle2,
   BookOpen, Target, TrendingUp, GraduationCap, ChevronLeft, ExternalLink,
-  User, Phone, Award, Lock, X, ListTodo, Search,
+  User, Phone, Award, Lock, X, ListTodo, Search, Swords, Map, Brain,
   HelpCircle, ArrowLeft, Rocket, Flag, XCircle, Timer,
 } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -21,6 +21,13 @@ import { MathKeyboard } from '@/components/student/MathKeyboard'
 import { SecurePlayerModal } from '@/components/student/SecurePlayerModal'
 import { StudentComplaints } from '@/components/student/StudentComplaints'
 import { BooksTab } from '@/components/student/BooksTab'
+/* (2026-و66) نظام منع الغش والتشتت الذكي — مراقبة مغادرة الامتحان */
+import { useAntiCheat, AntiCheatModal, AntiCheatBadge } from '@/components/student/useAntiCheat'
+/* (2026-و66) الميزات الجديدة — المولد الذكي + ساحة التحدي + الخرائط الذهنية */
+import { PracticeGenerator } from '@/components/student/PracticeGenerator'
+import { BattleArena } from '@/components/student/BattleArena'
+import { MindMapView } from '@/components/student/MindMapView'
+import type { MindMapData } from '@/lib/question-gen'
 import { FractionText } from '@/components/FractionText'
 import BidiText from '@/components/BidiText'
 /* (و64) الترجمة الحقيقية عربي/إنجليزي — الزراير الموحدة في النافبار */
@@ -472,6 +479,10 @@ function StudentPortalInner() {
     { id: 'videos', label: T('الدروس', 'Lessons'), icon: Video },
     { id: 'homework', label: T('الواجبات', 'Homework'), icon: ClipboardList },
     { id: 'exams', label: T('الامتحانات', 'Exams'), icon: FileText },
+    /* (2026-و66) المولد الذكي — طلب المستر: تاب «اتدرب أكتر» */
+    { id: 'practice', label: T('اتدرب أكتر', 'Practice'), icon: Target },
+    /* (2026-و66) ساحة التحدي — جروبات + تحدي المستر + فلاش كاردز */
+    { id: 'arena', label: T('ساحة التحدي', 'Arena'), icon: Swords },
     /* (2026-و40) الكتب والملازم — مكتبة PDF الطالب يفتحها/يحملها */
     { id: 'books', label: T('الكتب والملازم', 'Books'), icon: BookOpen },
     { id: 'announcements', label: T('التنبيهات', 'Alerts'), icon: Megaphone },
@@ -534,6 +545,10 @@ function StudentPortalInner() {
         {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} />}
         {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} studentId={studentId} completedHwIds={completedHwIds} onHwSubmitted={(id) => setCompletedHwIds(prev => new Set([...prev, id]))} />}
         {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} completedExamIds={completedExamIds} onExamSubmitted={(id) => setCompletedExamIds(prev => new Set([...prev, id]))} studentId={studentId} resultsLoaded={examResultsLoaded} onGoHome={() => setActiveTab('videos')} />}
+        {/* (2026-و66) المولد الذكي — 10 أسئلة تدريب بأي فكرة الطالب يكتبها */}
+        {activeTab === 'practice' && <PracticeGenerator grade={grade} />}
+        {/* (2026-و66) ساحة التحدي — جروبات + تحدي المستر + فلاش كاردز */}
+        {activeTab === 'arena' && <BattleArena studentId={studentId} studentName={currentStudent?.name || ''} grade={grade} />}
         {activeTab === 'books' && <BooksTab grade={grade} />}
         {activeTab === 'announcements' && <AnnouncementsTab announcements={dashboardData.announcements} />}
         {activeTab === 'discussions' && <DiscussionsTab grade={grade} studentId={studentId} studentName={currentStudent?.name || ''} />}
@@ -575,6 +590,37 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
   const [videoSchedules, setVideoSchedules] = useState<Record<string, any>>({})
   const [hiddenVideoIds, setHiddenVideoIds] = useState<Set<string>>(new Set())
   const [activeLessonVideo, setActiveLessonVideo] = useState<VideoType | null>(null)
+
+  /* ===== (2026-و66) الخرائط الذهنية التفاعلية للدروس — طلب المستر:
+     الطالب يفتح خريطة الدرس يشوف الموضوع كله في لمحة ===== */
+  const [lessonMindMaps, setLessonMindMaps] = useState<Record<string, { id: string; title: string }>>({})
+  const [openMindMap, setOpenMindMap] = useState<{ title: string; mapData: MindMapData | null } | null>(null)
+  const [mindMapLoading, setMindMapLoading] = useState(false)
+  useEffect(function () {
+    fetch('/api/mindmap')
+      .then(function (r) { return r.json() })
+      .then(function (d) {
+        var map: Record<string, { id: string; title: string }> = {}
+        ;(d.maps || []).forEach(function (m: any) {
+          if (m.videoId) map[m.videoId] = { id: m.id, title: m.title }
+        })
+        setLessonMindMaps(map)
+      })
+      .catch(function () {})
+  }, [])
+  const openLessonMindMap = function (videoId: string) {
+    var info = lessonMindMaps[videoId]
+    if (!info) return
+    setMindMapLoading(true)
+    setOpenMindMap({ title: info.title, mapData: null })
+    fetch('/api/mindmap?id=' + encodeURIComponent(info.id))
+      .then(function (r) { return r.json() })
+      .then(function (d) {
+        setOpenMindMap({ title: (d.map && d.map.title) || info.title, mapData: (d.map && d.map.data) || null })
+      })
+      .catch(function () { toast.error('مشكلة في تحميل الخريطة') })
+      .finally(function () { setMindMapLoading(false) })
+  }
 
   // Load video schedules for this student
   useEffect(() => {
@@ -856,6 +902,16 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">{new Date(video.createdAt).toLocaleDateString('ar-EG')}</p>
+              {/* (2026-و66) زرار الخريطة الذهنية — للدروس اللي ليها خريطة */}
+              {lessonMindMaps[video.id] && (
+                <button
+                  onClick={function (e) { e.stopPropagation(); openLessonMindMap(video.id) }}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 h-9 rounded-lg border border-violet-400/40 bg-violet-500/10 text-violet-600 dark:text-violet-400 text-xs font-bold hover:bg-violet-500/20 transition-colors"
+                >
+                  <Brain className="h-4 w-4" />
+                  خريطة الدرس الذهنية
+                </button>
+              )}
             </CardContent>
           </Card>
         )
@@ -896,6 +952,32 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
           }}
         />
       )}
+
+      {/* (2026-و66) عارض الخريطة الذهنية — مودال كامل الشاشة */}
+      {openMindMap && (
+        <div className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-6" dir="rtl" onClick={function () { setOpenMindMap(null) }}>
+          <div className="bg-card w-full max-w-5xl h-[88vh] rounded-2xl border shadow-2xl overflow-hidden flex flex-col" onClick={function (e) { e.stopPropagation() }}>
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-violet-500/10">
+              <div className="flex items-center gap-2 min-w-0">
+                <Brain className="h-5 w-5 text-violet-500 shrink-0" />
+                <h3 className="font-bold truncate">{openMindMap.title}</h3>
+                <Badge variant="outline" className="shrink-0 text-[10px]">خريطة ذهنية تفاعلية</Badge>
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={function () { setOpenMindMap(null) }}><X className="h-4 w-4" /></Button>
+            </div>
+            <div className="flex-1 min-h-0">
+              {mindMapLoading || !openMindMap.mapData ? (
+                <div className="h-full flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+                  <p className="text-sm text-muted-foreground">بنحمل الخريطة…</p>
+                </div>
+              ) : (
+                <MindMapView mapData={openMindMap.mapData} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -903,6 +985,32 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
 /* ========== HOMEWORK TAB ========== */
 function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { homework: Homework[]; studentId: string; completedHwIds: Set<string>; onHwSubmitted: (hwId: string) => void }) {
   const [expandedHw, setExpandedHw] = useState<string | null>(null)
+
+  /* ===== (2026-و66) منع الغش في الواجبات — نفس نظام الامتحانات:
+     تحذير لطيف 1-2 → خصم من 3 → تسليم تلقائي عند الرابعة ===== */
+  const hwCheatStrikesRef = useRef(0)
+  const hwActiveRef = useRef<string | null>(null)
+  const hwAntiCheat = useAntiCheat({
+    active: !!expandedHw,
+    onGiveUp: function () {
+      try {
+        var hwId = hwActiveRef.current
+        if (hwId) {
+          var btn = document.getElementById('hw-submit-' + hwId) as HTMLButtonElement | null
+          if (btn && !btn.disabled) btn.click()
+        }
+      } catch (e) {}
+    },
+    onStrike: function (s: number) { hwCheatStrikesRef.current = s },
+  })
+  useEffect(function () {
+    if (expandedHw) {
+      hwActiveRef.current = expandedHw
+      hwCheatStrikesRef.current = 0
+      hwAntiCheat.reset()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedHw])
   const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number | string>>>({})
   const [hwSubmitting, setHwSubmitting] = useState<string | null>(null)
   /* 2026-و20 — ممنوع تسليم الواجب لحد ما صور ورقة الحل توصل كاملة */
@@ -2154,7 +2262,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                       var res = await fetch('/api/homework/submit', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ studentId, homeworkId: hw.id, answers: mappedAnswers, tableAnswers: hwTablePayload }),
+                        /* (2026-و66) cheatStrikes — سجل مخالفات منع الغش */
+                        body: JSON.stringify({ studentId, homeworkId: hw.id, answers: mappedAnswers, tableAnswers: hwTablePayload, cheatStrikes: hwCheatStrikesRef.current || 0 }),
                       })
                       var data = await res.json()
                       if (res.ok || data.alreadySubmitted) {
@@ -2245,6 +2354,9 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
           })}
         </div>
       )}
+
+      {/* (2026-و66) مودال تحذير منع الغش للواجبات */}
+      <AntiCheatModal open={hwAntiCheat.warningOpen} strikes={hwAntiCheat.strikes} onDismiss={hwAntiCheat.dismissWarning} />
     </div>
   )
 }
@@ -2346,7 +2458,20 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   const examAutoRefreshDoneRef = useRef(false)
   const [examMcqNotes, setExamMcqNotes] = useState<Record<string, string>>({})
   const [examMcqNotesLoading, setExamMcqNotesLoading] = useState(false)
-  const doSubmitExamRef = useRef<null | ((opts?: { auto?: boolean }) => Promise<void>)>(null)
+  const doSubmitExamRef = useRef<null | ((opts?: { auto?: boolean; cheat?: boolean }) => Promise<void>)>(null)
+
+  /* ===== (2026-و66) نظام منع الغش والتشتت الذكي — طلب المستر:
+     «يحسس لما الطالب يقلب على الجوال أو يسيب الامتحان ويودع تحذير»
+     تحذير لطيف 1-2 → خصم نقاط من 3 → تسليم تلقائي عند الرابعة ===== */
+  const antiCheatStrikesRef = useRef(0)
+  const antiCheat = useAntiCheat({
+    active: !!takingExam && !examSubmitted,
+    onGiveUp: function () {
+      try { toast.error('⛔ عدّيت الحد المسموح من المغادرات — الامتحان هيتسلم تلقائيًا', { duration: 8000 }) } catch (e) {}
+      try { doSubmitExamRef.current?.({ auto: true, cheat: true }) } catch (e) {}
+    },
+    onStrike: function (s: number) { antiCheatStrikesRef.current = s },
+  })
 
   /* ===== (2026-و37) مسودة الامتحان المحفوظة تلقائيًا =====
      شكوى المستر: «لما الطالب بيرفع ورقة الحل بيتخرج من الصفحة ويحل من الأول».
@@ -2520,8 +2645,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   /* ===== (25-b2) دالة التسليم الموحدة — نفس منطق زرار التسليم الأصلي بالظبط
      (نفس mappedAnswers من answers/writingAnswers state) — والعداد التنازلي
      بيسلّم بيها تلقائيًا عند 0 بنفس إجابات الطالب المتاحة (حتى لو فاضية) ===== */
-  async function submitExamNow(opts?: { auto?: boolean }) {
+  async function submitExamNow(opts?: { auto?: boolean; cheat?: boolean }) {
     var auto = !!(opts && opts.auto)
+    var fromCheat = !!(opts && opts.cheat)
     var examIdLocal = takingExam
     if (!examIdLocal || submitting || examPhotoBusy) return
     /* guard مزامن: التسليم مبيحصلش مرتين ولا من العداد ولا من الزرار */
@@ -2570,7 +2696,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       const res = await fetch('/api/exams/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, examId: examIdLocal, answers: mappedAnswers, tableAnswers: examTablePayload }),
+        body: JSON.stringify({ studentId, examId: examIdLocal, answers: mappedAnswers, tableAnswers: examTablePayload, cheatStrikes: antiCheatStrikesRef.current || 0, autoSubmitted: fromCheat ? 1 : 0, penaltyPoints: Math.max(0, (antiCheatStrikesRef.current || 0) - 2) * 5 }),
         signal: submitController.signal,
       })
       clearTimeout(submitTimeout)
@@ -2680,6 +2806,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       }
       examAutoSubmitDoneRef.current = false
       examSubmitInFlightRef.current = false
+      antiCheatStrikesRef.current = 0
+      antiCheat.reset()
       setExamSubmitResult(null)
       setExamWritingReview(null)
       setExamWritingDone(false)
@@ -3058,7 +3186,11 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       <div className="space-y-4" dir="ltr">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-bold truncate min-w-0">{exam.title}</h3>
-          <Button variant="outline" size="sm" className="h-11 sm:h-8 shrink-0" onClick={() => { setTakingExam(null); setAnswers({}); setWritingAnswers({}); setExamTableAnswers({}); setExamQuestions([]); setExamShuffleMap([]); setExamTimeLimitMs(null); setExamTimeLeftMs(null); setExamTimeUp(false); examDeadlineRef.current = null }}>رجوع</Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* (2026-و66) شارة المخالفات — الطالب شايف عداد مغادراته */}
+            <AntiCheatBadge strikes={antiCheat.strikes} maxStrikes={antiCheat.maxStrikes} />
+            <Button variant="outline" size="sm" className="h-11 sm:h-8 shrink-0" onClick={() => { setTakingExam(null); setAnswers({}); setWritingAnswers({}); setExamTableAnswers({}); setExamQuestions([]); setExamShuffleMap([]); setExamTimeLimitMs(null); setExamTimeLeftMs(null); setExamTimeUp(false); examDeadlineRef.current = null }}>رجوع</Button>
+          </div>
         </div>
 
         {/* (25-b2) العداد التنازلي — ظابط فوق منطقة الحل — primary عادي،
@@ -3296,6 +3428,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         >
           {examPhotoBusy ? <span className="flex items-center justify-center gap-1.5"><Loader2 className="h-4 w-4 animate-spin" /> مستني صورة ورقة الحل تترفع كاملة...</span> : submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : `تسليم الامتحان (${Object.keys(answers).length + Object.keys(writingAnswers).length}/${examQuestions.length})`}
         </Button>
+
+        {/* (2026-و66) مودال التحذير — بيقفل الشاشة لحد ما الطالب يرجع */}
+        <AntiCheatModal open={antiCheat.warningOpen} strikes={antiCheat.strikes} onDismiss={antiCheat.dismissWarning} />
       </div>
     )
   }

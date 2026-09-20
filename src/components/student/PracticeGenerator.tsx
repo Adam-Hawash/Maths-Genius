@@ -1,0 +1,577 @@
+'use client'
+
+// ============================================================
+// FILE: src/components/student/PracticeGenerator.tsx
+// PURPOSE: (2026-و66) تاب «اتدرب أكتر» — المولد الذكي للأسئلة:
+//   الطالب يكتب فكرة/قانون/مسألة بتتعب فيها → POST /api/ai/practice
+//   → 10 أسئلة تدريب فريدة بخطوات وخدع المستر.
+//   الـ AI بياخد 20-50 ثانية → لذلك شاشة التحميل حية وفخمة:
+//   رسائل مصرية بتتغير كل 3 ثواني (framer-motion) + عداد ثواني شغال
+//   + شريط تقدم + سكيليتون لأسئلة جاية. فشل؟ رسالة + زر إعادة.
+// ============================================================
+
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Brain,
+  Loader2,
+  Eye,
+  EyeOff,
+  Lightbulb,
+  ListOrdered,
+  Dices,
+  Timer,
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import type { PracticeQuestion } from '@/lib/question-gen'
+
+/* ---------- ثوابت العرض ---------- */
+
+// (2026-و66) رسائل التحميل المصرية — بتتغير كل 3 ثواني أثناء التوليد
+var LOADING_MSGS = [
+  'المولد الذكي بيحلل طلبك…',
+  'بيجهز 10 أسئلة بأرقام مختلفة…',
+  'بيكتب الحل خطوة بخطوة…',
+  'لسه شوية وبجهز الخدع…',
+]
+
+// (2026-و66) المواضيع السريعة — الضغطة تملا الصندوق باقتراح جاهز للمولد
+var QUICK_TOPICS = [
+  { label: 'معادلات', hint: 'معادلات من الدرجة الأولى والثانية' },
+  { label: 'كسور', hint: 'جمع وطرح الكسور' },
+  { label: 'نسبة مئوية', hint: 'النسبة المئوية' },
+  { label: 'فيثاغورس', hint: 'نظرية فيثاغورس' },
+  { label: 'مساحة ومحيط', hint: 'المساحة والمحيط' },
+  { label: 'أسس وجذور', hint: 'الأسس والجذور' },
+  { label: 'المتوسط الحسابي', hint: 'المتوسط الحسابي' },
+  { label: 'سرعة وزمن', hint: 'السرعة والزمن والمسافة' },
+]
+
+// (2026-و66) مميزات المولد — تظهر في الحالة الفاضية قبل أول توليد
+var FEATURES = [
+  {
+    icon: Dices,
+    title: 'أرقام جديدة كل مرة',
+    desc: 'كل توليد بيطلع 10 أسئلة فريدة بنفس المهارة — تمرين مايخلصش',
+    cls: 'border-violet-500/30 bg-violet-500/15 text-violet-600 dark:text-violet-400',
+  },
+  {
+    icon: ListOrdered,
+    title: 'حل خطوة بخطوة',
+    desc: 'كل سؤال معاه الحل مفصّل زي ما المستر بيشرح على السبورة',
+    cls: 'border-teal-500/30 bg-teal-500/15 text-teal-600 dark:text-teal-400',
+  },
+  {
+    icon: Lightbulb,
+    title: 'خدع حل سريعة',
+    desc: 'خدعة المستر في كل سؤال تخليك تحل في نص الوقت بالظبط',
+    cls: 'border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  },
+]
+
+var AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩']
+
+/* ---------- أدوات مساعدة ---------- */
+
+// تحويل الرقم لأرقام عربية هندية — لإحساس مصري أصيل في الترقيم
+function toArNum(n: number): string {
+  return String(n)
+    .split('')
+    .map(function (d) { return AR_DIGITS[Number(d)] ?? d })
+    .join('')
+}
+
+// (2026-و66) ألوان بادج الصعوبة: سهل=زمردي / متوسط=عنبري / صعب=وردي
+function diffBadgeClass(difficulty: string): string {
+  var s = String(difficulty || '')
+  if (s.indexOf('سهل') !== -1) return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+  if (s.indexOf('صعب') !== -1) return 'border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-400'
+  if (s.indexOf('متوسط') !== -1) return 'border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400'
+  return 'border-teal-500/30 bg-teal-500/15 text-teal-600 dark:text-teal-400'
+}
+
+// شكل الرد المتوقع من /api/ai/practice
+interface PracticeResponse {
+  ok?: boolean
+  source?: string
+  engine?: string
+  questions?: PracticeQuestion[]
+  error?: string
+}
+
+/* ---------- كارت السؤال الواحد ---------- */
+
+function QuestionCardItem(props: {
+  q: PracticeQuestion
+  index: number
+  open: boolean
+  onToggle: () => void
+}) {
+  var q = props.q
+  var index = props.index
+  var open = props.open
+  var onToggle = props.onToggle
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.5) }}
+    >
+      <Card className='overflow-hidden'>
+        <CardContent className='space-y-3 p-4 sm:p-5'>
+          <div className='flex items-start gap-3'>
+            {/* رقم السؤال — دايرة تركوازية */}
+            <div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-teal-500/30 bg-teal-500/15 text-sm font-bold text-teal-600 dark:text-teal-400'>
+              {toArNum(index + 1)}
+            </div>
+
+            <div className='min-w-0 flex-1 space-y-2.5'>
+              {/* نص السؤال */}
+              <p className='break-words text-base font-bold leading-relaxed sm:text-lg'>{q.question}</p>
+
+              {/* البادجات + زر الحل */}
+              <div className='flex flex-wrap items-center gap-2'>
+                <Badge className={diffBadgeClass(q.difficulty)}>{q.difficulty || 'متوسط'}</Badge>
+                {q.topic ? (
+                  <Badge variant='outline' className='max-w-48 truncate'>
+                    {q.topic}
+                  </Badge>
+                ) : null}
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='sm'
+                  onClick={onToggle}
+                  aria-expanded={open}
+                  className='h-8 gap-1.5 text-teal-600 hover:bg-teal-500/10 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300'
+                >
+                  {open ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+                  {open ? 'اخفي الحل' : 'شوف الحل 👁'}
+                </Button>
+              </div>
+
+              {/* الحل — بينفتح بأنيميشن ناعم */}
+              <AnimatePresence>
+                {open && (
+                  <motion.div
+                    key='solution'
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                    className='overflow-hidden'
+                  >
+                    <div className='space-y-3 pt-1'>
+                      {/* صندوق الإجابة — زمردي */}
+                      <div className='rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3'>
+                        <div className='flex items-start gap-2.5'>
+                          <CheckCircle2 className='mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400' />
+                          <div className='min-w-0'>
+                            <p className='text-xs font-semibold text-emerald-700 dark:text-emerald-400'>الإجابة:</p>
+                            <p className='break-words text-base font-bold text-emerald-700 dark:text-emerald-300'>
+                              {q.answer}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* الحل خطوة بخطوة — قائمة مرقّمة بدواير */}
+                      <div className='rounded-lg border bg-muted/40 p-3'>
+                        <p className='mb-2.5 flex items-center gap-1.5 text-xs font-bold text-muted-foreground'>
+                          <ListOrdered className='h-4 w-4' />
+                          الحل خطوة بخطوة
+                        </p>
+                        <ol className='space-y-2.5'>
+                          {(q.steps || []).map(function (st, si) {
+                            return (
+                              <li key={si} className='flex items-start gap-2.5'>
+                                <span className='mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-teal-500/30 bg-teal-500/15 text-xs font-bold text-teal-600 dark:text-teal-400'>
+                                  {toArNum(si + 1)}
+                                </span>
+                                <span className='break-words text-sm leading-relaxed'>{st}</span>
+                              </li>
+                            )
+                          })}
+                        </ol>
+                      </div>
+
+                      {/* خدعة المستر — عنبرية */}
+                      {q.trick ? (
+                        <div className='rounded-lg border border-amber-500/30 bg-amber-500/10 p-3'>
+                          <p className='break-words text-sm leading-relaxed text-amber-700 dark:text-amber-300'>
+                            <span className='font-bold'>💡 خدعة المستر:</span> {q.trick}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
+/* ============================================================
+// المولد الذكي — التاب الأساسي
+// ============================================================ */
+
+export function PracticeGenerator({ grade }: { grade: string }) {
+  const [topic, setTopic] = useState('') // نص الطلب في الصندوق
+  const [loading, setLoading] = useState(false)
+  const [questions, setQuestions] = useState<PracticeQuestion[]>([])
+  const [resultTopic, setResultTopic] = useState('') // الموضوع اللي اتولّد عليه فعلاً
+  const [source, setSource] = useState<'ai' | 'local' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({}) // حلول مفتوحة
+  const [elapsed, setElapsed] = useState(0) // عداد الثواني أثناء التحميل
+  const [msgIdx, setMsgIdx] = useState(0) // رسالة التحميل الحالية
+  const topicRef = useRef<HTMLTextAreaElement>(null)
+  const lastTopicRef = useRef('') // آخر موضوع اتبعت — لإعادة المحاولة
+
+  /* نجاح = فيه نتائج جاهزة ومفيش تحميل ولا خطأ */
+  var success = !loading && questions.length > 0 && !error
+
+  /* (2026-و66) أثناء التحميل: عداد ثواني كل ثانية + رسالة جديدة كل 3 ثواني */
+  useEffect(function () {
+    if (!loading) return
+    var t1 = setInterval(function () { setElapsed(function (s) { return s + 1 }) }, 1000)
+    var t2 = setInterval(function () {
+      setMsgIdx(function (i) { return (i + 1) % LOADING_MSGS.length })
+    }, 3000)
+    return function () {
+      clearInterval(t1)
+      clearInterval(t2)
+    }
+  }, [loading])
+
+  /* نداء المولد — نفس الدالة للتوليد الأول وإعادة الأسئلة والمحاولة تاني */
+  const generate = useCallback(async function (rawTopic: string) {
+    var clean = String(rawTopic || '').trim()
+    if (!clean) {
+      toast.error('اكتب الفكرة أو المسألة اللي عايز تتدرب عليها الأول ✍️')
+      return
+    }
+    if (clean.length > 600) clean = clean.slice(0, 600)
+    lastTopicRef.current = clean
+    setLoading(true)
+    setError(null)
+    setQuestions([])
+    setOpenMap({})
+    setElapsed(0)
+    setMsgIdx(0)
+    try {
+      var res = await fetch('/api/ai/practice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: clean, grade: grade }),
+      })
+      var data: PracticeResponse | null = null
+      try { data = await res.json() } catch (e) { data = null }
+      if (!res.ok || !data || !data.ok) {
+        throw new Error((data && data.error) || 'المولد مشغول دلوقتي — جرب تاني')
+      }
+      var qs: PracticeQuestion[] = Array.isArray(data.questions) ? data.questions : []
+      if (qs.length === 0) {
+        throw new Error('مقدرتش أولّد أسئلة على الطلب ده — جرب تكتبه بطريقة تانية')
+      }
+      // ضمان وجود id لكل سؤال — للتحكم في فتح/قفل الحلول
+      qs = qs.map(function (q, i) {
+        return Object.assign({}, q, { id: String(q.id || 'q-' + i) })
+      })
+      setQuestions(qs)
+      setResultTopic(clean)
+      setSource(data.source === 'local' ? 'local' : 'ai')
+      toast.success('جهزنا ' + toArNum(qs.length) + ' أسئلة — يلا نحل! 🎉')
+    } catch (e) {
+      var msg = e instanceof Error && e.message ? e.message : 'حصلت مشكلة — جرب تاني'
+      setError(msg)
+      toast.error(msg)
+    } finally {
+      setLoading(false)
+    }
+  }, [grade])
+
+  /* «موضوع تاني» — رجوع لصندوق الإدخال فاضي زي أول مرة */
+  const resetAll = function () {
+    setQuestions([])
+    setResultTopic('')
+    setSource(null)
+    setError(null)
+    setOpenMap({})
+    setTopic('')
+    setTimeout(function () { topicRef.current?.focus() }, 50)
+  }
+
+  /* فتح/قفل حل سؤال معين */
+  const toggleSolution = function (id: string) {
+    setOpenMap(function (prev) {
+      return Object.assign({}, prev, { [id]: !prev[id] })
+    })
+  }
+
+  return (
+    <div className='space-y-4'>
+      {/* ============ صندوق الإدخال (بيختفي لما النتائج تظهر) ============ */}
+      {!success && (
+        <Card className='border-2 border-violet-500/20 shadow-lg shadow-violet-500/5'>
+          <CardHeader className='pb-4'>
+            <div className='flex items-start gap-3'>
+              <div className='flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-500/20 to-teal-500/20'>
+                <Brain className='h-6 w-6 text-violet-600 dark:text-violet-400' />
+              </div>
+              <div className='min-w-0'>
+                <CardTitle className='text-lg font-bold sm:text-xl'>🧠 اتدرب أكتر — المولد الذكي</CardTitle>
+                <CardDescription className='mt-1 text-sm leading-relaxed'>
+                  اكتب أي فكرة أو قانون أو مسألة بتتعب فيها، والمولد هيجهزلك 10 أسئلة تدريب بخطوات وخدع
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            {/* الصندوق الكبير للطلب */}
+            <Textarea
+              ref={topicRef}
+              value={topic}
+              onChange={function (e) { setTopic(e.target.value) }}
+              rows={4}
+              maxLength={600}
+              disabled={loading}
+              dir='rtl'
+              placeholder='مثلاً: معادلات من الدرجة التانية... أو كسور جمع وطرح... أو الصق المسألة نفسها لو عندك مسألة معينة'
+              aria-label='اكتب الفكرة أو المسألة اللي عايز تتدرب عليها'
+              className='min-h-28 resize-none text-base leading-relaxed md:text-base'
+            />
+
+            {/* شيبس المواضيع السريعة — ضغطة تملا الصندوق */}
+            <div className='space-y-2'>
+              <p className='text-xs font-semibold text-muted-foreground'>💡 مواضيع سريعة — دوس على أي واحدة واكتبها فورًا:</p>
+              <div className='flex flex-wrap gap-2'>
+                {QUICK_TOPICS.map(function (t) {
+                  return (
+                    <Button
+                      key={t.label}
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      disabled={loading}
+                      onClick={function () {
+                        setTopic(t.hint)
+                        setTimeout(function () { topicRef.current?.focus() }, 30)
+                      }}
+                      className='h-8 rounded-full px-3 text-xs font-semibold transition-all hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-600 active:scale-95 dark:hover:text-violet-400 sm:text-sm'
+                    >
+                      {t.label}
+                    </Button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* زر التوليد الكبير */}
+            <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+              <Button
+                type='button'
+                size='lg'
+                onClick={function () { generate(topic) }}
+                disabled={loading}
+                className='h-12 w-full bg-gradient-to-l from-violet-600 to-teal-600 text-base font-bold text-white shadow-md shadow-violet-500/25 hover:from-violet-600/90 hover:to-teal-600/90 sm:w-auto'
+              >
+                {loading && <Loader2 className='h-5 w-5 animate-spin' />}
+                ولّد 10 أسئلة 🚀
+              </Button>
+              <span className='text-center text-xs text-muted-foreground sm:text-left'>
+                الحد الأقصى ٦٠٠ حرف — اكتب بالعربي براحتك ✍️
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ============ شاشة التحميل الحية (الـ AI بياخد 20-50 ثانية) ============ */}
+      {loading && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <Card className='border-violet-500/30 bg-violet-500/5'>
+            <CardContent className='space-y-4 p-5 sm:p-6'>
+              <div className='flex flex-col items-center gap-2'>
+                <Loader2 className='h-7 w-7 animate-spin text-violet-600 dark:text-violet-400' />
+                {/* الرسائل المصرية المتغيرة كل 3 ثواني */}
+                <div className='flex min-h-8 items-center' aria-live='polite'>
+                  <AnimatePresence mode='wait'>
+                    <motion.p
+                      key={msgIdx % LOADING_MSGS.length}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.3 }}
+                      className='text-center font-bold text-violet-700 dark:text-violet-300 sm:text-lg'
+                    >
+                      {LOADING_MSGS[msgIdx % LOADING_MSGS.length]}
+                    </motion.p>
+                  </AnimatePresence>
+                </div>
+                {/* عداد الثواني الشغال */}
+                <div className='flex items-center gap-1.5 text-sm text-muted-foreground'>
+                  <Timer className='h-4 w-4' />
+                  <span>
+                    عدّى <span className='font-bold tabular-nums text-teal-600 dark:text-teal-400'>{toArNum(elapsed)}</span> ثانية...
+                  </span>
+                </div>
+              </div>
+
+              {/* شريط تقدم هادي — بيملا على مهل زي وقت الـ AI الحقيقي */}
+              <div className='h-1.5 w-full overflow-hidden rounded-full bg-muted'>
+                <motion.div
+                  className='h-full rounded-full bg-gradient-to-l from-violet-500 via-teal-500 to-violet-500'
+                  initial={{ width: '4%' }}
+                  animate={{ width: '94%' }}
+                  transition={{ duration: 45, ease: 'easeOut' }}
+                />
+              </div>
+
+              {/* سكيليتون — لمحة عن الأسئلة الجاية */}
+              <div className='space-y-2.5'>
+                {[0, 1, 2].map(function (i) {
+                  return (
+                    <div
+                      key={i}
+                      className='h-11 animate-pulse rounded-xl bg-muted/70'
+                      style={{ animationDelay: (i * 0.25) + 's' }}
+                    />
+                  )
+                })}
+              </div>
+
+              <p className='text-center text-xs text-muted-foreground'>
+                الأسئلة بتتولد بأرقام جديدة وحلول مضمونة — سيبها شغالة وترجعلك شوية 😉
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* ============ حالة الخطأ + إعادة المحاولة ============ */}
+      {!loading && error && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <Card className='border-rose-500/30 bg-rose-500/5'>
+            <CardContent className='flex flex-col items-center gap-3 p-6 text-center'>
+              <div className='flex h-12 w-12 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/15'>
+                <AlertTriangle className='h-6 w-6 text-rose-600 dark:text-rose-400' />
+              </div>
+              <p className='font-bold text-rose-600 dark:text-rose-400'>حصلت مشكلة في التوليد</p>
+              <p className='max-w-md text-sm leading-relaxed text-muted-foreground'>{error}</p>
+              <div className='flex flex-wrap justify-center gap-2 pt-1'>
+                <Button
+                  type='button'
+                  onClick={function () { generate(lastTopicRef.current || topic) }}
+                  className='gap-2 bg-rose-600 text-white hover:bg-rose-600/90'
+                >
+                  <RefreshCw className='h-4 w-4' />
+                  جرب تاني 🔄
+                </Button>
+                <Button type='button' variant='outline' onClick={resetAll}>
+                  اكتب موضوع تاني
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* ============ النتائج: 10 أسئلة جاهزة ============ */}
+      {success && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className='space-y-4'
+        >
+          {/* الهيدر: العنوان + بادج المحرك + أزرار التحكم */}
+          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+            <div className='flex min-w-0 flex-wrap items-center gap-2'>
+              <h3 className='font-bold text-lg sm:text-xl'>
+                {toArNum(questions.length)} أسئلة على «
+                <span className='text-teal-600 dark:text-teal-400'>{resultTopic}</span>»
+              </h3>
+              {source === 'local' ? (
+                <Badge className='border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'>
+                  ⚡ مولد المنصة الرياضي
+                </Badge>
+              ) : (
+                <Badge className='border-violet-500/30 bg-violet-500/15 text-violet-600 dark:text-violet-400'>
+                  ✨ بالذكاء الاصطناعي
+                </Badge>
+              )}
+            </div>
+            <div className='flex shrink-0 items-center gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={function () { generate(resultTopic) }}
+                className='gap-1.5 rounded-full'
+              >
+                <RefreshCw className='h-4 w-4' />
+                أسئلة جديدة 🔄
+              </Button>
+              <Button type='button' variant='ghost' size='sm' onClick={resetAll} className='rounded-full'>
+                موضوع تاني
+              </Button>
+            </div>
+          </div>
+
+          {/* كروت الأسئلة — على الموبايل تدفق طبيعي، على الديسكتوب سكرول داخلي أنيق */}
+          <div className='space-y-3 lg:max-h-[72vh] lg:overflow-y-auto lg:[scrollbar-width:thin] lg:[&::-webkit-scrollbar-thumb]:rounded-full lg:[&::-webkit-scrollbar-thumb]:bg-teal-500/25 lg:[&::-webkit-scrollbar-track]:bg-transparent lg:pl-1'>
+            {questions.map(function (q, i) {
+              return (
+                <QuestionCardItem
+                  key={q.id}
+                  q={q}
+                  index={i}
+                  open={!!openMap[q.id]}
+                  onToggle={function () { toggleSolution(q.id) }}
+                />
+              )
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* ============ الحالة الفاضية: المميزات قبل أول توليد ============ */}
+      {!loading && !error && !success && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className='space-y-3'>
+          <p className='text-center text-sm font-semibold text-muted-foreground'>
+            اكتب فوق أو اختار موضوع سريع — والباقي علينا 👇
+          </p>
+          <div className='grid gap-3 sm:grid-cols-3'>
+            {FEATURES.map(function (f) {
+              var Icon = f.icon
+              return (
+                <div key={f.title} className='flex items-start gap-3 rounded-xl border bg-card p-4'>
+                  <div className={'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ' + f.cls}>
+                    <Icon className='h-5 w-5' />
+                  </div>
+                  <div className='min-w-0'>
+                    <p className='text-sm font-bold'>{f.title}</p>
+                    <p className='mt-0.5 text-xs leading-relaxed text-muted-foreground'>{f.desc}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </motion.div>
+      )}
+    </div>
+  )
+}
