@@ -13,7 +13,7 @@
 //   + تنظيف صارم لكل الـ intervals في الـ useEffect returns
 // ============================================================
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
   Swords, Zap, Crown, Trophy, Timer, Flame, Copy, LogOut, LogIn,
-  Play, Check, X, Loader2, RotateCcw, UserPlus, Plus, GraduationCap, ListChecks,
+  Play, Check, X, Loader2, RotateCcw, UserPlus, Plus, GraduationCap, ListChecks, RefreshCw,
 } from 'lucide-react'
 
 /* ============================================================
@@ -89,6 +89,9 @@ interface TeacherChallenge {
   active: boolean
   closesAt: string | null
   createdAt: string
+  /* (2026-و68-إضافي) فيديو المستر — بيرجع من السيرفر بس لو موجود فعلًا */
+  videoUrl?: string
+  videoType?: string
 }
 interface ChallengeRow {
   rank: number
@@ -208,6 +211,8 @@ function GroupsMode({ studentName }: { studentName: string }) {
   var [gMe, setGMe] = useState<ArenaMe | null>(null)
   var [playerName, setPlayerName] = useState(studentName)
   var [joinCode, setJoinCode] = useState('')
+  /* (2026-و68) كود مخصص — الطالب يكتب كود الغرفة بنفسه */
+  var [customCode, setCustomCode] = useState('')
   var [busy, setBusy] = useState('') // create | join | start | next | end | leave
   var [sendingAnswer, setSendingAnswer] = useState(false)
   var [pendingChoice, setPendingChoice] = useState(-1)
@@ -375,9 +380,11 @@ function GroupsMode({ studentName }: { studentName: string }) {
   async function createRoom(): Promise<void> {
     var name = playerName.trim()
     if (!name) { toast.error('اكتب اسمك الأول يا بطل'); return }
+    var custom = customCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (custom && custom.length < 4) { toast.error('الكود المخصص لازم 4 حروف على الأقل'); return }
     setBusy('create')
     try {
-      var out = await postJson('/api/arena/rooms', { name: name })
+      var out = await postJson('/api/arena/rooms', { name: name, customCode: custom || undefined })
       var data = out.data
       if (out.status === 404 || !out.data) { toast.error('مشكلة في إنشاء الغرفة — جرب تاني'); return }
       if (!data.ok) { toast.error(String(data.error || 'مشكلة في إنشاء الغرفة')); return }
@@ -392,6 +399,7 @@ function GroupsMode({ studentName }: { studentName: string }) {
         finalQuestions: null,
         finalAnswers: null,
       })
+      setCustomCode('')
       toast.success('اتعملت الغرفة! شارك الكود مع صحابك 🎉')
     } catch (e) {
       toast.error('الشبكة بتلحس — جرب تاني')
@@ -403,7 +411,7 @@ function GroupsMode({ studentName }: { studentName: string }) {
   async function joinRoom(): Promise<void> {
     var code = joinCode.trim().toUpperCase()
     var name = playerName.trim()
-    if (code.length < 4) { toast.error('اكتب الكود كامل (6 حروف)'); return }
+    if (code.length < 4) { toast.error('اكتب الكود كامل (4 حروف على الأقل)'); return }
     if (!name) { toast.error('اكتب اسمك الأول'); return }
     setBusy('join')
     try {
@@ -563,6 +571,21 @@ function GroupsMode({ studentName }: { studentName: string }) {
                   className="h-12 text-base"
                 />
               </div>
+              {/* (2026-و68) كود مخصص — اختياري */}
+              <div>
+                <label className="text-xs font-bold text-muted-foreground mb-1.5 block">
+                  كود مخصص (اختياري) — اكتب الكود اللي يعجبك
+                </label>
+                <Input
+                  value={customCode}
+                  onChange={function (e) { setCustomCode(e.target.value.toUpperCase().replace(/[^A-Za-z0-9]/g, '').slice(0, 8)) }}
+                  placeholder="مثلاً: MATH7"
+                  dir="ltr"
+                  maxLength={8}
+                  className="h-11 text-center font-mono font-bold tracking-widest"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">من 4 لـ 8 حروف/أرقام — لو مستخدم هيجيلك رسالة تختار غيره</p>
+              </div>
               <Button
                 onClick={function () { createRoom() }}
                 disabled={busy === 'create'}
@@ -585,10 +608,10 @@ function GroupsMode({ studentName }: { studentName: string }) {
                 صحابك عملوا غرفة؟ اكتب الكود اللي بعتهولك ودوس ادخل 🚪
               </p>
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1.5 block">كود الغرفة (6 حروف)</label>
+                <label className="text-xs font-bold text-muted-foreground mb-1.5 block">كود الغرفة</label>
                 <Input
                   value={joinCode}
-                  onChange={function (e) { setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)) }}
+                  onChange={function (e) { setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)) }}
                   onKeyDown={function (e) { if (e.key === 'Enter') joinRoom() }}
                   placeholder="ABC123"
                   dir="ltr"
@@ -997,6 +1020,365 @@ function GroupsMode({ studentName }: { studentName: string }) {
 }
 
 /* ============================================================
+ * (2026-و68) تحدي بنك الملفات — طلب المستر:
+ * «الطالب أول ما يخش يعمل تحدي… يظهر له أسئلة ياخد أسئلة من
+ *  الملفات دي كلها بشكل عشوائي» — 10 أسئلة عشوائية من كل ملفات
+ *  المستر (بالإنجليزي) + مؤقت لكل سؤال + درجة (دقة + سرعة) + لوحة ترتيب.
+ * ============================================================ */
+var BANK_ROUND_COUNT = 10
+var BANK_Q_LIMIT_MS = 60 * 1000
+
+interface BankQ { id: string; question: string; options: string[]; points: number }
+interface BankBoardRow { rank: number; name: string; score: number; correctCount: number; totalQuestions: number; timeMs: number; createdAt: string }
+
+function BankChallenge({ studentId, studentName }: { studentId: string; studentName: string }) {
+  var [bankCount, setBankCount] = useState<number | null>(null)
+  var [phase, setPhase] = useState<'idle' | 'play' | 'done'>('idle')
+  var [loadingRound, setLoadingRound] = useState(false)
+  var [questions, setQuestions] = useState<BankQ[]>([])
+  var [idx, setIdx] = useState(0)
+  var [remainMs, setRemainMs] = useState(BANK_Q_LIMIT_MS)
+  var [picked, setPicked] = useState(-1)
+  var [submitting, setSubmitting] = useState(false)
+  var [result, setResult] = useState<{ score: number; correctCount: number; total: number; timeMs: number } | null>(null)
+  var [board, setBoard] = useState<BankBoardRow[]>([])
+  var [myRankKey, setMyRankKey] = useState('')
+
+  var qRef = useRef<BankQ[]>([])
+  var idxRef = useRef(0)
+  var answersRef = useRef<{ id: string; choice: number; ms: number }[]>([])
+  var qStartRef = useRef(0)
+  var lockRef = useRef(false)
+
+  useEffect(function () {
+    var alive = true
+    ;(async function () {
+      try {
+        var r1 = await fetch('/api/arena/challenges/bank?mode=info', { cache: 'no-store' })
+        var d1: any = await r1.json()
+        if (alive && d1 && d1.ok) setBankCount(Number(d1.bankCount || 0))
+        var r2 = await fetch('/api/arena/challenges/attempt?mode=board', { cache: 'no-store' })
+        var d2: any = await r2.json()
+        if (alive && d2 && d2.ok) setBoard(d2.board || [])
+      } catch (e) { /* شبكة */ }
+    })()
+    return function () { alive = false }
+  }, [])
+
+  async function refreshBoard(): Promise<void> {
+    try {
+      var r = await fetch('/api/arena/challenges/attempt?mode=board', { cache: 'no-store' })
+      var d: any = await r.json()
+      if (d && d.ok) setBoard(d.board || [])
+    } catch (e) {}
+  }
+
+  /* تسجيل إجابة (أو تجاوز بالتايم) والتقدم للسؤال الجاي — أو التسليم */
+  var recordAndAdvance = useCallback(function (choice: number): void {
+    if (lockRef.current) return
+    lockRef.current = true
+    var qs = qRef.current
+    var i = idxRef.current
+    var q = qs[i]
+    if (q) {
+      answersRef.current.push({ id: q.id, choice: choice, ms: Math.max(0, Date.now() - qStartRef.current) })
+    }
+    var next = i + 1
+    if (next >= qs.length) {
+      setIdx(next)
+      submitAll()
+      return
+    }
+    idxRef.current = next
+    setIdx(next)
+    setPicked(-1)
+    qStartRef.current = Date.now()
+    setRemainMs(BANK_Q_LIMIT_MS)
+    setTimeout(function () { lockRef.current = false }, 150)
+  }, [])
+
+  /* مؤقت السؤال — لما يخلص يجاوب لوحده (choice -1) */
+  useEffect(function () {
+    if (phase !== 'play') return
+    var startedAt = Date.now()
+    var iv = setInterval(function () {
+      var left = BANK_Q_LIMIT_MS - (Date.now() - startedAt)
+      if (left <= 0) {
+        setRemainMs(0)
+        recordAndAdvance(-1)
+      } else {
+        setRemainMs(left)
+      }
+    }, 250)
+    return function () { clearInterval(iv) }
+  }, [phase, idx, recordAndAdvance])
+
+  async function startRound(): Promise<void> {
+    if (loadingRound) return
+    setLoadingRound(true)
+    try {
+      var res = await fetch('/api/arena/challenges/bank?mode=round&count=' + BANK_ROUND_COUNT, { cache: 'no-store' })
+      var d: any = await res.json()
+      var qs: BankQ[] = (d && d.ok && Array.isArray(d.questions)) ? d.questions : []
+      if (!d || !d.ok || qs.length === 0) {
+        toast.error('البنك فاضي — استنى المستر يرفع ملفات التحدي')
+        return
+      }
+      qRef.current = qs
+      idxRef.current = 0
+      answersRef.current = []
+      qStartRef.current = Date.now()
+      lockRef.current = false
+      setQuestions(qs)
+      setIdx(0)
+      setPicked(-1)
+      setResult(null)
+      setRemainMs(BANK_Q_LIMIT_MS)
+      setPhase('play')
+    } catch (e) {
+      toast.error('الشبكة بتلحس — جرب تاني')
+    } finally {
+      setLoadingRound(false)
+    }
+  }
+
+  async function submitAll(): Promise<void> {
+    setSubmitting(true)
+    try {
+      var answers = answersRef.current.slice()
+      var totalMs = answers.reduce(function (a, b) { return a + (Number(b.ms) || 0) }, 0)
+      var out = await postJson('/api/arena/challenges/attempt', {
+        studentId: studentId,
+        name: studentName,
+        answers: answers,
+      })
+      var d = out.data
+      if (!d || !d.ok) {
+        toast.error(String((d && d.error) || 'مشكلة في تسليم التحدي'))
+        setPhase('idle')
+        return
+      }
+      setResult({ score: Number(d.score || 0), correctCount: Number(d.correctCount || 0), total: Number(d.total || answers.length), timeMs: Number(d.timeMs || totalMs) })
+      setMyRankKey(studentName + '-' + Number(d.score || 0))
+      setPhase('done')
+      toast.success('خلصت التحدي! درجتك: ' + String(d.score || 0) + ' 🎯')
+      await refreshBoard()
+    } catch (e) {
+      toast.error('الشبكة بتلحس — جرب تاني')
+      setPhase('idle')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  /* البنك فاضي (أو لسه بيتفحص) → مفيش حاجة تتعرض */
+  if (bankCount === 0) return null
+
+  /* ===== شاشة اللعب ===== */
+  if (phase === 'play') {
+    var qs = questions
+    var q = qs[idx]
+    if (!q) {
+      return (
+        <div className="py-10 flex items-center justify-center">
+          <Loader2 className="size-7 animate-spin text-muted-foreground" />
+        </div>
+      )
+    }
+    var pct = Math.max(0, Math.min(100, (remainMs / BANK_Q_LIMIT_MS) * 100))
+    var remainSec = Math.ceil(remainMs / 1000)
+    return (
+      <Card className="overflow-hidden border-violet-300 dark:border-violet-800">
+        <div className="bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-white">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <Badge className="bg-white/25 text-white border-0 font-black">🎯 تحدي ملفات المستر</Badge>
+            <span className="text-sm font-black" dir="ltr">{idx + 1} / {qs.length}</span>
+          </div>
+          <div className="mt-3 h-2 w-full rounded-full bg-white/20">
+            <div
+              className={'h-full rounded-full transition-[width] duration-200 ease-linear ' + (remainSec <= 10 ? 'bg-red-400' : 'bg-white')}
+              style={{ width: pct + '%' }}
+            />
+          </div>
+        </div>
+        <CardContent className="p-5 space-y-4">
+          {/* نقاط التقدم */}
+          <div className="flex items-center justify-center gap-1.5">
+            {qs.map(function (_, i) {
+              return (
+                <span
+                  key={i}
+                  className={'h-2 w-2 rounded-full ' + (i < idx ? 'bg-emerald-500' : i === idx ? 'bg-violet-500 ring-2 ring-violet-300' : 'bg-stone-300 dark:bg-stone-700')}
+                />
+              )
+            })}
+          </div>
+          <p dir="ltr" className="text-left text-lg font-bold leading-relaxed sm:text-xl">{q.question}</p>
+          {submitting ? (
+            <div className="py-8 flex flex-col items-center gap-2">
+              <Loader2 className="size-7 animate-spin text-violet-500" />
+              <p className="text-sm font-bold text-muted-foreground">بتسلّم المحاولة…</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {q.options.map(function (opt, i) {
+                return (
+                  <Button
+                    key={i}
+                    variant="outline"
+                    onClick={function () { setPicked(i); recordAndAdvance(i) }}
+                    className={'min-h-12 justify-start gap-2.5 text-base font-bold border-2 text-left ' +
+                      (picked === i
+                        ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/40'
+                        : 'border-violet-200 hover:border-violet-500 hover:bg-violet-50 dark:border-violet-900 dark:hover:bg-violet-950/30')}
+                  >
+                    <span className="grid place-items-center size-7 rounded-lg bg-violet-100 dark:bg-violet-900/50 font-mono text-sm shrink-0" dir="ltr">
+                      {LETTERS[i] || '•'}
+                    </span>
+                    <span dir="ltr" className="flex-1 text-left leading-snug break-words">{opt}</span>
+                  </Button>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  /* ===== شاشة النتيجة ===== */
+  if (phase === 'done' && result) {
+    return (
+      <Card className="overflow-hidden border-emerald-300 dark:border-emerald-800">
+        <div className="bg-gradient-to-l from-emerald-500 to-teal-600 px-5 py-4 text-white text-center">
+          <h3 className="font-black text-lg">خلصت التحدي! 🎉</h3>
+        </div>
+        <CardContent className="p-5 space-y-4">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl border bg-muted/40 p-3">
+              <p className="text-[11px] font-bold text-muted-foreground">الدرجة</p>
+              <p className="text-2xl font-black text-teal-600 dark:text-teal-400" dir="ltr">{result.score}</p>
+            </div>
+            <div className="rounded-xl border bg-muted/40 p-3">
+              <p className="text-[11px] font-bold text-muted-foreground">صح</p>
+              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400" dir="ltr">{result.correctCount}/{result.total}</p>
+            </div>
+            <div className="rounded-xl border bg-muted/40 p-3">
+              <p className="text-[11px] font-bold text-muted-foreground">الزمن</p>
+              <p className="text-2xl font-black" dir="ltr">{Math.round(result.timeMs / 1000)}s</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={function () { startRound() }} disabled={loadingRound} className="flex-1 min-h-12 bg-gradient-to-l from-violet-600 to-fuchsia-600 text-white font-black">
+              {loadingRound ? <Loader2 className="size-5 animate-spin" /> : <RefreshCw className="size-5" />}
+              جولة تانية — أسئلة جديدة
+            </Button>
+            <Button variant="outline" onClick={function () { setPhase('idle') }} className="min-h-12 font-black">رجوع</Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  /* ===== شاشة البداية + لوحة الترتيب ===== */
+  return (
+    <Card className="overflow-hidden border-violet-300 dark:border-violet-800">
+      <div className="bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-white">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <Badge className="bg-white/25 text-white border-0 font-black">🎯 تحدي ملفات المستر</Badge>
+          <Badge className="bg-white text-violet-700 border-0 font-black" dir="ltr">{bankCount} سؤال</Badge>
+        </div>
+        <h3 className="mt-2 font-black text-lg leading-snug">أسئلة عشوائية من كل ملفات المستر — كل جولة مختلفة!</h3>
+        <p className="text-sm text-violet-100 font-bold">10 أسئلة إنجليزي • دقيقة لكل سؤال • الدرجة = الدقة + السرعة</p>
+      </div>
+      <CardContent className="p-5 space-y-4">
+        <Button
+          onClick={function () { startRound() }}
+          disabled={loadingRound}
+          className="w-full min-h-14 bg-gradient-to-l from-violet-600 to-fuchsia-600 text-white font-black text-lg shadow-lg shadow-violet-500/25"
+        >
+          {loadingRound ? <Loader2 className="size-5 animate-spin" /> : <Swords className="size-5" />}
+          ابدأ التحدي 🚀
+        </Button>
+
+        <div className="rounded-2xl border p-3 space-y-2">
+          <h4 className="font-black flex items-center gap-1.5 text-sm">
+            <Trophy className="size-4 text-violet-500" /> لوحة ترتيب التحدي
+          </h4>
+          {board.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-2 font-bold">لسه محدش خلص — كن انت الأول! 🏃</p>
+          ) : (
+            <div className={SCROLL_CLS + ' space-y-1.5'}>
+              {board.map(function (row) {
+                var isMe = row.name === studentName && (myRankKey === studentName + '-' + String(row.score))
+                return (
+                  <div
+                    key={row.rank + '-' + row.name + '-' + row.createdAt}
+                    className={'flex items-center gap-2 rounded-xl px-3 py-2 ' + (isMe ? 'bg-violet-50 dark:bg-violet-950/40 border border-violet-300' : 'bg-stone-50 dark:bg-stone-900/50')}
+                  >
+                    <span className="w-8 text-center text-base shrink-0">
+                      {rankMedal(row.rank) || <span dir="ltr" className="font-black text-sm text-muted-foreground">{row.rank}</span>}
+                    </span>
+                    <span className="flex-1 truncate text-sm font-bold">
+                      {row.name}
+                      {isMe ? <span className="text-[10px] text-muted-foreground font-normal"> (انت)</span> : null}
+                    </span>
+                    <span dir="ltr" className="text-xs text-muted-foreground font-bold shrink-0">{row.correctCount}/{row.totalQuestions}</span>
+                    <Badge variant="outline" className="font-black shrink-0" dir="ltr">{row.score}</Badge>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ============================================================
+ * (2026-و68-إضافي) فيديو المستر في التحدي — طلب المستر: «يصور فيديو
+ * ويعمله في التحديات». يوتيوب (embed) أو ملف مرفوع (بتوكن موقّع من
+ * السيرفر). بيتعرض **فوق السؤال** — ولما مفيش فيديو المكون بيرجع null
+ * فمفيش بلوك فاضي أبدًا (نفس مبدأ زرار الخريطة الذهنية في و67).
+ * ============================================================ */
+function youTubeEmbedIdOf(url: string): string {
+  var m = String(url || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/))([\w-]{11})/)
+  return m ? m[1] : ''
+}
+
+function ChallengeVideo({ url, type }: { url: string; type: string }) {
+  if (!url) return null
+  if (type === 'youtube') {
+    var ytId = youTubeEmbedIdOf(url)
+    if (!ytId) return null
+    return (
+      <div className="overflow-hidden rounded-xl border border-amber-200 bg-black shadow-sm dark:border-amber-800" dir="ltr">
+        <iframe
+          src={'https://www.youtube.com/embed/' + ytId + '?modestbranding=1&rel=0&playsinline=1'}
+          title="فيديو المستر"
+          className="aspect-video w-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      </div>
+    )
+  }
+  if (type === 'file') {
+    return (
+      <video
+        src={url}
+        controls
+        playsInline
+        preload="metadata"
+        className="w-full rounded-xl border border-amber-200 bg-black shadow-sm dark:border-amber-800"
+      />
+    )
+  }
+  return null
+}
+
+/* ============================================================
  * الوضع 2: تحدي المستر
  * ============================================================ */
 function TeacherMode({ studentId, studentName }: { studentId: string; studentName: string }) {
@@ -1084,6 +1466,7 @@ function TeacherMode({ studentId, studentName }: { studentId: string; studentNam
   if (!active) {
     return (
       <div className="space-y-4">
+        <BankChallenge studentId={studentId} studentName={studentName} />
         <Card className="border-dashed">
           <CardContent className="p-8 text-center space-y-2">
             <div className="text-5xl">😴</div>
@@ -1117,6 +1500,7 @@ function TeacherMode({ studentId, studentName }: { studentId: string; studentNam
   /* ===== فيه تحدي شغال ===== */
   return (
     <div className="space-y-4">
+      <BankChallenge studentId={studentId} studentName={studentName} />
       <Card className="overflow-hidden border-amber-300 dark:border-amber-800">
         <div className="bg-gradient-to-l from-amber-500 to-orange-600 px-5 py-4 text-white space-y-2">
           <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1131,6 +1515,8 @@ function TeacherMode({ studentId, studentName }: { studentId: string; studentNam
           ) : null}
         </div>
         <CardContent className="p-5 space-y-4">
+          {/* (2026-و68-إضافي) فيديو المستر — فوق السؤال، بس لو فيه فيديو فعلًا */}
+          <ChallengeVideo url={String(active.videoUrl || '')} type={String(active.videoType || '')} />
           <p className="text-xl font-bold leading-relaxed">{active.question}</p>
 
           {data && data.myEntry ? (

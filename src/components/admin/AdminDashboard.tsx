@@ -28,6 +28,7 @@ import { AdminComplaints } from './AdminComplaints'
 import { CMSPanel } from './CMSPanel'
 /* (و64) الترجمة الحقيقية عربي/إنجليزي — الزراير الموحدة في النافبار */
 import { useT } from '@/lib/i18n'
+import { LangToggle } from '@/components/platform-toggles'
 import { VideoProtectionSettings } from './VideoProtectionSettings'
 import { FractionText, hasMathMarkup } from '@/components/FractionText'
 import { SocialLinksPanel } from './SocialLinksPanel'
@@ -384,7 +385,9 @@ export function AdminDashboard() {
             <p className="text-sm text-muted-foreground mt-1">{T('إدارة المنصة التعليمية بالكامل', 'Manage the full platform')}</p>
           </div>
           <div className="flex gap-2">
-            {/* (و64) الزراير الموحدة في النافبار فوق — ممنوع التكرار هنا */}
+            {/* (2026-و68) طلب المستر: سويتش اللغة جوه صفحة الأدمن نفسها —
+                التبديل بيرجم المنصة كلها ويبقى محفوظ للطالب كمان */}
+            <LangToggle />
             <Button variant="outline" size="sm" onClick={fetchStats}><RefreshCw className="h-4 w-4 ml-1" />{T('تحديث', 'Refresh')}</Button>
             <Button variant="outline" size="sm" onClick={openSettings}><Settings className="h-4 w-4 ml-1" />{T('الإعدادات', 'Settings')}</Button>
             <Button variant="outline" size="sm" onClick={logout}><LogOut className="h-4 w-4 ml-1" />{T('خروج', 'Logout')}</Button>
@@ -393,11 +396,11 @@ export function AdminDashboard() {
 
         {stats && (
           <div className="grid gap-4 grid-cols-2 lg:grid-cols-5 mb-6">
-            <StatCard icon={Users} label="إجمالي الطلاب" value={stats.totalStudents} color="bg-[#C49A38]/10 text-[#C49A38]" />
-            <StatCard icon={Clock} label="بانتظار الموافقة" value={stats.pendingStudents} color="bg-amber-500/10 text-amber-600 dark:text-amber-400" />
-            <StatCard icon={UserCheck} label="طلاب مفعلين" value={stats.approvedStudents} color="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
-            <StatCard icon={VideoIcon} label="إجمالي الفيديوهات" value={stats.totalVideos} color="bg-purple-500/10 text-purple-600 dark:text-purple-400" />
-            <StatCard icon={Wallet} label="مدفوعات معلقة" value={(stats as any).pendingPayments || 0} color="bg-amber-500/10 text-amber-600 dark:text-amber-400" />
+            <StatCard icon={Users} label={T('إجمالي الطلاب', 'Total Students')} value={stats.totalStudents} color="bg-[#C49A38]/10 text-[#C49A38]" />
+            <StatCard icon={Clock} label={T('بانتظار الموافقة', 'Pending Approval')} value={stats.pendingStudents} color="bg-amber-500/10 text-amber-600 dark:text-amber-400" />
+            <StatCard icon={UserCheck} label={T('طلاب مفعلين', 'Active Students')} value={stats.approvedStudents} color="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
+            <StatCard icon={VideoIcon} label={T('إجمالي الفيديوهات', 'Total Videos')} value={stats.totalVideos} color="bg-purple-500/10 text-purple-600 dark:text-purple-400" />
+            <StatCard icon={Wallet} label={T('مدفوعات معلقة', 'Pending Payments')} value={(stats as any).pendingPayments || 0} color="bg-amber-500/10 text-amber-600 dark:text-amber-400" />
           </div>
         )}
 

@@ -3,6 +3,7 @@
 // FILE: src/app/api/arena/rooms/route.ts
 // PURPOSE: (2026-و66) تحدي الجروبات — إنشاء غرفة تحدي بكود مشترك
 //   POST {name} → غرفة جديدة + اللاعب المؤسس (هوست)
+//   POST {name, customCode} → (2026-و68) الطالب يكتب كود الغرفة بنفسه
 //   الأسئلة بتتولد لحظة الإنشاء من المحرك الرياضي المحلي
 //   (أرقام جديدة كل مرة — مفيش غرفتين بنفس الأسئلة تقريبًا)
 // ============================================================
@@ -16,6 +17,11 @@ export const runtime = 'nodejs'
 
 var ROOM_ROUNDS = 8
 
+/* (2026-و68) تطبيع كود مخصص: حروف كبيرة وأرقام من غير  O/0 و I/1 — 4-8 خانات */
+function normalizeCustomCode(raw: string): string {
+  return String(raw || '').toUpperCase().replace(/O/g, '0').replace(/[I|]/g, '1').replace(/[^A-Z0-9]/g, '').slice(0, 8)
+}
+
 export async function POST(request: Request) {
   try {
     await ensureArenaTables()
@@ -27,23 +33,41 @@ export async function POST(request: Request) {
     var questions = generateBattleQuestions(rounds)
 
     // نظافة: امسح الغرف القديمة (أقدم من 6 ساعات)
+    // (2026-و68-إضافي) إصلاح مقارنة الزمن: CURRENT_TIMESTAMP في SQLite بيتخزن
+    // "YYYY-MM-DD HH:MM:SS" (مسافة) — و toISOString بيرجع "YYYY-MM-DDTHH…"
+    // (حرف T) والمسافة أصغر من T نصيًا، فالمقارنة القديمة كانت تعتبر **كل**
+    // الغرف قديمة وتمسحها مع أول create — الغرف الشغالة بتختفي وكود الغرفة
+    // المخصص عمرو ما يلاقي التكرار. توحيد الصيغة للاتنين يصلح المقارنة.
     try {
       var cutoff = Date.now() - 6 * 60 * 60 * 1000
-      var old = await db.$queryRawUnsafe('SELECT id FROM BattleRoom WHERE createdAt < ?', new Date(cutoff).toISOString())
+      var cutoffSql = new Date(cutoff).toISOString().replace('T', ' ').substring(0, 19)
+      var old = await db.$queryRawUnsafe('SELECT id FROM BattleRoom WHERE createdAt < ?', cutoffSql)
       for (var i = 0; i < (old || []).length; i++) {
         await safeWrite(function () { return db.$executeRawUnsafe('DELETE FROM BattlePlayer WHERE roomId = ?', old[i].id) })
         await safeWrite(function () { return db.$executeRawUnsafe('DELETE FROM BattleRoom WHERE id = ?', old[i].id) })
       }
     } catch (e) {}
 
-    // كود فريد
+    // (2026-و68) كود مخصص من الطالب — أو كود أوتوماتيكي
     var code = ''
-    for (var attempt = 0; attempt < 8; attempt++) {
-      var cand = makeRoomCode()
-      var exists = await db.$queryRawUnsafe('SELECT id FROM BattleRoom WHERE code = ? LIMIT 1', cand)
-      if (!exists || exists.length === 0) { code = cand; break }
+    var custom = normalizeCustomCode(String(body.customCode || ''))
+    if (custom) {
+      if (custom.length < 4) {
+        return NextResponse.json({ ok: false, error: 'الكود المخصص لازم يكون 4 حروف على الأقل' }, { status: 400 })
+      }
+      var taken = await db.$queryRawUnsafe('SELECT id FROM BattleRoom WHERE code = ? LIMIT 1', custom)
+      if (taken && taken.length > 0) {
+        return NextResponse.json({ ok: false, error: 'الكود «' + custom + '» مستخدم — جرب كود تاني' }, { status: 409 })
+      }
+      code = custom
+    } else {
+      for (var attempt = 0; attempt < 8; attempt++) {
+        var cand = makeRoomCode()
+        var exists = await db.$queryRawUnsafe('SELECT id FROM BattleRoom WHERE code = ? LIMIT 1', cand)
+        if (!exists || exists.length === 0) { code = cand; break }
+      }
+      if (!code) code = makeRoomCode() + Math.floor(Math.random() * 10)
     }
-    if (!code) code = makeRoomCode() + Math.floor(Math.random() * 10)
 
     var roomId = makeId('brm')
     var hostId = makeId('bp')
