@@ -23,6 +23,10 @@
 // الرد {ok,code,reason} + التوصيل 423 في مسارَي التسليم زي ما هما بالظبط.
 // ============================================================
 import { db, withRetry } from '@/lib/db'
+/* (2026-و67) أسئلة الطالب الفعلية — نفس الدالة اللي بتقرأ شاشة الأدمن/التسليم،
+   عشان امتحانات النماذج (أ/ب) تتتبع صح: سلسلة الحارس لازم تطابق حرفيًا
+   اللي الطالب شايفه في قايمته (القايمة بترجع أسئلة نموذجه هو) */
+import { resolveQuestionsForStudent } from '@/lib/exam-models'
 
 export interface SeqCheckResult {
   ok: boolean
@@ -143,9 +147,16 @@ async function loadVisibleChain(
   var firstWord = String(normalized || grade || '').trim().split(' ')[0] || ''
   var rows: any[] = []
   try {
+    /* (2026-و67) الامتحانات بنقرأ معاها أعمدة النماذج — عشان قابلية التتبع
+       تتحدد على أسئلة نموذج الطالب هو (نفس applyModelForStudent في القايمة)
+       مش على الأسئلة الأساس الخام. سبب علة «سلم الامتحان اللي قبله وانا اصلا
+       مسلمه»: امتحان نماذج من غير أسئلة أساس كان بيتخطى من السلسلة السيرفرية
+       (hasQuestions=false على الخام) والحارس كان بيرجع لامتحان أقدم — فبيقفل
+       طالب سلّم فعلاً. على العميل نفس الامتحان بيتتبّع عادي (أسئلة نموذجه
+       واصلة ليه) → سلسلتين مختلفتين = قفل كاذب. */
     rows = await withRetry(function () {
       return (db as any).$queryRawUnsafe(
-        'SELECT id, title, questions, scheduledAt, targetStudentIds, targetGroupIds FROM ' + table +
+        'SELECT id, title, questions, scheduledAt, targetStudentIds, targetGroupIds' + (kind === 'exam' ? ', models, modelMode, fixedModel' : '') + ' FROM ' + table +
         ' WHERE grade = ? OR grade = ? OR grade LIKE ? ORDER BY createdAt ASC',
         grade, normalized, '%' + firstWord + '%'
       )
@@ -159,9 +170,43 @@ async function loadVisibleChain(
   return rows.filter(function (item: any) {
     if (isScheduledAhead(item)) return false
     if (!isVisibleToStudent(item, studentId, groupId)) return false
-    if (!hasQuestions(item.questions)) return false // ملف بس — مش قابل للتسليم، نتخطاه
+    /* (2026-و67) قابلية التتبع بأسئلة الطالب الفعلية: امتحان فيه نماذج بيتحسب
+       حتى لو الأسئلة الأساس فاضية — وعلى العكس، امتحان نموذجه فاضي
+       (كل النماذج من غير أسئلة) بيتخطى زي ما القايمة شايفاه */
+    if (kind === 'exam') {
+      try {
+        var effQ = resolveQuestionsForStudent(item, studentId, item.id)
+        if (!Array.isArray(effQ) || effQ.length === 0) return false
+      } catch (e) {
+        if (!hasQuestions(item.questions)) return false
+      }
+    } else if (!hasQuestions(item.questions)) {
+      return false // ملف بس — مش قابل للتسليم، نتخطاه
+    }
     return true
   })
+}
+
+/* (2026-و67) فولباك إعادة الرفع: لو المستر مسح العنصر ورفعه تاني بنفس العنوان
+   (id جديد) — نتايج الـ id القديم لازم تعتبر تسليم للجديد. سبب شكوى
+   «سلم الامتحان اللي قبله وانا اصلا مسلمه»: العنصر بيتقفل على نتيجة
+   مش موجودة أصلاً لأن الـ id اتغير. المطابقة بالعنوان جوه نفس السلسلة
+   (نفس الصف/نفس قايمة الطالب) — آمنة ومحددة. */
+async function sameTitleDone(
+  chain: any[],
+  beforeIdx: number,
+  title: string,
+  table: 'ExamResult' | 'HomeworkResult',
+  studentId: string
+): Promise<boolean> {
+  var t = String(title || '').trim()
+  if (!t) return false
+  for (var i = 0; i < beforeIdx; i++) {
+    if (String((chain[i] && chain[i].title) || '').trim() !== t) continue
+    var ok = await rowExists(table, studentId, chain[i].id)
+    if (ok) return true
+  }
+  return false
 }
 
 /** الواجب بيفتح بس لو الواجب اللي قبله (نفس قايمة الطالب المرئية، الأقدم الأول) متسلّم */
@@ -189,8 +234,10 @@ export async function checkHwSequential(
     for (var i = idx - 1; i >= 0; i--) {
       var prev = chain[i]
       /* (إصلاح 2026-و10) فحص خام — findUnique المركب كان بينكسر صامت
-         (2026-و40) + retry + fail-open جوه rowExists نفسها */
+         (2026-و40) + retry + fail-open جوه rowExists نفسها
+         (2026-و67) + فولباك نفس العنوان (إعادة رفع بنفس الاسم) */
       var done = await rowExists('HomeworkResult', studentId, prev.id)
+      if (!done) done = await sameTitleDone(chain, i, prev.title, 'HomeworkResult', studentId)
       if (!done) {
         return {
           ok: false,
@@ -233,8 +280,10 @@ export async function checkExamSequential(
       var prev = chain[i]
       /* (إصلاح 2026-و10) فحص خام — findUnique المركب كان بينكسر صامت
          (ValidationError مبلوع → done دايماً null → رفض دائم)
-         (2026-و40) + retry + fail-open جوه rowExists نفسها */
+         (2026-و40) + retry + fail-open جوه rowExists نفسها
+         (2026-و67) + فولباك نفس العنوان (إعادة رفع بنفس الاسم) */
       var done = await rowExists('ExamResult', studentId, prev.id)
+      if (!done) done = await sameTitleDone(chain, i, prev.title, 'ExamResult', studentId)
       if (!done) {
         return {
           ok: false,

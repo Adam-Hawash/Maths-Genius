@@ -12,7 +12,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react'
-import { Brain, Eye, FileText, Film, Loader2, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react'
+import { Brain, Eye, FileText, Film, Link2, Loader2, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -190,6 +190,30 @@ export function MindMapStudio() {
       toast.error('مشكلة في الاتصال — جرب تاني')
     }
     setSaving(false)
+  }
+
+  /* ===== (2026-و67) ربط/فك ربط خريطة محفوظة بدرس — طلب المستر:
+     الخريطة ممنوع تظهر على فيديو غير لما هو يربطها، ويقدر يفكها/ينقلها في أي وقت.
+     فك الربط = الخريطة تفضل محفوظة بس مش بتظهر على أي درس للطالب ===== */
+  const [linkDialog, setLinkDialog] = useState<SavedMap | null>(null)
+  const [linkVideoChoice, setLinkVideoChoice] = useState('none')
+  const linkMap = async function (m: SavedMap, videoId: string) {
+    try {
+      const res = await fetch('/api/admin/mindmap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'link', id: m.id, videoId: videoId }),
+      })
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        toast.success(videoId ? 'الخريطة اتربطت بالدرس 📎 — هتظهر للطالب في الكارت' : 'اتفك ربط الخريطة — مش هتظهر على أي درس')
+        setMaps(function (prev) { return prev.map(function (x) { return x.id === m.id ? Object.assign({}, x, { videoId: videoId }) : x }) })
+      } else {
+        toast.error(String(data.error || 'الربط فشل — جرب تاني'))
+      }
+    } catch (e) {
+      toast.error('مشكلة في الاتصال — جرب تاني')
+    }
   }
 
   /* ===== مسح خريطة محفوظة ===== */
@@ -417,14 +441,27 @@ export function MindMapStudio() {
                           🌳 {branchCount} فروع
                         </Badge>
                         {m.videoId ? (
-                          <Badge variant="outline" className="text-[10px]">
-                            🔗 مرتبطة بدرس
+                          <Badge variant="outline" className="text-[10px] border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-300 gap-1">
+                            <Link2 className="h-3 w-3" />
+                            {(videos.find(function (v) { return v.id === m.videoId }) || ({} as VideoItem)).title || 'درس'}
                           </Badge>
-                        ) : null}
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">من غير ربط — مش ظاهرة للطالب</Badge>
+                        )}
                         <span className="text-[11px] text-muted-foreground">{fmtDate(m.createdAt)}</span>
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1"
+                        title="اختار الدرس اللي هتظهر عليه الخريطة — أو فك الربط خالص"
+                        onClick={function () { setLinkVideoChoice(m.videoId || 'none'); setLinkDialog(m) }}
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                        {m.videoId ? 'الربط' : 'اربط بدرس'}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -451,6 +488,46 @@ export function MindMapStudio() {
           )}
         </CardContent>
       </Card>
+
+      {/* (2026-و67) دايلوج ربط الخريطة بدرس — ربط/نقل/فك ربط */}
+      <Dialog open={!!linkDialog} onOpenChange={function (o) { if (!o) setLinkDialog(null) }}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-right">ربط الخريطة بدرس</DialogTitle>
+            <DialogDescription className="text-right">
+              اختار الدرس اللي هتظهر عليه «خريطة الدرس الذهنية» في واجهة الطالب — «من غير ربط» = مش هتظهر خالص
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Select value={linkVideoChoice} onValueChange={setLinkVideoChoice}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="اختار الدرس" />
+              </SelectTrigger>
+              <SelectContent className="max-h-60">
+                <SelectItem value="none">🚫 من غير ربط — مش ظاهرة للطالب</SelectItem>
+                {videos.map(function (v) {
+                  return (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.title}
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+            <Button
+              className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={function () {
+                if (!linkDialog) return
+                linkMap(linkDialog, linkVideoChoice === 'none' ? '' : linkVideoChoice)
+                setLinkDialog(null)
+              }}
+            >
+              <Save className="h-4 w-4" />
+              احفظ الربط
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* دايلوج معاينة خريطة محفوظة */}
       <Dialog open={!!preview} onOpenChange={function (o) { if (!o) setPreview(null) }}>
