@@ -39,9 +39,24 @@ export var SCHEMA_TABLES = [
   'CREATE TABLE IF NOT EXISTS Book (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT \'\', filePath TEXT NOT NULL DEFAULT \'\', fileName TEXT NOT NULL DEFAULT \'\', sourceUrl TEXT NOT NULL DEFAULT \'\', fileType TEXT NOT NULL DEFAULT \'application/pdf\', sizeBytes INTEGER NOT NULL DEFAULT 0, grade TEXT NOT NULL DEFAULT \'\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL)',
   // (2026-و44) الإشعارات — رد الشكوى/الكتب الجديدة/امتحانات وواجبات جديدة
   'CREATE TABLE IF NOT EXISTS Notification (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, type TEXT NOT NULL DEFAULT \'general\', title TEXT NOT NULL, body TEXT NOT NULL DEFAULT \'\', read INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  /* (2026-و66) ساحة التحدي — غرف الجروبات + اللاعبين + تحدي المستر + الفلاش كاردز */
+  'CREATE TABLE IF NOT EXISTS BattleRoom (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, title TEXT DEFAULT \'\', hostPlayerId TEXT DEFAULT \'\', status TEXT NOT NULL DEFAULT \'lobby\', questions TEXT NOT NULL DEFAULT \'[]\', currentIndex INTEGER NOT NULL DEFAULT 0, questionStartAt TEXT NOT NULL DEFAULT \'0\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  'CREATE TABLE IF NOT EXISTS BattlePlayer (id TEXT PRIMARY KEY, roomId TEXT NOT NULL, name TEXT NOT NULL, token TEXT DEFAULT \'\', isHost INTEGER NOT NULL DEFAULT 0, score INTEGER NOT NULL DEFAULT 0, streak INTEGER NOT NULL DEFAULT 0, answers TEXT NOT NULL DEFAULT \'{}\', lastSeen TEXT NOT NULL DEFAULT \'0\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  'CREATE TABLE IF NOT EXISTS TeacherChallenge (id TEXT PRIMARY KEY, title TEXT NOT NULL, question TEXT NOT NULL, options TEXT NOT NULL DEFAULT \'[]\', correctIndex INTEGER NOT NULL DEFAULT 0, points INTEGER NOT NULL DEFAULT 30, durationMin INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, closesAt DATETIME, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  'CREATE TABLE IF NOT EXISTS ChallengeEntry (id TEXT PRIMARY KEY, challengeId TEXT NOT NULL, studentId TEXT DEFAULT \'\', name TEXT NOT NULL, isTeacher INTEGER NOT NULL DEFAULT 0, choice INTEGER NOT NULL DEFAULT -1, correct INTEGER NOT NULL DEFAULT 0, timeMs INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  'CREATE TABLE IF NOT EXISTS FlashcardScore (id TEXT PRIMARY KEY, studentId TEXT DEFAULT \'\', name TEXT NOT NULL, score INTEGER NOT NULL DEFAULT 0, correctCount INTEGER NOT NULL DEFAULT 0, totalCards INTEGER NOT NULL DEFAULT 10, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  /* (2026-و66) الخرائط الذهنية التفاعلية */
+  'CREATE TABLE IF NOT EXISTS MindMap (id TEXT PRIMARY KEY, videoId TEXT DEFAULT \'\', title TEXT NOT NULL, sourceType TEXT DEFAULT \'youtube\', sourceUrl TEXT DEFAULT \'\', sourceName TEXT DEFAULT \'\', data TEXT NOT NULL DEFAULT \'{}\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
 ]
 
 var SCHEMA_COLUMNS = [
+  /* (2026-و66) نظام منع الغش الذكي — سجل المخالفات في نتايج الامتحان:
+     cheatStrikes = عدد مرات مغادرة الامتحان (تبويب/تصغير/خروج)
+     autoSubmitted = 1 لو الامتحان اتسلم تلقائيًا لتجاوز الحد المسموح
+     penaltyPoints = النقاط المخصومة بسبب المخالفات */
+  ['ExamResult', 'cheatStrikes', 'INTEGER', 'NOT NULL DEFAULT 0'],
+  ['ExamResult', 'autoSubmitted', 'INTEGER', 'NOT NULL DEFAULT 0'],
+  ['ExamResult', 'penaltyPoints', 'INTEGER', 'NOT NULL DEFAULT 0'],
   /* (2026-و38) ميعاد المجموعة — طلب المستر: كل مجموعة لازم ليها وقت */
   ['StudentGroup', 'meetingTime', 'TEXT', "DEFAULT ''"],
   ['Student', 'password', 'TEXT', "NOT NULL DEFAULT ''"],
@@ -174,7 +189,10 @@ export var SCHEMA_INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_notification_created ON Notification(createdAt)',
 ]
 
-export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book', 'Notification']
+/* (2026-و66) الجداول الجديدة (ساحة التحدي + الخرائط الذهنية) دخلت CORE_TABLES
+ * والبصمة اتبدّلت — نفس درس و38/و40/و43/و44/و45: من غير كده الجداول الجديدة
+ * عمرها ما بتتعمل على Turso أول ريكوست بعد النشر */
+export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book', 'Notification', 'BattleRoom', 'BattlePlayer', 'TeacherChallenge', 'ChallengeEntry', 'FlashcardScore', 'MindMap']
 
 /* (2026-و38) مفتاح البصمة اتبدل — البصمة القديمة كانت اتخزنت على الإنتاج
  * بعد ما كود و37 نزل (والجدول وقتها مش معمول لسه في CORE_TABLES فالترميم
@@ -195,7 +213,7 @@ export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homew
 /* (و45) مفتاح البصمة اتبدّل رابع — عمود GalleryImage.thumbnail (صورة مصغرة
  * لفيديوهات المعرض) دخل SCHEMA_TABLES + SCHEMA_COLUMNS — نفس الدرس الموثق:
  * من غير البَمب العمود مش هيتضاف على Turso أول ريكوست بعد النشر. */
-var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w45'
+var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w66'
 
 /* ============================================================
  * 2026-و23 — **إصلاح بطء المنصة** (طلب المستر: «المنصة بطيئة، تسجيل
