@@ -1153,6 +1153,10 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   const [formUrl, setFormUrl] = useState('')
   const [formPrice, setFormPrice] = useState('')
   const [formFile, setFormFile] = useState<File | null>(null)
+  /* (MG-3) كشف الدقة الحقيقية للملف المرفوع — علاج حيرة «الجودة ثابتة على 360»:
+     المنصة بتشغل الفيديو بدقته الأصلية حرفيًا — فلو الملف نفسه 360p يبقى ده مصدره
+     والرسالة دي بتوضح للمستر فورًا أول ما يختار الملف */
+  const [formFileRes, setFormFileRes] = useState<{ w: number; h: number } | null>(null)
   const [formThumbnail, setFormThumbnail] = useState<File | null>(null)
   const [formThumbnailUrl, setFormThumbnailUrl] = useState('')
   /* (و45) قيمة الصورة المصغرة الأوتوماتيكية الأخيرة — عشان الكتابة اليدوية للأدمن
@@ -1409,7 +1413,35 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
 
   const handleVideoFilePick = async function (f: File | null) {
     setFormFile(f)
+    setFormFileRes(null)
     if (!f) return
+    /* (MG-3) قراءة الدقة الحقيقية من ميتاداتا الفيديو نفسه — بلا رفع وبلا انتظار */
+    try {
+      var resInfo = await (function (file: File): Promise<{ w: number; h: number }> {
+        return new Promise(function (resolve) {
+          try {
+            var u = URL.createObjectURL(file)
+            var vv = document.createElement('video')
+            var finished = false
+            var finish = function (w: number, h: number) {
+              if (finished) return
+              finished = true
+              try { URL.revokeObjectURL(u) } catch (e) {}
+              resolve({ w: w || 0, h: h || 0 })
+            }
+            var to = setTimeout(function () { finish(0, 0) }, 6000)
+            vv.preload = 'metadata'
+            vv.onloadedmetadata = function () {
+              clearTimeout(to)
+              finish(vv.videoWidth || 0, vv.videoHeight || 0)
+            }
+            vv.onerror = function () { clearTimeout(to); finish(0, 0) }
+            vv.src = u
+          } catch (e) { resolve({ w: 0, h: 0 }) }
+        })
+      })(f)
+      setFormFileRes(resInfo)
+    } catch (e) {}
     /* (و45) لقطة أوتوماتيكية من الفيديو نفسه — بترفع فورًا كصورة مصغرة */
     setThumbCapturing(true)
     try {
@@ -1467,6 +1499,13 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
             <div className="space-y-1.5">
               <Label className="text-xs">رابط الفيديو — يوتيوب أو أي لينك من أي موقع (Cloudinary / Drive / Dropbox / mp4 مباشر…) — أو ارفع ملف فيديو. للتحكم في الجودات: ارفع على Cloudinary وهتلاقي قايمة جودات في المشغل</Label>
               <Input value={formUrl} onChange={(e) => handleVideoUrlChange(e.target.value)} placeholder="https://youtube.com/watch?v=… أو https://res.cloudinary.com/…/video/upload/v…/name.mp4" dir="ltr" />
+              {/* (MG-3) توضيح الجودة للينكات اليوتيوب — علاج حيرة «الجودة ثابتة على 360» */}
+              {getYouTubeId(formUrl) && !/<\s*iframe/i.test(formUrl) && (
+                <p className="text-[10.5px] leading-relaxed rounded-lg border border-sky-500/30 bg-sky-500/5 px-3 py-2 text-muted-foreground">
+                  ℹ️ لينك يوتيوب: المنصة بتشغّل الفيديو بأعلى جودة موجودة عليه على يوتيوب تلقائيًا.
+                  لو ظهر 360p يبقى الملف المرفوع على يوتيوب نفسه 360p — أو لسه في معالجة HD (بتاخد من نص ساعة لساعات بعد الرفع على يوتيوب، وبعدها الجودة الأعلى بتظهر لوحدها من غير ما تغير أي حاجة هنا).
+                </p>
+              )}
               {getYouTubeId(formUrl) && !/<\s*iframe/i.test(formUrl) && (
                 <div className="mt-2 w-40 aspect-video rounded-lg overflow-hidden border relative">
                   <Image src={`https://img.youtube.com/vi/${getYouTubeId(formUrl)}/mqdefault.jpg`} alt="thumbnail" fill className="object-cover" sizes="400px" unoptimized />
@@ -1477,13 +1516,26 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
             {/* Video File Upload */}
             <div className="space-y-1.5">
               <Label className="text-xs">أو ارفع ملف فيديو</Label>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input ref={videoFileRef} type="file" accept="video/*" className="hidden" onChange={(e) => { handleVideoFilePick(e.target.files?.[0] || null) }} />
                 <Button type="button" variant="outline" size="sm" onClick={() => videoFileRef.current?.click()} disabled={thumbCapturing}>
                   {thumbCapturing ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Upload className="h-4 w-4 ml-1" />}{formFile ? formFile.name : 'اختر فيديو'}
                 </Button>
                 {formFile && <span className="text-xs text-muted-foreground">{(formFile.size / 1024 / 1024).toFixed(1)} MB</span>}
+                {/* (MG-3) الدقة الحقيقية للملف — بتظهر فورًا بعد الاختيار */}
+                {formFileRes && formFileRes.h > 0 && (
+                  <Badge variant="secondary" className={"text-xs font-bold " + (formFileRes.h >= 720 ? "text-emerald-600" : "text-amber-600")}>
+                    الدقة: {formFileRes.w}×{formFileRes.h} ({formFileRes.h}p){formFileRes.h >= 720 ? " ✓" : " ⚠"}
+                  </Badge>
+                )}
               </div>
+              {formFileRes && formFileRes.h > 0 && formFileRes.h < 720 && (
+                <p className="text-[11px] leading-relaxed rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2">
+                  ⚠️ الفيديو ده دقته {formFileRes.h}p بس — هيظهر على المنصة بنفس الدقة دي.
+                  المنصة مش بتقلل الجودة أبدًا — الجودة اللي بتظهر هي الجودة الموجودة في الملف نفسه.
+                  لو عايز جودة أعلى: اطلع الفيديو من برنامج التسجيل/المونتاج بإعداد 1080p وارفعه تاني.
+                </p>
+              )}
               <p className="text-[10px] text-muted-foreground">لو الفيديو ملف مرفوع، هتاخد صورة مصغرة أوتوماتيك من وسط الفيديو نفسه — وتقدر تغيرها من خانة الصورة المصغرة لو عايز</p>
             </div>
 

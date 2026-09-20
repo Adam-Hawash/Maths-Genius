@@ -355,10 +355,14 @@ const PLAYER_PAGE = `<!doctype html>
   .wmNm .ph{direction:ltr;unicode-bidi:plaintext;font-weight:700;opacity:.85}
   /* لوجو المنصة في نص الفيديو — نص أبيض بظل قوي يبان على أي مشهد */
   .wmLogo{position:absolute;z-index:40;pointer-events:none;transform:translate(-50%,-50%);
-    font-weight:900;direction:ltr;white-space:nowrap;user-select:none;
+    font-weight:900;direction:ltr;white-space:nowrap;user-select:none;text-align:center;
     font-family:system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:.5px;
     color:rgba(255,255,255,.95);
     text-shadow:0 2px 14px rgba(0,0,0,.55),0 0 3px rgba(0,0,0,.45)}
+  /* (MG-3) اللوجو الوسطاني ممكن يظهر عليه اسم الطالب ورقمه تحت — «زي الأول» */
+  .wmLogo .in{display:block}
+  .wmLogo .sub{display:block;font-size:.4em;font-weight:800;letter-spacing:0;margin-top:.22em;opacity:.92;direction:rtl;unicode-bidi:plaintext}
+  .wmLogo .sub .ph{direction:ltr;unicode-bidi:plaintext}
   .wmLogo.s-sm{font-size:clamp(16px,2.5vw,34px)}
   .wmLogo.s-md{font-size:clamp(24px,4vw,56px)}
   .wmLogo.s-lg{font-size:clamp(36px,5.6vw,80px)}
@@ -486,7 +490,7 @@ const PLAYER_PAGE = `<!doctype html>
   #mgYtMark{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;pointer-events:none;
     margin-right:2px;opacity:.95;direction:ltr}
   #mgYtMark svg{filter:drop-shadow(0 1px 2px rgba(0,0,0,.7));display:block}
-  #mgYtMark .lbl{font-size:12px;font-weight:800;letter-spacing:.4px;color:#fff;
+  #mgYtMark .lbl{font-size:var(--ytLbl,14px);font-weight:800;letter-spacing:.4px;color:#fff;
     text-shadow:0 1px 2px rgba(0,0,0,.6);font-family:system-ui,sans-serif}
   @media(max-width:520px){#mgYtMark .lbl{display:none}}
   /* ===== (المشغل العادي 2026-و) الوقت + زرار إعدادات الجودة ⚙ + القايمة =====
@@ -582,10 +586,11 @@ var wmPhone = String(CFG.wm.phone || '').trim();
      دي الأساس الجديد حتى قبل ما صاحب المنصة يفتح لوحة الإعدادات */
 var PCFALLBACK = {
   barHeightMobile: 40, barHeightDesktop: 46, topShieldHeight: 0,
-  qrTL: { on: true, x: 6, y: 6, size: 'md', opacity: 0.26 },
-  qrBR: { on: true, x: 94, y: 84, size: 'md', opacity: 0.26 },
+  qrTL: { on: true, x: 6, y: 6, size: 'md', opacity: 0.26, blink: { on: false, show: 15, hide: 15 } },
+  qrBR: { on: true, x: 94, y: 84, size: 'md', opacity: 0.26, blink: { on: false, show: 15, hide: 15 } },
   nameItems: [],
-  centerLogo: { on: false, x: 50, y: 46, size: 'lg', opacity: 0.14 }
+  centerLogo: { on: false, x: 50, y: 46, size: 'lg', opacity: 0.14, content: 'both', blink: { on: false, show: 10, hide: 20 } },
+  ytMark: { on: true, size: 'lg' }
 };
 
 var PC = (function () {
@@ -593,20 +598,30 @@ var PC = (function () {
   function num(v, d, lo, hi) { var n = Number(v); if (!isFinite(n)) return d; return Math.min(hi, Math.max(lo, n)); }
   function size(v, d) { return (v === 'sm' || v === 'md' || v === 'lg') ? v : d; }
   function op(v, d, lo, hi) { var n = Number(v); if (!isFinite(n)) return d; return Math.min(hi, Math.max(lo, n)); }
+  /* (MG-3) دورة الظهور/الاختفاء — طلب المستر: «أتحكم في المدة بتاعة اختفائها» */
+  function blink(v, d) {
+    var s = (v && typeof v === 'object') ? v : {};
+    return { on: s.on === true, show: num(s.show, d.show, 1, 120), hide: num(s.hide, d.hide, 0, 120) };
+  }
   function qr(v, d) {
     var s = (v && typeof v === 'object') ? v : {};
-    return { on: s.on !== false, x: num(s.x, d.x, 0, 100), y: num(s.y, d.y, 0, 100), size: size(s.size, d.size), opacity: op(s.opacity, d.opacity, 0.05, 0.6) };
+    return { on: s.on !== false, x: num(s.x, d.x, 0, 100), y: num(s.y, d.y, 0, 100), size: size(s.size, d.size), opacity: op(s.opacity, d.opacity, 0.05, 0.6), blink: blink(s.blink, d.blink) };
   }
   function logo(v, d) {
     var s = (v && typeof v === 'object') ? v : {};
-    return { on: s.on === true, x: num(s.x, d.x, 0, 100), y: num(s.y, d.y, 0, 100), size: size(s.size, d.size), opacity: op(s.opacity, d.opacity, 0.03, 0.4) };
+    var content = (s.content === 'brand' || s.content === 'name' || s.content === 'both') ? s.content : d.content;
+    return { on: s.on === true, x: num(s.x, d.x, 0, 100), y: num(s.y, d.y, 0, 100), size: size(s.size, d.size), opacity: op(s.opacity, d.opacity, 0.03, 0.4), content: content, blink: blink(s.blink, d.blink) };
+  }
+  function ytm(v, d) {
+    var s = (v && typeof v === 'object') ? v : {};
+    return { on: s.on !== false, size: size(s.size, d.size) };
   }
   var items = [];
   try {
     var arr = Array.isArray(c.nameItems) ? c.nameItems : [];
     for (var i = 0; i < arr.length && items.length < 6; i++) {
       var it = arr[i]; if (!it || typeof it !== 'object') continue;
-      items.push({ id: String(it.id || ('nm-' + i)), x: num(it.x, 50, 0, 100), y: num(it.y, 10, 0, 100), size: size(it.size, 'md'), opacity: op(it.opacity, 0.3, 0.05, 0.6) });
+      items.push({ id: String(it.id || ('nm-' + i)), x: num(it.x, 50, 0, 100), y: num(it.y, 10, 0, 100), size: size(it.size, 'md'), opacity: op(it.opacity, 0.3, 0.05, 0.6), blink: blink(it.blink, { on: false, show: 15, hide: 15 }) });
     }
   } catch (e) { items = []; }
   return {
@@ -615,7 +630,8 @@ var PC = (function () {
     topShieldHeight: num(c.topShieldHeight, fb.topShieldHeight, 0, 96),
     qrTL: qr(c.qrTL, fb.qrTL), qrBR: qr(c.qrBR, fb.qrBR),
     nameItems: items,
-    centerLogo: logo(c.centerLogo, fb.centerLogo)
+    centerLogo: logo(c.centerLogo, fb.centerLogo),
+    ytMark: ytm(c.ytMark, fb.ytMark)
   };
 })();
 
@@ -636,14 +652,38 @@ function wmCardHtml(){
   return '<div class="in">' + qr + '<span class="nm">' + esc(wmName || wmPhone) + '</span>' +
     ((wmName && wmPhone) ? '<span class="sep">•</span><span class="ph">' + esc(wmPhone) + '</span>' : '') + '</div>';
 }
-/* موضع أي عنصر ووترمارك من الكونفج: مركزه على x%/y% + شفافيته */
+/* موضع أي عنصر ووترمارك من الكونفج: مركزه على x%/y% + شفافيته
+   (MG-3) + تسجيله في محرك الظهور/الاختفاء لو عليه دورة blink */
+var blinkReg = [];
+function regBlink(el, it){
+  try{
+    var b = it && it.blink;
+    if(!b || !b.on || !(b.hide > 0)) return;
+    blinkReg.push({ el: el, show: Math.max(1, b.show || 10), hide: Math.max(1, b.hide || 20), opacity: it.opacity, t: 0, hidden: false });
+  }catch(e){}
+}
+/* تيكتر الدورة — بيتقدم بس وقت التشغيل (زي دورة الووترمارك القديمة بالظبط) */
+var wmPlaying = false;
+setInterval(function(){
+  if(!wmPlaying || !blinkReg.length) return;
+  for(var i = 0; i < blinkReg.length; i++){
+    var b = blinkReg[i];
+    if(!b.el || !b.el.parentNode) continue;
+    b.t++;
+    if(!b.hidden && b.t >= b.show){ b.hidden = true; b.t = 0; b.el.style.opacity = '0'; }
+    else if(b.hidden && b.t >= b.hide){ b.hidden = false; b.t = 0; b.el.style.opacity = b.opacity; }
+  }
+}, 1000);
 function placeWm(el, it){
   el.style.left = it.x + '%';
   el.style.top = it.y + '%';
   el.style.opacity = it.opacity;
+  el.style.transition = 'opacity .8s ease';
+  regBlink(el, it);
 }
 function buildWm(){
   if(!CFG.wm.enabled) return;
+  blinkReg = [];
   var old = document.getElementById('wm');
   if(old) old.parentNode.removeChild(old);
   var layer = document.createElement('div');
@@ -665,10 +705,21 @@ function buildWm(){
       placeWm(nm, it); layer.appendChild(nm);
     }
   }
-  /* 4) لوجو المنصة في النص («Math Genius») */
+  /* 4) لوجو المنصة في النص — (MG-3) المحتوى من الكونفج:
+     brand = «Math Genius» بس | name = اسم الطالب ورقمه | both = الاتنين (زي الأول) */
   if(PC.centerLogo.on){
     var lg = document.createElement('div'); lg.className = 'wmLogo s-' + PC.centerLogo.size;
-    lg.textContent = 'Math Genius';
+    var lgContent = PC.centerLogo.content || 'both';
+    if(lgContent !== 'brand' && hasStudent){
+      var lgNm = esc(wmName || wmPhone) + ((wmName && wmPhone) ? ' <span class="ph">• ' + esc(wmPhone) + '</span>' : '');
+      if(lgContent === 'name'){
+        lg.innerHTML = '<span class="in">' + lgNm + '</span>';
+      } else {
+        lg.innerHTML = '<span class="in">Math Genius</span><span class="sub">' + lgNm + '</span>';
+      }
+    } else {
+      lg.textContent = 'Math Genius';
+    }
     placeWm(lg, PC.centerLogo); layer.appendChild(lg);
   }
   wrap.appendChild(layer);
@@ -1134,7 +1185,7 @@ function startWithWatchdog(){
 function ytState(){ try{ return playerApi && playerApi.getPlayerState ? playerApi.getPlayerState() : -1; }catch(e){ return -1; } }
 /* دورة الووترمارك الكبيرة (10 ظاهرة / 20 مخفية) بتشتغل وقت التشغيل بس —
    عند الإيقاف بتتوقف مؤقتًا ومتكملش (طلب المستر 2026-ل) */
-function wmRun(onoff){ try{ var w=document.getElementById('wmBig'); if(w) w.style.animationPlayState = onoff ? 'running' : 'paused'; }catch(e){} }
+function wmRun(onoff){ wmPlaying = !!onoff; try{ var w=document.getElementById('wmBig'); if(w) w.style.animationPlayState = onoff ? 'running' : 'paused'; }catch(e){} }
 
 /* ===== إخفاء شريط التحكم تلقائيًا (2026-و3 — طلب المستر الحرفي:
    «الشريط اللي تحت عاوزها تختفي أول ما أفتح الفيديو عادي، ولما أوقفه تظهر،
@@ -1255,7 +1306,12 @@ function mgUpdateProgress(){
    ديكور بس (pointer-events:none — مفيش لينك خالص، الفيديو من المنصة بس) */
 function mgYtMarkEl(){
   var m = document.createElement('span'); m.id = 'mgYtMark'; m.setAttribute('aria-hidden','true');
-  m.innerHTML = '<svg width="27" height="19" viewBox="0 0 28 20"><rect x="0.5" y="0.5" width="27" height="19" rx="5" fill="#FF0000"/><rect x="0.5" y="0.5" width="27" height="19" rx="5" fill="none" stroke="rgba(255,255,255,.35)"/><path d="M11.5 5.8v8.4L19.2 10z" fill="#fff"/></svg>' +
+  /* (MG-3) الحجم من الكونفج — صغير/متوسط/كبير — والمستر طلبها كبيرة (افتراضي كبير) */
+  var ysz = (PC.ytMark && PC.ytMark.size) || 'lg';
+  var dims = ysz === 'sm' ? { w: 21, h: 15, lbl: 10 } : ysz === 'md' ? { w: 27, h: 19, lbl: 12 } : { w: 34, h: 24, lbl: 14 };
+  if(PC.ytMark && PC.ytMark.on === false){ m.style.display = 'none'; return m; }
+  try{ m.style.setProperty('--ytLbl', dims.lbl + 'px'); }catch(e){}
+  m.innerHTML = '<svg width="' + dims.w + '" height="' + dims.h + '" viewBox="0 0 28 20"><rect x="0.5" y="0.5" width="27" height="19" rx="5" fill="#FF0000"/><rect x="0.5" y="0.5" width="27" height="19" rx="5" fill="none" stroke="rgba(255,255,255,.35)"/><path d="M11.5 5.8v8.4L19.2 10z" fill="#fff"/></svg>' +
     '<span class="lbl">YouTube</span>';
   return m;
 }
@@ -1435,6 +1491,11 @@ function ytRenderQMenu(){
     html += '<div class="qi' + (ytQWanted === q ? ' on' : '') + '" data-q="' + q + '"><span>' + ytQName(q) + '</span><span class="ck">' + (ytQWanted === q ? '✓' : '') + '</span></div>';
   }
   html += '<div class="qNote">الجودة بتُطلب تلقائيًا بـ 480p على الأقل — ويوتيوب بيرفعها أعلى لو النت يسمح. ولو اخترت مستوى بنفسك هنطلب ونتحقق إنه ثبت بجد</div>';
+  /* (MG-3) لو أعلى جودة في الفيديو نفسه ضعيفة — توضيح صادق + نصيحة معالجة HD */
+  var topQ = sorted.length ? sorted[0] : '';
+  if(topQ && (YT_Q_ORDER[topQ] || 0) <= (YT_Q_ORDER.large || 0)){
+    html += '<div class="qNote" style="color:rgba(252,211,77,.95)">أعلى جودة متاحة في الفيديو ده: ' + ytQName(topQ) + ' — دي حدود الملف الأصلي على يوتيوب ومفيش مشغل يقدر يخترع بكسلات أعلى. ولو الفيديو لسه مرفوع حديثًا على يوتيوب، معالجة HD بتاخد من نص ساعة لساعات — استنى شوية وارجع افتحه تاني</div>';
+  }
   m.innerHTML = html;
   var items = m.getElementsByClassName('qi');
   for(var j=0;j<items.length;j++){
