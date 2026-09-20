@@ -10,14 +10,15 @@
 //   بنفسه + مسح دخول طالب + إعادة فتح/مسح من التاريخ.
 // ============================================================
 
-import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, Flame, Loader2, RotateCcw, Swords, Trash2, Trophy, XCircle } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { CheckCircle2, Database, FileText, Film, Flame, Loader2, RotateCcw, Swords, Timer, Trash2, Trophy, Upload, XCircle, Youtube } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { chunkedUpload } from '@/lib/chunked-upload'
 
 const LETTERS = ['أ', 'ب', 'ج', 'د']
 const MEDALS = ['🥇', '🥈', '🥉']
@@ -33,6 +34,9 @@ interface Challenge {
   closesAt: string | null
   createdAt: string
   correctIndex?: number
+  /* (2026-و68-إضافي) فيديو المستر — بيرجع من السيرفر بس لو موجود فعلًا */
+  videoUrl?: string
+  videoType?: string
 }
 
 interface LeaderEntry {
@@ -76,6 +80,160 @@ export function TeacherChallengePanel() {
   const [fCorrect, setFCorrect] = useState(0)
   const [fPoints, setFPoints] = useState('30')
   const [fDur, setFDur] = useState('0')
+
+  /* (2026-و68-إضافي) فيديو المستر — يوتيوب أو ملف مرفوع (نفس الميكانيزم
+     بتاع رفع فيديوهات المعرض/الدرس: chunkedUpload → /api/files/<id>) */
+  const [fYoutube, setFYoutube] = useState('')
+  const [fVideoFile, setFVideoFile] = useState<{ url: string; name: string } | null>(null)
+  const [fVideoUploading, setFVideoUploading] = useState(false)
+  const fVideoInputRef = useRef<HTMLInputElement>(null)
+
+  /* اختيار ملف فيديو — رفع فوري بالأجزاء (2MB) زي باقي المنصة */
+  const pickChallengeVideo = async function (file: File | null) {
+    if (!file) return
+    if (file.type && file.type.indexOf('video/') !== 0) {
+      toast.error('لازم ملف فيديو (MP4/MOV…)')
+      return
+    }
+    if (file.size > 150 * 1024 * 1024) {
+      toast.error('الفيديو كبير أوي (الحد 150MB) — ارفعه على يوتيوب والصق اللينك')
+      return
+    }
+    setFVideoUploading(true)
+    try {
+      const up = await chunkedUpload(file, 'videos', undefined, function () { /* التقديم داخلي */ })
+      setFVideoFile({ url: String(up.filePath || ''), name: file.name })
+      setFYoutube('')
+      toast.success('الفيديو اترفع ✅ — متسيبش لينك يوتيوب في نفس الوقت')
+    } catch (err: any) {
+      toast.error(String((err && err.message) || 'فشل رفع الفيديو — جرب تاني'))
+    } finally {
+      setFVideoUploading(false)
+      if (fVideoInputRef.current) fVideoInputRef.current.value = ''
+    }
+  }
+
+  /* قرارات الفيديو النهائية لفورم الإنشاء أو الربط — حاجة واحدة بس */
+  const resolveVideoPayload = function (): { videoUrl: string; videoType: string } | { error: string } {
+    const yt = fYoutube.trim()
+    if (yt && fVideoFile) return { error: 'اختار حاجة واحدة — لينك يوتيوب أو ملف مرفوع (امسح واحد منهم)' }
+    if (yt) return { videoUrl: yt, videoType: 'youtube' }
+    if (fVideoFile) return { videoUrl: fVideoFile.url, videoType: 'file' }
+    return { videoUrl: '', videoType: '' }
+  }
+
+  const clearVideoFields = function () {
+    setFYoutube('')
+    setFVideoFile(null)
+  }
+
+  /* (2026-و68) بنك أسئلة التحدي + إعدادات الفلاش كاردز */
+  const [bankCount, setBankCount] = useState(0)
+  const [bankQs, setBankQs] = useState<Array<{ id: string; fileName: string; question: string; options: string[]; correctIndex: number; active: boolean }>>([])
+  const [bankLoading, setBankLoading] = useState(true)
+  const [bankUploading, setBankUploading] = useState(false)
+  const [bankOpen, setBankOpen] = useState(false)
+  const bankFileRef = useRef<HTMLInputElement>(null)
+  const [fcSeconds, setFcSeconds] = useState('15')
+  const [fcSaving, setFcSaving] = useState(false)
+  const [bankBusy, setBankBusy] = useState('')
+
+  const loadBank = useCallback(async function () {
+    try {
+      const res = await fetch('/api/arena/challenges/bank?mode=list')
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        setBankQs((data.questions || []).slice(0, 100))
+        setBankCount(Number(data.count || 0))
+      }
+    } catch (e) { /* شبكة */ } finally {
+      setBankLoading(false)
+    }
+  }, [])
+
+  const loadFcSeconds = useCallback(async function () {
+    try {
+      const res = await fetch('/api/arena/flashcards?mode=settings')
+      const data = await res.json()
+      if (res.ok && data.ok) setFcSeconds(String(Number(data.seconds) || 15))
+    } catch (e) { /* شبكة */ }
+  }, [])
+
+  useEffect(function () {
+    loadBank()
+    loadFcSeconds()
+  }, [loadBank, loadFcSeconds])
+
+  /* رفع ملف للبنك — PDF أو صورة → استخراج إنجليزي */
+  const uploadBankFile = async function (f: File | null) {
+    if (!f) return
+    setBankUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      const res = await fetch('/api/arena/challenges/bank', { method: 'POST', body: fd })
+      const data = await res.json().catch(function () { return null })
+      if (res.ok && data && data.ok) {
+        toast.success('اتضاف ' + String(data.added || 0) + ' سؤال من «' + String(data.fileName || f.name) + '» — البنك بقى ' + String(data.bankCount || 0) + ' سؤال 🎯')
+        await loadBank()
+      } else {
+        toast.error(String((data && data.error) || 'فشل رفع الملف — جرب تاني'))
+      }
+    } catch (e) {
+      toast.error('مشكلة في الاتصال — جرب تاني')
+    } finally {
+      setBankUploading(false)
+      if (bankFileRef.current) bankFileRef.current.value = ''
+    }
+  }
+
+  const bankAction = async function (payload: Record<string, unknown>, msg: string) {
+    setBankBusy(String(payload.id || payload.action || 'x'))
+    try {
+      const res = await fetch('/api/arena/challenges/bank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(function () { return null })
+      if (res.ok && data && data.ok) {
+        toast.success(msg)
+        await loadBank()
+      } else {
+        toast.error(String((data && data.error) || 'حصلت مشكلة'))
+      }
+    } catch (e) {
+      toast.error('مشكلة في الاتصال')
+    } finally {
+      setBankBusy('')
+    }
+  }
+
+  const saveFcSeconds = async function () {
+    const n = Math.round(Number(fcSeconds) || 0)
+    if (!(n >= 5 && n <= 90)) {
+      toast.error('المدة لازم تكون من 5 لـ 90 ثانية')
+      return
+    }
+    setFcSaving(true)
+    try {
+      const res = await fetch('/api/arena/flashcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setTime', seconds: n }),
+      })
+      const data = await res.json().catch(function () { return null })
+      if (res.ok && data && data.ok) {
+        toast.success('بقت مدة الفلاش كاردز ' + String(n) + ' ثانية ⚡')
+      } else {
+        toast.error(String((data && data.error) || 'حصلت مشكلة'))
+      }
+    } catch (e) {
+      toast.error('مشكلة في الاتصال')
+    } finally {
+      setFcSaving(false)
+    }
+  }
 
   /* مفتاح العملية الشغالة (create | close | join | entry:{rank} | reopen:{id} | del:{id}) */
   const [busy, setBusy] = useState('')
@@ -152,6 +310,12 @@ export function TeacherChallengePanel() {
       if (i === fCorrect) payloadCorrect = payloadOpts.length
       payloadOpts.push(filled[i])
     }
+    // (2026-و68-إضافي) فيديو المستر — يوتيوب أو ملف مرفوع (حاجة واحدة بس)
+    const video = resolveVideoPayload()
+    if ('error' in video) {
+      toast.error(video.error)
+      return
+    }
     setBusy('create')
     const resp = await post(
       {
@@ -162,6 +326,8 @@ export function TeacherChallengePanel() {
         correctIndex: payloadCorrect,
         points: Number(fPoints) || 30,
         durationMin: Number(fDur) || 0,
+        videoUrl: video.videoUrl || undefined,
+        videoType: video.videoType || undefined,
       },
       'نزل التحدي! التحدي القديم اتقفل تلقائي 🎯'
     )
@@ -181,6 +347,7 @@ export function TeacherChallengePanel() {
       setFCorrect(0)
       setFPoints('30')
       setFDur('0')
+      clearVideoFields()
     }
     setBusy('')
   }
@@ -190,6 +357,29 @@ export function TeacherChallengePanel() {
     if (!active) return
     setBusy('close')
     await post({ action: 'close', id: active.id }, 'اتقفل التحدي ✋')
+    setBusy('')
+  }
+
+  /* ===== (2026-و68-إضافي) ربط/تحديث/شيل فيديو التحدي الشغلان ===== */
+  const applyActiveVideo = async function () {
+    if (!active) return
+    const video = resolveVideoPayload()
+    if ('error' in video) {
+      toast.error(video.error)
+      return
+    }
+    setBusy('setVideo')
+    await post(
+      { action: 'setVideo', id: active.id, videoUrl: video.videoUrl, videoType: video.videoType },
+      video.videoUrl ? 'الفيديو اتربط بالتحدي 🎬 — هيثبت فوق السؤال عند الطلاب' : 'الفيديو اتشال من التحدي'
+    )
+    setBusy('')
+  }
+
+  const removeActiveVideo = async function () {
+    if (!active) return
+    setBusy('setVideo')
+    await post({ action: 'setVideo', id: active.id, videoUrl: '', videoType: '' }, 'الفيديو اتشال من التحدي')
     setBusy('')
   }
 
@@ -249,6 +439,154 @@ export function TeacherChallengePanel() {
 
   return (
     <div className="space-y-6" dir="rtl">
+      {/* ============ (2026-و68) بنك أسئلة التحدي + الفلاش كاردز ============ */}
+      <Card className="border-violet-300 dark:border-violet-800">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Database className="h-5 w-5 text-violet-600" />
+            🎯 بنك أسئلة التحدي — من ملفاتك (بالإنجليزي)
+            <Badge variant="outline" className="font-black" dir="ltr">{bankCount}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            ارفع ملف (PDF أو صورة) فيه أسئلة — المنصة هتستخرج الأسئلة <b>بالإنجليزي</b> تلقائيًا،
+            والطالب أول ما يخش «تحدي المستر» هياخد <b>10 أسئلة عشوائية من كل الملفات</b> كل جولة.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={bankFileRef}
+              type="file"
+              accept=".pdf,image/*"
+              className="hidden"
+              onChange={function (e) { uploadBankFile(e.target.files && e.target.files[0]) }}
+              aria-hidden="true"
+              tabIndex={-1}
+            />
+            <Button
+              type="button"
+              onClick={function () { bankFileRef.current?.click() }}
+              disabled={bankUploading}
+              className="min-h-11 gap-2 bg-gradient-to-l from-violet-600 to-fuchsia-600 font-black text-white"
+            >
+              {bankUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {bankUploading ? 'بيستخرج الأسئلة… (من 10 لـ 60 ث)' : 'ارفع ملف أسئلة (PDF / صورة)'}
+            </Button>
+            {bankCount > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={function () { setBankOpen(function (v) { return !v }) }}
+                className="min-h-11 gap-2 font-bold"
+              >
+                <FileText className="h-4 w-4" />
+                {bankOpen ? 'اخفي الأسئلة' : 'شوف الأسئلة'}
+              </Button>
+            ) : null}
+            {bankCount > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={bankBusy === 'clearAll'}
+                onClick={function () { if (window.confirm('متأكد إنك عايز تمسح كل أسئلة البنك؟')) bankAction({ action: 'clearAll' }, 'البنك اتمسح خلاص') }}
+                className="min-h-11 gap-1.5 text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400"
+              >
+                {bankBusy === 'clearAll' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                امسح الكل
+              </Button>
+            ) : null}
+          </div>
+
+          {bankOpen && bankCount > 0 ? (
+            <div className="max-h-96 space-y-2 overflow-y-auto rounded-xl border bg-muted/30 p-2">
+              {bankLoading ? (
+                <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> بنحمّل…</p>
+              ) : (
+                bankQs.map(function (q) {
+                  return (
+                    <div key={q.id} className="rounded-lg border bg-card p-3">
+                      <div className="flex items-start gap-2">
+                        <Badge variant="outline" className="shrink-0 text-[10px]" dir="ltr">{q.options[q.correctIndex] || '—'}</Badge>
+                        <p dir="ltr" className="min-w-0 flex-1 text-left text-sm font-bold leading-relaxed break-words">{q.question}</p>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            title={q.active ? 'إخفاء من الطالب' : 'تفعيل تاني'}
+                            onClick={function () { bankAction({ action: 'toggle', id: q.id, active: !q.active }, q.active ? 'اتخفى السؤال' : 'اتفع السؤال') }}
+                            className={'flex h-7 w-7 items-center justify-center rounded-full ' + (q.active ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-stone-500/15 text-stone-500')}
+                          >
+                            {q.active ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                          </button>
+                          <button
+                            type="button"
+                            title="مسح السؤال"
+                            onClick={function () { bankAction({ action: 'delete', id: q.id }, 'اتمسح السؤال') }}
+                            className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/15 text-red-600 dark:text-red-400"
+                          >
+                            {bankBusy === q.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+                      <p className="mt-1 text-[10px] text-muted-foreground" dir="ltr">📎 {q.fileName || '—'}</p>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card className="border-amber-300 dark:border-amber-800">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Timer className="h-5 w-5 text-amber-600" />
+            ⚡ فلاش كاردز — مدة البطاقة
+            <Badge variant="outline" className="font-black" dir="ltr">{fcSeconds}s</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            حدد كام ثانية للطالب يشوف كل بطاقة في تحدي الفلاش كاردز (من 5 لـ 90 — الافتراضي 15 ثانية).
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="number"
+              min={5}
+              max={90}
+              value={fcSeconds}
+              onChange={function (e) { setFcSeconds(e.target.value) }}
+              className="h-11 w-28 text-center font-black"
+              dir="ltr"
+            />
+            <Button
+              type="button"
+              onClick={saveFcSeconds}
+              disabled={fcSaving}
+              className="min-h-11 gap-2 bg-gradient-to-l from-amber-500 to-orange-600 font-black text-white"
+            >
+              {fcSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              احفظ المدة
+            </Button>
+            <div className="flex items-center gap-1.5">
+              {[10, 15, 20, 30].map(function (s) {
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={function () { setFcSeconds(String(s)) }}
+                    className={'h-9 rounded-full border px-3 text-xs font-black transition-colors ' + (Number(fcSeconds) === s ? 'border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'text-muted-foreground hover:border-amber-400')}
+                    dir="ltr"
+                  >
+                    {s}s
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ============ الفورم: نزّل تحدي جديد ============ */}
       <Card>
         <CardHeader className="pb-3">
@@ -326,6 +664,58 @@ export function TeacherChallengePanel() {
               <p className="mt-1 text-[11px] text-muted-foreground">0 = مفتوح لحد ما تقفله بنفسك</p>
             </div>
           </div>
+
+          {/* ===== (2026-و68-إضافي) فيديو المستر — يوتيوب أو ملف مرفوع ===== */}
+          <div className="rounded-xl border bg-muted/30 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="flex items-center gap-1.5 text-sm font-bold">
+                <Youtube className="h-4 w-4 text-red-600" />
+                فيديو التحدي (اختياري)
+              </label>
+              {fVideoFile ? (
+                <Badge variant="outline" className="text-[10px] font-bold" dir="ltr">📎 {fVideoFile.name.slice(0, 28)}</Badge>
+              ) : null}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              صوّر فيديو وابعته للطلاب: الصق لينك يوتيوب <b>أو</b> ارفع ملف فيديو — هيظهر فوق السؤال في تحدي المستر.
+            </p>
+            <Input
+              value={fYoutube}
+              onChange={function (e) { setFYoutube(e.target.value); if (e.target.value.trim()) setFVideoFile(null) }}
+              placeholder="https://www.youtube.com/watch?v=..."
+              dir="ltr"
+              className="text-left text-sm"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={fVideoInputRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={function (e) { pickChallengeVideo(e.target.files && e.target.files[0]) }}
+                aria-hidden="true"
+                tabIndex={-1}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={fVideoUploading}
+                onClick={function () { fVideoInputRef.current?.click() }}
+                className="min-h-9 gap-1.5"
+              >
+                {fVideoUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Film className="h-3.5 w-3.5" />}
+                {fVideoUploading ? 'بينرفع…' : 'ارفع ملف فيديو'}
+              </Button>
+              {fYoutube.trim() || fVideoFile ? (
+                <Button type="button" variant="ghost" size="sm" onClick={clearVideoFields} className="min-h-9 gap-1.5 text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400">
+                  <Trash2 className="h-3.5 w-3.5" />
+                  شيل الفيديو
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
           <Button
             onClick={create}
             disabled={busy === 'create'}
@@ -360,6 +750,87 @@ export function TeacherChallengePanel() {
           </div>
           <CardContent className="space-y-3 pt-4">
             <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed">{active.question}</p>
+
+            {/* ===== (2026-و68-إضافي) فيديو التحدي الشغلان — ربط/تحديث/شيل ===== */}
+            <div className="rounded-xl border bg-muted/30 p-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-1.5 text-sm font-bold">
+                  <Youtube className="h-4 w-4 text-red-600" />
+                  فيديو التحدي
+                </label>
+                {active.videoUrl ? (
+                  <Badge className="border-0 bg-emerald-500/15 text-[10px] font-black text-emerald-700 dark:text-emerald-300">متصل بالتحدي ✅</Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] font-bold text-muted-foreground">مفيش فيديو</Badge>
+                )}
+              </div>
+              {active.videoUrl && active.videoType === 'youtube' ? (
+                <div className="overflow-hidden rounded-lg border bg-black" dir="ltr">
+                  <iframe
+                    src={'https://www.youtube.com/embed/' + (active.videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/))([\w-]{11})/)?.[1] || '') + '?modestbranding=1&rel=0&playsinline=1'}
+                    title="فيديو التحدي"
+                    className="aspect-video w-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                </div>
+              ) : null}
+              {active.videoUrl && active.videoType === 'file' ? (
+                <video src={active.videoUrl} controls playsInline preload="metadata" className="w-full rounded-lg border bg-black" />
+              ) : null}
+              <Input
+                value={fYoutube}
+                onChange={function (e) { setFYoutube(e.target.value); if (e.target.value.trim()) setFVideoFile(null) }}
+                placeholder="لينك يوتيوب جديد (اختياري)…"
+                dir="ltr"
+                className="text-left text-sm"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={fVideoInputRef}
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={function (e) { pickChallengeVideo(e.target.files && e.target.files[0]) }}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={fVideoUploading}
+                  onClick={function () { fVideoInputRef.current?.click() }}
+                  className="min-h-9 gap-1.5"
+                >
+                  {fVideoUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Film className="h-3.5 w-3.5" />}
+                  {fVideoUploading ? 'بينرفع…' : 'ارفع ملف فيديو'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busy === 'setVideo' || (!fYoutube.trim() && !fVideoFile)}
+                  onClick={applyActiveVideo}
+                  className="min-h-9 gap-1.5 bg-red-600 text-white hover:bg-red-700"
+                >
+                  {busy === 'setVideo' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Youtube className="h-3.5 w-3.5" />}
+                  {active.videoUrl ? 'حدّث الفيديو' : 'اربط الفيديو بالتحدي'}
+                </Button>
+                {active.videoUrl ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy === 'setVideo'}
+                    onClick={removeActiveVideo}
+                    className="min-h-9 gap-1.5 text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    شيل الفيديو من التحدي
+                  </Button>
+                ) : null}
+              </div>
+            </div>
 
             {/* الاختيارات — الصح متعلّم بالأخضر للأدمن */}
             <div className="space-y-1.5">

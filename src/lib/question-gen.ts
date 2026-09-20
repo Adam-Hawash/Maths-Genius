@@ -8,8 +8,9 @@
 //   • «تحدي الفلاش كاردز» — بطاقات سريعة بنفس المحرك
 // القاعدة الذهبية: كل إجابة **محسوبة بالكود** (مش مخزنة) → الدقة 100%
 // دايمًا، والأرقام بتتغير كل توليد → «10 أسئلة فريدة بأرقام وخدع مختلفة».
-// المحتوى: منهج مصري (جبر/كسور/نِسب/هندسة/فيثاغورس/أسس/إحصاء) بأسلوب
-// عامي تعليمي واضح زي شرح المستر بالظبط.
+// (2026-و68) اللغة: كل نصوص الأسئلة/الحلول/الخدع **بالإنجليزي** — طلب
+// المستر الحرفي: «احنا متفقين إنها بالإنجليزي في الـ Math وبأسلوب الـ
+// Math اللي إحنا متعودين عليه» — الحسابات نفسها متلمستش خالص.
 // ============================================================
 
 export interface PracticeQuestion {
@@ -19,7 +20,7 @@ export interface PracticeQuestion {
   steps: string[]
   trick: string
   topic: string
-  difficulty: string // سهل | متوسط | صعب
+  difficulty: string // Easy | Medium | Hard
 }
 
 export interface BattleQuestion {
@@ -93,15 +94,15 @@ function genLinear(hard: boolean): GenQ {
   var c = a * x + b
   var bTxt = b > 0 ? ('+ ' + b) : ('− ' + Math.abs(b))
   return {
-    text: 'لو ' + a + 'x ' + bTxt + ' = ' + c + ' ، قيمة x = ؟',
+    text: 'Solve for x:  ' + a + 'x ' + bTxt + ' = ' + c,
     answer: String(x),
     answerNum: x,
     steps: [
-      'انقل ' + (b > 0 ? b : ('− ' + Math.abs(b))) + ' للطرف التاني: ' + a + 'x = ' + (c - b),
-      'اقسم الطرفين على ' + a + ': x = ' + (c - b) + ' ÷ ' + a + ' = ' + x,
+      'Move ' + (b > 0 ? b : ('− ' + Math.abs(b))) + ' to the other side: ' + a + 'x = ' + (c - b),
+      'Divide both sides by ' + a + ': x = ' + (c - b) + ' ÷ ' + a + ' = ' + x,
     ],
-    trick: 'في معادلة درجة أولى: خلي المجهول لوحده في طرف، والأرقام في الطرف التاني — وبس.',
-    topic: 'معادلات الدرجة الأولى',
+    trick: 'In a linear equation: keep the unknown alone on one side and the numbers on the other — that is all.',
+    topic: 'Linear Equations',
   }
 }
 
@@ -113,15 +114,15 @@ function genLinearBrackets(hard: boolean): GenQ {
   var c = a * (x + b)
   var bTxt = b > 0 ? ('+ ' + b) : ('− ' + Math.abs(b))
   return {
-    text: 'احسب قيمة x: ' + a + '(x ' + bTxt + ') = ' + c,
+    text: 'Solve for x:  ' + a + '(x ' + bTxt + ') = ' + c,
     answer: String(x),
     answerNum: x,
     steps: [
-      'اقسم الطرفين على ' + a + ': x ' + bTxt + ' = ' + (c / a),
-      'انقل ' + (b > 0 ? b : ('− ' + Math.abs(b))) + ' للطرف التاني: x = ' + x,
+      'Divide both sides by ' + a + ': x ' + bTxt + ' = ' + (c / a),
+      'Move ' + (b > 0 ? b : ('− ' + Math.abs(b))) + ' to the other side: x = ' + x,
     ],
-    trick: 'الأقواس الأول: تقدر تقسم الطرفين على الرقم اللي جنب القوس قبل ما تفتحه — أسرع بكتير.',
-    topic: 'معادلات بالأقواس',
+    trick: 'Brackets first: you can divide both sides by the number next to the bracket before expanding — much faster.',
+    topic: 'Equations with Brackets',
   }
 }
 
@@ -131,20 +132,20 @@ function genSystem2x2(hard: boolean): GenQ {
   var p = x + y
   var q = x - y
   return {
-    text: 'حل نظام المعادلتين:  x + y = ' + p + '  ،  x − y = ' + q,
-    answer: 'x = ' + x + ' ، y = ' + y,
+    text: 'Solve the system:  x + y = ' + p + '  ,  x − y = ' + q,
+    answer: 'x = ' + x + ' , y = ' + y,
     answerNum: null,
     distractors: [
-      'x = ' + y + ' ، y = ' + x,
-      'x = ' + (x + 1) + ' ، y = ' + (y - 1),
-      'x = ' + (x - 1) + ' ، y = ' + (y + 1),
+      'x = ' + y + ' , y = ' + x,
+      'x = ' + (x + 1) + ' , y = ' + (y - 1),
+      'x = ' + (x - 1) + ' , y = ' + (y + 1),
     ],
     steps: [
-      'اجمع المعادلتين: (x + y) + (x − y) = 2x = ' + (p + q) + ' → x = ' + x,
-      'عوّض في الأولى: ' + x + ' + y = ' + p + ' → y = ' + y,
+      'Add the two equations: (x + y) + (x − y) = 2x = ' + (p + q) + ' → x = ' + x,
+      'Substitute in the first: ' + x + ' + y = ' + p + ' → y = ' + y,
     ],
-    trick: 'الطريقة المثلثية: جمع المعادلتين بيلغي y على طول — خد بالك من الإشارات.',
-    topic: 'نظام المعادلات',
+    trick: 'The elimination method: adding the equations cancels y right away — watch the signs.',
+    topic: 'Systems of Equations',
   }
 }
 
@@ -155,21 +156,21 @@ function genQuadratic(): GenQ {
   var s = r1 + r2
   var pr = r1 * r2
   return {
-    text: 'حل المعادلة التربيعية: x² − ' + s + 'x + ' + pr + ' = 0',
-    answer: 'x = ' + Math.min(r1, r2) + ' أو x = ' + Math.max(r1, r2),
+    text: 'Solve the quadratic equation:  x² − ' + s + 'x + ' + pr + ' = 0',
+    answer: 'x = ' + Math.min(r1, r2) + ' or x = ' + Math.max(r1, r2),
     answerNum: null,
     distractors: [
-      'x = ' + (r1 + 1) + ' أو x = ' + r2,
-      'x = ' + r1 + ' أو x = ' + (r2 - 1),
-      'x = ' + (-r1) + ' أو x = ' + (-r2),
+      'x = ' + (r1 + 1) + ' or x = ' + r2,
+      'x = ' + r1 + ' or x = ' + (r2 - 1),
+      'x = ' + (-r1) + ' or x = ' + (-r2),
     ],
     steps: [
-      'محتاجين رقمين: حاصل ضربهم ' + pr + ' ومجموعهم ' + s,
-      'الرقمين هما ' + r1 + ' و ' + r2 + ' → (x − ' + r1 + ')(x − ' + r2 + ') = 0',
-      'يبقى: x = ' + r1 + ' أو x = ' + r2,
+      'We need two numbers whose product is ' + pr + ' and sum is ' + s,
+      'The numbers are ' + r1 + ' and ' + r2 + ' → (x − ' + r1 + ')(x − ' + r2 + ') = 0',
+      'So: x = ' + r1 + ' or x = ' + r2,
     ],
-    trick: 'في الشكل x² − sx + p: دوّر على العاملين اللي ضربهم p ومجموعهم s — بيتحلوا في ثواني.',
-    topic: 'المعادلات التربيعية',
+    trick: 'For the form x² − sx + p: find the two factors whose product is p and sum is s — it solves in seconds.',
+    topic: 'Quadratic Equations',
   }
 }
 
@@ -198,19 +199,19 @@ function genFraction(op: '+' | '−', hard: boolean): GenQ {
   var crossTxt = (b * d === gg2) ? String((a * d + c * b) / gg2) : (((a * d + c * b) / gg2) + '/' + (b * d / gg2))
   if (crossTxt !== answer && distractors.indexOf(crossTxt) === -1) distractors.push(crossTxt)
   return {
-    text: 'احسب:  ' + a + '/' + b + ' ' + opTxt + ' ' + c + '/' + d + '  = ؟',
+    text: 'Calculate:  ' + a + '/' + b + ' ' + opTxt + ' ' + c + '/' + d + '  = ?',
     answer: answer,
     answerNum: null,
     distractors: distractors.slice(0, 3),
     steps: [
-      'القوام المشترك الأصغر = ' + lcd + '  (لأن ' + b + ' × ' + (lcd / b) + ' = ' + lcd + ' و ' + d + ' × ' + (lcd / d) + ' = ' + lcd + ')',
+      'The least common denominator = ' + lcd + '  (because ' + b + ' × ' + (lcd / b) + ' = ' + lcd + ' and ' + d + ' × ' + (lcd / d) + ' = ' + lcd + ')',
       op === '+'
-        ? ('الجمع: (' + (a * (lcd / b)) + ' + ' + (c * (lcd / d)) + ') ÷ ' + lcd + ' = ' + num + '/' + lcd)
-        : ('الطرح: (' + (a * (lcd / b)) + ' − ' + (c * (lcd / d)) + ') ÷ ' + lcd + ' = ' + num + '/' + lcd),
-      num < 0 ? 'الناتج سالب — خد إشارته معاك في الاختصار' : 'اختصر بقسمة على ' + g + ' → ' + answer,
+        ? ('Add: (' + (a * (lcd / b)) + ' + ' + (c * (lcd / d)) + ') ÷ ' + lcd + ' = ' + num + '/' + lcd)
+        : ('Subtract: (' + (a * (lcd / b)) + ' − ' + (c * (lcd / d)) + ') ÷ ' + lcd + ' = ' + num + '/' + lcd),
+      num < 0 ? 'The result is negative — keep its sign while simplifying' : 'Simplify by dividing by ' + g + ' → ' + answer,
     ],
-    trick: 'القاعدة: نجمع البسط على قوام مشترك — **ممنوع** نجمع البسط مع البسط والمقام مع المقام.',
-    topic: 'جمع وطرح الكسور',
+    trick: 'The rule: add the numerators over a common denominator — NEVER add numerator with numerator and denominator with denominator.',
+    topic: 'Adding & Subtracting Fractions',
   }
 }
 
@@ -225,7 +226,7 @@ function genFractionMul(hard: boolean): GenQ {
   var n2 = num / g, d2 = den / g
   var answer = d2 === 1 ? String(n2) : (n2 + '/' + d2)
   return {
-    text: 'احسب:  ' + a + '/' + b + ' × ' + c + '/' + d + '  = ؟',
+    text: 'Calculate:  ' + a + '/' + b + ' × ' + c + '/' + d + '  = ?',
     answer: answer,
     answerNum: null,
     distractors: [
@@ -234,11 +235,11 @@ function genFractionMul(hard: boolean): GenQ {
       (a * d + c * b) + '/' + (b * d),
     ].filter(function (s) { return s !== answer }).slice(0, 3),
     steps: [
-      'الضرب: بسط × بسط والمقام × مقام = ' + num + '/' + den,
-      'اختصر بقسمة على ' + g + ' → ' + answer,
+      'Multiply: numerator × numerator and denominator × denominator = ' + num + '/' + den,
+      'Simplify by dividing by ' + g + ' → ' + answer,
     ],
-    trick: 'في ضرب الكسور اختصر **قبل** ما تضرب — بتوفر وقت ومجهود.',
-    topic: 'ضرب الكسور',
+    trick: 'When multiplying fractions, simplify BEFORE multiplying — saves time and effort.',
+    topic: 'Multiplying Fractions',
   }
 }
 
@@ -247,15 +248,15 @@ function genPercentOf(hard: boolean): GenQ {
   var N = ri(2, hard ? 30 : 12) * 20
   var ans = (p * N) / 100
   return {
-    text: 'احسب:  ' + p + '% من ' + N + ' = ؟',
+    text: 'Calculate:  ' + p + '% of ' + N + ' = ?',
     answer: String(ans),
     answerNum: ans,
     steps: [
-      'حوّل النسبة لكسر: ' + p + '% = ' + p + '/100',
-      'اضرب: ' + p + ' × ' + N + ' ÷ 100 = ' + ans,
+      'Convert the percentage to a fraction: ' + p + '% = ' + p + '/100',
+      'Multiply: ' + p + ' × ' + N + ' ÷ 100 = ' + ans,
     ],
-    trick: '10% = انقسم على 10، و50% = النص، و25% = الربع — احفظ السريعات دي.',
-    topic: 'النسبة المئوية',
+    trick: '10% = divide by 10, 50% = half, 25% = quarter — memorize these shortcuts.',
+    topic: 'Percentage',
   }
 }
 
@@ -266,16 +267,16 @@ function genPercentChange(hard: boolean): GenQ {
   var ans = up ? (M * (100 + p) / 100) : (M * (100 - p) / 100)
   return {
     text: up
-      ? ('سعر سلعة ' + M + ' جنيه وزاد ' + p + '% — السعر الجديد كام؟')
-      : ('سعر سلعة ' + M + ' جنيه نقص ' + p + '% — السعر الجديد كام؟'),
+      ? ('A product costs ' + M + ' EGP and its price increased by ' + p + '% — what is the new price?')
+      : ('A product costs ' + M + ' EGP and its price decreased by ' + p + '% — what is the new price?'),
     answer: String(ans),
     answerNum: ans,
     steps: [
-      'قيمة التغيير = ' + p + '% من ' + M + ' = ' + ((p * M) / 100) + ' جنيه',
-      up ? 'الجديد = ' + M + ' + ' + ((p * M) / 100) + ' = ' + ans : 'الجديد = ' + M + ' − ' + ((p * M) / 100) + ' = ' + ans,
+      'The change = ' + p + '% of ' + M + ' = ' + ((p * M) / 100) + ' EGP',
+      up ? 'New price = ' + M + ' + ' + ((p * M) / 100) + ' = ' + ans : 'New price = ' + M + ' − ' + ((p * M) / 100) + ' = ' + ans,
     ],
-    trick: 'زيادة: اضرب في (1 + p/100) — نقص: اضرب في (1 − p/100) — خطوة واحدة.',
-    topic: 'تغيرات النسبة المئوية',
+    trick: 'Increase: multiply by (1 + p/100) — decrease: multiply by (1 − p/100) — one step.',
+    topic: 'Percentage Change',
   }
 }
 
@@ -289,16 +290,16 @@ function genPercentChain(): GenQ {
   var mid = (c.M * (100 + c.up)) / 100
   var fin = (mid * (100 - c.down)) / 100
   return {
-    text: 'سعر تليفون ' + c.M + ' جنيه وزاد ' + c.up + '% وبعدين نقص ' + c.down + '% — السعر النهائي كام؟',
+    text: 'A phone costs ' + c.M + ' EGP, its price increased by ' + c.up + '% then decreased by ' + c.down + '% — what is the final price?',
     answer: String(fin),
     answerNum: fin,
     steps: [
-      'بعد الزيادة: ' + c.M + ' × ' + (100 + c.up) + '/100 = ' + mid,
-      'بعد النقص: ' + mid + ' × ' + (100 - c.down) + '/100 = ' + fin,
+      'After the increase: ' + c.M + ' × ' + (100 + c.up) + '/100 = ' + mid,
+      'After the decrease: ' + mid + ' × ' + (100 - c.down) + '/100 = ' + fin,
     ],
-    trick: 'ممنوع تجمع النسب (+15% و −10% مش 5%) — كل تغيير بيحصل على السعر الجديد بتاعه.',
-    topic: 'نسب مئوية متتالية',
-    difficulty: 'صعب',
+    trick: 'Never add the percentages (+15% and −10% is NOT 5%) — each change applies to the new price.',
+    topic: 'Successive Percentages',
+    difficulty: 'Hard',
   }
 }
 
@@ -310,32 +311,32 @@ function genPythagoras(hard: boolean): GenQ {
   if (askHyp) {
     var cAns = t[2]
     return {
-      text: 'مثلث قائم الزاوية طول ضلعا القائمتين ' + t[0] + ' و ' + t[1] + ' — احسب طول الوتر',
+      text: 'A right triangle has legs of length ' + t[0] + ' and ' + t[1] + ' — find the hypotenuse',
       answer: String(cAns),
       answerNum: cAns,
       steps: [
-        'قانون فيثاغورس: (الوتر)² = (الضلع الأول)² + (الضلع التاني)²',
-        '(الوتر)² = ' + t[0] + '² + ' + t[1] + '² = ' + (t[0] * t[0]) + ' + ' + (t[1] * t[1]) + ' = ' + (t[2] * t[2]),
-        'الوتر = جذر ' + (t[2] * t[2]) + ' = ' + cAns,
+        'Pythagoras theorem: (hypotenuse)² = (leg 1)² + (leg 2)²',
+        '(hypotenuse)² = ' + t[0] + '² + ' + t[1] + '² = ' + (t[0] * t[0]) + ' + ' + (t[1] * t[1]) + ' = ' + (t[2] * t[2]),
+        'Hypotenuse = √' + (t[2] * t[2]) + ' = ' + cAns,
       ],
-      trick: 'احفظ الثلاثيات الشهيرة (3،4،5) و(5،12،13) و(8،15،17) — بتوفر نص الوقت.',
-      topic: 'نظرية فيثاغورس',
+      trick: 'Memorize the famous triples (3,4,5), (5,12,13), (8,15,17) — they save half the time.',
+      topic: 'Pythagorean Theorem',
     }
   }
   // ضلع ناقص: نعطي الوتر وقائم واحد
   var miss = t[0]
   var known = t[1]
   return {
-    text: 'مثلث قائم الزاوية طول وتره ' + t[2] + ' وأحد ضلعي القائمة ' + known + ' — احسب الضلع القائم التاني',
+    text: 'A right triangle has a hypotenuse of ' + t[2] + ' and one leg of ' + known + ' — find the other leg',
     answer: String(miss),
     answerNum: miss,
     steps: [
-      '(الوتر)² = (القائم الأول)² + (القائم التاني)²',
-      (t[2] * t[2]) + ' = ' + (known * known) + ' + (القائم التاني)²',
-      '(القائم التاني)² = ' + (t[2] * t[2] - known * known) + ' → القائم التاني = ' + miss,
+      '(hypotenuse)² = (leg 1)² + (leg 2)²',
+      (t[2] * t[2]) + ' = ' + (known * known) + ' + (leg 2)²',
+      '(leg 2)² = ' + (t[2] * t[2] - known * known) + ' → leg 2 = ' + miss,
     ],
-    trick: 'الوتر دايمًا **أطول** ضلع — لو طلع منك أصغر يبقى في غلطة في الحساب.',
-    topic: 'نظرية فيثاغورس (عكسي)',
+    trick: 'The hypotenuse is ALWAYS the longest side — if you get a smaller one, you made a calculation mistake.',
+    topic: 'Pythagorean Theorem (Inverse)',
   }
 }
 
@@ -346,22 +347,22 @@ function genRectArea(hard: boolean): GenQ {
   if (askArea) {
     var a = w * h
     return {
-      text: 'مستطيل طوله ' + w + ' سم وعرضه ' + h + ' سم — احسب مساحته',
+      text: 'A rectangle has length ' + w + ' cm and width ' + h + ' cm — find its area',
       answer: String(a),
       answerNum: a,
-      steps: ['مساحة المستطيل = الطول × العرض', 'المساحة = ' + w + ' × ' + h + ' = ' + a + ' سم²'],
-      trick: 'المساحة دايمًا بوحدة **مربعة** (سم²) — متنساش تكتبها.',
-      topic: 'مساحة المستطيل',
+      steps: ['Area of rectangle = length × width', 'Area = ' + w + ' × ' + h + ' = ' + a + ' cm²'],
+      trick: 'Area always has a squared unit (cm²) — do not forget to write it.',
+      topic: 'Area of a Rectangle',
     }
   }
   var p = 2 * (w + h)
   return {
-    text: 'مستطيل طوله ' + w + ' سم وعرضه ' + h + ' سم — احسب محيطه',
+    text: 'A rectangle has length ' + w + ' cm and width ' + h + ' cm — find its perimeter',
     answer: String(p),
     answerNum: p,
-    steps: ['محيط المستطيل = 2 × (الطول + العرض)', 'المحيط = 2 × (' + w + ' + ' + h + ') = ' + p + ' سم'],
-    trick: 'المحيط لف حوالي الشكل — بوحدة خطية عادية (سم) مش مربعة.',
-    topic: 'محيط المستطيل',
+    steps: ['Perimeter of rectangle = 2 × (length + width)', 'Perimeter = 2 × (' + w + ' + ' + h + ') = ' + p + ' cm'],
+    trick: 'Perimeter is a walk around the shape — a plain linear unit (cm), not squared.',
+    topic: 'Perimeter of a Rectangle',
   }
 }
 
@@ -370,12 +371,12 @@ function genTriangleArea(): GenQ {
   var h = ri(3, 12)
   var a = (b * h) / 2
   return {
-    text: 'مثلث قاعدته ' + b + ' سم وارتفاعه ' + h + ' سم — مساحته = ؟',
+    text: 'A triangle has a base of ' + b + ' cm and a height of ' + h + ' cm — its area = ?',
     answer: String(a),
     answerNum: a,
-    steps: ['مساحة المثلث = ½ × القاعدة × الارتفاع', 'المساحة = ½ × ' + b + ' × ' + h + ' = ' + a + ' سم²'],
-    trick: 'الارتفاع لازم يكون **عمودي** على القاعدة — مش أي ضلع يبقى ارتفاع.',
-    topic: 'مساحة المثلث',
+    steps: ['Area of triangle = ½ × base × height', 'Area = ½ × ' + b + ' × ' + h + ' = ' + a + ' cm²'],
+    trick: 'The height must be PERPENDICULAR to the base — not just any side counts as a height.',
+    topic: 'Area of a Triangle',
   }
 }
 
@@ -385,28 +386,28 @@ function genCircle(): GenQ {
   if (askArea) {
     var a = (22 * r * r) / 7
     return {
-      text: 'دائرة نصف قطرها ' + r + ' سم — احسب مساحتها (π = 22/7)',
+      text: 'A circle has a radius of ' + r + ' cm — find its area (π = 22/7)',
       answer: String(a),
       answerNum: a,
       steps: [
-        'مساحة الدائرة = π × نق²',
-        'المساحة = 22/7 × ' + r + ' × ' + r + ' = ' + a + ' سم²',
+        'Area of a circle = π × r²',
+        'Area = 22/7 × ' + r + ' × ' + r + ' = ' + a + ' cm²',
       ],
-      trick: 'لما نق من مضاعفات 7 خلي π = 22/7 — القسمة بتطلع سليمة على طول.',
-      topic: 'مساحة الدائرة',
+      trick: 'When the radius is a multiple of 7, use π = 22/7 — the division always comes out clean.',
+      topic: 'Area of a Circle',
     }
   }
   var c = (44 * r) / 7
   return {
-    text: 'دائرة نصف قطرها ' + r + ' سم — احسب محيطها (π = 22/7)',
+    text: 'A circle has a radius of ' + r + ' cm — find its circumference (π = 22/7)',
     answer: String(c),
     answerNum: c,
     steps: [
-      'محيط الدائرة = 2 × π × نق',
-      'المحيط = 2 × 22/7 × ' + r + ' = ' + c + ' سم',
+      'Circumference of a circle = 2 × π × r',
+      'Circumference = 2 × 22/7 × ' + r + ' = ' + c + ' cm',
     ],
-    trick: 'المحيط = 44/7 × نق — مضاعفات 7 بتقسم جميل.',
-    topic: 'محيط الدائرة',
+    trick: 'Circumference = 44/7 × r — multiples of 7 divide nicely.',
+    topic: 'Circumference of a Circle',
   }
 }
 
@@ -414,12 +415,12 @@ function genCuboidVol(): GenQ {
   var l = ri(2, 12), w = ri(2, 10), h = ri(2, 9)
   var v = l * w * h
   return {
-    text: 'متوازي مستطيلات أبعاده ' + l + ' × ' + w + ' × ' + h + ' سم — حجمه = ؟',
+    text: 'A cuboid measures ' + l + ' × ' + w + ' × ' + h + ' cm — find its volume',
     answer: String(v),
     answerNum: v,
-    steps: ['الحجم = الطول × العرض × الارتفاع', 'الحجم = ' + l + ' × ' + w + ' × ' + h + ' = ' + v + ' سم³'],
-    trick: 'الحجم دايمًا وحدة **مكعبة** (سم³) — التلات أبعاد بتتضرب في بعض.',
-    topic: 'حجم متوازي المستطيلات',
+    steps: ['Volume = length × width × height', 'Volume = ' + l + ' × ' + w + ' × ' + h + ' = ' + v + ' cm³'],
+    trick: 'Volume always has a cubic unit (cm³) — the three dimensions multiply together.',
+    topic: 'Volume of a Cuboid',
   }
 }
 
@@ -428,15 +429,15 @@ function genCylinderVol(): GenQ {
   var h = ri(3, 15)
   var v = (22 * r * r * h) / 7
   return {
-    text: 'أسطوانة نصف قطر قاعدتها ' + r + ' سم وارتفاعها ' + h + ' سم — حجمها (π = 22/7)؟',
+    text: 'A cylinder has a base radius of ' + r + ' cm and a height of ' + h + ' cm — find its volume (π = 22/7)',
     answer: String(v),
     answerNum: v,
     steps: [
-      'حجم الأسطوانة = π × نق² × الارتفاع',
-      'الحجم = 22/7 × ' + (r * r) + ' × ' + h + ' = ' + v + ' سم³',
+      'Volume of a cylinder = π × r² × height',
+      'Volume = 22/7 × ' + (r * r) + ' × ' + h + ' = ' + v + ' cm³',
     ],
-    trick: 'فكر فيها كطبقات دائرية فوق بعض: مساحة القاعدة × الارتفاع.',
-    topic: 'حجم الأسطوانة',
+    trick: 'Think of it as circular layers stacked up: base area × height.',
+    topic: 'Volume of a Cylinder',
   }
 }
 
@@ -448,43 +449,43 @@ function genExponents(hard: boolean): GenQ {
   if (kind === 1) {
     var ans = Math.pow(a, m + n)
     return {
-      text: 'احسب:  ' + a + '^' + m + ' × ' + a + '^' + n + ' = ؟',
+      text: 'Calculate:  ' + a + '^' + m + ' × ' + a + '^' + n + ' = ?',
       answer: String(ans),
       answerNum: ans,
       steps: [
-        'نفس الأساس → نجمع الأسس: ' + a + '^(' + m + '+' + n + ') = ' + a + '^' + (m + n),
-        'الناتج = ' + ans,
+        'Same base → add the exponents: ' + a + '^(' + m + '+' + n + ') = ' + a + '^' + (m + n),
+        'The result = ' + ans,
       ],
-      trick: 'قانون الضرب لنفس الأساس: اجمع الأسس — الأساس بيفضل زي ما هو.',
-      topic: 'قوانين الأسس',
+      trick: 'Product rule for same base: add the exponents — the base stays as it is.',
+      topic: 'Laws of Exponents',
     }
   }
   if (kind === 2) {
     var m2 = Math.max(m, n), n2 = Math.min(m, n)
     var ans2 = Math.pow(a, m2 - n2)
     return {
-      text: 'احسب:  ' + a + '^' + m2 + ' ÷ ' + a + '^' + n2 + ' = ؟',
+      text: 'Calculate:  ' + a + '^' + m2 + ' ÷ ' + a + '^' + n2 + ' = ?',
       answer: String(ans2),
       answerNum: ans2,
       steps: [
-        'القسمة لنفس الأساس → نطرح الأسس: ' + a + '^(' + m2 + '−' + n2 + ') = ' + a + '^' + (m2 - n2),
-        'الناتج = ' + ans2,
+        'Division with same base → subtract the exponents: ' + a + '^(' + m2 + '−' + n2 + ') = ' + a + '^' + (m2 - n2),
+        'The result = ' + ans2,
       ],
-      trick: 'قسمة = طرح الأسس. ضرب = جمع الأسس. متقلطش بينهم.',
-      topic: 'قوانين الأسس',
+      trick: 'Division = subtract exponents. Multiplication = add exponents. Do not mix them up.',
+      topic: 'Laws of Exponents',
     }
   }
   var ans3 = Math.pow(a, m * n)
   return {
-    text: 'احسب:  (' + a + '^' + m + ')^' + n + ' = ؟',
+    text: 'Calculate:  (' + a + '^' + m + ')^' + n + ' = ?',
     answer: String(ans3),
     answerNum: ans3,
     steps: [
-      'قوة فوق قوة → نضرب الأسس: ' + a + '^(' + m + '×' + n + ') = ' + a + '^' + (m * n),
-      'الناتج = ' + ans3,
+      'A power over a power → multiply the exponents: ' + a + '^(' + m + '×' + n + ') = ' + a + '^' + (m * n),
+      'The result = ' + ans3,
     ],
-    trick: 'قوة خارجية على قوة داخلية = ضرب الأسس في بعض.',
-    topic: 'قوانين الأسس',
+    trick: 'An outer power over an inner power = multiply the exponents together.',
+    topic: 'Laws of Exponents',
   }
 }
 
@@ -493,25 +494,25 @@ function genRoots(hard: boolean): GenQ {
     var a = ri(2, 9), b = ri(2, 9)
     var ans = a * b
     return {
-      text: 'احسب:  √(' + (a * a) + ' × ' + (b * b) + ') = ؟',
+      text: 'Calculate:  √(' + (a * a) + ' × ' + (b * b) + ') = ?',
       answer: String(ans),
       answerNum: ans,
       steps: [
         '√(x × y) = √x × √y',
         '= ' + a + ' × ' + b + ' = ' + ans,
       ],
-      trick: 'الجذر بيتبعظ على الضرب: جذر كل عامل لوحده وبعدين اضرب.',
-      topic: 'الجذور التربيعية',
+      trick: 'The square root splits over multiplication: take the root of each factor then multiply.',
+      topic: 'Square Roots',
     }
   }
   var n = ri(4, 30)
   return {
-    text: 'احسب:  √' + (n * n) + ' = ؟',
+    text: 'Calculate:  √' + (n * n) + ' = ?',
     answer: String(n),
     answerNum: n,
-    steps: ['محتاجين رقم لو ضرب نفسه يطلع ' + (n * n), 'الرقم هو ' + n + ' لأن ' + n + ' × ' + n + ' = ' + (n * n)],
-    trick: 'احفظ المربعات الكاملة لحد 30² — الجذور بتبقى لعبة أطفال.',
-    topic: 'الجذور التربيعية',
+    steps: ['We need a number that gives ' + (n * n) + ' when multiplied by itself', 'The number is ' + n + ' because ' + n + ' × ' + n + ' = ' + (n * n)],
+    trick: 'Memorize the perfect squares up to 30² — square roots become a piece of cake.',
+    topic: 'Square Roots',
   }
 }
 
@@ -527,15 +528,15 @@ function genAverage(hard: boolean): GenQ {
     if (n3 <= 0) n3 = avg
   }
   return {
-    text: 'درجات طالب في 4 مواد: ' + n1 + ' ، ' + n2 + ' ، ' + n3 + ' ، ' + n4 + ' — المتوسط الحسابي = ؟',
+    text: 'A student scored ' + n1 + ', ' + n2 + ', ' + n3 + ', ' + n4 + ' in 4 subjects — find the mean (average)',
     answer: String(avg),
     answerNum: avg,
     steps: [
-      'المجموع = ' + n1 + ' + ' + n2 + ' + ' + n3 + ' + ' + n4 + ' = ' + (4 * avg),
-      'المتوسط = المجموع ÷ العدد = ' + (4 * avg) + ' ÷ 4 = ' + avg,
+      'The sum = ' + n1 + ' + ' + n2 + ' + ' + n3 + ' + ' + n4 + ' = ' + (4 * avg),
+      'Mean = sum ÷ count = ' + (4 * avg) + ' ÷ 4 = ' + avg,
     ],
-    trick: 'خدعة: لو الأرقام قريبة من بعض، حدد الرقم اللي بينهم — غالبًا هو المتوسط.',
-    topic: 'المتوسط الحسابي',
+    trick: 'Trick: if the numbers are close to each other, spot the one in the middle — it is usually the mean.',
+    topic: 'Arithmetic Mean',
   }
 }
 
@@ -546,21 +547,21 @@ function genSpeed(hard: boolean): GenQ {
   var kind = ri(1, 2)
   if (kind === 1) {
     return {
-      text: 'عربية بتتحرك بسرعة ' + v + ' كم/ساعة لمدة ' + t + ' ساعات — المسافة المقطوعة؟',
+      text: 'A car travels at ' + v + ' km/h for ' + t + ' hours — find the distance covered',
       answer: String(s),
       answerNum: s,
-      steps: ['المسافة = السرعة × الزمن', 'المسافة = ' + v + ' × ' + t + ' = ' + s + ' كم'],
-      trick: 'المثلث السحري: المسافة فوق، السرعة والزمن تحت — غطي اللي عايزه.',
-      topic: 'السرعة والمسافة',
+      steps: ['Distance = speed × time', 'Distance = ' + v + ' × ' + t + ' = ' + s + ' km'],
+      trick: 'The magic triangle: distance on top, speed and time below — cover the one you want.',
+      topic: 'Speed & Distance',
     }
   }
   return {
-    text: 'عربية قطعت مسافة ' + s + ' كم بسرعة ' + v + ' كم/ساعة — الزمن اللي أخدته؟',
+    text: 'A car covered ' + s + ' km at ' + v + ' km/h — how long did the trip take?',
     answer: String(t),
     answerNum: t,
-    steps: ['الزمن = المسافة ÷ السرعة', 'الزمن = ' + s + ' ÷ ' + v + ' = ' + t + ' ساعة'],
-    trick: 'الزمن = مسافة ÷ سرعة — واحفظ الوحدات: كم ÷ كم/ساعة = ساعة.',
-    topic: 'السرعة والزمن',
+    steps: ['Time = distance ÷ speed', 'Time = ' + s + ' ÷ ' + v + ' = ' + t + ' hours'],
+    trick: 'Time = distance ÷ speed — keep the units: km ÷ km/h = hours.',
+    topic: 'Speed & Time',
   }
 }
 
@@ -570,68 +571,68 @@ function genLcmGcd(): GenQ {
   if (wantGcd) {
     var g = gcd(a, b)
     return {
-      text: 'احسب العامل المشترك الأكبر للعددين ' + a + ' و ' + b,
+      text: 'Find the greatest common factor (GCF) of ' + a + ' and ' + b,
       answer: String(g),
       answerNum: g,
       steps: [
-        'عوامل ' + a + ': ' + factorsText(a),
-        'عوامل ' + b + ': ' + factorsText(b),
-        'أكبر عامل مشترك = ' + g,
+        'Factors of ' + a + ': ' + factorsText(a),
+        'Factors of ' + b + ': ' + factorsText(b),
+        'The greatest common factor = ' + g,
       ],
-      trick: 'العامل المشترك الأكبر مفيش أكبر من أصغر العددين — استبعد فورًا أي رقم أكبر.',
-      topic: 'العامل المشترك الأكبر',
+      trick: 'The GCF is never larger than the smaller number — cross out anything bigger right away.',
+      topic: 'Greatest Common Factor',
     }
   }
   var l = (a * b) / gcd(a, b)
   return {
-    text: 'احسب المضاعف المشترك الأصغر للعددين ' + a + ' و ' + b,
+    text: 'Find the least common multiple (LCM) of ' + a + ' and ' + b,
     answer: String(l),
     answerNum: l,
     steps: [
-      'العامل المشترك الأكبر = ' + gcd(a, b),
-      'م.م.أ = (العدد الأول × التاني) ÷ ع.م.أ = ' + (a * b) + ' ÷ ' + gcd(a, b) + ' = ' + l,
+      'The GCF = ' + gcd(a, b),
+      'LCM = (first × second) ÷ GCF = ' + (a * b) + ' ÷ ' + gcd(a, b) + ' = ' + l,
     ],
-    trick: 'م.م.أ دايمًا ≥ أكبر عدد، وع.م.أ دايمًا ≤ أصغر عدد.',
-    topic: 'المضاعف المشترك الأصغر',
+    trick: 'LCM is always ≥ the larger number, and GCF is always ≤ the smaller number.',
+    topic: 'Least Common Multiple',
   }
 }
 
 function factorsText(n: number): string {
   var out: string[] = []
   for (var i = 1; i <= n; i++) if (n % i === 0) out.push(String(i))
-  return out.join(' ، ')
+  return out.join(', ')
 }
 
 function genLikeTerms(): GenQ {
   var add = Math.random() < 0.5
-  var v = pick(['x', 'س', 'ص'])
+  var v = pick(['x', 'y', 'z'])
   if (add) {
     var a = ri(3, 12), b = ri(2, 9)
     return {
-      text: 'بسّط:  ' + a + v + ' + ' + b + v + ' = ؟',
+      text: 'Simplify:  ' + a + v + ' + ' + b + v + ' = ?',
       answer: (a + b) + v,
       answerNum: null,
       distractors: [(a * b) + v, (a + b) + v + '²', (a + b + 1) + v],
       steps: [
-        'الحدود المتشابهة (نفس ' + v + ') بتتجمع',
+        'Like terms (same ' + v + ') add together',
         '(' + a + ' + ' + b + ')' + v + ' = ' + (a + b) + v,
       ],
-      trick: 'الحدود المتشابهة زي التفاح مع التفاح: 3 تفاح + 5 تفاح = 8 تفاح.',
-      topic: 'تبسيط الحدود الجبرية',
+      trick: 'Like terms are like apples with apples: 3 apples + 5 apples = 8 apples.',
+      topic: 'Simplifying Algebraic Expressions',
     }
   }
   var a2 = ri(5, 14), b2 = ri(2, 4)
   return {
-    text: 'بسّط:  ' + a2 + v + ' − ' + b2 + v + ' = ؟',
+    text: 'Simplify:  ' + a2 + v + ' − ' + b2 + v + ' = ?',
     answer: (a2 - b2) + v,
     answerNum: null,
     distractors: [(a2 - b2 - 1) + v, (a2 * b2) + v, (a2 - b2) + v + '²'],
     steps: [
-      'نطرح المعاملات لأن الحدود متشابهة',
+      'Subtract the coefficients because the terms are like terms',
       '(' + a2 + ' − ' + b2 + ')' + v + ' = ' + (a2 - b2) + v,
     ],
-    trick: 'متقدرش تطرح حدود مختلفة: x − y عمرها ما تبقى حد واحد.',
-    topic: 'تبسيط الحدود الجبرية',
+    trick: 'You can never subtract unlike terms: x − y never becomes a single term.',
+    topic: 'Simplifying Algebraic Expressions',
   }
 }
 
@@ -641,17 +642,17 @@ function genProportion(): GenQ {
   var q2 = q1 + ri(1, 6)
   var p1 = unit * q1
   var ans = unit * q2
-  var item = pick(['قلم', 'كشكول', 'مسطرة', 'دفتر'])
+  var item = pick(['pens', 'notebooks', 'rulers', 'books'])
   return {
-    text: 'لو ' + q1 + ' قطع من ' + item + ' ثمنها ' + p1 + ' جنيه، يبقى ' + q2 + ' قطع من نفس النوع ثمنها ؟',
+    text: 'If ' + q1 + ' ' + item + ' cost ' + p1 + ' EGP, how much do ' + q2 + ' ' + item + ' of the same kind cost?',
     answer: String(ans),
     answerNum: ans,
     steps: [
-      'سعر القطعة الواحدة = ' + p1 + ' ÷ ' + q1 + ' = ' + unit + ' جنيه',
-      'سعر ' + q2 + ' قطع = ' + unit + ' × ' + q2 + ' = ' + ans + ' جنيه',
+      'Price of one item = ' + p1 + ' ÷ ' + q1 + ' = ' + unit + ' EGP',
+      'Price of ' + q2 + ' items = ' + unit + ' × ' + q2 + ' = ' + ans + ' EGP',
     ],
-    trick: 'في التناسب الطردي: اقسم عشان تطلع سعر الوحدة، وبعدين اضرب.',
-    topic: 'النسبة والتناسب',
+    trick: 'In direct proportion: divide to get the unit price, then multiply.',
+    topic: 'Ratio & Proportion',
   }
 }
 
@@ -662,15 +663,15 @@ function genTriangleAngles(): GenQ {
   var a3 = 180 - a1 - a2
   if (a3 < 15) { a3 = 15 + ri(0, 20); a1 = 180 - a2 - a3 }
   return {
-    text: 'مثلث زاويتين منه ' + a1 + '° و ' + a2 + '° — احسب الزاوية التالتة',
+    text: 'A triangle has two angles of ' + a1 + '° and ' + a2 + '° — find the third angle',
     answer: String(a3),
     answerNum: a3,
     steps: [
-      'مجموع زوايا المثلث = 180°',
-      'الزاوية التالتة = 180 − (' + a1 + ' + ' + a2 + ') = ' + a3 + '°',
+      'The sum of angles in a triangle = 180°',
+      'The third angle = 180 − (' + a1 + ' + ' + a2 + ') = ' + a3 + '°',
     ],
-    trick: 'قاعدة 180 في المثلث من أهم القوانين — بتحل بيها نص أسئلة الهندسة.',
-    topic: 'زوايا المثلث',
+    trick: 'The 180° rule is one of the most important laws — it solves half of geometry questions.',
+    topic: 'Angles of a Triangle',
   }
 }
 
@@ -682,7 +683,7 @@ function genSimplifyFraction(): GenQ {
   var gg = gcd(num, den)
   var ans = (num / gg) + '/' + (den / gg)
   return {
-    text: 'بسّط الكسر:  ' + num + '/' + den,
+    text: 'Simplify the fraction:  ' + num + '/' + den,
     answer: ans,
     answerNum: null,
     distractors: [
@@ -691,11 +692,11 @@ function genSimplifyFraction(): GenQ {
       (num) + '/' + (den - gg),
     ].filter(function (s) { return s !== ans && s.indexOf('/') > 0 }).slice(0, 3),
     steps: [
-      'العامل المشترك الأكبر لـ ' + num + ' و ' + den + ' = ' + gg,
-      'اقسم البسط والمقام على ' + gg + ' → ' + ans,
+      'The greatest common factor of ' + num + ' and ' + den + ' = ' + gg,
+      'Divide the numerator and denominator by ' + gg + ' → ' + ans,
     ],
-    trick: 'الاختصار: اقسم البسط **والمقام** على نفس الرقم — لو حسّيت واحد فيهم كسر يبقى الغلط.',
-    topic: 'تبسيط الكسور',
+    trick: 'Simplifying: divide the numerator AND the denominator by the same number — if one becomes a decimal, you made a mistake.',
+    topic: 'Simplifying Fractions',
   }
 }
 
@@ -706,22 +707,23 @@ var GENERATORS_HARD = [genQuadratic, genPercentChain, genSystem2x2, genPythagora
 /* ============================================================
  * 1) مولّد أسئلة «اتدرب أكتر» — 10 أسئلة بخطوات وخدع
  *    topic: كلام الطالب — بنحلل الكلمات المفتاحية ونختار المولّدات المناسبة
+ *    (الكلمات المفتاحية بتدعم عربي وإنجليزي — الطالب يكتب بأي لغة)
  * ============================================================ */
 var TOPIC_KEYWORDS: Array<{ re: RegExp; keys: string[] }> = [
-  { re: /(معادل|مجهول|equation|x\s*=|حل\s+و)/, keys: ['linear', 'brackets', 'system', 'quadratic'] },
-  { re: /(تربيعية|تربيعي|x²|x\^2)/, keys: ['quadratic'] },
-  { re: /(كسر|كسور|قوام|بسط|مقام)/, keys: ['fracAdd', 'fracSub', 'fracMul', 'simplify'] },
-  { re: /(نسبة|مئوي|%|بالمئة|خصم|ربح)/, keys: ['percentOf', 'percentChange', 'percentChain'] },
-  { re: /(فيثاغورس|قائم|وتر|قائمه)/, keys: ['pytho'] },
-  { re: /(مساح|محيط|دائرة|مستطيل|مثلث|مربع)/, keys: ['rectArea', 'triArea', 'circle', 'angles'] },
-  { re: /(حجم|أسطوانة|مكعب|متوازي)/, keys: ['cuboid', 'cylinder'] },
-  { re: /(أس|أسس|قوة|أُس|قدرة)/, keys: ['exp', 'roots'] },
-  { re: /(جذر|تربيع\s*الجذر|√)/, keys: ['roots'] },
-  { re: /(متوسط|وسط\s*حسابي|إحصاء)/, keys: ['average'] },
-  { re: /(سرعة|مسافة|زمن|ساعة|كم)/, keys: ['speed'] },
-  { re: /(مضاعف|عامل\s+مشترك|تحليل)/, keys: ['lcmGcd'] },
-  { re: /(تبسيط|حدود|جبر|متشابهة)/, keys: ['likeTerms'] },
-  { re: /(تناسب|تناسب طردى|طردية|نسبة\s+سعر)/, keys: ['proportion'] },
+  { re: /(معادل|مجهول|equation|solve|x\s*=|حل\s+و)/i, keys: ['linear', 'brackets', 'system', 'quadratic'] },
+  { re: /(تربيعية|تربيعي|quadratic|x²|x\^2)/i, keys: ['quadratic'] },
+  { re: /(كسر|كسور|قوام|بسط|مقام|fraction)/i, keys: ['fracAdd', 'fracSub', 'fracMul', 'simplify'] },
+  { re: /(نسبة|مئوي|%|بالمئة|خصم|ربح|percent|discount)/i, keys: ['percentOf', 'percentChange', 'percentChain'] },
+  { re: /(فيثاغورس|قائم|وتر|قائمه|pythagor)/i, keys: ['pytho'] },
+  { re: /(مساح|محيط|دائرة|مستطيل|مثلث|مربع|area|perimeter|circle|rectangle|triangle)/i, keys: ['rectArea', 'triArea', 'circle', 'angles'] },
+  { re: /(حجم|أسطوانة|مكعب|متوازي|volume|cylinder|cuboid)/i, keys: ['cuboid', 'cylinder'] },
+  { re: /(أس|أسس|قوة|أُس|قدرة|exponent|power)/i, keys: ['exp', 'roots'] },
+  { re: /(جذر|تربيع\s*الجذر|√|root|square root)/i, keys: ['roots'] },
+  { re: /(متوسط|وسط\s*حسابي|إحصاء|average|mean|statistics)/i, keys: ['average'] },
+  { re: /(سرعة|مسافة|زمن|ساعة|كم|speed|distance|time)/i, keys: ['speed'] },
+  { re: /(مضاعف|عامل\s+مشترك|تحليل|lcm|gcf|multiple|factor)/i, keys: ['lcmGcd'] },
+  { re: /(تبسيط|حدود|جبر|متشابهة|simplify|like terms|algebra)/i, keys: ['likeTerms'] },
+  { re: /(تناسب|تناسب طردى|طردية|نسبة\s+سعر|proportion|ratio)/i, keys: ['proportion'] },
 ]
 
 function pickGeneratorsFor(topic: string): Array<{ fn: Function; key: string }> {
@@ -781,13 +783,13 @@ export function generatePracticeSet(topic: string): PracticeQuestion[] {
       steps: (q.steps || []).map(function (s) { return String(s) }),
       trick: String(q.trick || ''),
       topic: String(q.topic || ''),
-      difficulty: diff === 'easy' ? 'سهل' : (diff === 'med' ? 'متوسط' : 'صعب'),
+      difficulty: diff === 'easy' ? 'Easy' : (diff === 'med' ? 'Medium' : 'Hard'),
     })
   }
   // لو اتعذر إكمال 10 (نظريًا مستحيل) — كرر بمولد عام
   while (out.length < 10) {
     var q2 = genLinear(true)
-    out.push({ id: uid(), question: q2.text, answer: q2.answer, steps: q2.steps, trick: q2.trick, topic: q2.topic, difficulty: 'صعب' })
+    out.push({ id: uid(), question: q2.text, answer: q2.answer, steps: q2.steps, trick: q2.trick, topic: q2.topic, difficulty: 'Hard' })
   }
   return out
 }
@@ -836,16 +838,20 @@ export function generateBattleQuestions(count: number, timeLimitSec?: number): B
       text: q.text,
       options: options,
       correctIndex: options.indexOf(correctTxt),
-      explanation: (q.steps || []).join(' ← ') || String(q.trick || ''),
+      explanation: (q.steps || []).join(' → ') || String(q.trick || ''),
       timeLimitSec: timeLimitSec || (25 + Math.floor(Math.random() * 3) * 5),
     })
   }
   return out
 }
 
-/* بطاقات الفلاش كاردز — أسئلة قصيرة سريعة (8 ثواني للبطاقة) */
-export function generateFlashcards(count: number): BattleQuestion[] {
-  var qs = generateBattleQuestions(count, 8)
+/* بطاقات الفلاش كاردز — أسئلة قصيرة سريعة
+   (2026-و68) المدة بتتحدد من الأدمن — الافتراضي 15 ثانية (طلب المستر) */
+export var FLASHCARD_DEFAULT_SEC = 15
+
+export function generateFlashcards(count: number, timeSec?: number): BattleQuestion[] {
+  var sec = Math.max(5, Math.min(Number(timeSec) || FLASHCARD_DEFAULT_SEC, 90))
+  var qs = generateBattleQuestions(count, sec)
   return qs
 }
 
@@ -867,7 +873,7 @@ export function sanitizeAiPractice(items: any): PracticeQuestion[] {
         steps: steps.slice(0, 6),
         trick: String(it.trick || it.tip || '').trim(),
         topic: String(it.topic || '').trim(),
-        difficulty: String(it.difficulty || 'متوسط').trim(),
+        difficulty: String(it.difficulty || 'Medium').trim(),
       })
     }
   }

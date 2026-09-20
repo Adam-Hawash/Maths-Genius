@@ -47,6 +47,10 @@ export var SCHEMA_TABLES = [
   'CREATE TABLE IF NOT EXISTS FlashcardScore (id TEXT PRIMARY KEY, studentId TEXT DEFAULT \'\', name TEXT NOT NULL, score INTEGER NOT NULL DEFAULT 0, correctCount INTEGER NOT NULL DEFAULT 0, totalCards INTEGER NOT NULL DEFAULT 10, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   /* (2026-و66) الخرائط الذهنية التفاعلية */
   'CREATE TABLE IF NOT EXISTS MindMap (id TEXT PRIMARY KEY, videoId TEXT DEFAULT \'\', title TEXT NOT NULL, sourceType TEXT DEFAULT \'youtube\', sourceUrl TEXT DEFAULT \'\', sourceName TEXT DEFAULT \'\', data TEXT NOT NULL DEFAULT \'{}\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  /* (2026-و68) بنك أسئلة التحدي — المستر يرفع ملفات → استخراج إنجليزي →
+     الطالب ياخد أسئلة عشوائية من كل الملفات + محاولات محفوظة بلوحة ترتيب */
+  'CREATE TABLE IF NOT EXISTS ChallengeBankQuestion (id TEXT PRIMARY KEY, fileName TEXT DEFAULT \'\', question TEXT NOT NULL, options TEXT NOT NULL DEFAULT \'[]\', correctIndex INTEGER NOT NULL DEFAULT 0, points INTEGER NOT NULL DEFAULT 10, active INTEGER NOT NULL DEFAULT 1, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  'CREATE TABLE IF NOT EXISTS ChallengeAttempt (id TEXT PRIMARY KEY, studentId TEXT DEFAULT \'\', name TEXT NOT NULL, score INTEGER NOT NULL DEFAULT 0, correctCount INTEGER NOT NULL DEFAULT 0, totalQuestions INTEGER NOT NULL DEFAULT 10, timeMs INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
 ]
 
 var SCHEMA_COLUMNS = [
@@ -122,6 +126,11 @@ var SCHEMA_COLUMNS = [
   ['Homework', 'targetGroupIds', 'TEXT', "DEFAULT ''"],
   // (و43) الكتب بلينك خارجي — عمود sourceUrl لجدول Book (التخزين على الدرايف مش في القاعدة)
   ['Book', 'sourceUrl', 'TEXT', "NOT NULL DEFAULT ''"],
+  // (2026-و68-إضافي) فيديو المستر في تحدي المستر — طلب المستر: «يصور فيديو ويعمله
+  // في التحديات» — videoUrl: لينك يوتيوب خام أو مسار /api/files/<id> لملف مرفوع،
+  // videoType: 'youtube' | 'file' | '' (فاضي = مفيش فيديو — الواجهة بتخفي البلوك)
+  ['TeacherChallenge', 'videoUrl', 'TEXT', "DEFAULT ''"],
+  ['TeacherChallenge', 'videoType', 'TEXT', "DEFAULT ''"],
 ]
 
 var SCHEMA_FIXES = [
@@ -192,7 +201,7 @@ export var SCHEMA_INDEXES = [
 /* (2026-و66) الجداول الجديدة (ساحة التحدي + الخرائط الذهنية) دخلت CORE_TABLES
  * والبصمة اتبدّلت — نفس درس و38/و40/و43/و44/و45: من غير كده الجداول الجديدة
  * عمرها ما بتتعمل على Turso أول ريكوست بعد النشر */
-export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book', 'Notification', 'BattleRoom', 'BattlePlayer', 'TeacherChallenge', 'ChallengeEntry', 'FlashcardScore', 'MindMap']
+export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book', 'Notification', 'BattleRoom', 'BattlePlayer', 'TeacherChallenge', 'ChallengeEntry', 'FlashcardScore', 'MindMap', 'ChallengeBankQuestion', 'ChallengeAttempt']
 
 /* (2026-و38) مفتاح البصمة اتبدل — البصمة القديمة كانت اتخزنت على الإنتاج
  * بعد ما كود و37 نزل (والجدول وقتها مش معمول لسه في CORE_TABLES فالترميم
@@ -213,7 +222,10 @@ export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homew
 /* (و45) مفتاح البصمة اتبدّل رابع — عمود GalleryImage.thumbnail (صورة مصغرة
  * لفيديوهات المعرض) دخل SCHEMA_TABLES + SCHEMA_COLUMNS — نفس الدرس الموثق:
  * من غير البَمب العمود مش هيتضاف على Turso أول ريكوست بعد النشر. */
-var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w66'
+/* (2026-و68-إضافي) مفتاح البصمة اتبدّل خامس — عمودي TeacherChallenge.videoUrl
+ * / videoType (فيديو المستر في التحدي) دخلوا SCHEMA_COLUMNS — نفس الدرس الموثق
+ * و38/و40/و43/و44/و45: من غير تغيير المفتاح الـ ALTER مش هيشتغل على Turso. */
+var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w68'
 
 /* ============================================================
  * 2026-و23 — **إصلاح بطء المنصة** (طلب المستر: «المنصة بطيئة، تسجيل

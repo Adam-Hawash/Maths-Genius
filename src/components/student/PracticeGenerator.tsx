@@ -14,6 +14,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Brain,
+  Camera,
+  ImagePlus,
   Loader2,
   Eye,
   EyeOff,
@@ -24,6 +26,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   RefreshCw,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -43,15 +46,16 @@ var LOADING_MSGS = [
 ]
 
 // (2026-و66) المواضيع السريعة — الضغطة تملا الصندوق باقتراح جاهز للمولد
+// (2026-و68) التلميحات بقت إنجليزي — لأن المولد بيطلع الأسئلة بالإنجليزي
 var QUICK_TOPICS = [
-  { label: 'معادلات', hint: 'معادلات من الدرجة الأولى والثانية' },
-  { label: 'كسور', hint: 'جمع وطرح الكسور' },
-  { label: 'نسبة مئوية', hint: 'النسبة المئوية' },
-  { label: 'فيثاغورس', hint: 'نظرية فيثاغورس' },
-  { label: 'مساحة ومحيط', hint: 'المساحة والمحيط' },
-  { label: 'أسس وجذور', hint: 'الأسس والجذور' },
-  { label: 'المتوسط الحسابي', hint: 'المتوسط الحسابي' },
-  { label: 'سرعة وزمن', hint: 'السرعة والزمن والمسافة' },
+  { label: 'معادلات', hint: 'Linear and quadratic equations — solve for x' },
+  { label: 'كسور', hint: 'Adding and subtracting fractions' },
+  { label: 'نسبة مئوية', hint: 'Percentage of a number and percentage change' },
+  { label: 'فيثاغورس', hint: 'Pythagorean theorem' },
+  { label: 'مساحة ومحيط', hint: 'Area and perimeter of rectangles, triangles and circles' },
+  { label: 'أسس وجذور', hint: 'Laws of exponents and square roots' },
+  { label: 'المتوسط الحسابي', hint: 'Arithmetic mean (average)' },
+  { label: 'سرعة وزمن', hint: 'Speed, distance and time' },
 ]
 
 // (2026-و66) مميزات المولد — تظهر في الحالة الفاضية قبل أول توليد
@@ -88,13 +92,45 @@ function toArNum(n: number): string {
     .join('')
 }
 
-// (2026-و66) ألوان بادج الصعوبة: سهل=زمردي / متوسط=عنبري / صعب=وردي
+// (2026-و66) ألوان بادج الصعوبة — (2026-و68) بيدعم الإنجليزي والعربي:
+// Easy=زمردي / Medium=عنبري / Hard=وردي
 function diffBadgeClass(difficulty: string): string {
   var s = String(difficulty || '')
-  if (s.indexOf('سهل') !== -1) return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-  if (s.indexOf('صعب') !== -1) return 'border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-400'
-  if (s.indexOf('متوسط') !== -1) return 'border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400'
+  if (s.indexOf('سهل') !== -1 || s.toLowerCase() === 'easy') return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+  if (s.indexOf('صعب') !== -1 || s.toLowerCase() === 'hard') return 'border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-400'
+  if (s.indexOf('متوسط') !== -1 || s.toLowerCase() === 'medium') return 'border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400'
   return 'border-teal-500/30 bg-teal-500/15 text-teal-600 dark:text-teal-400'
+}
+
+/* (2026-و68) ضغط صورة المعادلة قبل الرفع — أقصى بعد 1600px وجودة 0.85
+   عشان الرفع يكون سريع والـ API ميقبلش حجم كبير */
+function compressImageFile(file: File): Promise<string> {
+  return new Promise(function (resolve, reject) {
+    var reader = new FileReader()
+    reader.onerror = function () { reject(new Error('read-fail')) }
+    reader.onload = function () {
+      var src = String(reader.result || '')
+      var img = new Image()
+      img.onerror = function () { reject(new Error('img-fail')) }
+      img.onload = function () {
+        try {
+          var maxDim = 1600
+          var w = img.naturalWidth || img.width
+          var h = img.naturalHeight || img.height
+          var scale = Math.min(1, maxDim / Math.max(w, h))
+          var canvas = document.createElement('canvas')
+          canvas.width = Math.max(1, Math.round(w * scale))
+          canvas.height = Math.max(1, Math.round(h * scale))
+          var ctx = canvas.getContext('2d')
+          if (!ctx) { resolve(src); return }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+          resolve(canvas.toDataURL('image/jpeg', 0.85))
+        } catch (e) { resolve(src) }
+      }
+      img.src = src
+    }
+    reader.readAsDataURL(file)
+  })
 }
 
 // شكل الرد المتوقع من /api/ai/practice
@@ -134,8 +170,8 @@ function QuestionCardItem(props: {
             </div>
 
             <div className='min-w-0 flex-1 space-y-2.5'>
-              {/* نص السؤال */}
-              <p className='break-words text-base font-bold leading-relaxed sm:text-lg'>{q.question}</p>
+              {/* نص السؤال — (2026-و68) إنجليزي فاتجاهه LTR */}
+              <p dir='ltr' className='break-words text-left text-base font-bold leading-relaxed sm:text-lg'>{q.question}</p>
 
               {/* البادجات + زر الحل */}
               <div className='flex flex-wrap items-center gap-2'>
@@ -176,7 +212,7 @@ function QuestionCardItem(props: {
                           <CheckCircle2 className='mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400' />
                           <div className='min-w-0'>
                             <p className='text-xs font-semibold text-emerald-700 dark:text-emerald-400'>الإجابة:</p>
-                            <p className='break-words text-base font-bold text-emerald-700 dark:text-emerald-300'>
+                            <p dir='ltr' className='break-words text-left text-base font-bold text-emerald-700 dark:text-emerald-300'>
                               {q.answer}
                             </p>
                           </div>
@@ -196,7 +232,7 @@ function QuestionCardItem(props: {
                                 <span className='mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-teal-500/30 bg-teal-500/15 text-xs font-bold text-teal-600 dark:text-teal-400'>
                                   {toArNum(si + 1)}
                                 </span>
-                                <span className='break-words text-sm leading-relaxed'>{st}</span>
+                                <span dir='ltr' className='break-words text-left text-sm leading-relaxed'>{st}</span>
                               </li>
                             )
                           })}
@@ -206,7 +242,7 @@ function QuestionCardItem(props: {
                       {/* خدعة المستر — عنبرية */}
                       {q.trick ? (
                         <div className='rounded-lg border border-amber-500/30 bg-amber-500/10 p-3'>
-                          <p className='break-words text-sm leading-relaxed text-amber-700 dark:text-amber-300'>
+                          <p dir='ltr' className='break-words text-left text-sm leading-relaxed text-amber-700 dark:text-amber-300'>
                             <span className='font-bold'>💡 خدعة المستر:</span> {q.trick}
                           </p>
                         </div>
@@ -229,6 +265,9 @@ function QuestionCardItem(props: {
 
 export function PracticeGenerator({ grade }: { grade: string }) {
   const [topic, setTopic] = useState('') // نص الطلب في الصندوق
+  const [image, setImage] = useState('') // (2026-و68) dataURL لصورة معادلة مرفوعة
+  const [imgBusy, setImgBusy] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
   const [questions, setQuestions] = useState<PracticeQuestion[]>([])
   const [resultTopic, setResultTopic] = useState('') // الموضوع اللي اتولّد عليه فعلاً
@@ -259,12 +298,13 @@ export function PracticeGenerator({ grade }: { grade: string }) {
   /* نداء المولد — نفس الدالة للتوليد الأول وإعادة الأسئلة والمحاولة تاني */
   const generate = useCallback(async function (rawTopic: string) {
     var clean = String(rawTopic || '').trim()
-    if (!clean) {
-      toast.error('اكتب الفكرة أو المسألة اللي عايز تتدرب عليها الأول ✍️')
+    var img = image
+    if (!clean && !img) {
+      toast.error('اكتب الفكرة أو المعادلة… أو ارفع صورة معادلة ✍️')
       return
     }
-    if (clean.length > 600) clean = clean.slice(0, 600)
-    lastTopicRef.current = clean
+    if (clean.length > 1200) clean = clean.slice(0, 1200)
+    lastTopicRef.current = clean || 'صورة معادلة'
     setLoading(true)
     setError(null)
     setQuestions([])
@@ -275,7 +315,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
       var res = await fetch('/api/ai/practice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: clean, grade: grade }),
+        body: JSON.stringify({ topic: clean, grade: grade, image: img || undefined }),
       })
       var data: PracticeResponse | null = null
       try { data = await res.json() } catch (e) { data = null }
@@ -291,7 +331,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
         return Object.assign({}, q, { id: String(q.id || 'q-' + i) })
       })
       setQuestions(qs)
-      setResultTopic(clean)
+      setResultTopic(clean || 'صورة المعادلة اللي رفعتها 📷')
       setSource(data.source === 'local' ? 'local' : 'ai')
       toast.success('جهزنا ' + toArNum(qs.length) + ' أسئلة — يلا نحل! 🎉')
     } catch (e) {
@@ -301,7 +341,27 @@ export function PracticeGenerator({ grade }: { grade: string }) {
     } finally {
       setLoading(false)
     }
-  }, [grade])
+  }, [grade, image])
+
+  /* (2026-و68) اختيار صورة معادلة — ضغط فوري + معاينة */
+  const onPickImage = useCallback(async function (f: File | null) {
+    if (!f) return
+    if (f.type && f.type.indexOf('image/') !== 0) {
+      toast.error('لازم صورة (JPG/PNG) — صوّر المعادلة وابعتها 📷')
+      return
+    }
+    setImgBusy(true)
+    try {
+      var dataUrl = await compressImageFile(f)
+      setImage(dataUrl)
+      toast.success('الصورة جاهزة — اكتب (أو متكتبش) حاجة ودوس ولّد 🚀')
+    } catch (e) {
+      toast.error('مقدرتش أقرا الصورة — جرب صورة تانية')
+    } finally {
+      setImgBusy(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }, [])
 
   /* «موضوع تاني» — رجوع لصندوق الإدخال فاضي زي أول مرة */
   const resetAll = function () {
@@ -311,6 +371,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
     setError(null)
     setOpenMap({})
     setTopic('')
+    setImage('')
     setTimeout(function () { topicRef.current?.focus() }, 50)
   }
 
@@ -346,13 +407,52 @@ export function PracticeGenerator({ grade }: { grade: string }) {
               value={topic}
               onChange={function (e) { setTopic(e.target.value) }}
               rows={4}
-              maxLength={600}
+              maxLength={1200}
               disabled={loading}
-              dir='rtl'
-              placeholder='مثلاً: معادلات من الدرجة التانية... أو كسور جمع وطرح... أو الصق المسألة نفسها لو عندك مسألة معينة'
-              aria-label='اكتب الفكرة أو المسألة اللي عايز تتدرب عليها'
+              dir='auto'
+              placeholder={'اكتب المعادلة أو الفكرة… مثلاً: 6(x - 1) = 18  أو  Pythagoras theorem — أو صوّر المعادلة من الكتاب وارفعها 👇'}
+              aria-label='اكتب الفكرة أو المعادلة اللي عايز تتدرب عليها'
               className='min-h-28 resize-none text-base leading-relaxed md:text-base'
             />
+
+            {/* (2026-و68) رفع صورة معادلة — زرار + معاينة */}
+            <div className='flex flex-wrap items-center gap-2'>
+              <input
+                ref={fileRef}
+                type='file'
+                accept='image/*'
+                capture='environment'
+                className='hidden'
+                onChange={function (e) { onPickImage(e.target.files && e.target.files[0]) }}
+                aria-hidden='true'
+                tabIndex={-1}
+              />
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                disabled={loading || imgBusy}
+                onClick={function () { fileRef.current?.click() }}
+                className='h-9 gap-1.5 rounded-full border-violet-500/40 text-violet-600 hover:bg-violet-500/10 hover:text-violet-700 dark:text-violet-400'
+              >
+                {imgBusy ? <Loader2 className='h-4 w-4 animate-spin' /> : (image ? <Camera className='h-4 w-4' /> : <ImagePlus className='h-4 w-4' />)}
+                {image ? 'غيّر الصورة' : '📷 ارفع صورة معادلة'}
+              </Button>
+              {image ? (
+                <div className='flex items-center gap-2 rounded-full border bg-muted/50 py-1 pe-1 ps-2'>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={image} alt='معاينة صورة المعادلة' className='h-10 w-14 rounded-full object-cover' />
+                  <button
+                    type='button'
+                    onClick={function () { setImage('') }}
+                    aria-label='امسح الصورة'
+                    className='flex h-6 w-6 items-center justify-center rounded-full bg-rose-500/15 text-rose-600 transition-colors hover:bg-rose-500/25 dark:text-rose-400'
+                  >
+                    <X className='h-3.5 w-3.5' />
+                  </button>
+                </div>
+              ) : null}
+            </div>
 
             {/* شيبس المواضيع السريعة — ضغطة تملا الصندوق */}
             <div className='space-y-2'>
@@ -392,7 +492,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
                 ولّد 10 أسئلة 🚀
               </Button>
               <span className='text-center text-xs text-muted-foreground sm:text-left'>
-                الحد الأقصى ٦٠٠ حرف — اكتب بالعربي براحتك ✍️
+                الأسئلة بتتولد بالإنجليزي — اكتب بأي لغة أو ارفع صورة ✍️
               </span>
             </div>
           </CardContent>
