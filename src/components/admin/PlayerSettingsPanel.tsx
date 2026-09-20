@@ -338,11 +338,15 @@ export function PlayerSettingsPanel() {
                 style={{ left: `${cfg.centerLogo.x}%`, top: `${cfg.centerLogo.y}%`, opacity: cfg.centerLogo.opacity, fontSize: cfg.centerLogo.size === 'sm' ? 18 : cfg.centerLogo.size === 'md' ? 30 : 44, textShadow: '0 2px 14px rgba(0,0,0,.55)' }}
                 onPointerDown={(e) => onItemPointerDown(e, { kind: 'logo' })}
               >
-                {cfg.centerLogo.content !== 'name' && <span style={{ display: 'block' }}>Math Genius</span>}
-                {cfg.centerLogo.content !== 'brand' && (
-                  <span style={{ display: 'block', fontSize: '0.4em', fontWeight: 800, marginTop: 2, opacity: 0.92 }}>
-                    اسم الطالب <span style={{ direction: 'ltr', unicodeBidi: 'plaintext' }}>• 01xxxxxxxxx</span>
-                  </span>
+                {/* (MG-4) نفس شكل المشغل: brand = لوجو بس | name = اسم ثنائي وتحتيه الرقم | both = لوجو فوق + اسم ورقم */}
+                {cfg.centerLogo.content === 'both' && <span style={{ display: 'block', fontSize: '0.42em', fontWeight: 900, letterSpacing: 0.5, marginBottom: 2, opacity: 0.9 }}>Math Genius</span>}
+                {cfg.centerLogo.content === 'brand' ? (
+                  <span style={{ display: 'block' }}>Math Genius</span>
+                ) : (
+                  <>
+                    <span style={{ display: 'block' }}>اسم الطالب الثنائي</span>
+                    <span style={{ display: 'block', fontSize: '0.4em', fontWeight: 800, marginTop: 2, opacity: 0.95, direction: 'ltr', unicodeBidi: 'plaintext' }}>01xxxxxxxxx</span>
+                  </>
                 )}
               </div>
             )}
@@ -352,7 +356,7 @@ export function PlayerSettingsPanel() {
                 style={{ left: `${cfg.qrTL.x}%`, top: `${cfg.qrTL.y}%`, opacity: cfg.qrTL.opacity }}
                 onPointerDown={(e) => onItemPointerDown(e, { kind: 'qrTL' })}
               >
-                <span className="flex flex-col items-center gap-0.5 rounded-lg border border-white/25 bg-black/45 px-1 py-0.5 shadow-lg" style={{ width: cfg.qrTL.size === 'sm' ? 46 : cfg.qrTL.size === 'md' ? 60 : 76 }}>
+                <span className="flex flex-col items-center gap-0.5 rounded-lg border border-white/40 bg-black/66 px-1 py-0.5 shadow-lg" style={{ width: cfg.qrTL.size === 'sm' ? 46 : cfg.qrTL.size === 'md' ? 60 : 76 }}>
                   <FakeQr size={cfg.qrTL.size === 'sm' ? 24 : cfg.qrTL.size === 'md' ? 32 : 42} />
                   <span className="text-white font-bold" style={{ fontSize: cfg.qrTL.size === 'sm' ? 6 : cfg.qrTL.size === 'md' ? 7.5 : 9 }}>اسم الطالب</span>
                   <span className="text-white/85 font-bold" style={{ fontSize: cfg.qrTL.size === 'sm' ? 5.5 : cfg.qrTL.size === 'md' ? 6.5 : 8 }}>01xxxxxxxxx</span>
@@ -365,7 +369,7 @@ export function PlayerSettingsPanel() {
                 style={{ left: `${cfg.qrBR.x}%`, top: `${cfg.qrBR.y}%`, opacity: cfg.qrBR.opacity }}
                 onPointerDown={(e) => onItemPointerDown(e, { kind: 'qrBR' })}
               >
-                <span className="flex flex-col items-center gap-0.5 rounded-lg border border-white/25 bg-black/45 px-1 py-0.5 shadow-lg" style={{ width: cfg.qrBR.size === 'sm' ? 46 : cfg.qrBR.size === 'md' ? 60 : 76 }}>
+                <span className="flex flex-col items-center gap-0.5 rounded-lg border border-white/40 bg-black/66 px-1 py-0.5 shadow-lg" style={{ width: cfg.qrBR.size === 'sm' ? 46 : cfg.qrBR.size === 'md' ? 60 : 76 }}>
                   <FakeQr size={cfg.qrBR.size === 'sm' ? 24 : cfg.qrBR.size === 'md' ? 32 : 42} />
                   <span className="text-white font-bold" style={{ fontSize: cfg.qrBR.size === 'sm' ? 6 : cfg.qrBR.size === 'md' ? 7.5 : 9 }}>اسم الطالب</span>
                   <span className="text-white/85 font-bold" style={{ fontSize: cfg.qrBR.size === 'sm' ? 5.5 : cfg.qrBR.size === 'md' ? 6.5 : 8 }}>01xxxxxxxxx</span>
@@ -379,7 +383,7 @@ export function PlayerSettingsPanel() {
                 style={{ left: `${it.x}%`, top: `${it.y}%`, opacity: it.opacity }}
                 onPointerDown={(e) => onItemPointerDown(e, { kind: 'name', id: it.id })}
               >
-                <span className="inline-block rounded-lg border border-white/25 bg-black/45 px-2 py-0.5 text-white font-extrabold whitespace-nowrap shadow-lg" style={{ fontSize: it.size === 'sm' ? 9 : it.size === 'md' ? 12 : 16 }}>
+                <span className="inline-block rounded-lg border border-white/40 bg-black/62 px-2 py-0.5 text-white font-extrabold whitespace-nowrap shadow-lg" style={{ fontSize: it.size === 'sm' ? 9 : it.size === 'md' ? 12 : 16 }}>
                   اسم الطالب <span className="opacity-85 font-bold">• 01xxxxxxxxx</span>
                 </span>
               </div>
@@ -404,7 +408,7 @@ export function PlayerSettingsPanel() {
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => {
               const id = 'nm-' + Date.now()
-              setCfg((p) => ({ ...p, nameItems: [...p.nameItems, { id, x: 50, y: p.nameItems.length ? clamp(12 + p.nameItems.length * 12, 0, 90) : 12, size: 'md', opacity: 0.3, blink: { on: false, show: 15, hide: 15 } }] }))
+              setCfg((p) => ({ ...p, nameItems: [...p.nameItems, { id, x: 50, y: p.nameItems.length ? clamp(12 + p.nameItems.length * 12, 0, 90) : 12, size: 'md', opacity: 0.55, blink: { on: false, show: 15, hide: 15 } }] }))
               setSelected({ kind: 'name', id })
             }}><Plus className="h-3.5 w-3.5" />ضيف عنصر اسم ورقم</Button>
             {cfg.nameItems.length > 0 && selected && selected.kind === 'name' && (
@@ -425,14 +429,14 @@ export function PlayerSettingsPanel() {
                   <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">الحجم:</span><SizeButtons value={selSize} onChange={setSize} /></div>
                   <div className="flex items-center gap-2 flex-1 min-w-[200px]">
                     <span className="text-xs text-muted-foreground whitespace-nowrap">الشفافية: {Math.round(selOpacity * 100)}%</span>
-                    <Slider className="flex-1" value={[Math.round(selOpacity * 100)]} min={5} max={60} step={1} onValueChange={(v) => setOpacity(v[0] / 100)} />
+                    <Slider className="flex-1" value={[Math.round(selOpacity * 100)]} min={5} max={85} step={1} onValueChange={(v) => setOpacity(v[0] / 100)} />
                   </div>
                 </div>
                 {/* (MG-3) محتوى اللوجو الوسطاني */}
                 {selected.kind === 'logo' && (
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-muted-foreground">محتوى اللوجو:</span>
-                    {([['brand', 'لوجو بس'], ['name', 'اسم ورقم بس'], ['both', 'الاتنين (زي الأول)']] as const).map(([k, lbl]) => (
+                    {([['brand', 'لوجو بس'], ['name', 'اسم الطالب وتحتيه رقمه (زي الأول)'], ['both', 'لوجو فوق + اسم ورقم']] as const).map(([k, lbl]) => (
                       <Button key={k} type="button" size="sm" variant={cfg.centerLogo.content === k ? 'default' : 'outline'} className="h-7 px-2.5 text-xs" onClick={() => setLogoContent(k)}>{lbl}</Button>
                     ))}
                   </div>

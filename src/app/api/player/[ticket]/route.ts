@@ -326,10 +326,10 @@ const PLAYER_PAGE = `<!doctype html>
   .wm{position:absolute;inset:0;z-index:40;pointer-events:none;user-select:none;overflow:hidden}
   .wmCard,.wmNm{position:absolute;z-index:46;pointer-events:none;transform:translate(-50%,-50%)}
   .wmQr .in{display:inline-flex;flex-direction:column;align-items:center;gap:2px;
-    background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.28);color:#fff;
+    background:rgba(0,0,0,.66);border:1px solid rgba(255,255,255,.42);color:#fff;
     border-radius:9px;padding:3px 4px;direction:rtl;white-space:nowrap;
-    width:clamp(52px,6vw,80px);box-shadow:0 2px 10px rgba(0,0,0,.35)}
-  .wmQr .qr{width:clamp(26px,3vw,40px);height:clamp(26px,3vw,40px);border-radius:4px;
+    width:clamp(52px,6vw,80px);box-shadow:0 2px 10px rgba(0,0,0,.5)}
+  .wmQr .qr{width:clamp(28px,3.4vw,44px);height:clamp(28px,3.4vw,44px);border-radius:4px;
     background:#fff;padding:2px;display:block}
   .wmQr .nm{font-size:clamp(7px,.85vw,10px);font-weight:800;unicode-bidi:plaintext;
     letter-spacing:0;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
@@ -346,9 +346,9 @@ const PLAYER_PAGE = `<!doctype html>
   .wmQr.s-lg .nm{font-size:clamp(9px,1.1vw,13px)}
   .wmQr.s-lg .ph{font-size:clamp(8px,.95vw,11px)}
   /* شيب اسم الطالب + رقمه (بيترسم ديناميكيًا لكل طالب — {اسم} • {رقم}) */
-  .wmNm .in{display:inline-block;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.28);color:#fff;
+  .wmNm .in{display:inline-block;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.4);color:#fff;
     border-radius:9px;padding:3px 9px;direction:rtl;white-space:nowrap;
-    font-weight:800;unicode-bidi:plaintext;letter-spacing:0;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+    font-weight:800;unicode-bidi:plaintext;letter-spacing:0;box-shadow:0 2px 10px rgba(0,0,0,.45)}
   .wmNm.s-sm .in{font-size:clamp(8px,1vw,11px)}
   .wmNm.s-md .in{font-size:clamp(11px,1.4vw,15px)}
   .wmNm.s-lg .in{font-size:clamp(14px,1.9vw,20px)}
@@ -361,8 +361,9 @@ const PLAYER_PAGE = `<!doctype html>
     text-shadow:0 2px 14px rgba(0,0,0,.55),0 0 3px rgba(0,0,0,.45)}
   /* (MG-3) اللوجو الوسطاني ممكن يظهر عليه اسم الطالب ورقمه تحت — «زي الأول» */
   .wmLogo .in{display:block}
-  .wmLogo .sub{display:block;font-size:.4em;font-weight:800;letter-spacing:0;margin-top:.22em;opacity:.92;direction:rtl;unicode-bidi:plaintext}
-  .wmLogo .sub .ph{direction:ltr;unicode-bidi:plaintext}
+  .wmLogo .over{display:block;font-size:.42em;font-weight:900;letter-spacing:.5px;margin-bottom:.18em;opacity:.9;direction:ltr}
+  .wmLogo .sub{display:block;font-size:.4em;font-weight:800;letter-spacing:0;margin-top:.2em;opacity:.95;direction:rtl;unicode-bidi:plaintext}
+  .wmLogo .sub.ph{direction:ltr;unicode-bidi:plaintext}
   .wmLogo.s-sm{font-size:clamp(16px,2.5vw,34px)}
   .wmLogo.s-md{font-size:clamp(24px,4vw,56px)}
   .wmLogo.s-lg{font-size:clamp(36px,5.6vw,80px)}
@@ -586,15 +587,19 @@ var wmPhone = String(CFG.wm.phone || '').trim();
      دي الأساس الجديد حتى قبل ما صاحب المنصة يفتح لوحة الإعدادات */
 var PCFALLBACK = {
   barHeightMobile: 40, barHeightDesktop: 46, topShieldHeight: 0,
-  qrTL: { on: true, x: 6, y: 6, size: 'md', opacity: 0.26, blink: { on: false, show: 15, hide: 15 } },
-  qrBR: { on: true, x: 94, y: 84, size: 'md', opacity: 0.26, blink: { on: false, show: 15, hide: 15 } },
+  /* (MG-4) الشفافيات اترفعت — «عللي أنت الشفافية من عندك» */
+  qrTL: { on: true, x: 6, y: 6, size: 'md', opacity: 0.55, blink: { on: false, show: 15, hide: 15 } },
+  qrBR: { on: true, x: 94, y: 84, size: 'md', opacity: 0.55, blink: { on: false, show: 15, hide: 15 } },
   nameItems: [],
-  centerLogo: { on: false, x: 50, y: 46, size: 'lg', opacity: 0.14, content: 'both', blink: { on: false, show: 10, hide: 20 } },
+  centerLogo: { on: false, x: 50, y: 46, size: 'lg', opacity: 0.42, content: 'name', blink: { on: false, show: 10, hide: 20 } },
   ytMark: { on: true, size: 'lg' }
 };
 
 var PC = (function () {
   var fb = PCFALLBACK, c = CFG.pcfg || {};
+  /* (MG-4) ترقية v:1 → v:2 — الكونفج القديم شفافياته كانت باهتة فبتترفع */
+  var savedVer = Number(c.v) || 1;
+  var upgrade = savedVer < 2;
   function num(v, d, lo, hi) { var n = Number(v); if (!isFinite(n)) return d; return Math.min(hi, Math.max(lo, n)); }
   function size(v, d) { return (v === 'sm' || v === 'md' || v === 'lg') ? v : d; }
   function op(v, d, lo, hi) { var n = Number(v); if (!isFinite(n)) return d; return Math.min(hi, Math.max(lo, n)); }
@@ -605,12 +610,16 @@ var PC = (function () {
   }
   function qr(v, d) {
     var s = (v && typeof v === 'object') ? v : {};
-    return { on: s.on !== false, x: num(s.x, d.x, 0, 100), y: num(s.y, d.y, 0, 100), size: size(s.size, d.size), opacity: op(s.opacity, d.opacity, 0.05, 0.6), blink: blink(s.blink, d.blink) };
+    var o = op(s.opacity, d.opacity, 0.05, 0.85);
+    if (upgrade && s.opacity !== undefined) o = Math.max(o, 0.55); /* القديم 0.26 كان مش باين */
+    return { on: s.on !== false, x: num(s.x, d.x, 0, 100), y: num(s.y, d.y, 0, 100), size: size(s.size, d.size), opacity: o, blink: blink(s.blink, d.blink) };
   }
   function logo(v, d) {
     var s = (v && typeof v === 'object') ? v : {};
     var content = (s.content === 'brand' || s.content === 'name' || s.content === 'both') ? s.content : d.content;
-    return { on: s.on === true, x: num(s.x, d.x, 0, 100), y: num(s.y, d.y, 0, 100), size: size(s.size, d.size), opacity: op(s.opacity, d.opacity, 0.03, 0.4), content: content, blink: blink(s.blink, d.blink) };
+    var o = op(s.opacity, d.opacity, 0.03, 0.6);
+    if (upgrade && s.opacity !== undefined && s.opacity <= 0.2) o = Math.max(o, 0.42); /* القديم 0.14 كان مختفي */
+    return { on: s.on === true, x: num(s.x, d.x, 0, 100), y: num(s.y, d.y, 0, 100), size: size(s.size, d.size), opacity: o, content: content, blink: blink(s.blink, d.blink) };
   }
   function ytm(v, d) {
     var s = (v && typeof v === 'object') ? v : {};
@@ -621,7 +630,9 @@ var PC = (function () {
     var arr = Array.isArray(c.nameItems) ? c.nameItems : [];
     for (var i = 0; i < arr.length && items.length < 6; i++) {
       var it = arr[i]; if (!it || typeof it !== 'object') continue;
-      items.push({ id: String(it.id || ('nm-' + i)), x: num(it.x, 50, 0, 100), y: num(it.y, 10, 0, 100), size: size(it.size, 'md'), opacity: op(it.opacity, 0.3, 0.05, 0.6), blink: blink(it.blink, { on: false, show: 15, hide: 15 }) });
+      var no = op(it.opacity, 0.55, 0.05, 0.85);
+      if (upgrade) no = Math.max(no, 0.55);
+      items.push({ id: String(it.id || ('nm-' + i)), x: num(it.x, 50, 0, 100), y: num(it.y, 10, 0, 100), size: size(it.size, 'md'), opacity: no, blink: blink(it.blink, { on: false, show: 15, hide: 15 }) });
     }
   } catch (e) { items = []; }
   return {
@@ -705,17 +716,21 @@ function buildWm(){
       placeWm(nm, it); layer.appendChild(nm);
     }
   }
-  /* 4) لوجو المنصة في النص — (MG-3) المحتوى من الكونفج:
-     brand = «Math Genius» بس | name = اسم الطالب ورقمه | both = الاتنين (زي الأول) */
+  /* 4) لوجو المنصة في النص — (MG-4) الشكل الجديد «زي الأول»:
+     name = اسم الطالب الثنائي وتحتيه رقم تليفونه (سطرين — الافتراضي)
+     both = Math Genius فوق + الاسم تحتيه + الرقم تحتيه
+     brand = «Math Genius» بس */
   if(PC.centerLogo.on){
     var lg = document.createElement('div'); lg.className = 'wmLogo s-' + PC.centerLogo.size;
-    var lgContent = PC.centerLogo.content || 'both';
-    if(lgContent !== 'brand' && hasStudent){
-      var lgNm = esc(wmName || wmPhone) + ((wmName && wmPhone) ? ' <span class="ph">• ' + esc(wmPhone) + '</span>' : '');
+    var lgContent = PC.centerLogo.content || 'name';
+    var lgTwo = (function(){ var p = String(wmName||'').split(/\s+/).filter(Boolean); return p.slice(0,2).join(' '); })();
+    var lgSub = (lgTwo ? '<span class="sub">' + esc(lgTwo) + '</span>' : '') +
+                (wmPhone ? '<span class="sub ph">' + esc(wmPhone) + '</span>' : '');
+    if(lgContent !== 'brand' && (lgTwo || wmPhone)){
       if(lgContent === 'name'){
-        lg.innerHTML = '<span class="in">' + lgNm + '</span>';
+        lg.innerHTML = '<span class="in">' + esc(lgTwo || wmPhone) + '</span>' + lgSub;
       } else {
-        lg.innerHTML = '<span class="in">Math Genius</span><span class="sub">' + lgNm + '</span>';
+        lg.innerHTML = '<span class="over">Math Genius</span><span class="in">' + esc(lgTwo || wmPhone) + '</span>' + lgSub;
       }
     } else {
       lg.textContent = 'Math Genius';

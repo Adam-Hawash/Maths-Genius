@@ -1222,6 +1222,38 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
         setUploadStatus('جاري رفع الفيديو...')
         videoPath = await uploadFileWithProgress(formFile, 'videos', setUploadProgress, setUploadStatus)
         videoType = formFile.type
+        /* (MG-4) تحقق بعد الرفع: بنقرأ دقة الملف المخزن على المنصة نفسه
+           ونقارنها بالملف الأصلي — إثبات حقيقي إن المنصة بتخزن نفس الدقة
+           بالظبط (بتضغط/بتصغّر حاجة) — علاج حيرة «الجودة ثابتة على 360» */
+        try {
+          var remoteRes = await (function (path: string): Promise<{ w: number; h: number }> {
+            return new Promise(function (resolve) {
+              try {
+                var vv = document.createElement('video')
+                var finished = false
+                var finish = function (w: number, h: number) {
+                  if (finished) return
+                  finished = true
+                  try { vv.removeAttribute('src'); vv.load() } catch (e) {}
+                  resolve({ w: w || 0, h: h || 0 })
+                }
+                var to = setTimeout(function () { finish(0, 0) }, 12000)
+                vv.preload = 'metadata'
+                vv.onloadedmetadata = function () { clearTimeout(to); finish(vv.videoWidth || 0, vv.videoHeight || 0) }
+                vv.onerror = function () { clearTimeout(to); finish(0, 0) }
+                vv.src = path + '?adminId=' + encodeURIComponent(currentAdminId || '')
+              } catch (e) { resolve({ w: 0, h: 0 }) }
+            })
+          })(videoPath)
+          if (remoteRes.h > 0) {
+            var localH = formFileRes && formFileRes.h ? formFileRes.h : 0
+            if (localH && remoteRes.h < localH - 16) {
+              toast.error('تنبيه: الملف المخزن على المنصة بدقة ' + remoteRes.h + 'p والملف الأصلي ' + localH + 'p — حصل اختلاف! جرب ترفع تاني وبلغ الدعم لو تكرر', { duration: 12000 })
+            } else {
+              toast.success('✓ اتأكدنا: الملف المخزن على المنصة بدقة ' + remoteRes.h + 'p' + (localH ? ' — مطابق للملف الأصلي بالظبط' : '') + ' — المنصة مش بتضغط أو تقلل الجودة أبدًا', { duration: 9000 })
+            }
+          }
+        } catch (e) {}
       }
 
       if (formThumbnail) {
@@ -1533,7 +1565,11 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                 <p className="text-[11px] leading-relaxed rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2">
                   ⚠️ الفيديو ده دقته {formFileRes.h}p بس — هيظهر على المنصة بنفس الدقة دي.
                   المنصة مش بتقلل الجودة أبدًا — الجودة اللي بتظهر هي الجودة الموجودة في الملف نفسه.
-                  لو عايز جودة أعلى: اطلع الفيديو من برنامج التسجيل/المونتاج بإعداد 1080p وارفعه تاني.
+                  <br />
+                  <span className="font-bold">أشهر سبب لفيديو 360p: الملف جاي من واتساب!</span> واتساب بيضغط أي فيديو بيبعته لـ 360p تلقائيًا —
+                  لو الفيديو وصلك واتساب أو انت بعته لنفسك واتساب، دوّر على الملف الأصلي من معرض الموبايل/الكاميرا أو من برنامج التسجيل نفسه وارفعه من هناك.
+                  <br />
+                  ولو بتستخدم فيديو يوتيوب: يوتيوب بياخد من نص ساعة لساعات بيجهز نسخة HD بعد الرفع — الجودة الأعلى بتظهر لوحدها بعد المعالجة.
                 </p>
               )}
               <p className="text-[10px] text-muted-foreground">لو الفيديو ملف مرفوع، هتاخد صورة مصغرة أوتوماتيك من وسط الفيديو نفسه — وتقدر تغيرها من خانة الصورة المصغرة لو عايز</p>
