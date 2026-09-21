@@ -16,6 +16,8 @@
 //          GEMINI_API_KEYS=AIzaSy....,AIzaSy....,AIzaSy....
 // ============================================================
 
+import { db } from '@/lib/db'
+
 export var GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest']
 
 // Optional API base override (proxy/self-host testing). Defaults to Google's
@@ -56,6 +58,47 @@ export interface GeminiResult {
   model?: string
   error?: string
   status?: number
+}
+
+/* ============================================================
+ * (و77) DB model cache — السرعة على الكولد ستارت: آخر موديل نجح
+ * فعلًا على السيرفر بيتحفظ في جدول AiModelCache في قاعدة البيانات،
+ * وبكذا أي تشغيل جديد بيبدأ بالموديل الشغال من أول لحظة — من غير
+ * محاولات 404 مكررة ولا انتظار ListModels. كل حاجة try/catch:
+ * العطل هنا مستحيل يوصل لرحلة الشات أو التصحيح.
+ * ============================================================ */
+var aiCacheReady = false // once-per-process flag (أنشئ الجدول مرة واحدة)
+var aiCacheLoad: Promise<void> | null = null
+
+async function aiCacheInit(): Promise<void> {
+  if (aiCacheReady) return
+  if (!aiCacheLoad) {
+    aiCacheLoad = (async function () {
+      try {
+        await db.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS AiModelCache (key TEXT PRIMARY KEY, value TEXT)')
+        aiCacheReady = true
+      } catch (e) {
+        aiCacheLoad = null // جرب تاني في النداء الجاي — من غير أي رمي
+      }
+    })()
+  }
+  return aiCacheLoad
+}
+
+async function cacheGet(key: string): Promise<string | null> {
+  try {
+    await aiCacheInit()
+    var rows: any = await db.$queryRawUnsafe('SELECT value FROM AiModelCache WHERE key = ? LIMIT 1', key)
+    if (rows && rows.length > 0 && rows[0].value != null) return String(rows[0].value)
+  } catch (e) {}
+  return null
+}
+
+async function cacheSet(key: string, value: string): Promise<void> {
+  try {
+    await aiCacheInit()
+    await db.$executeRawUnsafe('INSERT OR REPLACE INTO AiModelCache (key, value) VALUES (?, ?)', key, value)
+  } catch (e) {}
 }
 
 /* ============================================================
@@ -137,6 +180,8 @@ async function discoverModels(): Promise<string[]> {
       discoveredModels = rankModels(found)
       discoveredAt = Date.now()
       try { console.log('[Gemini] Available models for this key:', discoveredModels.slice(0, 8).join(', ')) } catch (e) {}
+      /* (و77) اكتشاف ناجح → خزّن القائمة في القاعدة للكولد ستارت الجاي */
+      try { cacheSet('models_json', JSON.stringify(discoveredModels)) } catch (e) {}
     }
     return discoveredModels
   })()
@@ -153,10 +198,26 @@ async function discoverModels(): Promise<string[]> {
 // BACKGROUND to keep the cache fresh, and is only AWAITED when
 // every static attempt already failed (self-healing preserved).
 // ============================================================
-function getStaticChain(): string[] {
+async function getStaticChain(): Promise<string[]> {
   var chain: string[] = []
+  /* (و77) آخر موديل نجح فعلًا (محفوظ في القاعدة) — أول واحد في السلسلة */
+  var wm = await cacheGet('working_model')
+  if (wm && chain.indexOf(wm) < 0) chain.push(wm)
   for (var i = 0; i < GEMINI_MODELS.length; i++) if (chain.indexOf(GEMINI_MODELS[i]) < 0) chain.push(GEMINI_MODELS[i])
   for (var j = 0; j < discoveredModels.length; j++) if (chain.indexOf(discoveredModels[j]) < 0) chain.push(discoveredModels[j])
+  /* (و77) الموديلات المكتشفة سابقًا والمحفوظة في القاعدة */
+  var mj = await cacheGet('models_json')
+  try {
+    if (mj) {
+      var arr = JSON.parse(mj)
+      if (Array.isArray(arr)) {
+        for (var k = 0; k < arr.length; k++) {
+          var id = String(arr[k] || '')
+          if (id && chain.indexOf(id) < 0) chain.push(id)
+        }
+      }
+    }
+  } catch (e) {}
   return chain
 }
 
@@ -300,7 +361,7 @@ export async function callGemini(opts: {
 
   // background refresh (cached 10 min) — never awaited on the fast path
   var discoveryPromise = discoverModels()
-  var staticModels = getStaticChain()
+  var staticModels = await getStaticChain()
 
   var tryModels = async function (models: string[]): Promise<GeminiResult | null> {
     // Outer: passes (2nd pass clears short RPM blips) — then models — then keys
@@ -315,7 +376,11 @@ export async function callGemini(opts: {
           var t = timeoutMs
           if (attemptIndex === 1 && opts.fastFailFirstMs) t = opts.fastFailFirstMs
           var result = await attempt(models[mi], keys[ki], opts.parts, generationConfig, t, thinkingMode)
-          if (result.ok) return result
+          if (result.ok) {
+            /* (و77) نجاح → احفظ الموديل الشغال للكولد ستارت الجاي (بدون انتظار) */
+            try { cacheSet('working_model', models[mi]) } catch (e) {}
+            return result
+          }
           lastError = result.error || ''
           if (result.status === 429) {
             sawQuota = true
@@ -441,7 +506,7 @@ async function streamAttempt(model: string, apiKey: string, parts: any[], genera
   return first
 }
 
-export async function callGeminiStream(opts: {
+export async function streamGemini(opts: {
   parts: any[]
   generationConfig?: any
   timeoutMs?: number
@@ -459,13 +524,17 @@ export async function callGeminiStream(opts: {
   var sawQuota = false
 
   var discoveryPromise = discoverModels()
-  var staticModels = getStaticChain()
+  var staticModels = await getStaticChain()
 
   var tryList = async function (models: string[]): Promise<GeminiResult | null> {
     for (var mi = 0; mi < models.length; mi++) {
       for (var ki = 0; ki < keys.length; ki++) {
         var result = await streamAttempt(models[mi], keys[ki], opts.parts, generationConfig, timeoutMs, thinkingMode, opts.onDelta)
-        if (result.ok) return result
+        if (result.ok) {
+          /* (و77) نجاح → احفظ الموديل الشغال للكولد ستارت الجاي (بدون انتظار) */
+          try { cacheSet('working_model', models[mi]) } catch (e) {}
+          return result
+        }
         lastError = result.error || ''
         if (result.status === 429) {
           sawQuota = true
