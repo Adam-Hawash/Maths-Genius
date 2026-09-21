@@ -1610,6 +1610,8 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
   var [remainMs, setRemainMs] = useState(0)
   var [submitting, setSubmitting] = useState(false)
   var [myRowKey, setMyRowKey] = useState('')
+  /* (و70-ج) مصدر الكروت: كروت المستر المرفوعة أو تدريب مولّد */
+  var [deckSource, setDeckSource] = useState('generated')
 
   /* مراجع — الحكم اللحظي ميبقاش فيه state قديم */
   var cardsRef = useRef<FlashCard[]>([])
@@ -1660,6 +1662,7 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
         toast.error(String((d && d.error) || 'مشكلة في تجهيز الجولة'))
         return
       }
+      setDeckSource(String(d.source || 'generated'))
       cardsRef.current = d.cards
       setCards(d.cards)
       idxRef.current = 0
@@ -1795,8 +1798,14 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
           </div>
           <CardContent className="p-5 space-y-4">
             <p className="leading-relaxed text-sm font-bold">
-              <span dir="ltr">10</span> بطاقات سريعة — كل بطاقة <span dir="ltr">8</span> ثواني بس! الدقة + السرعة = نقاط. <span dir="ltr">3</span> صح ورا بعض = بونص 🔥
+              <span dir="ltr">10</span> بطاقات سريعة — كل بطاقة على مدة المستر! الدقة + السرعة = نقاط. <span dir="ltr">3</span> صح ورا بعض = بونص 🔥
             </p>
+            {/* (و70-ج) مصدر الجولة: كروت المستر المرفوعة أو تدريب مولّد */}
+            {deckSource === 'deck' ? (
+              <p className="rounded-xl bg-fuchsia-500/10 px-3 py-2 text-[13px] font-black text-fuchsia-700 dark:text-fuchsia-300 ring-1 ring-fuchsia-400/30">
+                🎯 الجولة دي على كروت المستر اللي حطها — ركّز يا بطل!
+              </p>
+            ) : null}
             <Button
               onClick={function () { startRound() }}
               disabled={loadingRound}

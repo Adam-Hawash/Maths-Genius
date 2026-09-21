@@ -50,6 +50,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: true, board: board })
     }
 
+    /* (و70-ج) قايمة كروت المستر — للأدمن */
+    if (mode === 'deck') {
+      var dRows = await db.$queryRawUnsafe('SELECT * FROM FlashcardCard ORDER BY createdAt DESC LIMIT 500')
+      var deck = ((dRows || []) as any[]).map(function (r: any) {
+        return {
+          id: String(r.id),
+          fileName: String(r.fileName || ''),
+          front: String(r.front || ''),
+          back: String(r.back || ''),
+          active: Number(r.active || 0) === 1,
+        }
+      })
+      var activeCount = deck.filter(function (c) { return c.active }).length
+      return NextResponse.json({ ok: true, cards: deck, activeCount: activeCount })
+    }
+
     /* (2026-و68) إعدادات المدة — للأدمن */
     if (mode === 'settings') {
       var secs = await readFlashcardSeconds()
@@ -58,10 +74,58 @@ export async function GET(request: NextRequest) {
 
     // جولة جديدة — بالمدة اللي حددها الأدمن (15 افتراضي)
     var seconds = await readFlashcardSeconds()
-    var cards = generateFlashcards(10, seconds)
+
+    /* (و70-ج) الأولوية لكروت المستر المرفوعة — «تحدي على الـ flash cards
+       والحاجات اللي احنا بنحطها»: لو فيه كروت نشطة بنتحدي بها بدل المولد.
+       الأمام سؤال والظهر إجابة — والاختيارات من ظهور كروت تانية. */
+    var deckCards: any[] = []
+    try {
+      var deckRows = await db.$queryRawUnsafe(
+        'SELECT id, front, back FROM FlashcardCard WHERE active = 1 ORDER BY RANDOM() LIMIT 10'
+      )
+      deckCards = (deckRows || []) as any[]
+    } catch (e2) { /* الجدول لسه مش موجود — المولد يتكفل */ }
+
+    var source = 'generated'
+    var cards: any[] = []
+    if (deckCards.length >= 4) {
+      source = 'deck'
+      var backs: string[] = deckCards.map(function (c) { return String(c.back || '').trim() })
+      var shuffled = deckCards.slice(0)
+      for (var i = shuffled.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1))
+        var t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t
+      }
+      cards = shuffled.map(function (c: any) {
+        var correct = String(c.back || '').trim()
+        var dis: string[] = []
+        for (var d = 0; d < backs.length && dis.length < 3; d++) {
+          var b = backs[d]
+          if (b && b !== correct && dis.indexOf(b) === -1) dis.push(b)
+        }
+        var options = [correct].concat(dis).slice(0, 4)
+        // خلط الاختيارات
+        for (var o = options.length - 1; o > 0; o--) {
+          var k2 = Math.floor(Math.random() * (o + 1))
+          var t2 = options[o]; options[o] = options[k2]; options[k2] = t2
+        }
+        return {
+          id: String(c.id),
+          text: String(c.front || '').trim(),
+          options: options,
+          correctIndex: options.indexOf(correct),
+          timeLimitSec: seconds,
+        }
+      }).filter(function (c: any) { return c.text && c.correctIndex >= 0 })
+      if (cards.length < 4) { source = 'generated'; cards = [] }
+    }
+    if (cards.length === 0) {
+      cards = generateFlashcards(10, seconds)
+    }
     return NextResponse.json({
       ok: true,
       seconds: seconds,
+      source: source,
       cards: cards.map(function (c: any) {
         return {
           id: c.id,
@@ -83,6 +147,62 @@ export async function POST(request: Request) {
     await ensureArenaTables()
     var body = await request.json().catch(function () { return ({} as any) })
     var action = String(body.action || 'submit')
+
+    /* (و70-ج) إدارة كروت المستر (أدمن) */
+    if (action === 'addCard') {
+      var front = String(body.front || '').trim().slice(0, 400)
+      var back = String(body.back || '').trim().slice(0, 400)
+      if (!front || !back) return NextResponse.json({ ok: false, error: 'اكتب الأمام والظهر' }, { status: 400 })
+      var cid = 'fcd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+      await safeWrite(function () {
+        return db.$executeRawUnsafe(
+          "INSERT INTO FlashcardCard (id, fileName, front, back, active, createdAt) VALUES (?, '', ?, ?, 1, CURRENT_TIMESTAMP)",
+          cid, front, back
+        )
+      })
+      return NextResponse.json({ ok: true, id: cid })
+    }
+    if (action === 'bulkCards') {
+      var text = String(body.text || '')
+      var lines = text.split('\n')
+      var added = 0
+      for (var li = 0; li < lines.length; li++) {
+        var ln = lines[li].trim()
+        if (!ln) continue
+        var parts = ln.split('|')
+        if (parts.length < 2) continue
+        var f2 = parts[0].trim().slice(0, 400)
+        var b2 = parts.slice(1).join(' | ').trim().slice(0, 400)
+        if (!f2 || !b2) continue
+        var bid = 'fcd_' + Date.now().toString(36) + li.toString(36) + Math.random().toString(36).slice(2, 6)
+        await safeWrite(function () {
+          return db.$executeRawUnsafe(
+            "INSERT INTO FlashcardCard (id, fileName, front, back, active, createdAt) VALUES (?, '', ?, ?, 1, CURRENT_TIMESTAMP)",
+            bid, f2, b2
+          )
+        })
+        added++
+      }
+      return NextResponse.json({ ok: true, added: added })
+    }
+    if (action === 'toggleCard') {
+      await safeWrite(function () {
+        return db.$executeRawUnsafe('UPDATE FlashcardCard SET active = ? WHERE id = ?', body.active ? 1 : 0, String(body.id || ''))
+      })
+      return NextResponse.json({ ok: true })
+    }
+    if (action === 'deleteCard') {
+      await safeWrite(function () {
+        return db.$executeRawUnsafe('DELETE FROM FlashcardCard WHERE id = ?', String(body.id || ''))
+      })
+      return NextResponse.json({ ok: true })
+    }
+    if (action === 'clearDeck') {
+      await safeWrite(function () {
+        return db.$executeRawUnsafe('DELETE FROM FlashcardCard')
+      })
+      return NextResponse.json({ ok: true })
+    }
 
     /* (2026-و68) setTime — الأدمن بيحدد مدة البطاقة (5-90 ثانية) */
     if (action === 'setTime') {

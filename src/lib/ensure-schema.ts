@@ -51,6 +51,10 @@ export var SCHEMA_TABLES = [
      الطالب ياخد أسئلة عشوائية من كل الملفات + محاولات محفوظة بلوحة ترتيب */
   'CREATE TABLE IF NOT EXISTS ChallengeBankQuestion (id TEXT PRIMARY KEY, fileName TEXT DEFAULT \'\', question TEXT NOT NULL, options TEXT NOT NULL DEFAULT \'[]\', correctIndex INTEGER NOT NULL DEFAULT 0, points INTEGER NOT NULL DEFAULT 10, active INTEGER NOT NULL DEFAULT 1, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   'CREATE TABLE IF NOT EXISTS ChallengeAttempt (id TEXT PRIMARY KEY, studentId TEXT DEFAULT \'\', name TEXT NOT NULL, score INTEGER NOT NULL DEFAULT 0, correctCount INTEGER NOT NULL DEFAULT 0, totalQuestions INTEGER NOT NULL DEFAULT 10, timeMs INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  /* (و70-ج) كروت الفلاش بتاعة المستر — «تحدي على الـ flash cards والحاجات
+     اللي احنا بنحطها» — الأمام سؤال والظهر إجابة (بالإنجليزي) والطالب
+     بيتحدي عليها بنفس مؤقت الفلاش كاردز ولوحة الشرف */
+  'CREATE TABLE IF NOT EXISTS FlashcardCard (id TEXT PRIMARY KEY, fileName TEXT DEFAULT \'\', front TEXT NOT NULL, back TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
 ]
 
 var SCHEMA_COLUMNS = [
@@ -201,7 +205,7 @@ export var SCHEMA_INDEXES = [
 /* (2026-و66) الجداول الجديدة (ساحة التحدي + الخرائط الذهنية) دخلت CORE_TABLES
  * والبصمة اتبدّلت — نفس درس و38/و40/و43/و44/و45: من غير كده الجداول الجديدة
  * عمرها ما بتتعمل على Turso أول ريكوست بعد النشر */
-export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book', 'Notification', 'BattleRoom', 'BattlePlayer', 'TeacherChallenge', 'ChallengeEntry', 'FlashcardScore', 'MindMap', 'ChallengeBankQuestion', 'ChallengeAttempt']
+export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book', 'Notification', 'BattleRoom', 'BattlePlayer', 'TeacherChallenge', 'ChallengeEntry', 'FlashcardScore', 'MindMap', 'ChallengeBankQuestion', 'ChallengeAttempt', 'FlashcardCard']
 
 /* (2026-و38) مفتاح البصمة اتبدل — البصمة القديمة كانت اتخزنت على الإنتاج
  * بعد ما كود و37 نزل (والجدول وقتها مش معمول لسه في CORE_TABLES فالترميم

@@ -11,7 +11,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Database, FileText, Film, Flame, Loader2, RotateCcw, Swords, Timer, Trash2, Trophy, Upload, XCircle, Youtube } from 'lucide-react'
+import { CheckCircle2, Database, FileText, Film, Flame, Loader2, Plus, RotateCcw, Swords, Timer, Trash2, Trophy, Upload, XCircle, Youtube } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -137,6 +137,14 @@ export function TeacherChallengePanel() {
   const [fcSeconds, setFcSeconds] = useState('15')
   const [fcSaving, setFcSaving] = useState(false)
   const [bankBusy, setBankBusy] = useState('')
+  /* (و70-ج) كروت الفلاش بتاعة المستر — تحدي على اللي احنا بنحطه */
+  const [deckCards, setDeckCards] = useState<Array<{ id: string; front: string; back: string; active: boolean }>>([])
+  const [deckOpen, setDeckOpen] = useState(false)
+  const [deckFront, setDeckFront] = useState('')
+  const [deckBack, setDeckBack] = useState('')
+  const [deckBulk, setDeckBulk] = useState('')
+  const [deckBulkOpen, setDeckBulkOpen] = useState(false)
+  const [deckBusy, setDeckBusy] = useState('')
 
   const loadBank = useCallback(async function () {
     try {
@@ -232,6 +240,79 @@ export function TeacherChallengePanel() {
       toast.error('مشكلة في الاتصال')
     } finally {
       setFcSaving(false)
+    }
+  }
+
+  /* (و70-ج) تحميل قايمة كروت المستر */
+  const loadDeck = useCallback(async function () {
+    try {
+      const res = await fetch('/api/arena/flashcards?mode=deck')
+      const d = await res.json()
+      if (res.ok && d.ok) setDeckCards(d.cards || [])
+    } catch (e) { /* شبكة */ }
+  }, [])
+
+  useEffect(function () {
+    loadDeck()
+  }, [loadDeck])
+
+  const deckAction = async function (payload: Record<string, unknown>, msg: string) {
+    setDeckBusy(String(payload.id || payload.action || 'x'))
+    try {
+      const res = await fetch('/api/arena/flashcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const d = await res.json().catch(function () { return null })
+      if (res.ok && d && d.ok) {
+        toast.success(msg)
+        await loadDeck()
+      } else {
+        toast.error(String((d && d.error) || 'حصلت مشكلة'))
+      }
+    } catch (e) {
+      toast.error('مشكلة في الاتصال')
+    } finally {
+      setDeckBusy('')
+    }
+  }
+
+  const addDeckCard = async function () {
+    if (!deckFront.trim() || !deckBack.trim()) {
+      toast.error('اكتب الأمام (السؤال) والظهر (الإجابة)')
+      return
+    }
+    await deckAction({ action: 'addCard', front: deckFront, back: deckBack }, 'الكارت اتضاف ✅')
+    setDeckFront('')
+    setDeckBack('')
+  }
+
+  const addBulkCards = async function () {
+    if (!deckBulk.trim()) {
+      toast.error('اكتب الكروت — كل سطر: السؤال | الإجابة')
+      return
+    }
+    setDeckBusy('bulk')
+    try {
+      const res = await fetch('/api/arena/flashcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bulkCards', text: deckBulk }),
+      })
+      const d = await res.json().catch(function () { return null })
+      if (res.ok && d && d.ok) {
+        toast.success('اتضاف ' + String(d.added || 0) + ' كارت ✅')
+        setDeckBulk('')
+        setDeckBulkOpen(false)
+        await loadDeck()
+      } else {
+        toast.error(String((d && d.error) || 'حصلت مشكلة'))
+      }
+    } catch (e) {
+      toast.error('مشكلة في الاتصال')
+    } finally {
+      setDeckBusy('')
     }
   }
 
@@ -584,6 +665,135 @@ export function TeacherChallengePanel() {
               })}
             </div>
           </div>
+        </CardContent>
+      </Card>
+      {/* ============ (و70-ج) كروت الفلاش بتاعة المستر — تحدي على اللي احنا بنحطه ============ */}
+      <Card className="border-violet-300 dark:border-violet-800">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Database className="h-5 w-5 text-fuchsia-600" />
+            ⚡ كروت الفلاش بتاعتك — تحدي على محتواك (بالإنجليزي)
+            <Badge variant="outline" className="font-black" dir="ltr">{deckCards.filter(function (c) { return c.active }).length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            حط كروت (سؤال ← إجابة) من اللي بتحطه في المنصة — أول ما يكون فيه <b>4 كروت نشطة</b>،
+            تحدي «⚡ فلاش كاردز» عند الطلاب هيبقى <b>على كروتك بالإنجليزي</b> بنفس المدة اللي فوق
+            ولوحة الشرف. لو مفيش كروت، الطالب بياخد تدريب سريع مولّد تلقائي.
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-muted-foreground">الأمام — السؤال (Front)</label>
+              <Input
+                value={deckFront}
+                onChange={function (e) { setDeckFront(e.target.value) }}
+                placeholder="What is 7 × 8?"
+                className="min-h-11"
+                dir="ltr"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-muted-foreground">الظهر — الإجابة (Back)</label>
+              <Input
+                value={deckBack}
+                onChange={function (e) { setDeckBack(e.target.value) }}
+                placeholder="56"
+                className="min-h-11"
+                dir="ltr"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={addDeckCard}
+              disabled={deckBusy === 'addCard'}
+              className="min-h-11 gap-2 bg-gradient-to-l from-fuchsia-600 to-violet-600 font-black text-white"
+            >
+              {deckBusy === 'addCard' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              ضيف كارت
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={function () { setDeckBulkOpen(function (v) { return !v }) }}
+              className="min-h-11 gap-2 font-bold"
+            >
+              <FileText className="h-4 w-4" />
+              لزق كروت كتير
+            </Button>
+            {deckCards.length > 0 ? (
+              <Button type="button" variant="outline" onClick={function () { setDeckOpen(function (v) { return !v }) }} className="min-h-11 gap-2 font-bold">
+                {deckOpen ? 'اخفي الكروت' : 'شوف الكروت'} ({deckCards.length})
+              </Button>
+            ) : null}
+            {deckCards.length > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={deckBusy === 'clearDeck'}
+                onClick={function () { if (window.confirm('متأكد إنك عايز تمسح كل الكروت؟')) deckAction({ action: 'clearDeck' }, 'كل الكروت اتمسحت') }}
+                className="min-h-11 gap-1.5 text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400"
+              >
+                {deckBusy === 'clearDeck' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                امسح الكل
+              </Button>
+            ) : null}
+          </div>
+
+          {deckBulkOpen ? (
+            <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
+              <p className="text-xs font-bold text-muted-foreground">كل سطر كارت واحد — السؤال ثم علامة | ثم الإجابة:</p>
+              <Textarea
+                value={deckBulk}
+                onChange={function (e) { setDeckBulk(e.target.value) }}
+                placeholder={'What is 7 × 8? | 56\nWhat is the square root of 81? | 9\nSolve: 2x + 3 = 11 | x = 4'}
+                rows={6}
+                dir="ltr"
+                className="font-mono text-left"
+              />
+              <Button type="button" onClick={addBulkCards} disabled={deckBusy === 'bulkCards'} className="min-h-11 gap-2 bg-gradient-to-l from-fuchsia-600 to-violet-600 font-black text-white">
+                {deckBusy === 'bulkCards' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                ضيف كل السطور
+              </Button>
+            </div>
+          ) : null}
+
+          {deckOpen && deckCards.length > 0 ? (
+            <div className="max-h-96 space-y-2 overflow-y-auto rounded-xl border bg-muted/30 p-2">
+              {deckCards.map(function (c) {
+                return (
+                  <div key={c.id} className="rounded-lg border bg-card p-3">
+                    <div className="flex items-start gap-2" dir="ltr">
+                      <p className="min-w-0 flex-1 text-left text-sm font-bold leading-relaxed break-words">{c.front}</p>
+                      <Badge variant="outline" className="shrink-0 font-black" dir="ltr">{c.back}</Badge>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          title={c.active ? 'إخفاء الكارت' : 'تفعيل تاني'}
+                          onClick={function () { deckAction({ action: 'toggleCard', id: c.id, active: !c.active }, c.active ? 'الكارت اتخفى' : 'الكارت اتفعل') }}
+                          className={'flex h-7 w-7 items-center justify-center rounded-full ' + (c.active ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-stone-500/15 text-stone-500')}
+                        >
+                          {c.active ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                        </button>
+                        <button
+                          type="button"
+                          title="مسح الكارت"
+                          onClick={function () { deckAction({ action: 'deleteCard', id: c.id }, 'الكارت اتمسح') }}
+                          className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/15 text-red-600 dark:text-red-400"
+                        >
+                          {deckBusy === c.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
