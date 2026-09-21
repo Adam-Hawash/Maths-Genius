@@ -24,6 +24,10 @@ import {
   Swords, Zap, Crown, Trophy, Timer, Flame, Copy, LogOut, LogIn,
   Play, Check, X, Loader2, RotateCcw, UserPlus, Plus, GraduationCap, ListChecks, RefreshCw,
 } from 'lucide-react'
+/* (2026-و71) عارض الماث بتاع المنصة نفسه — الأس ² والكسور المكدسة
+   زي الامتحانات بالظبط — طلب المستر: «عاوز الحاجات تبقى بالماث
+   زي الحاجات بتاعة الماث اللي إحنا عاملينها في منصتنا» */
+import { FractionText } from '@/components/FractionText'
 
 /* ============================================================
  * الأنواع — مطابقة لعقود الـ APIs الحية (ممنوع نغيرها)
@@ -737,7 +741,11 @@ function GroupsMode({ studentName }: { studentName: string }) {
               />
             </div>
 
-            <h3 className="text-xl font-bold leading-relaxed">{liveQ.text}</h3>
+            {/* (و71) السؤال والاختيارات بـ FractionText زي امتحانات المنصة —
+                الأس والكسور بتترسم صح ومفيش قلب اتجاه للأرقام */}
+            <h3 dir="ltr" className="text-left text-xl font-bold leading-relaxed">
+              <FractionText text={liveQ.text} />
+            </h3>
 
             {/* كشف الإجابة لما وقت السؤال يخلص — لكل اللاعبين */}
             {gRoom.revealed ? (
@@ -747,10 +755,13 @@ function GroupsMode({ studentName }: { studentName: string }) {
                 className="rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-3.5 space-y-1"
               >
                 <p className="font-black text-emerald-700 dark:text-emerald-300">
-                  ✅ الإجابة الصح: {gRoom.revealed.correctIndex >= 0 ? liveQ.options[gRoom.revealed.correctIndex] : '—'}
+                  ✅ الإجابة الصح:{' '}
+                  {gRoom.revealed.correctIndex >= 0 ? (
+                    <span dir="ltr" className="inline-block"><FractionText text={liveQ.options[gRoom.revealed.correctIndex]} /></span>
+                  ) : '—'}
                 </p>
                 {gRoom.revealed.explanation ? (
-                  <p className="text-sm text-emerald-800/80 dark:text-emerald-200/80 leading-relaxed">💡 {gRoom.revealed.explanation}</p>
+                  <p className="text-sm text-emerald-800/80 dark:text-emerald-200/80 leading-relaxed">💡 <FractionText text={gRoom.revealed.explanation} /></p>
                 ) : null}
               </motion.div>
             ) : null}
@@ -798,7 +809,7 @@ function GroupsMode({ studentName }: { studentName: string }) {
                     <span className="grid place-items-center size-7 rounded-lg bg-stone-100 dark:bg-stone-800 font-mono text-sm shrink-0" dir="ltr">
                       {LETTERS[i] || '•'}
                     </span>
-                    <span className="flex-1 text-start leading-snug">{opt}</span>
+                    <span dir="ltr" className="flex-1 text-left leading-snug break-words"><FractionText text={opt} /></span>
                     {sendingAnswer && pendingChoice === i ? <Loader2 className="size-4 animate-spin shrink-0" /> : null}
                   </Button>
                 )
@@ -973,19 +984,19 @@ function GroupsMode({ studentName }: { studentName: string }) {
                     var myChoiceText = ans && ans.choice >= 0 && ans.choice < q.options.length ? q.options[ans.choice] : '—'
                     return (
                       <div key={qi} className="rounded-xl border p-3 space-y-1.5">
-                        <p className="font-bold text-sm leading-relaxed">{qi + 1}. {q.text}</p>
+                        <p dir="ltr" className="text-left font-bold text-sm leading-relaxed">{qi + 1}. <FractionText text={q.text} /></p>
                         {ans ? (
                           <p className={'text-sm font-black ' + (Number(ans.correct) ? 'text-emerald-600' : 'text-red-600')}>
-                            {Number(ans.correct) ? '✅ إجابتك: ' : '❌ إجابتك: '}{myChoiceText}
+                            {Number(ans.correct) ? '✅ إجابتك: ' : '❌ إجابتك: '}<span dir="ltr" className="inline-block"><FractionText text={myChoiceText} /></span>
                           </p>
                         ) : (
                           <p className="text-sm text-stone-400 font-bold">⌛ ما جاوبتش في السؤال ده</p>
                         )}
                         {!ans || !Number(ans.correct) ? (
-                          <p className="text-sm text-emerald-600 font-bold">الإجابة الصح: {q.options[q.correctIndex]}</p>
+                          <p className="text-sm text-emerald-600 font-bold">الإجابة الصح: <span dir="ltr" className="inline-block"><FractionText text={q.options[q.correctIndex]} /></span></p>
                         ) : null}
                         {q.explanation ? (
-                          <p className="text-xs text-muted-foreground leading-relaxed">💡 {q.explanation}</p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">💡 <FractionText text={q.explanation} /></p>
                         ) : null}
                       </div>
                     )
@@ -1213,7 +1224,7 @@ function BankChallenge({ studentId, studentName }: { studentId: string; studentN
               )
             })}
           </div>
-          <p dir="ltr" className="text-left text-lg font-bold leading-relaxed sm:text-xl">{q.question}</p>
+          <p dir="ltr" className="text-left text-lg font-bold leading-relaxed sm:text-xl"><FractionText text={q.question} /></p>
           {submitting ? (
             <div className="py-8 flex flex-col items-center gap-2">
               <Loader2 className="size-7 animate-spin text-violet-500" />
@@ -1235,7 +1246,7 @@ function BankChallenge({ studentId, studentName }: { studentId: string; studentN
                     <span className="grid place-items-center size-7 rounded-lg bg-violet-100 dark:bg-violet-900/50 font-mono text-sm shrink-0" dir="ltr">
                       {LETTERS[i] || '•'}
                     </span>
-                    <span dir="ltr" className="flex-1 text-left leading-snug break-words">{opt}</span>
+                    <span dir="ltr" className="flex-1 text-left leading-snug break-words"><FractionText text={opt} /></span>
                   </Button>
                 )
               })}
@@ -1517,7 +1528,9 @@ function TeacherMode({ studentId, studentName }: { studentId: string; studentNam
         <CardContent className="p-5 space-y-4">
           {/* (2026-و68-إضافي) فيديو المستر — فوق السؤال، بس لو فيه فيديو فعلًا */}
           <ChallengeVideo url={String(active.videoUrl || '')} type={String(active.videoType || '')} />
-          <p className="text-xl font-bold leading-relaxed">{active.question}</p>
+          {/* (و71) سؤال المستر بـ FractionText — dir=auto عشان كلام المستر العربي
+              يفضل RTL والماث جواه بيتعزل LTR ويترسم صح */}
+          <p dir="auto" className="text-xl font-bold leading-relaxed"><FractionText text={active.question} /></p>
 
           {data && data.myEntry ? (
             <motion.div
@@ -1541,7 +1554,7 @@ function TeacherMode({ studentId, studentName }: { studentId: string; studentNam
                     <span className="grid place-items-center size-7 rounded-lg bg-amber-100 dark:bg-amber-900/50 font-mono text-sm shrink-0" dir="ltr">
                       {LETTERS[i] || '•'}
                     </span>
-                    <span className="flex-1 text-start leading-snug">{opt}</span>
+                    <span dir="ltr" className="flex-1 text-left leading-snug break-words"><FractionText text={opt} /></span>
                     {submitting ? <Loader2 className="size-4 animate-spin shrink-0" /> : null}
                   </Button>
                 )
@@ -1898,7 +1911,11 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
           >
             <Card>
               <CardContent className="p-5 space-y-4">
-                <p className="text-xl font-bold leading-relaxed text-center">{cardNow.text}</p>
+                {/* (و71) نص الكارد بـ FractionText — أس/كسور بتترسم زي المنصة.
+                    dir=auto: كروت المحرك الإنجليزي LTR وكروت المستر العربي RTL */}
+                <p dir="auto" className="text-xl font-bold leading-relaxed text-center">
+                  <FractionText text={cardNow.text} />
+                </p>
                 <div className="grid grid-cols-2 gap-2.5">
                   {cardNow.options.map(function (opt, i) {
                     var cls = 'min-h-12 text-base font-bold border-2 justify-center'
@@ -1913,7 +1930,7 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
                     }
                     return (
                       <Button key={i} variant="outline" disabled={!!feedback} onClick={function () { fcSettle(i) }} className={cls}>
-                        {opt}
+                        <span dir="ltr" className="leading-snug"><FractionText text={opt} /></span>
                       </Button>
                     )
                   })}
@@ -1927,9 +1944,9 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
                     {feedback.correct ? (
                       <>صح! <span dir="ltr">+{feedback.gained}</span>{streak >= 3 ? ' 🔥 بونص الستريك' : ''}</>
                     ) : feedback.timeout ? (
-                      <>⌛ الوقت خلص! الإجابة الصح: {cardNow.options[Number(cardNow.correctIndex)]}</>
+                      <>⌛ الوقت خلص! الإجابة الصح: <span dir="ltr" className="inline-block"><FractionText text={cardNow.options[Number(cardNow.correctIndex)]} /></span></>
                     ) : (
-                      <>❌ غلط — الإجابة الصح: {cardNow.options[Number(cardNow.correctIndex)]}</>
+                      <>❌ غلط — الإجابة الصح: <span dir="ltr" className="inline-block"><FractionText text={cardNow.options[Number(cardNow.correctIndex)]} /></span></>
                     )}
                   </motion.p>
                 ) : null}

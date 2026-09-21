@@ -10,18 +10,23 @@
 //   + دعم رفع صورة معادلة (VLM): الزاي والجيميني بيقرا الصورة ويولد
 //     10 أسئلة على نفس الفكرة/المعادلة بأرقام مختلفة.
 //
-//   3 محركات بالترتيب — اللي ينجح أولًا بيكسب:
-//   1) ZAI (z-ai-web-dev-sdk) — نصوص + رؤية بدون مفاتيح
-//   2) Gemini (GEMINI_API_KEYS) — احتياطي على Vercel (نصوص + رؤية)
-//   3) المحرك المحلي (lib/question-gen) — مضمون 100% للنصوص
-//   لو الـ AI رجّع أقل من 10 أسئلة سليمة → بيتكمل من المحرك المحلي
-//   عشان الطالب **دايمًا** ياخد 10 أسئلة كاملة مهما حصل.
+//   (2026-و71) طلب المستر: «اتدرب أكتر» لازم يطلع ماث إنجليزي نضيف
+//   زي أسئلة المنصة نفسها ("Calculate: 2^3 × 2^3 = ?") — مش كلام عربي
+//   ولا ماث مكسور. الترتيب بقى:
+//   1) المحرك المحلي (lib/question-gen) — **الأول خالص** لو الطلب بيطابق
+//      موضوع معروف من مواضيع المنصة (matchTopicKey) — كود محسوب دقة
+//      100% بنفس أسلوب امتحانات المنصة بالظبط، ومفيش أحسن منه
+//   2) ZAI (z-ai-web-dev-sdk) — للنصوص المخصصة غير المعروفة + الصور
+//   3) Gemini (GEMINI_API_KEYS) — احتياطي على Vercel (نصوص + رؤية)
+//   ومخرجات الـ AI بتتعقم صرامة (sanitizeAiPractice): ممنوع عربي،
+//   ممنوع ماث مكسور — وأي سؤال اتشطب بيتعوض فورًا من المحرك المحلي
+//   عشان الطالب **دايمًا** ياخد 10 أسئلة إنجليزي نضيفة مهما حصل.
 // ============================================================
 
 import { NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 import { callGemini, hasGeminiKey, parseGeminiJson } from '@/lib/gemini'
-import { generatePracticeSet, sanitizeAiPractice, type PracticeQuestion } from '@/lib/question-gen'
+import { generatePracticeSet, sanitizeAiPractice, matchTopicKey, type PracticeQuestion } from '@/lib/question-gen'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -143,14 +148,33 @@ export async function POST(request: Request) {
     var source = 'ai'
     var questions: PracticeQuestion[] | null = null
 
-    // محرك 1 ثم 2 (بصورة أو من غيرها)
+    // (2026-و71) المحرك المحلي **الأول** — لو الطلب بيطابق موضوع معروف من
+    // مواضيع المنصة: الأسئلة محسوبة بالكود، إنجليزي مضمون، بنفس أسلوب
+    // امتحانات المنصة ("Calculate: 2^3 × 2^3 = ?") — ده اللي المستر عايزه
+    // بالظبط فبنرجعه على طول من غير ما ندور على الـ AI أصلًا.
+    // (الصورة محتاج رؤية — فالمحلي الأول للنصوص بس)
+    if (!hasImage && matchTopicKey(topic).length > 0) {
+      var localFirst = generatePracticeSet(topic)
+      if (localFirst.length >= 10) {
+        return NextResponse.json({
+          ok: true,
+          source: 'local',
+          engine: 'Maths Genius Engine',
+          elapsedMs: Date.now() - started,
+          questions: localFirst,
+        })
+      }
+    }
+
+    // مسار الـ AI — للنصوص المخصصة (معادلة/كلام حر) والصور
     questions = await zaiGenerate(topic, grade, hasImage ? imageDataUrl : '')
     if (!questions || questions.length < 10) {
       var g = await geminiGenerate(topic, grade, hasImage ? imageDataUrl : '')
       if (g && g.length > (questions ? questions.length : 0)) questions = g
     }
 
-    // محرك 3: المحلي — بيتاح للنصوص بس (الصورة محتاج رؤية)
+    // (2026-و71) التعقيم الصارم شال أي سؤال عربي/مكسور → نكمل الناقص
+    // من المحرك المحلي فورًا — الطالب دايمًا يستلم 10 أسئلة نضيفة.
     if (!hasImage) {
       var local = generatePracticeSet(topic)
       if (!questions || questions.length === 0) {
