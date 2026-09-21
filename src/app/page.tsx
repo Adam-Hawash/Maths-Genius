@@ -157,6 +157,13 @@ export default function HomePage() {
           <h1 className="text-2xl font-bold text-foreground tracking-wide">
             <span className="text-[#8B6914] dark:text-[#E5BE5A]">Math</span> Genius
           </h1>
+          {/* (2026-و75-C) إيموجيز الرياضيات بندوبة متدرجة فوق شاشة التحميل */}
+          <div className="flex items-end justify-center gap-3 text-3xl leading-none" dir="ltr">
+            <span className="animate-bounce">🧮</span>
+            <span className="animate-bounce [animation-delay:0.15s]">➗</span>
+            <span className="animate-bounce [animation-delay:0.3s]">✖️</span>
+            <span className="animate-bounce [animation-delay:0.45s]">📐</span>
+          </div>
           <div className="flex items-center gap-3 justify-center">
             <Loader2 className="h-4 w-4 animate-spin text-[#C49A38]" />
             <p className="text-muted-foreground text-sm">جاري التحميل...</p>

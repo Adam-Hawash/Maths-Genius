@@ -29,6 +29,10 @@ var PENALTY_FREE_STRIKES = 2 // أول تحذيرين بدون خصم
  * زرار رفع الصورة أو زرار الكاميرا عشان نعرف إن النافذة هتفقد الفوكس
  * لحظة (نافذة اختيار الملف/الكاميرا) — دي مش مغادرة امتحان خالص */
 export var PICKER_OPEN_EVENT = 'mg-picker-open'
+/* (2026-و74) حدث قفل المودال/النافذة — مودال الكاميرا الحقيقي بيفضل جوه
+ * الصفحة (مفيش blur حقيقي) فلازم نرف التعليق يدوي عند القفل عشان أي
+ * مغادرة حقيقية بعدها تتحسب طبيعي من غير ما نستنى الـ5 دقايق */
+export var PICKER_CLOSE_EVENT = 'mg-picker-close'
 
 export interface AntiCheatOptions {
   active: boolean
@@ -146,9 +150,14 @@ export function useAntiCheat(opts: AntiCheatOptions) {
       var onVisBack = function () {
         if (document.visibilityState === 'visible') setTimeout(finish, 600)
       }
+      /* (2026-و74) مودال الكاميرا اتقفل من غير أي blur حقيقي حصل —
+       * نرف التعليق فورًا (بمهلة أمان 600ms) عشان المغادرة الحقيقية
+       * اللي بعدها تتحسب طبيعي بدل ما تفضل معلقة للـ5 دقايق */
+      var onCloseEvt = function () { setTimeout(finish, 600) }
       var safety = setTimeout(finish, 5 * 60 * 1000)
       window.addEventListener('focus', onBack)
       document.addEventListener('visibilitychange', onVisBack)
+      document.addEventListener(PICKER_CLOSE_EVENT, onCloseEvt)
     }
     /* (1) حدث صريح من زرار رفع الصورة/الكاميرا في MathKeyboard */
     document.addEventListener(PICKER_OPEN_EVENT, onPickerOpen)
@@ -241,4 +250,9 @@ export function AntiCheatBadge({ strikes, maxStrikes }: { strikes: number; maxSt
 /* (2026-و73) مساعدة صغيرة — إطلاق حدث فتح نافذة الرفع (زرار الصورة/الكاميرا) */
 export function notifyPickerOpen() {
   try { document.dispatchEvent(new CustomEvent(PICKER_OPEN_EVENT)) } catch (e) {}
+}
+
+/* (2026-و74) مساعدة — إطلاق حدث قفل مودال الكاميرا/الرفع لرفع التعليق */
+export function notifyPickerClose() {
+  try { document.dispatchEvent(new CustomEvent(PICKER_CLOSE_EVENT)) } catch (e) {}
 }
