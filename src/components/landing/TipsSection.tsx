@@ -4,6 +4,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useAppStore } from '@/stores/app-store'
 /* (و72) ترجمة حسب لغة الزائر — النصوص من الأدمن عربي/إنجليزي */
 import { useLangStore, pickConfig } from '@/lib/i18n'
+/* (و78) نصائح إضافية من الأدمن — JSON آمن في custom_tips */
+import { parseCustomContent } from '@/lib/custom-content'
 import { Lightbulb, Clock, Brain, Pencil, MessageCircle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -81,10 +83,25 @@ export default function TipsSection() {
     },
   ]
 
+  /* (و78) نصائح إضافية من الأدمن (custom_tips) — بتترسم بعد النصائح الثابتة
+     بنفس الكارت بالظبط، والأيقونات والألوان بتلف على المصفوفات الموجودة بالترتيب */
+  var customTips = parseCustomContent(cfg.custom_tips)
+  for (var ct = 0; ct < customTips.length; ct++) {
+    var cti = customTips[ct]
+    tips.push({
+      icon: TIP_ICONS[ct % TIP_ICONS.length],
+      titleAr: cti.titleAr || cti.titleEn,
+      titleEn: cti.titleEn || cti.titleAr,
+      description: cti.descAr || cti.descEn,
+      descriptionEn: cti.descEn || cti.descAr,
+      color: TIP_COLORS[ct % TIP_COLORS.length],
+    })
+  }
+
   function renderTipCard(tip, idx) {
     return (
       <Card
-        key={tip.titleEn}
+        key={'tip-' + idx}
         className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 border-border/50 bg-card"
       >
         <CardContent className="p-4 sm:p-5 flex gap-4 items-start">

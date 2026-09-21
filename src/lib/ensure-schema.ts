@@ -172,6 +172,10 @@ var SCHEMA_FIXES = [
   // النافيبار بالعربي: مستر وائل خضير — من غير العصاية (|) ومن غير الإنجليزي (طلب المستر)
   "UPDATE SiteConfig SET value = 'مستر وائل خضير' WHERE key = 'navbar_subtitle' AND (value LIKE '%خضير%' OR value LIKE '%Khadir%' OR value LIKE '%Khodair%' OR value LIKE '%Khudair%' OR value LIKE '%Khodier%' OR value LIKE '%El-Kh%' OR value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%|%')",
   "UPDATE SiteConfig SET value = 'مستر وائل خضير' WHERE key IN ('hero_title_line2', 'instructor_name') AND (value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%الخضيري%')",
+  // ===== (و78) تصحيح اسم المطور (التهجئة الصحيحة: **Adham Hawash** — أدهم حواش) =====
+  // أي قيمة مخزنة فيها 'Adam Hawash' (تهجئة غلط من نسخة قديمة) بتتصحح مرة
+  // واحدة هنا (idempotent) + على القراءة في /api/config
+  "UPDATE SiteConfig SET value = REPLACE(value, 'Adam Hawash', 'Adham Hawash') WHERE (key LIKE '%made_by%' OR key LIKE '%developer_label%') AND value LIKE '%Adam Hawash%'",
   // ===== (2026-و31) صورة المعلم = الأساسية والبديلة (طلب المستر حرفيًا: «صورة المعلم
   // تكون هي الأساسية والبديلة، ما تحطش حاجة من دماغك») =====
   // روابط الصور القديمة (i.imghos.co) كانت متخزنة في الكاش عند الطلاب بصورة مش
