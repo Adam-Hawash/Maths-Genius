@@ -10,7 +10,7 @@
 
 import { useSyncExternalStore } from 'react'
 import { useTheme } from 'next-themes'
-import { Moon, Sun, Languages } from 'lucide-react'
+import { Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLangStore } from '@/lib/i18n'
 
@@ -45,24 +45,36 @@ export function ThemeToggle() {
   )
 }
 
-/* زرار اللغة — في الوضع العربي بيعرض EN (يدوس يروح إنجليزي)
-   وفي الإنجليزي بيعرض عربي (يرجع) — والتبديل بيترجم فعلًا وبيقلب الاتجاه */
+/* (2026-و73) سويتش اللغة بستايل حبتين EN | عربي — نفس سويتش منصة د. شيماء
+   (طلب المستر: «السويتش اللي في منصة دكتور شيماء ده حلو قوي عاوزك تعمله
+   لي في كل المنصات») — المفعّل متعلم عليه بالـ primary */
 export function LangToggle() {
   var lang = useLangStore(function (s) { return s.lang })
   var setLang = useLangStore(function (s) { return s.setLang })
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      className="h-9 min-h-[36px] px-2.5 gap-1 shrink-0 text-xs font-bold"
-      onClick={function () { setLang(lang === 'en' ? 'ar' : 'en') }}
-      title="تغيير اللغة | Change language"
-      aria-label="تغيير اللغة | Change language"
+    <div
+      className="inline-flex items-center rounded-full border border-border bg-muted/60 p-0.5 text-[11px] font-bold shrink-0"
+      role="group"
+      aria-label="Language / اللغة"
     >
-      <Languages className="h-4 w-4" />
-      {lang === 'en' ? 'عربي' : 'EN'}
-    </Button>
+      <button
+        type="button"
+        onClick={function () { setLang('en') }}
+        aria-pressed={lang === 'en'}
+        className={'rounded-full px-2.5 py-1 transition-colors cursor-pointer ' + (lang === 'en' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+      >
+        EN
+      </button>
+      <button
+        type="button"
+        onClick={function () { setLang('ar') }}
+        aria-pressed={lang === 'ar'}
+        className={'rounded-full px-2.5 py-1 transition-colors cursor-pointer ' + (lang === 'ar' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+      >
+        عربي
+      </button>
+    </div>
   )
 }
 

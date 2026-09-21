@@ -25,6 +25,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 var MAX_AUTO_SUBMIT_STRIKES = 4 // المغادرة الرابعة → تسليم تلقائي
 var PENALTY_FREE_STRIKES = 2 // أول تحذيرين بدون خصم
 
+/* (2026-و73) اسم حدث منصة داخلي — MathKeyboard بيطلقه لما الطالب يدوس على
+ * زرار رفع الصورة أو زرار الكاميرا عشان نعرف إن النافذة هتفقد الفوكس
+ * لحظة (نافذة اختيار الملف/الكاميرا) — دي مش مغادرة امتحان خالص */
+export var PICKER_OPEN_EVENT = 'mg-picker-open'
+
 export interface AntiCheatOptions {
   active: boolean
   /* أول اسم مخصص للرسالة (اسم الطالب) */
@@ -42,6 +47,11 @@ export function useAntiCheat(opts: AntiCheatOptions) {
   var strikesRef = useRef(0)
   var lastStrikeAtRef = useRef(0)
   var giveUpFiredRef = useRef(false)
+  /* (2026-و73) عدّاد تعليق — أثناء فتح نافذة رفع الصورة/الكاميرا النافذة بتفقد
+   * الفوكس (blur/hidden) وده كان بيتحسب مخالفة غلط. طلب المستر: «طالما رافع
+   * الصورة ودايس على زرار إلغاء — دي مش خروج». العدّاد بيتزود مع كل سبب تعليق
+   * وبيترجع صفر لما الأسباب تخلص */
+  var suspendedRef = useRef(0)
   var optsRef = useRef(opts)
   optsRef.current = opts
 
@@ -56,6 +66,8 @@ export function useAntiCheat(opts: AntiCheatOptions) {
   var registerDeparture = useCallback(function () {
     var o = optsRef.current
     if (!o.active) return
+    /* (2026-و73) أثناء رفع صورة/تصوير بالكاميرا مفيش أي مخالفة تتحسب */
+    if (suspendedRef.current > 0) return
     var now = Date.now()
     /* حارس التكرار: blur + visibilitychange بيحصلوا مع بعض — واحد بس */
     if (now - lastStrikeAtRef.current < 800) return
@@ -104,6 +116,56 @@ export function useAntiCheat(opts: AntiCheatOptions) {
     }
   }, [active, registerDeparture])
 
+  /* ===== (2026-و73) إعفاء نافذة رفع الصورة/الكاميرا من المغادرة =====
+   * فتح نافذة اختيار الملف أو كاميرا الجهاز بتعمل blur/visibilitychange
+   * لحظي — وده كان بيتحسب مخالفة ويوصّل الطالب للتسليم التلقائي غلط.
+   * المنطق: أي كليك على input[type=file] (أو حدث PICKER_OPEN_EVENT من
+   * MathKeyboard) بيعلّق العدّاد فورًا، ولما النافذة ترجع (focus/visible)
+   * بنستنى 600ms مهلة أمان ونفك التعليق. حارس صلاحية 5 دقايق عشان
+   * التعليق ما يفضلش معلق للأبد لو حدث فات أي حاجة.
+   * الطالب اللي هيغش فعلاً هيخرج من نافذة الرفع لتطبيق تاني → الفوكس
+   * بيرجع ونفك التعليق → أول blur حقيقي بعدها بيتحسب طبيعي. */
+  useEffect(function () {
+    if (!active) return
+    var onPickerOpen = function () {
+      suspendedRef.current = suspendedRef.current + 1
+      var done = false
+      var finish = function () {
+        if (done) return
+        done = true
+        window.removeEventListener('focus', onBack)
+        document.removeEventListener('visibilitychange', onVisBack)
+        clearTimeout(safety)
+        suspendedRef.current = Math.max(0, suspendedRef.current - 1)
+        /* تصفير حارس التكرار عشان أي blur متأخر ما يحسبش */
+        lastStrikeAtRef.current = 0
+      }
+      /* لما النافذة ترجع: مهلة 600ms ثم فك — بغطي إلغاء النافذة واختيار ملف
+       * ورجوع الكاميرا على الموبايل (اللي ممكن يخفي الصفحة ثواني طويلة) */
+      var onBack = function () { setTimeout(finish, 600) }
+      var onVisBack = function () {
+        if (document.visibilityState === 'visible') setTimeout(finish, 600)
+      }
+      var safety = setTimeout(finish, 5 * 60 * 1000)
+      window.addEventListener('focus', onBack)
+      document.addEventListener('visibilitychange', onVisBack)
+    }
+    /* (1) حدث صريح من زرار رفع الصورة/الكاميرا في MathKeyboard */
+    document.addEventListener(PICKER_OPEN_EVENT, onPickerOpen)
+    /* (2) شبكة أمان: أي كليك على input[type=file] (حتى البرامجي) بيتنشر */
+    var onDocClick = function (e: any) {
+      try {
+        var t = e && e.target
+        if (t && t.tagName === 'INPUT' && t.type === 'file') onPickerOpen()
+      } catch (err) {}
+    }
+    document.addEventListener('click', onDocClick, true)
+    return function () {
+      document.removeEventListener(PICKER_OPEN_EVENT, onPickerOpen)
+      document.removeEventListener('click', onDocClick, true)
+    }
+  }, [active])
+
   var dismissWarning = useCallback(function () { setWarningOpen(false) }, [])
 
   return {
@@ -114,6 +176,9 @@ export function useAntiCheat(opts: AntiCheatOptions) {
     warningOpen: warningOpen,
     dismissWarning: dismissWarning,
     reset: function () { strikesRef.current = 0; giveUpFiredRef.current = false; setStrikes(0); setWarningOpen(false) },
+    /* (2026-و73) تعليق/فك يدوي — متاح لأي UI رفع ملفات جاي */
+    suspend: function () { suspendedRef.current = suspendedRef.current + 1 },
+    resume: function () { suspendedRef.current = Math.max(0, suspendedRef.current - 1); lastStrikeAtRef.current = 0 },
   }
 }
 
@@ -171,4 +236,9 @@ export function AntiCheatBadge({ strikes, maxStrikes }: { strikes: number; maxSt
       👁 {strikes}/{maxStrikes}
     </span>
   )
+}
+
+/* (2026-و73) مساعدة صغيرة — إطلاق حدث فتح نافذة الرفع (زرار الصورة/الكاميرا) */
+export function notifyPickerOpen() {
+  try { document.dispatchEvent(new CustomEvent(PICKER_OPEN_EVENT)) } catch (e) {}
 }

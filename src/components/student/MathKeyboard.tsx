@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Calculator, X, Delete, CornerDownLeft, Image as ImageIcon, Loader2, Eye, ArrowDownToLine } from 'lucide-react'
+import { Calculator, X, Delete, CornerDownLeft, Image as ImageIcon, Camera, Loader2, Eye, ArrowDownToLine } from 'lucide-react'
 import { chunkedUpload } from '@/lib/chunked-upload'
 import { FractionText, hasMathMarkup } from '@/components/FractionText'
+/* (2026-و73) إعفاء نافذة الرفع/الكاميرا من عدّاد مغادرة الامتحان */
+import { notifyPickerOpen } from '@/components/student/useAntiCheat'
 
 interface MathKeyboardProps {
   value: string
@@ -138,6 +140,10 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
   const [activeGroup, setActiveGroup] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  /* (2026-و73) مدخل الكاميرا — بيفتح كاميرا الجهاز مباشرة على الموبايل
+   * (capture=environment) وعلى الديسكتوب يفتح اختيار ملف عادي —
+   * والاتنين بيعتبروا جزء من حل السؤال مش خروج من المنصة */
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadPct, setUploadPct] = useState(0)
   const [uploadedImage, setUploadedImage] = useState<string>('')
@@ -432,6 +438,8 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
       setUploadPct(100)
       if (onUploadStateChange) onUploadStateChange(false, 100)
       if (fileInputRef.current) fileInputRef.current.value = ''
+      /* (و73) تصفير مدخل الكاميرا كمان — عشان نفس الصورة تنفع تتصور تاني */
+      if (cameraInputRef.current) cameraInputRef.current.value = ''
     }
   }
 
@@ -441,7 +449,11 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
       <div className="flex items-center gap-1.5 flex-wrap">
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={function () {
+            /* (و73) الرفع مش خروج من المنصة — إعفاء عدّاد المغادرة */
+            notifyPickerOpen()
+            fileInputRef.current?.click()
+          }}
           disabled={uploading}
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
           title="Upload image"
@@ -452,6 +464,22 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
             <ImageIcon className="h-3.5 w-3.5" />
           )}
           <span>{uploading ? 'جاري رفع الورقة كاملة... ' + uploadPct + '%' : 'رفع صورة ورقة الحل'}</span>
+        </button>
+        {/* (2026-و73) زرار الكاميرا — طلب المستر: زرار جنب أي مسألة مقالية يقدر
+          * الطالب يصور ورقة حله بيها بكاميرا الجهاز نفسه — ومن غير ما يتحسب
+          * خروج من المنصة (نفس إعفاء زرار الرفع) */}
+        <button
+          type="button"
+          onClick={function () {
+            notifyPickerOpen()
+            cameraInputRef.current?.click()
+          }}
+          disabled={uploading}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors disabled:opacity-50"
+          title="Take a photo with your camera"
+        >
+          <Camera className="h-3.5 w-3.5" />
+          <span>تصوير بالكاميرا</span>
         </button>
         <button
           type="button"
@@ -471,6 +499,17 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleImageUpload}
+      />
+      {/* (2026-و73) مدخل الكاميرا — capture بيفتح كاميرا الجهاز على الموبايل
+        * مباشرة، ونفس معالج الرفع بيشتغل معاه عادي */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
         multiple
         className="hidden"
         onChange={handleImageUpload}
