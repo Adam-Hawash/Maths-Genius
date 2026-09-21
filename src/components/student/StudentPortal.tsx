@@ -992,13 +992,19 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
   const hwActiveRef = useRef<string | null>(null)
   const hwAntiCheat = useAntiCheat({
     active: !!expandedHw,
+    /* (2026-و76) نوع الشاشة واجب — رسايل التحذير تقول «كمّل واجبك» */
+    kind: 'hw',
     onGiveUp: function () {
+      try { toast.error('⛔ عدّيت الحد المسموح من المغادرات — الواجب هيتسلم تلقائيًا', { duration: 8000 }) } catch (e) {}
       try {
         var hwId = hwActiveRef.current
-        if (hwId) {
-          var btn = document.getElementById('hw-submit-' + hwId) as HTMLButtonElement | null
-          if (btn && !btn.disabled) btn.click()
-        }
+        if (!hwId) return
+        var btn = document.getElementById('hw-submit-' + hwId) as HTMLButtonElement | null
+        if (!btn) return
+        /* صورة ورقة الحل لسه بتترفع — ممنوع التسليم قبل ما توصل كاملة (2026-و20) */
+        if (btn.getAttribute('data-photo-busy') === '1') return
+        if (btn.disabled) btn.disabled = false
+        btn.click()
       } catch (e) {}
     },
     onStrike: function (s: number) { hwCheatStrikesRef.current = s },
@@ -2241,7 +2247,10 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                     </div>
                   )}
 
-                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-8 mt-1" disabled={Object.keys(myAnswers).length === 0 && Object.keys(hwAnswers[hw.id] || {}).length === 0 || hwSubmitting === hw.id || hwPhotoBusy[hw.id] === true} onClick={async function() {
+                  {/* (2026-و76) id=hw-submit-<hwId> — onGiveUp بتدور عليه بالـgetElementById
+                     عشان التسليم التلقائي عند المغادرة الرابعة يشتغل زي الامتحانات بالظبط
+                     + data-photo-busy عشان التسليم التلقائي ما يحصلش والصورة لسه بتترفع */}
+                  <Button id={'hw-submit-' + hw.id} data-photo-busy={hwPhotoBusy[hw.id] ? '1' : '0'} size="sm" className="w-full sm:w-auto h-11 sm:h-8 mt-1" disabled={Object.keys(myAnswers).length === 0 && Object.keys(hwAnswers[hw.id] || {}).length === 0 || hwSubmitting === hw.id || hwPhotoBusy[hw.id] === true} onClick={async function() {
                     setHwSubmitting(hw.id)
                     try {
                       // Map display answers back to original indices
@@ -2377,8 +2386,9 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         </div>
       )}
 
-      {/* (2026-و66) مودال تحذير منع الغش للواجبات */}
-      <AntiCheatModal open={hwAntiCheat.warningOpen} strikes={hwAntiCheat.strikes} onDismiss={hwAntiCheat.dismissWarning} />
+      {/* (2026-و66) مودال تحذير منع الغش للواجبات
+          (2026-و76) kindLabel=الواجب — رسايل التحذير بتقول «كمّل واجبك» مش «امتحانك» */}
+      <AntiCheatModal open={hwAntiCheat.warningOpen} strikes={hwAntiCheat.strikes} kindLabel="الواجب" onDismiss={hwAntiCheat.dismissWarning} />
     </div>
   )
 }

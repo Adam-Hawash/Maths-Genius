@@ -27,8 +27,10 @@ import {
   CalendarClock,
 } from 'lucide-react'
 import { toast } from 'sonner'
-/* (و64) زراير الثيم + اللغة الموحدة في كل المنصة + الترجمة الحقيقية */
-import { PlatformToggles } from '@/components/platform-toggles'
+/* (و64) زراير الثيم + اللغة الموحدة في كل المنصة + الترجمة الحقيقية
+   (2026-و76) فصلنا التوجلز — سويتش اللغة بقى آخر عنصر في طرف النافبار
+   باين على الموبايل والديسكتوب زي ما هو، والثيم في مكانه القديم */
+import { ThemeToggle, LangToggle } from '@/components/platform-toggles'
 import { useT, useLangStore, pickConfig } from '@/lib/i18n'
 /* (2026-و29) «أوائل الطلبة» في النافبار — طلب المستر: زرار جنب Geometry
    يفتح دايلوج بأول 3 طلاب — والقسم اتشال من الصفحة الرئيسية */
@@ -100,7 +102,8 @@ export function Navbar() {
               target="_blank"
               rel="noopener noreferrer"
               title="Developer Portfolio"
-              className="flex items-center justify-center py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors"
+              /* (2026-و76) تكبير التوقيع على الموبايل واللابتوب — طلب المستر */
+              className="flex items-center justify-center py-2 text-[13px] font-medium md:text-[15px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors"
             >
               <span dir="ltr">
                 {cfg.footer_made_by_label || 'Developed by Adam Hawash'}
@@ -108,7 +111,9 @@ export function Navbar() {
             </a>
           </div>
         )}
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+        {/* (2026-و76) px-3 على الموبايل — توفير 8px عشان صف النافبار المزφο
+           (أوائل + Geometry + ثيم + همبرجر + سويتش اللغة) ما يعديش 390px */}
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-3 sm:px-6">
           {/* Brand - Right side (RTL start) */}
           <button
             onClick={handleGoHome}
@@ -120,10 +125,11 @@ export function Navbar() {
                 alt="Mr.Wael Khodair"
                 width={36}
                 height={36}
-                className="h-9 w-9 rounded-lg object-cover border border-primary/30"
+                /* (2026-و76) h-8 على الموبايل عشان صف النافبار المزحوم */
+                className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg object-cover border border-primary/30"
               />
             ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <span className="text-xs font-bold">MG</span>
               </div>
             )}
@@ -220,17 +226,18 @@ export function Navbar() {
             )}
           </nav>
 
-          {/* YouTube + Theme Toggle + Mobile Menu Button */}
-          <div className="flex items-center gap-2">
+          {/* YouTube + Theme Toggle + Mobile Menu Button
+              (2026-و76) gap-1 على الموبايل — 5 عناصر لازم ييقعدوا في 390px */}
+          <div className="flex items-center gap-1 sm:gap-2">
             {/* (2026-و32) «أوائل الطلبة» أول عنصر في الموبايل — طلب المستر: في منصات مش شيماء تبقى الأولى */}
             <button
               type="button"
               onClick={function () { setTopStudentsOpen(true) }}
               title="أوائل الطلبة — أفضل 3"
               aria-label="أوائل الطلبة — أفضل 3 طلاب"
-              className="md:hidden flex items-center gap-1 min-h-[44px] px-2.5 rounded-xl text-[#8A6D22] dark:text-[#E5BE5A] bg-[#C49A38]/10 border border-[#C49A38]/40 hover:bg-[#C49A38]/20 transition-colors cursor-pointer"
+              className="md:hidden flex items-center gap-1 min-h-[44px] px-1.5 sm:px-2.5 rounded-xl text-[#8A6D22] dark:text-[#E5BE5A] bg-[#C49A38]/10 border border-[#C49A38]/40 hover:bg-[#C49A38]/20 transition-colors cursor-pointer"
             >
-              <Trophy className="h-5 w-5" />
+              <Trophy className="h-4 w-4 sm:h-5 sm:w-5" />
               <span className="text-xs font-bold">الأوائل</span>
             </button>
             {/* Geometry Laws — ظاهر على طول في الموبايل فوق من غير فتح القائمة
@@ -240,25 +247,28 @@ export function Navbar() {
               href="/geometry-laws"
               title="Geometry Laws — قوانين الهندسة"
               aria-label="Geometry Laws — قوانين الهندسة"
-              className="md:hidden flex items-center gap-1 min-h-[44px] px-2.5 rounded-xl text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
+              className="md:hidden flex items-center gap-1 min-h-[44px] px-1.5 sm:px-2.5 rounded-xl text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
             >
-              <Shapes className="h-5 w-5" />
+              <Shapes className="h-4 w-4 sm:h-5 sm:w-5" />
               <span dir="ltr" className="text-xs font-bold">Geometry</span>
             </a>
             {youtubeLink && (
+              /* (2026-و76) آيفون مخفي على الموبايل الصغير — بيتعوض بأول عنصر في
+                 قايمة الهامبرجر عشان صف النافبار ما يعديش عرض الشاشة (390px) */
               <a
                 href={youtubeLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center min-h-[44px] min-w-[44px] text-muted-foreground hover:text-red-500 transition-colors"
+                className="hidden sm:flex items-center justify-center min-h-[44px] min-w-[44px] text-muted-foreground hover:text-red-500 transition-colors"
                 title="YouTube"
               >
                 <Youtube className="h-4 w-4" />
               </a>
             )}
 
-            {/* (و64) زراير الثيم + اللغة — موحدة في كل المنصة */}
-            <PlatformToggles />
+            {/* (و64) زرار الثيم — موحد في كل المنصة
+                (2026-و76) سويتش اللغة اتنقل لآخر الصف — أقصى طرف النافبار */}
+            <ThemeToggle />
 
             {/* Mobile Hamburger */}
             <Button
@@ -274,12 +284,29 @@ export function Navbar() {
                 <Menu className="h-5 w-5" />
               )}
             </Button>
+            {/* (2026-و76) سويتش اللغة EN|عربي — آخر عنصر في طرف النافبار
+                (بعد الهامبرجر) وباين على الموبايل والديسكتوب من غير ما تفتح القايمة */}
+            <LangToggle />
           </div>
         </div>
 
         {/* Mobile Menu */}
         {mobileMenu && (
           <div className="md:hidden border-t bg-background/95 backdrop-blur-md px-4 py-3 space-y-2">
+            {/* (2026-و76) YouTube أول عنصر في قايمة الموبايل — عوّض الأيقونة
+                اللي اتخفت من صف النافبار على الشاشات الصغيرة */}
+            {youtubeLink && (
+              <a
+                href={youtubeLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMobileMenu(false)}
+                className="flex items-center gap-2 min-h-[44px] px-3 rounded-xl border border-border bg-muted/40 text-foreground font-bold text-sm"
+              >
+                <Youtube className="h-4 w-4 text-red-500" />
+                YouTube
+              </a>
+            )}
             {/* (2026-و32) أوائل الطلبة أول عنصر في قايمة الموبايل — طلب المستر */}
             <button
               type="button"

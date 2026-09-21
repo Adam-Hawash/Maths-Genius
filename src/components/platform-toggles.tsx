@@ -58,11 +58,14 @@ export function LangToggle() {
       role="group"
       aria-label="Language / اللغة"
     >
+      {/* (2026-و76) px-2 على الموبايل — الحبة تبقى أضيق شوية عشان صف النافبار
+          المزحوم (أوائل+Geometry+ثيم+همبرجر+السويتش) ما يعديش 390px — وترجع
+          px-2.5 من sm وطالع زي ما هي في كل المنصة */}
       <button
         type="button"
         onClick={function () { setLang('en') }}
         aria-pressed={lang === 'en'}
-        className={'rounded-full px-2.5 py-1 transition-colors cursor-pointer ' + (lang === 'en' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+        className={'rounded-full px-2 sm:px-2.5 py-1 transition-colors cursor-pointer ' + (lang === 'en' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
       >
         EN
       </button>
@@ -70,7 +73,7 @@ export function LangToggle() {
         type="button"
         onClick={function () { setLang('ar') }}
         aria-pressed={lang === 'ar'}
-        className={'rounded-full px-2.5 py-1 transition-colors cursor-pointer ' + (lang === 'ar' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+        className={'rounded-full px-2 sm:px-2.5 py-1 transition-colors cursor-pointer ' + (lang === 'ar' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
       >
         عربي
       </button>

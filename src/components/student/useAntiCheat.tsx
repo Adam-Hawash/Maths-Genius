@@ -38,7 +38,10 @@ export interface AntiCheatOptions {
   active: boolean
   /* أول اسم مخصص للرسالة (اسم الطالب) */
   studentName?: string
-  /* بيتنادى مرة واحدة لما الطالب يتجاوز الحد → سلّم الامتحان */
+  /* (2026-و76) نوع الشاشة — الامتحان ولا الواجب — عشان رسايل التحذير تناسبه
+     (افتراضي exam زي ما كان) */
+  kind?: 'exam' | 'hw'
+  /* بيتنادى مرة واحدة لما الطالب يتجاوز الحد → سلّم الامتحان/الواجب */
   onGiveUp?: () => void
   /* بيتنادى مع كل مخالفة جديدة (للتوست/اللوج) */
   onStrike?: (strikes: number) => void
@@ -83,9 +86,17 @@ export function useAntiCheat(opts: AntiCheatOptions) {
     setWarningOpen(true)
 
     try {
-      if (s === 1) toast('رايح فين يا بطل؟ 😅 رجوع كمل امتحانك — إحنا معاك!', { duration: 5000 })
+      /* (2026-و76) رسايل حسب نوع الشاشة — الواجب «كمّل واجبك» مش «كمل امتحانك» */
+      var kind = (optsRef.current.kind === 'hw') ? 'hw' : 'exam'
+      if (s === 1) {
+        if (kind === 'hw') toast('رايح فين يا بطل؟ 😅 رجوع كمّل واجبك — إحنا معاك!', { duration: 5000 })
+        else toast('رايح فين يا بطل؟ 😅 رجوع كمل امتحانك — إحنا معاك!', { duration: 5000 })
+      }
       else if (s === 2) toast.warning('تاني مرة! ⚠️ خد بالك — أي مغادرة بعد كده فيها خصم نقاط.', { duration: 5000 })
-      else if (s === 3) toast.error('⚠️ خصم نقاط! كل مغادرة بعد كده = −5 درجات. ماتبقاش غبي وانت جاي امتحان 😤', { duration: 6000 })
+      else if (s === 3) {
+        if (kind === 'hw') toast.error('⚠️ خصم نقاط! كل مغادرة بعد كده = −5 درجات. ماتبقاش غبي وانت جاي واجب 😤', { duration: 6000 })
+        else toast.error('⚠️ خصم نقاط! كل مغادرة بعد كده = −5 درجات. ماتبقاش غبي وانت جاي امتحان 😤', { duration: 6000 })
+      }
     } catch (e) {}
 
     if (o.onStrike) {
@@ -191,9 +202,16 @@ export function useAntiCheat(opts: AntiCheatOptions) {
   }
 }
 
-/* مودال التحذير — بيقفل الشاشة لحد ما الطالب يضغط رجعت */
-export function AntiCheatModal({ open, strikes, studentName, onDismiss }: { open: boolean; strikes: number; studentName?: string; onDismiss: () => void }) {
+/* مودال التحذير — بيقفل الشاشة لحد ما الطالب يضغط رجعت
+   (2026-و76) kindLabel — «الامتحان» افتراضي، والواجب بيتبعت له «الواجب»
+   عشان الرسايل تقول «كمّل واجبك» بدل «كمل امتحانك» — الستايل والأنيميشن
+   والنقط الأربعة زي ما هي بالظبط */
+export function AntiCheatModal({ open, strikes, studentName, kindLabel, onDismiss }: { open: boolean; strikes: number; studentName?: string; kindLabel?: string; onDismiss: () => void }) {
   var first = strikes <= 1
+  var kind = kindLabel || 'الامتحان'
+  var isHw = kind === 'الواجب'
+  var yourThing = isHw ? 'واجبك' : 'امتحانك'
+  var theThing = isHw ? 'الواجب' : 'الامتحان'
   return (
     <AnimatePresence>
       {open && (
@@ -217,8 +235,8 @@ export function AntiCheatModal({ open, strikes, studentName, onDismiss }: { open
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
               {first
-                ? 'سيبت الامتحان لحظة! ' + (studentName ? ('يا ' + studentName) : 'يا صاحبي') + ' — كمل امتحانك، محدش بيسيب امتحانه في النص 😅'
-                : 'دي المغادرة رقم ' + strikes + '. لو عدّيت ' + 4 + ' مغادرات الامتحان هيتسلم لوحده، وكل مغادرة بعد التانية بتفصلك 5 درجات!'}
+                ? 'سيبت ' + kind + ' لحظة! ' + (studentName ? ('يا ' + studentName) : 'يا صاحبي') + ' — كمّل ' + yourThing + '، محدش بيسيب ' + kind + ' في النص 😅'
+                : 'دي المغادرة رقم ' + strikes + '. لو عدّيت ' + 4 + ' مغادرات ' + kind + ' هيتسلم لوحده، وكل مغادرة بعد التانية بتفصلك 5 درجات!'}
             </p>
             <div className="flex items-center justify-center gap-1.5 mb-4">
               {[1, 2, 3, 4].map(function (n) {
@@ -228,7 +246,7 @@ export function AntiCheatModal({ open, strikes, studentName, onDismiss }: { open
               })}
             </div>
             <Button onClick={onDismiss} className="w-full h-12 text-base font-bold">
-              رجعت أكمل الامتحان 💪
+              رجعت أكمل {theThing} 💪
             </Button>
           </motion.div>
         </motion.div>
