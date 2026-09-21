@@ -705,9 +705,112 @@ function genSimplifyFraction(): GenQ {
   }
 }
 
+/* ============================================================
+ * (و72) مولّدات السهول الأساسية + الفلاش كاردز — السباق الفردي:
+ *   easy   = حساب بسيط (خانات/خانتين) + جدول الضرب + كسور بسيطة
+ *   flash  = أسئلة وذكر سريع (حساب فوري) بمدة قصيرة لكل بطاقة
+ * كلها بترجع نفس شكل GenQ — الإجابة محسوبة بالكود 100%
+ * ============================================================ */
+function genArithBasic(hard: boolean): GenQ {
+  var kind = pick(hard ? ['mul', 'add', 'sub', 'mul'] : ['add', 'sub', 'mul'])
+  if (kind === 'mul') {
+    var a = ri(2, hard ? 15 : 9)
+    var b = ri(2, hard ? 12 : 9)
+    var ans = a * b
+    return {
+      text: 'Calculate:  ' + a + ' × ' + b + ' = ?',
+      answer: String(ans),
+      answerNum: ans,
+      steps: [a + ' × ' + b + ' = ' + ans],
+      trick: hard ? 'Break it: ' + a + ' × ' + b + ' = ' + a + ' × ' + (b - (b % 10)) + ' + ' + a + ' × ' + (b % 10) + '.' : 'Use the times table — memorize it and you answer in one second.',
+      topic: 'Multiplication',
+    }
+  }
+  var a2 = ri(11, hard ? 88 : 49)
+  var b2 = ri(2, hard ? 78 : 40)
+  if (kind === 'add') {
+    var sum = a2 + b2
+    return {
+      text: 'Calculate:  ' + a2 + ' + ' + b2 + ' = ?',
+      answer: String(sum),
+      answerNum: sum,
+      steps: [a2 + ' + ' + b2 + ' = ' + sum],
+      trick: 'Add the tens first, then the units — much faster.',
+      topic: 'Addition',
+    }
+  }
+  var big = Math.max(a2, b2)
+  var small = Math.min(a2, b2)
+  var diff = big - small
+  return {
+    text: 'Calculate:  ' + big + ' − ' + small + ' = ?',
+    answer: String(diff),
+    answerNum: diff,
+    steps: [big + ' − ' + small + ' = ' + diff],
+    trick: 'Count up from the small number to the big one — that is the answer.',
+    topic: 'Subtraction',
+  }
+}
+
+function genTimesTable(hard: boolean): GenQ {
+  var n = pick([2, 3, 4, 5, 6, 7, 8, 9])
+  var k = ri(2, hard ? 12 : 9)
+  var ans = n * k
+  return {
+    text: 'Calculate:  ' + n + ' × ' + k + ' = ?',
+    answer: String(ans),
+    answerNum: ans,
+    steps: [n + ' × ' + k + ' = ' + ans],
+    trick: hard ? n + ' × ' + k + ' = ' + n + ' × ' + (k - 1) + ' + ' + n + ' = ' + (ans - n) + ' + ' + n + '.' : 'The ' + n + ' times table: just add ' + n + ' every step.',
+    topic: 'Times Tables',
+  }
+}
+
+function genSquareFact(hard: boolean): GenQ {
+  var n = ri(4, hard ? 20 : 12)
+  var ans = n * n
+  return {
+    text: 'Calculate:  ' + n + '^2 = ?',
+    answer: String(ans),
+    answerNum: ans,
+    steps: [n + '^2 = ' + n + ' × ' + n + ' = ' + ans],
+    trick: hard ? '(' + n + ')^2 = (' + (n - 1) + ')^2 + 2×' + (n - 1) + ' + 1 = ' + ((n - 1) * (n - 1)) + ' + ' + (2 * (n - 1)) + ' + 1.' : 'Squares up to 12 are worth memorizing: 11^2 = 121, 12^2 = 144.',
+    topic: 'Squares',
+  }
+}
+
+function genSimpleFraction(hard: boolean): GenQ {
+  var d = pick(hard ? [6, 8, 9, 10, 12] : [3, 4, 5, 6, 8])
+  var n1 = ri(1, d - 2)
+  var n2 = ri(1, d - n1 - 1)
+  var num = n1 + n2
+  var gg = gcd(num, d)
+  var rn = num / gg
+  var rd = d / gg
+  var ans = rd === 1 ? String(rn) : rn + '/' + rd
+  var wrong1 = gg === 1 ? (num + 1) + '/' + d : num + '/' + d
+  var wrong2 = rd === 1 ? String(rn + 1) : (rn + 1) + '/' + (rd + 1)
+  var wrong3 = rd === 1 ? String(rn + 2) : (rn - 1 > 0 ? rn - 1 : rn + 2) + '/' + rd
+  return {
+    text: 'Calculate:  ' + n1 + '/' + d + ' + ' + n2 + '/' + d + ' = ?',
+    answer: ans,
+    answerNum: null,
+    distractors: [wrong1, wrong2, wrong3].filter(function (s, si, arr) { return s !== ans && s.indexOf('0/') !== 0 && arr.indexOf(s) === si }),
+    steps: [
+      'Same denominator: add the numerators → ' + n1 + ' + ' + n2 + ' = ' + num + ' → ' + num + '/' + d,
+      gg > 1 ? 'Simplify by ' + gg + ' → ' + ans : 'Already in simplest form: ' + ans,
+    ],
+    trick: 'Same denominator? Add the tops only — the bottom never changes.',
+    topic: 'Basic Fractions',
+  }
+}
+
 var GENERATORS_EASY = [genLinear, genPercentOf, genRectArea, genAverage, genExponents, genRoots, genSpeed, genLikeTerms, genSimplifyFraction, genTriangleAngles, genProportion, genFractionMul]
 var GENERATORS_MED = [genFraction, genPythagoras, genCircle, genCuboidVol, genPercentChange, genSystem2x2, genLinearBrackets, genLcmGcd, genProportion, genCylinderVol, genTriangleArea]
 var GENERATORS_HARD = [genQuadratic, genPercentChain, genSystem2x2, genPythagoras, genLinearBrackets, genFraction, genCylinderVol, genExponents]
+/* (و72) عائلات السهول (حساب بسيط + جدول ضرب + كسور بسيطة) وعائلات الفلاش (ذكر سريع) */
+var GENERATORS_BASICS = [genArithBasic, genTimesTable, genSimpleFraction, genSimplifyFraction]
+var GENERATORS_FLASH = [genTimesTable, genArithBasic, genSquareFact]
 
 /* ============================================================
  * 1) مولّد أسئلة «اتدرب أكتر» — 10 أسئلة بخطوات وخدع
@@ -782,14 +885,23 @@ function pickGeneratorsFor(topic: string): Array<{ fn: Function; key: string }> 
   return out.length > 0 ? out : [{ fn: genLinear, key: 'linear' }]
 }
 
-/* توليد 10 أسئلة تدريب — صعوبتها بتزيد تدريجيًا (3 سهل / 4 متوسط / 3 صعب) */
-export function generatePracticeSet(topic: string): PracticeQuestion[] {
+/* توليد أسئلة تدريب — (و72) العدد بيبقى parameter (افتراضي 10) وصعوبتها
+   بتزيد تدريجيًا (~30% سهل في الأول / ~40% متوسط / الباقي صعب) */
+export function generatePracticeSet(topic: string, count?: number): PracticeQuestion[] {
+  var n = Math.max(1, Math.min(Number(count) || 10, 50))
   var gens = pickGeneratorsFor(topic)
   var out: PracticeQuestion[] = []
   var usedTexts: Record<string, boolean> = {}
-  var plan = ['easy', 'easy', 'easy', 'med', 'med', 'med', 'med', 'hard', 'hard', 'hard']
+  /* خطة الصعوبة — تدرج حسب العدد المطلوب (10 → 3/4/3 زي ما كان بالظبط) */
+  var nEasy = Math.max(1, Math.round(n * 0.3))
+  var nHard = Math.max(1, Math.round(n * 0.3))
+  var nMed = Math.max(0, n - nEasy - nHard)
+  var plan: string[] = []
+  for (var pe = 0; pe < nEasy; pe++) plan.push('easy')
+  for (var pm = 0; pm < nMed; pm++) plan.push('med')
+  for (var ph = 0; ph < nHard; ph++) plan.push('hard')
   var attempts = 0
-  while (out.length < 10 && attempts < 120) {
+  while (out.length < n && attempts < 200) {
     attempts++
     var idx = out.length
     var diff = plan[idx] || 'med'
@@ -809,8 +921,8 @@ export function generatePracticeSet(topic: string): PracticeQuestion[] {
       difficulty: diff === 'easy' ? 'Easy' : (diff === 'med' ? 'Medium' : 'Hard'),
     })
   }
-  // لو اتعذر إكمال 10 (نظريًا مستحيل) — كرر بمولد عام
-  while (out.length < 10) {
+  // لو اتعذر إكمال العدد المطلوب (نظريًا مستحيل) — كرر بمولد عام
+  while (out.length < n) {
     var q2 = genLinear(true)
     out.push({ id: uid(), question: q2.text, answer: q2.answer, steps: q2.steps, trick: q2.trick, topic: q2.topic, difficulty: 'Hard' })
   }
@@ -832,17 +944,54 @@ function buildDistractors(ansNum: number, count: number): string[] {
   return out
 }
 
-export function generateBattleQuestions(count: number, timeLimitSec?: number): BattleQuestion[] {
+/* ============================================================
+ * (و72) مولّد أسئلة السباق — اختيارات MCQ 4 مع مشتتات ذكية + فلتر صعوبة:
+ *   opts?: number → (توافق قديم) timeLimitSec ثابت لكل الأسئلة
+ *   opts?: { difficulty?: 'easy'|'medium'|'hard'|'mixed',
+ *            style?: 'general'|'flash', cardSeconds?: number, timeLimitSec?: number }
+ *   easy   = حساب بسيط + جدول الضرب + كسور بسيطة
+ *   medium = الخليط الكلاسيكي (السهل + المتوسط)
+ *   hard   = خطوات متعددة + نسب + جبر خفيف
+ *   mixed  = السلوك الحالي (كل العائلات)
+ *   style 'flash' → أسئلة وذكر سريع و timeLimitSec = cardSeconds
+ * شكل المخرجات مش متغير خالص: text / options / correctIndex / explanation / timeLimitSec
+ * ============================================================ */
+function battleHardRoll(difficulty: string): boolean {
+  if (difficulty === 'easy') return false
+  if (difficulty === 'hard') return Math.random() < 0.9
+  return Math.random() < 0.25
+}
+
+export function generateBattleQuestions(count: number, opts?: any): BattleQuestion[] {
+  var o = (typeof opts === 'number') ? { timeLimitSec: opts } : (opts || {})
+  var difficulty = ['easy', 'medium', 'hard', 'mixed'].indexOf(String(o.difficulty || '')) !== -1 ? String(o.difficulty) : 'mixed'
+  var style = String(o.style || 'general') === 'flash' ? 'flash' : 'general'
+  var cardSeconds = Math.max(5, Math.min(Number(o.cardSeconds) || 15, 90))
+  var forcedSec = Number(o.timeLimitSec) || 0
   var n = Math.max(3, Math.min(count || 8, 15))
-  var pool = GENERATORS_EASY.concat(GENERATORS_MED, GENERATORS_HARD)
+
+  var pool: Function[]
+  if (style === 'flash') {
+    /* فلاش كاردز — عائلات وذكر سريع (الصعوبة بتتحكم في حجم الأرقام جوه المولدات) */
+    pool = GENERATORS_FLASH
+  } else if (difficulty === 'easy') {
+    pool = GENERATORS_BASICS
+  } else if (difficulty === 'medium') {
+    pool = GENERATORS_EASY.concat(GENERATORS_MED)
+  } else if (difficulty === 'hard') {
+    pool = GENERATORS_HARD
+  } else {
+    pool = GENERATORS_EASY.concat(GENERATORS_MED, GENERATORS_HARD)
+  }
+
   var out: BattleQuestion[] = []
   var used: Record<string, boolean> = {}
   var guard = 0
-  while (out.length < n && guard < 200) {
+  while (out.length < n && guard < 300) {
     guard++
     var g = pick(pool)
     var q: GenQ = null
-    try { q = g(Math.random() < 0.25) } catch (e) { continue }
+    try { q = g(battleHardRoll(difficulty)) } catch (e) { continue }
     if (!q || !q.text || used[q.text]) continue
     var options: string[] = []
     var correctTxt = String(q.answer)
@@ -851,30 +1000,32 @@ export function generateBattleQuestions(count: number, timeLimitSec?: number): B
       if (dis.length < 3) continue
       options = shuffle([correctTxt].concat(dis))
     } else {
-      var disTxt = (q.distractors || []).slice(0, 3)
+      var disTxt = (q.distractors || []).filter(function (s: string, si: number, arr: string[]) { return s !== correctTxt && arr.indexOf(s) === si }).slice(0, 3)
       if (disTxt.length < 3) continue
       options = shuffle([correctTxt].concat(disTxt))
     }
     used[q.text] = true
+    var timeLimitSec = forcedSec || (style === 'flash' ? cardSeconds : 0) || (25 + Math.floor(Math.random() * 3) * 5)
     out.push({
       id: uid(),
       text: q.text,
       options: options,
       correctIndex: options.indexOf(correctTxt),
       explanation: (q.steps || []).join(' → ') || String(q.trick || ''),
-      timeLimitSec: timeLimitSec || (25 + Math.floor(Math.random() * 3) * 5),
+      timeLimitSec: timeLimitSec,
     })
   }
   return out
 }
 
 /* بطاقات الفلاش كاردز — أسئلة قصيرة سريعة
-   (2026-و68) المدة بتتحدد من الأدمن — الافتراضي 15 ثانية (طلب المستر) */
+   (2026-و68) المدة بتتحدد من الأدمن — الافتراضي 15 ثانية (طلب المستر)
+   (و72) بيدعم فلتر الصعوبة + أسلوب الفلاش السريع — والمدة والعدد parameters */
 export var FLASHCARD_DEFAULT_SEC = 15
 
-export function generateFlashcards(count: number, timeSec?: number): BattleQuestion[] {
+export function generateFlashcards(count: number, timeSec?: number, difficulty?: string): BattleQuestion[] {
   var sec = Math.max(5, Math.min(Number(timeSec) || FLASHCARD_DEFAULT_SEC, 90))
-  var qs = generateBattleQuestions(count, sec)
+  var qs = generateBattleQuestions(count, { style: 'flash', difficulty: difficulty || 'mixed', cardSeconds: sec })
   return qs
 }
 
@@ -889,10 +1040,11 @@ export function generateFlashcards(count: number, timeSec?: number): BattleQuest
 var ARABIC_RE = /[\u0600-\u06FF]/
 var BROKEN_MATH_RE = /(?:\uFFFD|\u000C|\\?\brac\s*[\s{(]|undefined|NaN)/
 
-export function sanitizeAiPractice(items: any): PracticeQuestion[] {
+export function sanitizeAiPractice(items: any, maxCount?: number): PracticeQuestion[] {
+  var cap = Math.max(1, Math.min(Number(maxCount) || 10, 50))
   var out: PracticeQuestion[] = []
   if (Array.isArray(items)) {
-    for (var i = 0; i < items.length && out.length < 10; i++) {
+    for (var i = 0; i < items.length && out.length < cap; i++) {
       var it = items[i] || {}
       var q = repairCorruptMath(String(it.question || it.q || '')).trim()
       var a = repairCorruptMath(String(it.answer || it.a || '')).trim()

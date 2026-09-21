@@ -1,14 +1,24 @@
 // @ts-nocheck
 // ============================================================
 // FILE: src/app/api/arena/rooms/[code]/route.ts
-// PURPOSE: (2026-و66) قلب تحدي الجروبات — حالة الغرفة الحية:
-//   GET  ?playerId=&token= → حالة كاملة (players + question + scores)
-//        مع «التحديث الكسول»: لو وقت السؤال خلص بننتقل للسؤال اللي بعده
-//        أو نلعب بالغرفة — كل العيّلات بتتزامن من هنا (polling ~1s)
+// PURPOSE: (2026-و66) قلب تحدي الجروبات — حالة الغرفة الحية.
+//   (2026-و72) **إعادة كتابة كاملة: سباق فردي (RACE)** — كل لاعب ليه
+//   مؤقّت وسؤال مستقل: ما فيش انتظار باقي اللاعبين خالص. اللي يخلص 15
+//   سؤال أول يكسب — واللي يخلص بعده بيكمل لوحده.
+//   GET  ?playerId=&token= → حالة كاملة + أسئلة الغرفة (من غير الإجابات!)
+//        + بياناتي: qIndex / remainMs / finished + مكشول إجاباتي القديمة
+//        + players + leaderboard «مين خلّص الأول»
+//        مع «التحديث الكسول»: لو وقت سؤال أي لاعب خلص → بنتقدّم هو لوحده
 //   POST {action: join|start|answer|next|leave|end}
-//        • join: دخول بالاسم (حد أقصى 6 لاعبين)
-//        • start/next/end: للهوست بس (بتوكن سري)
-//        • answer: مرة واحدة لكل سؤال — درجة = سرعة + دقة + ستريك
+//        • join: دخول بالاسم + studentId — لو نفس الطالب (نفس studentId)
+//          موجود → REATTACH لنفس اللاعب (مش لاعب جديد). لو خرج قبل كده
+//          (status=left) → ممنوع يرجع. الدخول بعد بدء السباق → مرفوض.
+//        • start: للهوست بس — بيسجل startedAt ويصفّر مؤقتات كل اللاعبين
+//        • answer: صالح لسؤالي أنا بس (idx === player.qIndex) — درجة =
+//          سرعة + دقة + ستريك — وبعدها بتتقدم فورًا للسؤال اللي بعده
+//        • leave: مسموح في أي مرحلة (لوبي أو لايف) — بيقطع الجلسة
+//          (status=left) ومفيش رجوع بعدها. الهوست في اللوبي بيتم تسليمه.
+//        • end: للهوست بس — إنهاء مبكر. • next: no-op (السباق تلقائي)
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -19,53 +29,82 @@ export const runtime = 'nodejs'
 
 var ONLINE_WINDOW_MS = 12000
 var MAX_PLAYERS = 6
+var ADVANCE_GRACE_MS = 900 /* سماحية زمنية قبل التقدّم التلقائي */
 
-function rowToPlayer(p: any, currentIndex: number) {
-  var answers = {}
-  try { answers = JSON.parse(String(p.answers || '{}')) } catch (e) {}
-  var answeredCurrent = answers && answers[String(currentIndex)] !== undefined
-  var online = Number(p.lastSeen || 0) > Date.now() - ONLINE_WINDOW_MS
-  return {
-    id: p.id,
-    name: String(p.name || ''),
-    isHost: !!Number(p.isHost || 0),
-    score: Number(p.score || 0),
-    streak: Number(p.streak || 0),
-    online: online,
-    answeredCurrent: !!answeredCurrent,
-  }
+function parseObj(s: any): any {
+  try { return JSON.parse(String(s || '{}')) || {} } catch (e) { return {} }
 }
 
-/* التحديث الكسول — بيحصل مرة واحدة لكل نداء بالذات (guard بسيط) */
-async function lazyTick(room: any) {
+function questionLimitMs(q: any): number {
+  return Math.max(5, Number(q && q.timeLimitSec || 25)) * 1000
+}
+
+function isActive(p: any): boolean {
+  return String(p && p.status || 'active') !== 'left'
+}
+
+function isFinished(p: any): boolean {
+  return Number(p && p.finished || 0) === 1
+}
+
+/* التحديث الكسول — السباق: كل لاعب بيتقدّم لوحده لما وقت سؤاله يخلص.
+   لو كل اللاعبين النشطين خلصوا → الغرفة بتتنهي (الحارس على مستوى الغرفة). */
+async function lazyTickRace(room: any): Promise<boolean> {
   if (!room || room.status !== 'live') return false
   var questions: any[] = []
   try { questions = JSON.parse(String(room.questions || '[]')) } catch (e) {}
   if (questions.length === 0) return false
-  var started = false
+
+  var players: any[] = []
+  try { players = await db.$queryRawUnsafe('SELECT * FROM BattlePlayer WHERE roomId = ?', room.id) } catch (e) {}
+  if (!players || players.length === 0) return false
+
+  var now = Date.now()
   var changed = false
-  while (true) {
-    if (room.currentIndex >= questions.length) {
-      await safeWrite(function () { return db.$executeRawUnsafe("UPDATE BattleRoom SET status = 'ended', updatedAt = CURRENT_TIMESTAMP WHERE id = ?", room.id) })
-      room.status = 'ended'
-      changed = true
-      break
+  var activeCount = 0
+  var finishedCount = 0
+
+  for (var i = 0; i < players.length; i++) {
+    var p = players[i]
+    if (!isActive(p)) continue
+    activeCount++
+    if (isFinished(p)) { finishedCount++; continue }
+    var qIndex = Math.max(0, Number(p.qIndex || 0))
+    var advanceTo = -1
+    if (qIndex >= questions.length) {
+      /* أمان: لاعب عدّى آخر سؤال من غير ما يتسجل خلص */
+      advanceTo = questions.length
+    } else {
+      var q = questions[qIndex] || {}
+      var limit = questionLimitMs(q)
+      var startAt = Number(p.qStartAt || room.startedAt || 0)
+      if (startAt > 0 && now - startAt > limit + ADVANCE_GRACE_MS) {
+        advanceTo = qIndex + 1
+      }
     }
-    var q = questions[room.currentIndex] || {}
-    var limit = Math.max(8, Number(q.timeLimitSec || 25)) * 1000
-    var elapsed = Date.now() - Number(room.questionStartAt || 0)
-    if (elapsed > limit + 900) {
-      room.currentIndex = Number(room.currentIndex) + 1
-      room.questionStartAt = String(Date.now())
+    if (advanceTo >= 0) {
+      var willFinish = advanceTo >= questions.length
       await safeWrite(function () {
-        return db.$executeRawUnsafe('UPDATE BattleRoom SET currentIndex = ?, questionStartAt = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', room.currentIndex, room.questionStartAt, room.id)
+        return db.$executeRawUnsafe(
+          'UPDATE BattlePlayer SET qIndex = ?, qStartAt = ?, finished = ?, finishedAt = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
+          advanceTo, String(now), willFinish ? 1 : 0, willFinish ? String(now) : '', p.id
+        )
       })
+      p.qIndex = advanceTo
+      p.finished = willFinish ? 1 : 0
+      if (willFinish) finishedCount++
       changed = true
-      continue
     }
-    break
   }
-  if (started) { /* reserved */ }
+
+  /* الحارس على مستوى الغرفة: كل النشطين خلصوا (أو مفيش نشطين) → خلصت */
+  if (activeCount === 0 || finishedCount >= activeCount) {
+    await safeWrite(function () {
+      return db.$executeRawUnsafe("UPDATE BattleRoom SET status = 'ended', updatedAt = CURRENT_TIMESTAMP WHERE id = ?", room.id)
+    })
+    room.status = 'ended'
+    changed = true
+  }
   return changed
 }
 
@@ -82,63 +121,120 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ ok: false, error: 'الغرفة مش موجودة — راجع الكود' }, { status: 404 })
     }
     var room = roomRows[0]
-    await lazyTick(room)
+    await lazyTickRace(room)
 
-    var players = await db.$queryRawUnsafe('SELECT * FROM BattlePlayer WHERE roomId = ? ORDER BY score DESC, lastSeen ASC', room.id)
+    var players = await db.$queryRawUnsafe('SELECT * FROM BattlePlayer WHERE roomId = ? ORDER BY lastSeen ASC', room.id)
+    players = players || []
 
     var questions: any[] = []
     try { questions = JSON.parse(String(room.questions || '[]')) } catch (e) {}
 
-    // حدّث حضور اللاعب
+    // حدّث حضور اللاعب — (و72) اللاعب اللي خرج (status=left) بيمنع الجلسة القديمة
     var me: any = null
-    var myAnswer: any = null
-    var lastResult: any = null
     if (playerId) {
-      for (var i = 0; i < (players || []).length; i++) {
-        if (players[i].id === playerId) {
-          me = players[i]
-          break
-        }
+      for (var i = 0; i < players.length; i++) {
+        if (players[i].id === playerId) { me = players[i]; break }
       }
       if (me) {
+        if (token && String(me.token || '') !== token) {
+          return NextResponse.json({ ok: false, error: 'جلسة غير صالحة — ادخل من الأول' }, { status: 403 })
+        }
+        if (!isActive(me)) {
+          return NextResponse.json({ ok: false, error: 'خرجت من التحدي ومش مسموح ترجع تاني' }, { status: 403 })
+        }
         try { await db.$executeRawUnsafe('UPDATE BattlePlayer SET lastSeen = ? WHERE id = ?', String(Date.now()), me.id) } catch (e) {}
-        var answers = {}
-        try { answers = JSON.parse(String(me.answers || '{}')) } catch (e) {}
-        var curIdx = Number(room.currentIndex)
-        if (answers[String(curIdx)]) myAnswer = answers[String(curIdx)]
-        var prevIdx = curIdx - 1
-        if (answers[String(prevIdx)]) lastResult = Object.assign({ questionIndex: prevIdx }, answers[String(prevIdx)])
       }
     }
 
+    var now = Date.now()
+    var total = questions.length
     var live = room.status === 'live'
-    var currentIndex = Number(room.currentIndex)
-    var currentQuestion: any = null
-    if (live && currentIndex >= 0 && currentIndex < questions.length) {
-      var q = questions[currentIndex]
-      var limit = Math.max(8, Number(q.timeLimitSec || 25)) * 1000
-      var remainMs = Math.max(0, limit - (Date.now() - Number(room.questionStartAt || 0)))
-      // ممنوع نبعت الإجابة الصح قبل ما السؤال يخلص
-      currentQuestion = {
-        index: currentIndex,
-        text: String(q.text || ''),
-        options: q.options || [],
-        timeLimitSec: Number(q.timeLimitSec || 25),
-        remainMs: remainMs,
+    var startedAt = Number(room.startedAt || 0)
+
+    /* بياناتي في السباق — كل لاعب بيجري في سباقه الخاص */
+    var myQIndex = 0
+    var myFinished = false
+    var myFinishedAt = ''
+    var myRemainMs = 0
+    var myAnswers: any = {}
+    var myScore = 0
+    var myStreak = 0
+    if (me) {
+      myQIndex = Math.max(0, Number(me.qIndex || 0))
+      myFinished = isFinished(me)
+      myFinishedAt = String(me.finishedAt || '')
+      myAnswers = parseObj(me.answers)
+      myScore = Number(me.score || 0)
+      myStreak = Number(me.streak || 0)
+      var curQ = questions[myQIndex]
+      if (live && !myFinished && curQ) {
+        var startAt = Number(me.qStartAt || room.startedAt || 0)
+        myRemainMs = startAt > 0 ? Math.max(0, questionLimitMs(curQ) - (now - startAt)) : questionLimitMs(curQ)
       }
     }
 
-    var revealed: any = null
-    // لما السؤال يخلص (وقته عدى) نكشف الإجابة مع الشرح — نفس السؤال لحد ما ينقل
-    if (live && currentIndex < questions.length && currentQuestion && currentQuestion.remainMs <= 0) {
-      var q2 = questions[currentIndex]
-      revealed = { correctIndex: Number(q2.correctIndex), explanation: String(q2.explanation || '') }
+    /* مكشول الإجابات بتاعتي بس — الأسئلة اللي جاوبتها أو وقتها خلص عليّ (keyed by idx) */
+    var myRevealed: Record<string, { correctIndex: number; explanation: string }> = {}
+    if (me) {
+      var revealUpTo = myFinished ? total : myQIndex
+      for (var ri = 0; ri < revealUpTo && ri < total; ri++) {
+        var rq = questions[ri]
+        if (rq) myRevealed[String(ri)] = { correctIndex: Number(rq.correctIndex), explanation: String(rq.explanation || '') }
+      }
+      for (var ak in myAnswers) {
+        var aq = questions[Number(ak)]
+        if (aq && !myRevealed[String(ak)]) myRevealed[String(ak)] = { correctIndex: Number(aq.correctIndex), explanation: String(aq.explanation || '') }
+      }
     }
 
-    var totalRounds = questions.length
+    /* اللاعبين — بيانات السباق لكل واحد (من غير إجاباتهم!) */
+    var playersOut = players.map(function (p: any) {
+      var pa = parseObj(p.answers)
+      var pq = Math.max(0, Number(p.qIndex || 0))
+      var pOnline = isActive(p) && Number(p.lastSeen || 0) > now - ONLINE_WINDOW_MS
+      return {
+        id: p.id,
+        name: String(p.name || ''),
+        isHost: !!Number(p.isHost || 0),
+        score: Number(p.score || 0),
+        streak: Number(p.streak || 0),
+        qIndex: pq,
+        finished: isFinished(p),
+        finishedAt: String(p.finishedAt || ''),
+        status: String(p.status || 'active'),
+        online: pOnline,
+        isMe: !!(me && p.id === me.id),
+        answeredCurrent: !!(pa && pa[String(pq)] !== undefined),
+      }
+    })
+
+    /* لوحة «مين خلّص الأول» — الخالصين الأول (بالأسرع) وبعدين الباقي بالدرجة */
+    var activeForBoard = players.filter(function (p: any) { return isActive(p) })
+    var leaderboard = activeForBoard.slice().sort(function (a: any, b: any) {
+      var fa = isFinished(a)
+      var fb = isFinished(b)
+      if (fa && fb) return Number(a.finishedAt || 0) - Number(b.finishedAt || 0)
+      if (fa !== fb) return fa ? -1 : 1
+      return Number(b.score || 0) - Number(a.score || 0)
+    }).map(function (p: any, li: number) {
+      return {
+        rank: li + 1,
+        id: p.id,
+        name: String(p.name || ''),
+        score: Number(p.score || 0),
+        qIndex: Math.max(0, Number(p.qIndex || 0)),
+        finished: isFinished(p),
+        finishedAt: String(p.finishedAt || ''),
+        online: isActive(p) && Number(p.lastSeen || 0) > now - ONLINE_WINDOW_MS,
+        isHost: !!Number(p.isHost || 0),
+        status: String(p.status || 'active'),
+        isMe: !!(me && p.id === me.id),
+      }
+    })
+
     var ended = room.status === 'ended'
 
-    // نتايج نهائية كاملة بعد الختام
+    /* نتايج نهائية كاملة بعد الختام */
     var finalQuestions: any[] | null = null
     var finalAnswers: Record<string, any> | null = null
     if (ended) {
@@ -146,8 +242,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         return { text: String(q.text || ''), options: q.options || [], correctIndex: Number(q.correctIndex), explanation: String(q.explanation || '') }
       })
       finalAnswers = {}
-      for (var pi = 0; pi < (players || []).length; pi++) {
-        try { finalAnswers[players[pi].id] = JSON.parse(String(players[pi].answers || '{}')) } catch (e) {}
+      for (var pi = 0; pi < players.length; pi++) {
+        finalAnswers[players[pi].id] = parseObj(players[pi].answers)
       }
     }
 
@@ -157,12 +253,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         code: room.code,
         title: room.title,
         status: room.status,
-        currentIndex: currentIndex,
-        totalRounds: totalRounds,
+        currentIndex: Number(room.currentIndex || 0),
+        totalRounds: total,
         hostPlayerId: room.hostPlayerId,
-        currentQuestion: currentQuestion,
-        revealed: revealed,
-        players: (players || []).map(function (p: any) { return rowToPlayer(p, currentIndex) }),
+        mode: String(room.mode || 'general'),
+        difficulty: String(room.difficulty || 'mixed'),
+        cardSeconds: Number(room.cardSeconds || 15),
+        startedAt: startedAt,
+        currentQuestion: null, /* (و72) السؤال بقى لكل لاعب — في me بالأسفل */
+        revealed: null,
+        /* أسئلة الغرفة من غير الإجابات — العميل بيعرض سؤاله منه فورًا */
+        questions: questions.map(function (q: any, qi: number) {
+          return { index: qi, text: String(q.text || ''), options: q.options || [], timeLimitSec: Number(q.timeLimitSec || 25) }
+        }),
+        players: playersOut,
+        leaderboard: leaderboard,
         finalQuestions: finalQuestions,
         finalAnswers: finalAnswers,
       },
@@ -172,13 +277,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             name: String(me.name || ''),
             token: String(me.token || ''),
             isHost: !!Number(me.isHost || 0),
-            score: Number(me.score || 0),
-            streak: Number(me.streak || 0),
-            myAnswer: myAnswer,
-            lastResult: lastResult,
+            score: myScore,
+            streak: myStreak,
+            qIndex: myQIndex,
+            total: total,
+            finished: myFinished,
+            finishedAt: myFinishedAt,
+            qStartAt: Number(me.qStartAt || 0),
+            remainMs: myRemainMs,
+            myAnswer: myAnswers[String(myQIndex)] || null,
+            lastResult: myAnswers[String(myQIndex - 1)] || null,
+            answers: myAnswers,
+            revealed: myRevealed,
           }
         : null,
-      now: Date.now(),
+      now: now,
     })
   } catch (e: any) {
     console.error('[arena/room GET] failed:', String((e && e.message) || e))
@@ -205,26 +318,57 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
     if (action === 'join') {
       if (room.status === 'ended') return NextResponse.json({ ok: false, error: 'التحدي ده خلص خلاص' }, { status: 409 })
       var existingPlayers = await db.$queryRawUnsafe('SELECT * FROM BattlePlayer WHERE roomId = ?', room.id)
-      if ((existingPlayers || []).length >= MAX_PLAYERS) {
-        return NextResponse.json({ ok: false, error: 'الغرفة كملت (' + MAX_PLAYERS + ' لاعبين كحد أقصى)' }, { status: 409 })
-      }
+      existingPlayers = existingPlayers || []
+      var activePlayers = existingPlayers.filter(function (p: any) { return isActive(p) })
       var name = String(body.name || '').trim().slice(0, 40)
       if (!name) return NextResponse.json({ ok: false, error: 'اكتب اسمك الأول' }, { status: 400 })
-      // لو نفس الاسم موجود → نميزه برقم
-      var taken = (existingPlayers || []).some(function (p: any) { return String(p.name) === name })
-      if (taken) name = name + ' ' + (existingPlayers.length + 1)
+      var studentId = String(body.studentId || '').trim().slice(0, 64)
+
+      /* (و72) نفس الطالب (studentId) موجود؟
+         • خرج قبل كده (left) → ممنوع يرجع
+         • لسه في الغرفة → REATTACH لنفس اللاعب (تحديث الجلسة — مش لاعب جديد) */
+      if (studentId) {
+        for (var si = 0; si < existingPlayers.length; si++) {
+          var sp = existingPlayers[si]
+          if (String(sp.studentId || '') !== studentId) continue
+          if (!isActive(sp)) {
+            return NextResponse.json({ ok: false, error: 'خرجت من التحدي ومش مسموح ترجع تاني' }, { status: 403 })
+          }
+          var newToken = Math.random().toString(36).slice(2) + Date.now().toString(36)
+          await safeWrite(function () {
+            return db.$executeRawUnsafe('UPDATE BattlePlayer SET token = ?, name = ?, lastSeen = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', newToken, name, String(Date.now()), sp.id)
+          })
+          return NextResponse.json({
+            ok: true,
+            reattached: true,
+            me: { id: sp.id, name: name, token: newToken, isHost: !!Number(sp.isHost || 0), score: Number(sp.score || 0), streak: Number(sp.streak || 0) },
+            room: { code: room.code, status: room.status, totalRounds: questions.length, mode: String(room.mode || 'general'), difficulty: String(room.difficulty || 'mixed'), cardSeconds: Number(room.cardSeconds || 15) },
+          })
+        }
+      }
+
+      /* (و72) دخول جديد بعد ما السباق بدأ → مرفوض (الدخول من اللوبي بس) */
+      if (room.status === 'live') {
+        return NextResponse.json({ ok: false, error: 'التحدي بدأ بالفعل' }, { status: 409 })
+      }
+      if (activePlayers.length >= MAX_PLAYERS) {
+        return NextResponse.json({ ok: false, error: 'الغرفة كملت (' + MAX_PLAYERS + ' لاعبين كحد أقصى)' }, { status: 409 })
+      }
+      // لو نفس الاسم موجود → نميزه برقم (بين النشطين بس)
+      var taken = activePlayers.some(function (p: any) { return String(p.name) === name })
+      if (taken) name = name + ' ' + (activePlayers.length + 1)
       var pid = 'bp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9)
       var ptoken = Math.random().toString(36).slice(2) + Date.now().toString(36)
       await safeWrite(function () {
         return db.$executeRawUnsafe(
-          'INSERT INTO BattlePlayer (id, roomId, name, token, isHost, score, streak, answers, lastSeen, createdAt, updatedAt) VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-          pid, room.id, name, ptoken, '{}', String(Date.now())
+          "INSERT INTO BattlePlayer (id, roomId, name, token, isHost, score, streak, answers, lastSeen, studentId, qIndex, qStartAt, finishedAt, finished, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?, ?, 0, '', '', 0, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+          pid, room.id, name, ptoken, '{}', String(Date.now()), studentId
         )
       })
       return NextResponse.json({
         ok: true,
         me: { id: pid, name: name, token: ptoken, isHost: false, score: 0, streak: 0 },
-        room: { code: room.code, status: room.status, totalRounds: questions.length },
+        room: { code: room.code, status: room.status, totalRounds: questions.length, mode: String(room.mode || 'general'), difficulty: String(room.difficulty || 'mixed'), cardSeconds: Number(room.cardSeconds || 15) },
       })
     }
 
@@ -239,39 +383,47 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
     if (String(me.token || '') !== token) {
       return NextResponse.json({ ok: false, error: 'جلسة غير صالحة — ادخل من الأول' }, { status: 403 })
     }
+    if (!isActive(me)) {
+      return NextResponse.json({ ok: false, error: 'خرجت من التحدي ومش مسموح ترجع تاني' }, { status: 403 })
+    }
     var isHost = !!Number(me.isHost || 0)
 
-    /* ===== start (هوست) ===== */
+    /* ===== start (هوست) — بيسجل startedAt ويصفّر مؤقتات كل النشطين ===== */
     if (action === 'start') {
       if (!isHost) return NextResponse.json({ ok: false, error: 'الهوست بس اللي بيبدأ التحدي' }, { status: 403 })
       if (room.status !== 'lobby') return NextResponse.json({ ok: true, already: true })
+      var startMs = String(Date.now())
       await safeWrite(function () {
-        return db.$executeRawUnsafe("UPDATE BattleRoom SET status = 'live', currentIndex = 0, questionStartAt = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", String(Date.now()), room.id)
+        return db.$executeRawUnsafe("UPDATE BattleRoom SET status = 'live', currentIndex = 0, questionStartAt = ?, startedAt = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", startMs, startMs, room.id)
+      })
+      await safeWrite(function () {
+        return db.$executeRawUnsafe("UPDATE BattlePlayer SET qIndex = 0, qStartAt = ?, finished = 0, finishedAt = '', updatedAt = CURRENT_TIMESTAMP WHERE roomId = ? AND status != 'left'", startMs, room.id)
       })
       return NextResponse.json({ ok: true })
     }
 
-    /* ===== answer ===== */
+    /* ===== answer — سؤالي أنا بس (idx === player.qIndex) وتقدّم فوري ===== */
     if (action === 'answer') {
       if (room.status !== 'live') return NextResponse.json({ ok: false, error: 'التحدي مش شغال دلوقتي' }, { status: 409 })
+      if (isFinished(me)) return NextResponse.json({ ok: false, error: 'انت خلصت خلاص — استنى الباقيين 🏁' }, { status: 409 })
       var idx = Number(body.questionIndex)
-      if (idx !== Number(room.currentIndex)) {
+      if (idx !== Number(me.qIndex || 0)) {
         return NextResponse.json({ ok: false, error: 'السؤال اتغير — كمل على اللي بعده' }, { status: 409 })
       }
       var q = questions[idx]
       if (!q) return NextResponse.json({ ok: false, error: 'سؤال غير موجود' }, { status: 404 })
-      var limitMs = Math.max(8, Number(q.timeLimitSec || 25)) * 1000
-      var elapsed = Date.now() - Number(room.questionStartAt || 0)
-      if (elapsed > limitMs) {
+      var limitMs = questionLimitMs(q)
+      var startAt = Number(me.qStartAt || room.startedAt || 0)
+      var elapsed = startAt > 0 ? Math.max(0, Date.now() - startAt) : 0
+      if (elapsed > limitMs + ADVANCE_GRACE_MS) {
         return NextResponse.json({ ok: false, error: 'الوقت خلص على السؤال ده' }, { status: 409 })
       }
-      var answersObj = {}
-      try { answersObj = JSON.parse(String(me.answers || '{}')) } catch (e) {}
+      var answersObj = parseObj(me.answers)
       if (answersObj[String(idx)]) {
         return NextResponse.json({ ok: false, error: 'جاوبت في السؤال ده قبل كذا' }, { status: 409 })
       }
       var choice = Number(body.choice)
-      var ms = Math.max(0, Math.min(Number(body.ms) || elapsed, elapsed))
+      var ms = Math.max(0, Math.min(Number(body.ms) || elapsed, elapsed || Number(body.ms) || 0))
       var correct = choice === Number(q.correctIndex) ? 1 : 0
       var gained = 0
       var streak = Number(me.streak || 0)
@@ -284,43 +436,70 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
         streak = 0
       }
       answersObj[String(idx)] = { choice: choice, correct: correct, gained: gained, ms: ms }
+      var nextIndex = idx + 1
+      var willFinish = nextIndex >= questions.length
+      var nowMs = String(Date.now())
       await safeWrite(function () {
-        return db.$executeRawUnsafe('UPDATE BattlePlayer SET answers = ?, score = score + ?, streak = ?, lastSeen = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', JSON.stringify(answersObj), gained, streak, String(Date.now()), me.id)
+        return db.$executeRawUnsafe(
+          'UPDATE BattlePlayer SET answers = ?, score = score + ?, streak = ?, qIndex = ?, qStartAt = ?, finished = ?, finishedAt = ?, lastSeen = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
+          JSON.stringify(answersObj), gained, streak, nextIndex, nowMs, willFinish ? 1 : 0, willFinish ? nowMs : '', nowMs, me.id
+        )
       })
+      /* (و72) لو كل النشطين خلصوا → الغرفة بتتنهي فورًا من غير ما نستنى GET */
+      if (willFinish) {
+        try {
+          var all = await db.$queryRawUnsafe('SELECT finished, status FROM BattlePlayer WHERE roomId = ?', room.id)
+          var act = 0
+          var fin = 0
+          for (var ai = 0; ai < (all || []).length; ai++) {
+            if (!isActive(all[ai])) continue
+            act++
+            if (isFinished(all[ai])) fin++
+          }
+          if (act > 0 && fin >= act) {
+            await safeWrite(function () {
+              return db.$executeRawUnsafe("UPDATE BattleRoom SET status = 'ended', updatedAt = CURRENT_TIMESTAMP WHERE id = ?", room.id)
+            })
+          }
+        } catch (e2) {}
+      }
       return NextResponse.json({
         ok: true,
         correct: !!correct,
         gained: gained,
         streak: streak,
         correctIndex: Number(q.correctIndex), // للطالب اللي جاوب — محدش تاني بيشوفها
+        explanation: String(q.explanation || ''),
+        finished: willFinish,
+        nextIndex: nextIndex,
       })
     }
 
-    /* ===== next (هوست) — تخطي يدوي لو الكل جاوب ===== */
+    /* ===== next (هوست) — (و72) no-op: السباق بيقدّم نفسه لاعب لاعب ===== */
     if (action === 'next') {
       if (!isHost) return NextResponse.json({ ok: false, error: 'الهوست بس' }, { status: 403 })
-      var nextIdx = Number(room.currentIndex) + 1
-      if (nextIdx >= questions.length) {
-        await safeWrite(function () { return db.$executeRawUnsafe("UPDATE BattleRoom SET status = 'ended', updatedAt = CURRENT_TIMESTAMP WHERE id = ?", room.id) })
-      } else {
-        await safeWrite(function () { return db.$executeRawUnsafe('UPDATE BattleRoom SET currentIndex = ?, questionStartAt = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', nextIdx, String(Date.now()), room.id) })
-      }
-      return NextResponse.json({ ok: true })
+      return NextResponse.json({ ok: true, noop: true })
     }
 
-    /* ===== end (هوست) ===== */
+    /* ===== end (هوست) — إنهاء مبكر ===== */
     if (action === 'end') {
       if (!isHost) return NextResponse.json({ ok: false, error: 'الهوست بس' }, { status: 403 })
-      await safeWrite(function () { return db.$executeRawUnsafe("UPDATE BattleRoom SET status = 'ended', updatedAt = CURRENT_TIMESTAMP WHERE id = ?", room.id) })
+      await safeWrite(function () {
+        return db.$executeRawUnsafe("UPDATE BattleRoom SET status = 'ended', updatedAt = CURRENT_TIMESTAMP WHERE id = ?", room.id)
+      })
       return NextResponse.json({ ok: true })
     }
 
-    /* ===== leave ===== */
+    /* ===== leave — (و72) مسموح في أي مرحلة: بنعلّم status='left' من غير مسح
+       الصف — اللاعب اللي خرج ممنوع يرجع بنفس studentId/الجلسة، ومش بيظهر
+       في اللوحة ولا في حسابات «الكل جاوب». تسليم الهوست في اللوبي بس. ===== */
     if (action === 'leave') {
-      await safeWrite(function () { return db.$executeRawUnsafe('DELETE FROM BattlePlayer WHERE id = ?', me.id) })
-      // لو الهوست مشي قبل ما يبدأ → أول تاني بقي هوست
+      await safeWrite(function () {
+        return db.$executeRawUnsafe("UPDATE BattlePlayer SET status = 'left', lastSeen = '0', updatedAt = CURRENT_TIMESTAMP WHERE id = ?", me.id)
+      })
+      // لو الهوست مشي من اللوبي → أول تاني نشيط بقي هوست
       if (isHost && room.status === 'lobby') {
-        var rest = await db.$queryRawUnsafe('SELECT id FROM BattlePlayer WHERE roomId = ? ORDER BY lastSeen ASC LIMIT 1', room.id)
+        var rest = await db.$queryRawUnsafe("SELECT id FROM BattlePlayer WHERE roomId = ? AND status != 'left' AND id != ? ORDER BY lastSeen ASC LIMIT 1", room.id, me.id)
         if (rest && rest.length > 0) {
           await safeWrite(function () { return db.$executeRawUnsafe('UPDATE BattlePlayer SET isHost = 1 WHERE id = ?', rest[0].id) })
           await safeWrite(function () { return db.$executeRawUnsafe('UPDATE BattleRoom SET hostPlayerId = ? WHERE id = ?', rest[0].id, room.id) })

@@ -4,6 +4,12 @@
 // PURPOSE: (2026-و66) تحدي الجروبات — إنشاء غرفة تحدي بكود مشترك
 //   POST {name} → غرفة جديدة + اللاعب المؤسس (هوست)
 //   POST {name, customCode} → (2026-و68) الطالب يكتب كود الغرفة بنفسه
+//   (2026-و72) السباق الفردي — POST {name, mode, difficulty, rounds,
+//     cardSeconds, studentId}:
+//     • mode: 'general' (أسئلة عامة) | 'flash' (فلاش كاردز سريعة)
+//     • difficulty: 'easy' | 'medium' | 'hard' (فلتر عائلات المولد)
+//     • rounds: 3-15 (افتراضي 8) • cardSeconds: 5-90 (فلاش — افتراضي 15)
+//     • studentId: ربط اللاعب بحساب الطالب (ريأتاتش بدل التكرار)
 //   الأسئلة بتتولد لحظة الإنشاء من المحرك الرياضي المحلي
 //   (أرقام جديدة كل مرة — مفيش غرفتين بنفس الأسئلة تقريبًا)
 // ============================================================
@@ -29,8 +35,18 @@ export async function POST(request: Request) {
     var name = String(body.name || '').trim().slice(0, 40)
     if (!name) return NextResponse.json({ ok: false, error: 'اكتب اسمك الأول يا بطل' }, { status: 400 })
 
+    /* (و72) خيارات السباق — mode/difficulty/rounds/cardSeconds/studentId */
+    var mode = String(body.mode || 'general') === 'flash' ? 'flash' : 'general'
+    var difficulty = ['easy', 'medium', 'hard'].indexOf(String(body.difficulty || '')) !== -1 ? String(body.difficulty) : 'mixed'
     var rounds = Math.max(3, Math.min(Number(body.rounds) || ROOM_ROUNDS, 15))
-    var questions = generateBattleQuestions(rounds)
+    var cardSeconds = Math.max(5, Math.min(Math.round(Number(body.cardSeconds) || 15), 90))
+    var studentId = String(body.studentId || '').trim().slice(0, 64)
+
+    var questions = generateBattleQuestions(rounds, {
+      difficulty: difficulty,
+      style: mode === 'flash' ? 'flash' : 'general',
+      cardSeconds: cardSeconds,
+    })
 
     // نظافة: امسح الغرف القديمة (أقدم من 6 ساعات)
     // (2026-و68-إضافي) إصلاح مقارنة الزمن: CURRENT_TIMESTAMP في SQLite بيتخزن
@@ -75,20 +91,20 @@ export async function POST(request: Request) {
 
     await safeWrite(function () {
       return db.$executeRawUnsafe(
-        'INSERT INTO BattleRoom (id, code, title, hostPlayerId, status, questions, currentIndex, questionStartAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-        roomId, code, 'تحدي ' + name, hostId, 'lobby', JSON.stringify(questions), 0, 0
+        'INSERT INTO BattleRoom (id, code, title, hostPlayerId, status, questions, currentIndex, questionStartAt, startedAt, mode, difficulty, cardSeconds, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+        roomId, code, 'تحدي ' + name, hostId, 'lobby', JSON.stringify(questions), 0, 0, '', mode, difficulty, cardSeconds
       )
     })
     await safeWrite(function () {
       return db.$executeRawUnsafe(
-        'INSERT INTO BattlePlayer (id, roomId, name, token, isHost, score, streak, answers, lastSeen, createdAt, updatedAt) VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-        hostId, roomId, name, token, '{}', String(Date.now())
+        "INSERT INTO BattlePlayer (id, roomId, name, token, isHost, score, streak, answers, lastSeen, studentId, qIndex, qStartAt, finishedAt, finished, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?, ?, 0, '', '', 0, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        hostId, roomId, name, token, '{}', String(Date.now()), studentId
       )
     })
 
     return NextResponse.json({
       ok: true,
-      room: { id: roomId, code: code, status: 'lobby', totalRounds: rounds },
+      room: { id: roomId, code: code, status: 'lobby', totalRounds: rounds, mode: mode, difficulty: difficulty, cardSeconds: cardSeconds },
       me: { id: hostId, name: name, token: token, isHost: true, score: 0 },
     })
   } catch (e: any) {

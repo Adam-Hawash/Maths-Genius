@@ -29,7 +29,7 @@ import {
 import { toast } from 'sonner'
 /* (و64) زراير الثيم + اللغة الموحدة في كل المنصة + الترجمة الحقيقية */
 import { PlatformToggles } from '@/components/platform-toggles'
-import { useT } from '@/lib/i18n'
+import { useT, useLangStore, pickConfig } from '@/lib/i18n'
 /* (2026-و29) «أوائل الطلبة» في النافبار — طلب المستر: زرار جنب Geometry
    يفتح دايلوج بأول 3 طلاب — والقسم اتشال من الصفحة الرئيسية */
 import { TopStudentsDialog } from './TopStudentsDialog'
@@ -40,6 +40,8 @@ export function Navbar() {
   const [topStudentsOpen, setTopStudentsOpen] = useState(false)
   /* (و64) الترجمة الحقيقية — عربي/إنجليزي */
   const T = useT()
+  /* (و72) اسم النافيبار حسب اللغة (الأدمن يكتب عربي/إنجليزي) */
+  var lang = useLangStore(function (s) { return s.lang })
 
   const {
     currentView,
@@ -60,7 +62,7 @@ export function Navbar() {
   const youtubeLink = cfg.social_youtube || ''
   // اسم المنصة جنب صورة المستر — "Math Genius" بالإنجليزي (طلب المستر حرفيًا:
   // "انت كتبلي مستر بالعربي — لا، عايزك تكتبلي ماث جينيس بالانجليزي زي المكتوب في المنصة")
-  const navName = cfg.navbar_brand || 'Math Genius'
+  const navName = pickConfig(cfg, 'navbar_brand', lang, 'Math Genius', 'Math Genius')
 
   const isAuthenticated = !!currentStudent || isAdminLoggedIn
   const isAuthPage = currentView === 'auth-login' || currentView === 'auth-register'

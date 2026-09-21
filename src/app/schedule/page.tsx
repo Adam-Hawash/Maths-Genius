@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react'
 import { CalendarClock, Clock, GraduationCap, ArrowRight, BookOpen, Loader2 } from 'lucide-react'
 /* (و64) زراير الثيم + اللغة الموحدة في كل المنصة */
 import { PlatformToggles } from '@/components/platform-toggles'
+/* (و72) ترجمة نصوص الصفحة حسب لغة الزائر */
+import { useLangStore, pickConfig } from '@/lib/i18n'
 import Link from 'next/link'
 
 interface ScheduleSlot {
@@ -84,6 +86,8 @@ function slotCountLabel(count: number): string {
 export default function SchedulePage() {
   const { siteConfig, setSiteConfig, configLoaded } = useAppStore()
   const [loading, setLoading] = useState(true)
+  /* (و72) لغة الزائر */
+  var lang = useLangStore(function (s) { return s.lang })
 
   useEffect(() => {
     if (!configLoaded) {
@@ -102,9 +106,10 @@ export default function SchedulePage() {
 
   // Parse schedule from siteConfig.schedule_data (JSON string) or use default
   let schedule: DaySchedule[] = DEFAULT_SCHEDULE
-  let scheduleTitle = 'مواعيد السنتر'
-  let scheduleSubtitle = 'جدول مواعيد الحصص الأسبوعية لكل الصفوف الدراسية — اختر اليوم المناسب لك وتابع موعد حصتك'
-  let scheduleBadge = 'جدول الحصص الأسبوعي'
+  /* (و72) النصوص حسب اللغة — عربي بقرا المفتاح الأساسي، إنجليزي بقرا *_en */
+  let scheduleTitle = pickConfig(siteConfig, 'schedule_title', lang, 'مواعيد السنتر', 'Center Schedule')
+  let scheduleSubtitle = pickConfig(siteConfig, 'schedule_subtitle', lang, 'جدول مواعيد الحصص الأسبوعية لكل الصفوف الدراسية — اختر اليوم المناسب لك وتابع موعد حصتك', 'Weekly class schedule for all grades — pick the day that suits you and catch your class on time')
+  let scheduleBadge = pickConfig(siteConfig, 'schedule_badge', lang, 'جدول الحصص الأسبوعي', 'Weekly Class Schedule')
   let scheduleFooterNote = 'جميع المواعيد بتوقيت القاهرة. لو عندك أي استفسار عن موعد حصتك تواصل معنا عبر واتساب.'
   let brandName = 'Math Genius — Mr.Wael Khodair'
 
@@ -118,6 +123,12 @@ export default function SchedulePage() {
     if (siteConfig.schedule_title) scheduleTitle = siteConfig.schedule_title
     if (siteConfig.schedule_subtitle) scheduleSubtitle = siteConfig.schedule_subtitle
     if (siteConfig.schedule_badge) scheduleBadge = siteConfig.schedule_badge
+    /* (و72) الإنجليزي: لو الأدمن كاتب النسخ الإنجليزية نستخدمها */
+    if (lang === 'en') {
+      if (siteConfig.schedule_title_en) scheduleTitle = siteConfig.schedule_title_en
+      if (siteConfig.schedule_subtitle_en) scheduleSubtitle = siteConfig.schedule_subtitle_en
+      if (siteConfig.schedule_badge_en) scheduleBadge = siteConfig.schedule_badge_en
+    }
     if (siteConfig.schedule_footer_note) scheduleFooterNote = siteConfig.schedule_footer_note
     if (siteConfig.schedule_brand) brandName = siteConfig.schedule_brand
   } catch (e) {

@@ -1,6 +1,8 @@
 'use client'
 
 import { useAppStore } from '@/stores/app-store'
+/* (و72) ترجمة حسب لغة الزائر */
+import { useLangStore, pickConfig } from '@/lib/i18n'
 import { Badge } from '@/components/ui/badge'
 import { Camera, Trash2, Heart, ImagePlus, PlayCircle, Film, X, Loader2, Maximize, Minimize } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
@@ -57,16 +59,16 @@ export default function GallerySection() {
   var siteConfig = store.siteConfig || {}
   var isAdminLoggedIn = store.isAdminLoggedIn || false
   var galleryImages = (store as any).galleryImages || []
+  /* (و72) لغة الزائر — عنوان القسم يظهر بلغته */
+  var lang = useLangStore(function (s) { return s.lang })
   const [images, setImages] = useState<GalleryImage[]>([])
   const [loading, setLoading] = useState(true)
   const [videoModal, setVideoModal] = useState<{ id: string; url: string } | null>(null)
 
   var galleryTitle =
-    siteConfig.gallery_title ||
-    'معرض الصور لطلابي وأبنائي الأعزاء | Photos of My Beloved Students'
+    pickConfig(siteConfig, 'gallery_title', lang, 'معرض الصور لطلابي وأبنائي الأعزاء | Photos of My Beloved Students', 'Photos of My Beloved Students')
   var gallerySubtitle =
-    siteConfig.gallery_subtitle ||
-    'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey'
+    pickConfig(siteConfig, 'gallery_subtitle', lang, 'لحظات مميزة من رحلتنا التعليمية — Moments from our educational journey', 'Moments from our educational journey')
 
   useEffect(function() {
     var preloaded = Array.isArray(galleryImages) ? galleryImages : []
