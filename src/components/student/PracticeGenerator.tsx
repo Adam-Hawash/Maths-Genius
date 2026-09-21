@@ -41,7 +41,7 @@ import type { PracticeQuestion } from '@/lib/question-gen'
 // (2026-و66) رسائل التحميل المصرية — بتتغير كل 3 ثواني أثناء التوليد
 var LOADING_MSGS = [
   'المولد الذكي بيحلل طلبك…',
-  'بيجهز 10 أسئلة بأرقام مختلفة…',
+  'بيجهز {n} أسئلة بأرقام مختلفة…',
   'بيكتب الحل خطوة بخطوة…',
   'لسه شوية وبجهز الخدع…',
 ]
@@ -64,7 +64,7 @@ var FEATURES = [
   {
     icon: Dices,
     title: 'أرقام جديدة كل مرة',
-    desc: 'كل توليد بيطلع 10 أسئلة فريدة بنفس المهارة — تمرين مايخلصش',
+    desc: 'كل توليد بيطلع أسئلة فريدة بنفس المهارة — تمرين مايخلصش',
     cls: 'border-violet-500/30 bg-violet-500/15 text-violet-600 dark:text-violet-400',
   },
   {
@@ -271,6 +271,8 @@ function QuestionCardItem(props: {
 
 export function PracticeGenerator({ grade }: { grade: string }) {
   const [topic, setTopic] = useState('') // نص الطلب في الصندوق
+  /* (و72) عدد الأسئلة — الطالب بيختار (5/10/15/20 والافتراضي 10) */
+  const [pCount, setPCount] = useState(10)
   const [image, setImage] = useState('') // (2026-و68) dataURL لصورة معادلة مرفوعة
   const [imgBusy, setImgBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -321,7 +323,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
       var res = await fetch('/api/ai/practice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: clean, grade: grade, image: img || undefined }),
+        body: JSON.stringify({ topic: clean, grade: grade, image: img || undefined, count: pCount }),
       })
       var data: PracticeResponse | null = null
       try { data = await res.json() } catch (e) { data = null }
@@ -347,7 +349,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
     } finally {
       setLoading(false)
     }
-  }, [grade, image])
+  }, [grade, image, pCount])
 
   /* (2026-و68) اختيار صورة معادلة — ضغط فوري + معاينة */
   const onPickImage = useCallback(async function (f: File | null) {
@@ -401,7 +403,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
               <div className='min-w-0'>
                 <CardTitle className='text-lg font-bold sm:text-xl'>🧠 اتدرب أكتر — المولد الذكي</CardTitle>
                 <CardDescription className='mt-1 text-sm leading-relaxed'>
-                  اكتب أي فكرة أو قانون أو مسألة بتتعب فيها، والمولد هيجهزلك 10 أسئلة تدريب بخطوات وخدع
+                  اكتب أي فكرة أو قانون أو مسألة بتتعب فيها، والمولد هيجهزلك {pCount} أسئلة تدريب بخطوات وخدع
                 </CardDescription>
               </div>
             </div>
@@ -485,6 +487,31 @@ export function PracticeGenerator({ grade }: { grade: string }) {
               </div>
             </div>
 
+            {/* (و72) عدد الأسئلة — شيبس 5/10/15/20 */}
+            <div className='space-y-2'>
+              <p className='text-xs font-semibold text-muted-foreground'>🔢 عدد الأسئلة:</p>
+              <div className='flex flex-wrap gap-2'>
+                {[5, 10, 15, 20].map(function (n) {
+                  return (
+                    <Button
+                      key={n}
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      disabled={loading}
+                      onClick={function () { setPCount(n) }}
+                      className={'h-8 rounded-full px-3 text-xs font-bold transition-all sm:text-sm ' +
+                        (pCount === n
+                          ? 'border-violet-500 bg-violet-500/10 text-violet-600 dark:text-violet-400'
+                          : 'text-muted-foreground hover:border-violet-500/40 hover:text-violet-600 dark:hover:text-violet-400')}
+                    >
+                      {n}
+                    </Button>
+                  )
+                })}
+              </div>
+            </div>
+
             {/* زر التوليد الكبير */}
             <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
               <Button
@@ -495,7 +522,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
                 className='h-12 w-full bg-gradient-to-l from-violet-600 to-teal-600 text-base font-bold text-white shadow-md shadow-violet-500/25 hover:from-violet-600/90 hover:to-teal-600/90 sm:w-auto'
               >
                 {loading && <Loader2 className='h-5 w-5 animate-spin' />}
-                ولّد 10 أسئلة 🚀
+                ولّد {pCount} أسئلة 🚀
               </Button>
               <span className='text-center text-xs text-muted-foreground sm:text-left'>
                 الأسئلة بتتولد بالإنجليزي — اكتب بأي لغة أو ارفع صورة ✍️
@@ -523,7 +550,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
                       transition={{ duration: 0.3 }}
                       className='text-center font-bold text-violet-700 dark:text-violet-300 sm:text-lg'
                     >
-                      {LOADING_MSGS[msgIdx % LOADING_MSGS.length]}
+                      {LOADING_MSGS[msgIdx % LOADING_MSGS.length].replace('{n}', String(pCount))}
                     </motion.p>
                   </AnimatePresence>
                 </div>

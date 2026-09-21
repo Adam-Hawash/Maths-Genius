@@ -31,29 +31,34 @@ import { generatePracticeSet, sanitizeAiPractice, matchTopicKey, type PracticeQu
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-/* (2026-و68) برومبت إنجليزي — أسلوب Maths Genius بالظبط */
-var SYSTEM_PROMPT = [
-  'You are an expert Egyptian math teacher on the "Maths Genius" platform.',
-  'The student will send you: an idea, a rule/law, a specific problem, or an EQUATION they struggle with (as text or as a photo).',
-  'Your task: analyze the request and generate EXACTLY 10 unique practice questions on the SAME skill/law:',
-  '- Different numbers for every question (never repeat the same numbers)',
-  '- A different quick solving trick for every question',
-  '- Clear step-by-step solution (2-3 short steps each)',
-  '- If the student sent a specific problem/equation: generate 10 similar problems using the SAME rule with different numbers',
-  '- Difficulty gradient: first 3 Easy, middle 4 Medium, last 3 Hard',
-  '- EVERYTHING you output must be in ENGLISH (question, answer, steps, trick, topic) — school math style like "Solve for x: 6(x - 1) = 18"',
-  '- The math MUST be 100% correct — verify every calculation before writing it',
-  '- No LaTeX or complex symbols — write fractions as a/b and powers as x² or 2^3',
-  '- Keep steps short (2-3 per question) and the trick in one line — so the response is fast',
-  'Return JSON only with no extra text, in this exact shape:',
-  '{"questions":[{"question":"question text","answer":"final answer","steps":["step 1","step 2","step 3"],"trick":"quick solving trick","topic":"skill name","difficulty":"Easy or Medium or Hard"}]}',
-].join('\n')
+/* (2026-و68) برومبت إنجليزي — أسلوب Maths Genius بالظبط
+   (و72) العدد بقى parameter — "EXACTLY {count}" بدل 10 الثابتة */
+function buildSystemPrompt(count: number): string {
+  var n = Math.max(3, Math.min(Number(count) || 10, 20))
+  return [
+    'You are an expert Egyptian math teacher on the "Maths Genius" platform.',
+    'The student will send you: an idea, a rule/law, a specific problem, or an EQUATION they struggle with (as text or as a photo).',
+    'Your task: analyze the request and generate EXACTLY ' + n + ' unique practice questions on the SAME skill/law:',
+    '- Different numbers for every question (never repeat the same numbers)',
+    '- A different quick solving trick for every question',
+    '- Clear step-by-step solution (2-3 short steps each)',
+    '- If the student sent a specific problem/equation: generate ' + n + ' similar problems using the SAME rule with different numbers',
+    '- Difficulty gradient: first third Easy, middle third Medium, last third Hard',
+    '- EVERYTHING you output must be in ENGLISH (question, answer, steps, trick, topic) — school math style like "Solve for x: 6(x - 1) = 18"',
+    '- The math MUST be 100% correct — verify every calculation before writing it',
+    '- No LaTeX or complex symbols — write fractions as a/b and powers as x² or 2^3',
+    '- Keep steps short (2-3 per question) and the trick in one line — so the response is fast',
+    'Return JSON only with no extra text, in this exact shape:',
+    '{"questions":[{"question":"question text","answer":"final answer","steps":["step 1","step 2","step 3"],"trick":"quick solving trick","topic":"skill name","difficulty":"Easy or Medium or Hard"}]}',
+  ].join('\n')
+}
 
-function buildUserPrompt(topic: string, grade: string): string {
+function buildUserPrompt(topic: string, grade: string, count: number): string {
+  var n = Math.max(3, Math.min(Number(count) || 10, 20))
   return [
     'Student request: «' + String(topic || '').slice(0, 600) + '»',
     grade ? ('Grade level: ' + grade) : '',
-    'Generate 10 practice questions on this skill in the required shape (JSON only, everything in English).',
+    'Generate ' + n + ' practice questions on this skill in the required shape (JSON only, everything in English).',
   ].filter(Boolean).join('\n')
 }
 
@@ -69,13 +74,13 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
 }
 
 /* ===== محرك 1: ZAI — نصوص + رؤية ===== */
-async function zaiGenerate(topic: string, grade: string, imageDataUrl: string): Promise<PracticeQuestion[] | null> {
+async function zaiGenerate(topic: string, grade: string, imageDataUrl: string, count: number): Promise<PracticeQuestion[] | null> {
   try {
     var zai = await ZAI.create()
-    var userContent: any = buildUserPrompt(topic, grade)
+    var userContent: any = buildUserPrompt(topic, grade, count)
     if (imageDataUrl) {
       userContent = [
-        { type: 'text', text: buildUserPrompt(topic, grade) },
+        { type: 'text', text: buildUserPrompt(topic, grade, count) },
         { type: 'image_url', image_url: { url: imageDataUrl } },
       ]
     }
@@ -83,7 +88,7 @@ async function zaiGenerate(topic: string, grade: string, imageDataUrl: string): 
     var completion = await Promise.race([
       zai.chat.completions.create({
         messages: [
-          { role: 'assistant', content: SYSTEM_PROMPT },
+          { role: 'assistant', content: buildSystemPrompt(count) },
           { role: 'user', content: userContent },
         ],
         thinking: { type: 'disabled' },
@@ -94,18 +99,18 @@ async function zaiGenerate(topic: string, grade: string, imageDataUrl: string): 
     var text = ((completion as any)?.choices?.[0]?.message?.content) || ''
     var parsed = parseGeminiJson(String(text || ''))
     if (!parsed) return null
-    var qs = sanitizeAiPractice(parsed.questions || parsed.items || parsed)
-    return qs.length >= 5 ? qs : null
+    var qs = sanitizeAiPractice(parsed.questions || parsed.items || parsed, count)
+    return qs.length >= Math.min(5, count) ? qs : null
   } catch (e) {
     return null
   }
 }
 
 /* ===== محرك 2: Gemini — نصوص + رؤية ===== */
-async function geminiGenerate(topic: string, grade: string, imageDataUrl: string): Promise<PracticeQuestion[] | null> {
+async function geminiGenerate(topic: string, grade: string, imageDataUrl: string, count: number): Promise<PracticeQuestion[] | null> {
   try {
     if (!hasGeminiKey()) return null
-    var parts: any[] = [{ text: SYSTEM_PROMPT + '\n\n' + buildUserPrompt(topic, grade) }]
+    var parts: any[] = [{ text: buildSystemPrompt(count) + '\n\n' + buildUserPrompt(topic, grade, count) }]
     var img = parseDataUrl(imageDataUrl)
     if (img) {
       parts.push({ inline_data: { mime_type: img.mimeType, data: img.data } })
@@ -118,8 +123,8 @@ async function geminiGenerate(topic: string, grade: string, imageDataUrl: string
     if (!res || !res.ok || !res.text) return null
     var parsed = parseGeminiJson(res.text)
     if (!parsed) return null
-    var qs = sanitizeAiPractice(parsed.questions || parsed.items || parsed)
-    return qs.length >= 5 ? qs : null
+    var qs = sanitizeAiPractice(parsed.questions || parsed.items || parsed, count)
+    return qs.length >= Math.min(5, count) ? qs : null
   } catch (e) {
     return null
   }
@@ -133,6 +138,8 @@ export async function POST(request: Request) {
     var topic = String(body.topic || body.message || '').trim()
     var grade = String(body.grade || '').trim()
     var imageDataUrl = String(body.image || '').trim()
+    /* (و72) عدد الأسئلة — الطالب بيختار (3-20 والافتراضي 10) */
+    var count = Math.max(3, Math.min(Math.round(Number(body.count) || 10), 20))
     var hasImage = !!parseDataUrl(imageDataUrl)
 
     // لو فيه صورة → حد للطلب 1200 حرف؛ لو نص فقط → مطلوب نص
@@ -154,8 +161,8 @@ export async function POST(request: Request) {
     // بالظبط فبنرجعه على طول من غير ما ندور على الـ AI أصلًا.
     // (الصورة محتاج رؤية — فالمحلي الأول للنصوص بس)
     if (!hasImage && matchTopicKey(topic).length > 0) {
-      var localFirst = generatePracticeSet(topic)
-      if (localFirst.length >= 10) {
+      var localFirst = generatePracticeSet(topic, count)
+      if (localFirst.length >= count) {
         return NextResponse.json({
           ok: true,
           source: 'local',
@@ -167,28 +174,28 @@ export async function POST(request: Request) {
     }
 
     // مسار الـ AI — للنصوص المخصصة (معادلة/كلام حر) والصور
-    questions = await zaiGenerate(topic, grade, hasImage ? imageDataUrl : '')
-    if (!questions || questions.length < 10) {
-      var g = await geminiGenerate(topic, grade, hasImage ? imageDataUrl : '')
+    questions = await zaiGenerate(topic, grade, hasImage ? imageDataUrl : '', count)
+    if (!questions || questions.length < count) {
+      var g = await geminiGenerate(topic, grade, hasImage ? imageDataUrl : '', count)
       if (g && g.length > (questions ? questions.length : 0)) questions = g
     }
 
     // (2026-و71) التعقيم الصارم شال أي سؤال عربي/مكسور → نكمل الناقص
-    // من المحرك المحلي فورًا — الطالب دايمًا يستلم 10 أسئلة نضيفة.
+    // من المحرك المحلي فورًا — الطالب دايمًا يستلم العدد المطلوب أسئلة نضيفة.
     if (!hasImage) {
-      var local = generatePracticeSet(topic)
+      var local = generatePracticeSet(topic, count)
       if (!questions || questions.length === 0) {
         questions = local
         source = 'local'
-      } else if (questions.length < 10) {
+      } else if (questions.length < count) {
         var have = new Set(questions.map(function (q) { return q.question }))
-        for (var i = 0; i < local.length && questions.length < 10; i++) {
+        for (var i = 0; i < local.length && questions.length < count; i++) {
           if (!have.has(local[i].question)) questions.push(local[i])
         }
       }
-      questions = questions.slice(0, 10)
+      questions = questions.slice(0, count)
     } else if (questions) {
-      questions = questions.slice(0, 10)
+      questions = questions.slice(0, count)
     }
 
     if (!questions || questions.length === 0) {
@@ -207,7 +214,7 @@ export async function POST(request: Request) {
     try {
       var t = String(body && body.topic ? body.topic : '')
       if (t) {
-        var questionsLocal = generatePracticeSet(t)
+        var questionsLocal = generatePracticeSet(t, count)
         return NextResponse.json({ ok: true, source: 'local', engine: 'Maths Genius Engine', questions: questionsLocal })
       }
     } catch (e2) {}

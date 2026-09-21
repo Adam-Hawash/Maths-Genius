@@ -63,6 +63,20 @@ export function currentLang(): Lang {
   return useLangStore.getState().lang
 }
 
+/* (و72) اختيار قيمة نصية من كونفيج الأدمن حسب لغة الزائر:
+   إنجليزي بقرأ المفتاح *_en (لو الأدمن كاتبه أو فيه افتراضي)،
+   عربي بقرأ المفتاح الأساسي — المستر يكتب كل لغة لوحده من لوحة التحكم */
+export function pickConfig(cfg: any, key: string, lang: string, arFallback?: string, enFallback?: string): string {
+  if (lang === 'en') {
+    var en = cfg ? cfg[key + '_en'] : ''
+    if (en && String(en).trim() !== '') return String(en)
+    return enFallback || arFallback || ''
+  }
+  var v = cfg ? cfg[key] : ''
+  if (v && String(v).trim() !== '') return String(v)
+  return arFallback || ''
+}
+
 /* LangBoot — بيركّب مرة واحدة في layout.tsx: بيقرأ اللغة المحفوظة
    ويطبّق dir/lang على <html> بعد أول تحميل (قبل كده سكريبت الـ head
    بيتكفل بالموضوع قبل الرسم عشان مفيش وميض اتجاه غلط) */

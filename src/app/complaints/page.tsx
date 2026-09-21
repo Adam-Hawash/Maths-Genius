@@ -20,7 +20,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, MessageSquareHeart, Send, CheckCircle2, Home, Phone, User, GraduationCap } from 'lucide-react'
 
 // (2026-ف) الصفوف بتوع المنصة بالظبط — نفس قايمة app-store GRADES
+// (و72) رابعة وخمسة ابتدائي اتضافوا قبل السادس زي app-store
 var GRADES = [
+  'رابعة ابتدائي',
+  'خمسة ابتدائي',
   'الصف السادس الابتدائي',
   'أولى إعدادي',
   'تانية إعدادي',

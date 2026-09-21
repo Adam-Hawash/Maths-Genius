@@ -3,13 +3,15 @@
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/stores/app-store'
 /* (و64) الترجمة الحقيقية عربي/إنجليزي */
-import { useT } from '@/lib/i18n'
+import { useT, useLangStore } from '@/lib/i18n'
 import { useEffect, useState } from 'react'
 import { Award, GraduationCap, Users, BookOpen, Clock, CalendarClock } from 'lucide-react'
 
 export default function HeroSection() {
   /* (و64) الترجمة */
   const T = useT()
+  /* (و72) لغة الزائر الحالية — لعرض المحتوى المكتوب من الأدمن بالعربي/الإنجليزي */
+  var lang = useLangStore(function (s) { return s.lang })
   const {
     setView,
     siteConfig,
@@ -68,6 +70,19 @@ export default function HeroSection() {
 
   const showBg = !!dbBg || fallbackBgExists
   const showPhoto = !!dbPhoto || fallbackPhotoExists
+
+  /* (و72) اختيار نص الأدمن حسب اللغة: إنجليزي بقرأ المفتاح *_en من لوحة
+     الأدمن (أو الافتراضي الإنجليزي)، عربي بقرأ المفتاح الأساسي —
+     فالمستر يكتب العربي والإنجليزي كل واحد لوحده من لوحة التحكم */
+  var L = function (key: string, arFallback: string, enFallback: string): string {
+    if (lang === 'en') {
+      var en = (cfg as any)[key + '_en']
+      if (en && String(en).trim() !== '') return String(en)
+      return enFallback
+    }
+    var ar = (cfg as any)[key]
+    return ar && String(ar).trim() !== '' ? String(ar) : arFallback
+  }
 
   return (
     <section className="relative overflow-hidden bg-[#0F0D0A]" dir="rtl">
@@ -180,26 +195,27 @@ export default function HeroSection() {
             <div className="inline-flex items-center gap-2 rounded-full bg-[#C49A38]/15 px-4 py-1.5 text-sm font-medium text-[#E5BE5A] border border-[#C49A38]/20">
               <Award className="h-4 w-4" />
               <span>
-                {cfg.hero_badge ||
-                  'Comprehensive Learning Platform | منصة تعليمية متكاملة'}
+                {L('hero_badge', 'Comprehensive Learning Platform | منصة تعليمية متكاملة', 'Comprehensive Learning Platform')}
               </span>
             </div>
 
             {/* Title */}
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-white">
               <span className="block text-[#E5BE5A]">
-                {cfg.hero_title_line1 || 'Math Genius'}
+                {L('hero_title_line1', 'Math Genius', 'Math Genius')}
               </span>
               <span className="block mt-1 text-2xl sm:text-3xl lg:text-4xl font-semibold text-white/80">
-                {cfg.hero_title_line2 || 'مستر وائل خضير'}
+                {L('hero_title_line2', 'مستر وائل خضير', 'Mr. Wael Khodair')}
               </span>
             </h1>
 
             {/* Subtitle */}
             <p className="max-w-xl text-white/70 text-base sm:text-lg leading-relaxed lg:mx-0 mx-auto">
-              {cfg.hero_subtitle ||
-                T('نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.',
-                  'We make math simple and fun! Algebra, Geometry, Formulas, Cheat Sheets — weekly homework, regular exams, and continuous tracking of your progress.')}
+              {L(
+                'hero_subtitle',
+                'نبسّط لك الرياضيات ونجعلها سهلة وممتعة! Algebra, Geometry, Formulas, Cheat Sheets — واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة لتقدّمك الأكاديمي.',
+                'We make math simple and fun! Algebra, Geometry, Formulas, Cheat Sheets — weekly homework, regular exams, and continuous tracking of your progress.'
+              )}
             </p>
 
             {/* CTA Buttons */}
@@ -230,7 +246,7 @@ export default function HeroSection() {
                 onClick={() => window.location.href = '/schedule'}
               >
                 <CalendarClock className="h-4 w-4" />
-                مواعيد السنتر
+                {T('مواعيد السنتر', 'Center Schedule')}
               </Button>
             </div>
 
@@ -263,11 +279,11 @@ export default function HeroSection() {
                   <p className="text-2xl font-bold text-[#E5BE5A]">
                     {stats?.totalVideos
                       ? stats.totalVideos
-                      : cfg.hero_stat1_value || '100+'}
+                      : L('hero_stat1_value', '8+', '8+')}
                   </p>
                 </div>
                 <p className="text-xs text-white/70">
-                  {cfg.hero_stat1_label || 'Video Lessons | دروس فيديو'}
+                  {L('hero_stat1_label', 'Video Lessons | دروس فيديو', 'Video Lessons')}
                 </p>
               </div>
 
@@ -279,11 +295,11 @@ export default function HeroSection() {
                   <p className="text-2xl font-bold text-[#E5BE5A]">
                     {stats?.approvedStudents
                       ? stats.approvedStudents
-                      : cfg.hero_stat2_value || '500+'}
+                      : L('hero_stat2_value', '100+', '100+')}
                   </p>
                 </div>
                 <p className="text-xs text-white/70">
-                  {cfg.hero_stat2_label || 'Students | طالب'}
+                  {L('hero_stat2_label', 'Students | طالب', 'Students')}
                 </p>
               </div>
 
@@ -293,11 +309,11 @@ export default function HeroSection() {
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <Clock className="h-4 w-4 text-[#8B6914]/60 dark:text-[#E5BE5A]/60" />
                   <p className="text-2xl font-bold text-[#E5BE5A]">
-                    {cfg.hero_stat3_value || '24/7'}
+                    {L('hero_stat3_value', '24/7', '24/7')}
                   </p>
                 </div>
                 <p className="text-xs text-white/70">
-                  {cfg.hero_stat3_label || 'Tracking | متابعة'}
+                  {L('hero_stat3_label', 'Tracking | متابعة', 'Tracking')}
                 </p>
               </div>
             </div>
@@ -321,7 +337,7 @@ export default function HeroSection() {
                 {showPhoto ? (
                   <img
                     src={heroPhoto}
-                    alt={cfg.instructor_name || 'Mr.Wael Khodair'}
+                    alt={L('instructor_name', 'Mr.Wael Khodair', 'Mr.Wael Khodair')}
                     className="w-full h-full object-cover"
                     style={{ objectPosition: '50% 50%' }}
                   />
@@ -336,7 +352,7 @@ export default function HeroSection() {
               {/* Badge overlay — الاسم مرة واحدة بس (طلب المستر) */}
               <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#0F0D0A] border border-[#C49A38]/40 rounded-full px-5 py-2 shadow-lg">
                 <p className="text-[#E5BE5A] font-bold text-sm tracking-wider whitespace-nowrap">
-                  {cfg.instructor_name || 'مستر وائل خضير'}
+                  {L('instructor_name', 'مستر وائل خضير', 'Mr. Wael Khodair')}
                 </p>
               </div>
             </div>

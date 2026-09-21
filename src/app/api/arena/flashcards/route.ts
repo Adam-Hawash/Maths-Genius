@@ -72,8 +72,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: true, seconds: secs })
     }
 
-    // جولة جديدة — بالمدة اللي حددها الأدمن (15 افتراضي)
-    var seconds = await readFlashcardSeconds()
+    // جولة جديدة — (و72) الطالب يقدر يختار العدد والمدة والصعوبة بنفسه
+    // (الافتراضي: مدة الأدمن flashcard_seconds و 10 بطاقات — متلمسش)
+    var urlCount = Math.max(3, Math.min(Math.round(Number(url.searchParams.get('count')) || 10), 20))
+    var urlSeconds = Math.round(Number(url.searchParams.get('seconds')) || 0)
+    var urlDifficulty = ['easy', 'medium', 'hard', 'mixed'].indexOf(String(url.searchParams.get('difficulty') || '')) !== -1
+      ? String(url.searchParams.get('difficulty'))
+      : 'mixed'
+    var adminSeconds = await readFlashcardSeconds()
+    var seconds = (urlSeconds >= 5 && urlSeconds <= 90) ? urlSeconds : adminSeconds
+    var roundCount = urlCount
 
     /* (و70-ج) الأولوية لكروت المستر المرفوعة — «تحدي على الـ flash cards
        والحاجات اللي احنا بنحطها»: لو فيه كروت نشطة بنتحدي بها بدل المولد.
@@ -81,7 +89,7 @@ export async function GET(request: NextRequest) {
     var deckCards: any[] = []
     try {
       var deckRows = await db.$queryRawUnsafe(
-        'SELECT id, front, back FROM FlashcardCard WHERE active = 1 ORDER BY RANDOM() LIMIT 10'
+        'SELECT id, front, back FROM FlashcardCard WHERE active = 1 ORDER BY RANDOM() LIMIT ' + Math.max(4, Math.min(roundCount, 30)),
       )
       deckCards = (deckRows || []) as any[]
     } catch (e2) { /* الجدول لسه مش موجود — المولد يتكفل */ }
@@ -120,7 +128,8 @@ export async function GET(request: NextRequest) {
       if (cards.length < 4) { source = 'generated'; cards = [] }
     }
     if (cards.length === 0) {
-      cards = generateFlashcards(10, seconds)
+      /* (و72) المولد بياخد العدد والمدة والصعوبة من اختيار الطالب */
+      cards = generateFlashcards(roundCount, seconds, urlDifficulty)
     }
     return NextResponse.json({
       ok: true,

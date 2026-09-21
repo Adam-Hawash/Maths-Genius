@@ -40,8 +40,8 @@ export var SCHEMA_TABLES = [
   // (2026-و44) الإشعارات — رد الشكوى/الكتب الجديدة/امتحانات وواجبات جديدة
   'CREATE TABLE IF NOT EXISTS Notification (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, type TEXT NOT NULL DEFAULT \'general\', title TEXT NOT NULL, body TEXT NOT NULL DEFAULT \'\', read INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   /* (2026-و66) ساحة التحدي — غرف الجروبات + اللاعبين + تحدي المستر + الفلاش كاردز */
-  'CREATE TABLE IF NOT EXISTS BattleRoom (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, title TEXT DEFAULT \'\', hostPlayerId TEXT DEFAULT \'\', status TEXT NOT NULL DEFAULT \'lobby\', questions TEXT NOT NULL DEFAULT \'[]\', currentIndex INTEGER NOT NULL DEFAULT 0, questionStartAt TEXT NOT NULL DEFAULT \'0\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
-  'CREATE TABLE IF NOT EXISTS BattlePlayer (id TEXT PRIMARY KEY, roomId TEXT NOT NULL, name TEXT NOT NULL, token TEXT DEFAULT \'\', isHost INTEGER NOT NULL DEFAULT 0, score INTEGER NOT NULL DEFAULT 0, streak INTEGER NOT NULL DEFAULT 0, answers TEXT NOT NULL DEFAULT \'{}\', lastSeen TEXT NOT NULL DEFAULT \'0\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  'CREATE TABLE IF NOT EXISTS BattleRoom (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, title TEXT DEFAULT \'\', hostPlayerId TEXT DEFAULT \'\', status TEXT NOT NULL DEFAULT \'lobby\', questions TEXT NOT NULL DEFAULT \'[]\', currentIndex INTEGER NOT NULL DEFAULT 0, questionStartAt TEXT NOT NULL DEFAULT \'0\', startedAt TEXT DEFAULT \'\', mode TEXT DEFAULT \'general\', difficulty TEXT DEFAULT \'mixed\', cardSeconds INTEGER DEFAULT 15, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  'CREATE TABLE IF NOT EXISTS BattlePlayer (id TEXT PRIMARY KEY, roomId TEXT NOT NULL, name TEXT NOT NULL, token TEXT DEFAULT \'\', isHost INTEGER NOT NULL DEFAULT 0, score INTEGER NOT NULL DEFAULT 0, streak INTEGER NOT NULL DEFAULT 0, answers TEXT NOT NULL DEFAULT \'{}\', lastSeen TEXT NOT NULL DEFAULT \'0\', studentId TEXT DEFAULT \'\', qIndex INTEGER DEFAULT 0, qStartAt TEXT DEFAULT \'\', finishedAt TEXT DEFAULT \'\', finished INTEGER DEFAULT 0, status TEXT DEFAULT \'active\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   'CREATE TABLE IF NOT EXISTS TeacherChallenge (id TEXT PRIMARY KEY, title TEXT NOT NULL, question TEXT NOT NULL, options TEXT NOT NULL DEFAULT \'[]\', correctIndex INTEGER NOT NULL DEFAULT 0, points INTEGER NOT NULL DEFAULT 30, durationMin INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, closesAt DATETIME, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   'CREATE TABLE IF NOT EXISTS ChallengeEntry (id TEXT PRIMARY KEY, challengeId TEXT NOT NULL, studentId TEXT DEFAULT \'\', name TEXT NOT NULL, isTeacher INTEGER NOT NULL DEFAULT 0, choice INTEGER NOT NULL DEFAULT -1, correct INTEGER NOT NULL DEFAULT 0, timeMs INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   'CREATE TABLE IF NOT EXISTS FlashcardScore (id TEXT PRIMARY KEY, studentId TEXT DEFAULT \'\', name TEXT NOT NULL, score INTEGER NOT NULL DEFAULT 0, correctCount INTEGER NOT NULL DEFAULT 0, totalCards INTEGER NOT NULL DEFAULT 10, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
@@ -135,6 +135,22 @@ var SCHEMA_COLUMNS = [
   // videoType: 'youtube' | 'file' | '' (فاضي = مفيش فيديو — الواجهة بتخفي البلوك)
   ['TeacherChallenge', 'videoUrl', 'TEXT', "DEFAULT ''"],
   ['TeacherChallenge', 'videoType', 'TEXT', "DEFAULT ''"],
+  /* (و72) السباق الفردي في تحدي الجروبات — كل لاعب ليه مؤقت وسؤال مستقل:
+     BattlePlayer.studentId (ربط الحساب + منع العودة بعد الخروج)
+     qIndex/qStartAt (سؤالي الحالي وبدايته — تقدم لكل لاعب لوحده)
+     finished/finishedAt (خلّص؟ وإمتى — لترتيب «مين خلّص الأول»)
+     status (active | left — الخروج من أي مرحلة)
+     BattleRoom.startedAt (بداية السباق — ساعة التوقيت) mode/difficulty/cardSeconds (خيارات الغرفة) */
+  ['BattlePlayer', 'studentId', 'TEXT', "DEFAULT ''"],
+  ['BattlePlayer', 'qIndex', 'INTEGER', 'DEFAULT 0'],
+  ['BattlePlayer', 'qStartAt', 'TEXT', "DEFAULT ''"],
+  ['BattlePlayer', 'finishedAt', 'TEXT', "DEFAULT ''"],
+  ['BattlePlayer', 'finished', 'INTEGER', 'DEFAULT 0'],
+  ['BattlePlayer', 'status', 'TEXT', "DEFAULT 'active'"],
+  ['BattleRoom', 'startedAt', 'TEXT', "DEFAULT ''"],
+  ['BattleRoom', 'mode', 'TEXT', "DEFAULT 'general'"],
+  ['BattleRoom', 'difficulty', 'TEXT', "DEFAULT 'mixed'"],
+  ['BattleRoom', 'cardSeconds', 'INTEGER', 'DEFAULT 15'],
 ]
 
 var SCHEMA_FIXES = [
@@ -229,7 +245,10 @@ export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homew
 /* (2026-و68-إضافي) مفتاح البصمة اتبدّل خامس — عمودي TeacherChallenge.videoUrl
  * / videoType (فيديو المستر في التحدي) دخلوا SCHEMA_COLUMNS — نفس الدرس الموثق
  * و38/و40/و43/و44/و45: من غير تغيير المفتاح الـ ALTER مش هيشتغل على Turso. */
-var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w68'
+/* (و72) مفتاح البصمة اتغير — أعمدة السباق الفردي في BattleRoom/BattlePlayer
+ * دخلوا SCHEMA_COLUMNS — نفس الدرس الموثق (و38/و40/و43/و45/و68): من غير
+ * تغيير المفتاح الأعمدة الجديدة عمرها ما بتتضاف على قواعد موجودة. */
+var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w72'
 
 /* ============================================================
  * 2026-و23 — **إصلاح بطء المنصة** (طلب المستر: «المنصة بطيئة، تسجيل

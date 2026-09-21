@@ -30,7 +30,9 @@ import {
 import { FractionText } from '@/components/FractionText'
 
 /* ============================================================
- * الأنواع — مطابقة لعقود الـ APIs الحية (ممنوع نغيرها)
+ * الأنواع — مطابقة لعقود الـ APIs الحية
+ * (2026-و72) السباق الفردي: الغرفة بترجع أسئلتها (من غير الإجابات)
+ * + بيانات سباقي (qIndex/remainMs/finished) + لوحة «مين خلّص الأول»
  * ============================================================ */
 interface ArenaPlayer {
   id: string
@@ -40,6 +42,12 @@ interface ArenaPlayer {
   streak: number
   online: boolean
   answeredCurrent: boolean
+  /* (و72) بيانات السباق */
+  qIndex?: number
+  finished?: boolean
+  finishedAt?: string
+  status?: string
+  isMe?: boolean
 }
 
 interface ArenaLiveQuestion {
@@ -48,6 +56,28 @@ interface ArenaLiveQuestion {
   options: string[]
   timeLimitSec: number
   remainMs: number
+}
+
+/* (و72) سؤال السباق — من غير correctIndex (بتوصل بعد الإجابة بس) */
+interface ArenaQ {
+  index: number
+  text: string
+  options: string[]
+  timeLimitSec: number
+}
+
+interface ArenaBoardRow {
+  rank: number
+  id?: string
+  name: string
+  score: number
+  qIndex: number
+  finished: boolean
+  finishedAt: string
+  online: boolean
+  isHost: boolean
+  status: string
+  isMe: boolean
 }
 
 interface ArenaRoom {
@@ -62,6 +92,13 @@ interface ArenaRoom {
   players: ArenaPlayer[]
   finalQuestions: { text: string; options: string[]; correctIndex: number; explanation: string }[] | null
   finalAnswers: Record<string, Record<string, { choice: number; correct: number; gained: number; ms: number }>> | null
+  /* (و72) بيانات السباق */
+  mode?: string
+  difficulty?: string
+  cardSeconds?: number
+  startedAt?: number
+  questions?: ArenaQ[]
+  leaderboard?: ArenaBoardRow[]
 }
 
 interface ArenaMe {
@@ -72,15 +109,26 @@ interface ArenaMe {
   score: number
   streak: number
   myAnswer?: { choice: number; correct: number; gained: number; ms: number } | null
+  /* (و72) بيانات سباقي */
+  qIndex?: number
+  total?: number
+  finished?: boolean
+  finishedAt?: string
+  qStartAt?: number
+  remainMs?: number
+  answers?: Record<string, { choice: number; correct: number; gained: number; ms: number }>
+  revealed?: Record<string, { correctIndex: number; explanation: string }>
 }
 
-/* فيدباك لحظي على إجابتي في الجروبات */
+/* فيدباك لحظي على إجابتي في الجروبات — (و72) فيه الإجابة الصح من رد السيرفر */
 interface MyFeedback {
   correct: boolean
   gained: number
   streak: number
   choice: number
   timeout?: boolean
+  correctIndex?: number
+  questionIndex?: number
 }
 
 /* تحدي المستر */
@@ -207,9 +255,29 @@ async function postJson(url: string, body: any): Promise<{ status: number; data:
 }
 
 /* ============================================================
- * الوضع 1: تحدي الجروبات
+ * الوضع 1: تحدي الجروبات — (2026-و72) سباق فردي RACE:
+ *   كل لاعب ليه مؤقّت وسؤال مستقل — ما فيش انتظار باقي اللاعبين.
+ *   جاوب → فيدباك لحظي ~1 ثانية → السؤال اللي بعده فورًا.
+ *   اللي يخلص أسئلته الأول يكسب (⏱ زمن الخلوص مسجل على السيرفر).
  * ============================================================ */
-function GroupsMode({ studentName }: { studentName: string }) {
+
+/* (و72) شيبس اختيار خيارات الغرفة — كبيرة تصلح للمس */
+function OptionChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: any }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={'min-h-10 rounded-xl border-2 px-2 text-[13px] font-black transition-colors ' +
+        (active
+          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+          : 'border-stone-200 bg-white text-stone-500 hover:border-emerald-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400')}
+    >
+      {children}
+    </button>
+  )
+}
+
+function GroupsMode({ studentId, studentName }: { studentId: string; studentName: string }) {
   /* الحالة الرئيسية — الغرفة هي مصدر الحقيقة (idle = مفيش غرفة) */
   var [gRoom, setGRoom] = useState<ArenaRoom | null>(null)
   var [gMe, setGMe] = useState<ArenaMe | null>(null)
@@ -217,21 +285,52 @@ function GroupsMode({ studentName }: { studentName: string }) {
   var [joinCode, setJoinCode] = useState('')
   /* (2026-و68) كود مخصص — الطالب يكتب كود الغرفة بنفسه */
   var [customCode, setCustomCode] = useState('')
-  var [busy, setBusy] = useState('') // create | join | start | next | end | leave
+  /* (2026-و72) خيارات إنشاء الغرفة */
+  var [optMode, setOptMode] = useState<'general' | 'flash'>('general')
+  var [optDiff, setOptDiff] = useState<'easy' | 'medium' | 'hard'>('medium')
+  var [optRounds, setOptRounds] = useState(8)
+  var [optCardSec, setOptCardSec] = useState(15)
+  var [busy, setBusy] = useState('') // create | join | start | end | leave
   var [sendingAnswer, setSendingAnswer] = useState(false)
   var [pendingChoice, setPendingChoice] = useState(-1)
   var [myFeedback, setMyFeedback] = useState<MyFeedback | null>(null)
   var [gNow, setGNow] = useState(Date.now())
+  /* (و72) السباق الفردي — سؤالي الحالي (myQIdx) والسؤال المعروض (shownIdx):
+     بعد الإجابة myQIdx بيتقدّم فورًا و shownIdx بيستنى الفيدباك (~1 ثانية) */
+  var [myQIdx, setMyQIdx] = useState(0)
+  var [shownIdx, setShownIdx] = useState(0)
+  var [raceDone, setRaceDone] = useState(false)
+  var [localFinishAt, setLocalFinishAt] = useState(0)
 
   /* مراجع — عشان الـ polling ميقعش في stale closures */
   var gMeRef = useRef<ArenaMe | null>(null)
+  var gRoomRef = useRef<ArenaRoom | null>(null)
   var gRoomCodeRef = useRef('')
-  var qRemainBaseRef = useRef<{ remainMs: number; at: number; limitMs: number } | null>(null)
-  var lastQIdxRef = useRef(-1)
+  var roomQRef = useRef<ArenaQ[]>([])
+  var myQIdxRef = useRef(0)
+  var shownIdxRef = useRef(0)
+  var raceDoneRef = useRef(false)
+  var sendingRef = useRef(false)
   var feedbackQIdxRef = useRef(-999)
+  var advanceTimerRef = useRef<number | null>(null)
+  /* أساس عدّاد سؤالي: {remainMs, at, limitMs} — بيتزامن من البولينج ويجري محليًا */
+  var qRemainBaseRef = useRef<{ remainMs: number; at: number; limitMs: number } | null>(null)
 
   useEffect(function () { gMeRef.current = gMe }, [gMe])
+  useEffect(function () { gRoomRef.current = gRoom }, [gRoom])
   useEffect(function () { gRoomCodeRef.current = gRoom ? gRoom.code : '' }, [gRoom])
+  useEffect(function () { roomQRef.current = (gRoom && gRoom.questions) ? gRoom.questions : [] }, [gRoom])
+  useEffect(function () { myQIdxRef.current = myQIdx }, [myQIdx])
+  useEffect(function () { shownIdxRef.current = shownIdx }, [shownIdx])
+  useEffect(function () { raceDoneRef.current = raceDone }, [raceDone])
+  useEffect(function () { sendingRef.current = sendingAnswer }, [sendingAnswer])
+
+  function killAdvanceTimer(): void {
+    if (advanceTimerRef.current !== null) {
+      clearTimeout(advanceTimerRef.current)
+      advanceTimerRef.current = null
+    }
+  }
 
   /* صفّر حالة الجروبات والرجوع لشاشة البداية */
   function resetGroups(): void {
@@ -242,18 +341,35 @@ function GroupsMode({ studentName }: { studentName: string }) {
     setMyFeedback(null)
     setPendingChoice(-1)
     setJoinCode('')
-    lastQIdxRef.current = -1
+    setCustomCode('')
+    myQIdxRef.current = 0
+    setMyQIdx(0)
+    shownIdxRef.current = 0
+    setShownIdx(0)
+    raceDoneRef.current = false
+    setRaceDone(false)
+    setLocalFinishAt(0)
     feedbackQIdxRef.current = -999
     qRemainBaseRef.current = null
+    killAdvanceTimer()
   }
 
-  /* تسجيل اللاعب في الغرفة (إنشاء أو دخول) */
+  /* تسجيل اللاعب في الغرفة (إنشاء أو دخول أو رجوع لجلسة) */
   function applyJoined(code: string, me: ArenaMe, room: ArenaRoom): void {
     saveMeLocal(code, me)
     gRoomCodeRef.current = code
-    lastQIdxRef.current = -1
     feedbackQIdxRef.current = -999
     qRemainBaseRef.current = null
+    killAdvanceTimer()
+    var qi = Math.max(0, Number(me.qIndex || 0))
+    myQIdxRef.current = qi
+    setMyQIdx(qi)
+    shownIdxRef.current = qi
+    setShownIdx(qi)
+    var fin = !!me.finished
+    raceDoneRef.current = fin
+    setRaceDone(fin)
+    setLocalFinishAt(0)
     setGMe(me)
     setGRoom(room)
   }
@@ -267,15 +383,31 @@ function GroupsMode({ studentName }: { studentName: string }) {
       try {
         var res = await fetch('/api/arena/rooms/' + encodeURIComponent(saved.code) + '?playerId=' + encodeURIComponent(saved.playerId) + '&token=' + encodeURIComponent(saved.token), { cache: 'no-store' })
         if (!alive) return
-        if (!res.ok) { clearMeLocal(saved.code); return }
+        if (!res.ok) {
+          /* (و72) جلسة ماتت أو الطالب كان خرج → نمسح التخزين ونعرض الرسالة */
+          clearMeLocal(saved.code)
+          var err: any = null
+          try { err = await res.json() } catch (e2) {}
+          if (err && err.error) toast.error(String(err.error))
+          return
+        }
         var data: any = await res.json()
         if (!alive || !data || !data.ok || !data.me || !data.room) { clearMeLocal(saved.code); return }
         var m = data.me
-        applyJoined(String(data.room.code), { id: m.id, name: m.name, token: m.token, isHost: !!m.isHost, score: Number(m.score || 0), streak: Number(m.streak || 0) }, data.room)
+        applyJoined(String(data.room.code), {
+          id: m.id, name: m.name, token: m.token, isHost: !!m.isHost, score: Number(m.score || 0), streak: Number(m.streak || 0),
+          qIndex: Number(m.qIndex || 0), total: Number(m.total || 0), finished: !!m.finished, finishedAt: String(m.finishedAt || ''),
+          qStartAt: Number(m.qStartAt || 0), remainMs: Number(m.remainMs || 0), answers: m.answers || {}, revealed: m.revealed || {},
+        }, data.room)
         toast.success('رجعناك لغرفة ' + String(data.room.code) + ' 🎮')
       } catch (e) { /* الشبكة — السترك الجاي في البولينج يعوض */ }
     })()
     return function () { alive = false }
+  }, [])
+
+  /* تنظيف التايمرات عند الخروج — ممنوع تايمر يفضل عايش */
+  useEffect(function () {
+    return function () { killAdvanceTimer() }
   }, [])
 
   /* ===== البولينج — قلب الوضع اللاتمزامي (1.2 ثانية) ===== */
@@ -297,20 +429,40 @@ function GroupsMode({ studentName }: { studentName: string }) {
           setGRoom(null)
           setGMe(null)
           setMyFeedback(null)
-          lastQIdxRef.current = -1
+          myQIdxRef.current = 0
+          setMyQIdx(0)
+          shownIdxRef.current = 0
+          setShownIdx(0)
+          raceDoneRef.current = false
+          setRaceDone(false)
           feedbackQIdxRef.current = -999
           toast.error('الغرفة اتقفلت — ابدأ واحدة جديدة 💪')
+          return
+        }
+        if (res.status === 403) {
+          /* (و72) الطالب خرج من التحدي أو الجلسة بقت غير صالحة */
+          clearMeLocal(code)
+          var err403: any = null
+          try { err403 = await res.json() } catch (e3) {}
+          setGRoom(null)
+          setGMe(null)
+          setMyFeedback(null)
+          myQIdxRef.current = 0
+          setMyQIdx(0)
+          shownIdxRef.current = 0
+          setShownIdx(0)
+          raceDoneRef.current = false
+          setRaceDone(false)
+          feedbackQIdxRef.current = -999
+          toast.error(String((err403 && err403.error) || 'جلسة غير صالحة — ادخل من الأول'))
           return
         }
         var data: any = await res.json()
         if (!alive || !data || !data.ok) return
         var room: ArenaRoom = data.room
         setGRoom(room)
-        if (data.me) {
-          var m = data.me
-          setGMe({ id: m.id, name: m.name, token: m.token, isHost: !!m.isHost, score: Number(m.score || 0), streak: Number(m.streak || 0), myAnswer: m.myAnswer || null })
-        } else {
-          /* اللاعب مش موجود في الغرفة (اتشال) — خروج نظيف */
+        if (!data.me) {
+          /* اللاعب مش موجود في الغرفة — خروج نظيف */
           clearMeLocal(code)
           setGRoom(null)
           setGMe(null)
@@ -318,29 +470,41 @@ function GroupsMode({ studentName }: { studentName: string }) {
           toast.error('انت مش في الغرفة دي — ادخل تاني')
           return
         }
-        /* مزامنة أساس العدّاد المحلي (عشان العداد يجري بين البولينجات) */
-        if (room.currentQuestion) {
-          qRemainBaseRef.current = {
-            remainMs: Number(room.currentQuestion.remainMs || 0),
-            at: Date.now(),
-            limitMs: Math.max(8, Number(room.currentQuestion.timeLimitSec || 25)) * 1000,
-          }
-        } else {
-          qRemainBaseRef.current = null
+        var m = data.me
+        setGMe({
+          id: m.id, name: m.name, token: m.token, isHost: !!m.isHost, score: Number(m.score || 0), streak: Number(m.streak || 0),
+          myAnswer: m.myAnswer || null,
+          qIndex: Number(m.qIndex || 0), total: Number(m.total || 0), finished: !!m.finished, finishedAt: String(m.finishedAt || ''),
+          qStartAt: Number(m.qStartAt || 0), remainMs: Number(m.remainMs || 0),
+          answers: m.answers || {}, revealed: m.revealed || {},
+        })
+        /* (و72) مزامنة تقدّمي — السيرفر هو الحكم: لو قدّم أكتر مني (تايم أوت مثلًا) نلحقه.
+           لو إحنا اللي قدمنا بالفيدباك (محليًا) والسيرفر لسه بيلحق → مش بنرجع لورا. */
+        var serverQ = Math.max(0, Number(m.qIndex || 0))
+        var limitOf = function (idx: number): number {
+          var qs = room.questions || []
+          var qq = qs[idx]
+          return qq ? Math.max(5, Number(qq.timeLimitSec || 25)) * 1000 : 30000
         }
-        /* سؤال جديد → صفّر الفيدباك المحلي */
-        var qIdx = room.currentQuestion ? Number(room.currentQuestion.index) : -1
-        if (qIdx !== lastQIdxRef.current) {
-          lastQIdxRef.current = qIdx
+        if (m.finished && !raceDoneRef.current) {
+          raceDoneRef.current = true
+          setRaceDone(true)
+          setLocalFinishAt(Number(m.finishedAt) || Date.now())
+          killAdvanceTimer()
           feedbackQIdxRef.current = -999
           setMyFeedback(null)
-          setPendingChoice(-1)
         }
-        /* استرجاع الفيدباك لو جاوبنا على السؤال الحالي قبل كده (ريفريش مثلًا) */
-        if (data.me && data.me.myAnswer && room.currentQuestion && feedbackQIdxRef.current !== Number(room.currentQuestion.index)) {
-          feedbackQIdxRef.current = Number(room.currentQuestion.index)
-          var ma = data.me.myAnswer
-          setMyFeedback({ correct: !!Number(ma.correct), gained: Number(ma.gained || 0), streak: Number(data.me.streak || 0), choice: Number(ma.choice) })
+        if (serverQ > myQIdxRef.current) {
+          myQIdxRef.current = serverQ
+          setMyQIdx(serverQ)
+          if (!myFeedback && advanceTimerRef.current === null) {
+            shownIdxRef.current = serverQ
+            setShownIdx(serverQ)
+            qRemainBaseRef.current = { remainMs: Number(m.remainMs || 0) || limitOf(serverQ), at: Date.now(), limitMs: limitOf(serverQ) }
+          }
+        } else if (serverQ === myQIdxRef.current && shownIdxRef.current === serverQ && !myFeedback && advanceTimerRef.current === null && !m.finished) {
+          /* نفس السؤال → زامن العدّاد المحلي (عشان يجري صح بين البولينجات) */
+          qRemainBaseRef.current = { remainMs: Number(m.remainMs || 0), at: Date.now(), limitMs: limitOf(serverQ) }
         }
       } catch (e) { /* خطأ شبكة عابر — السترك الجاي يعوض */ }
     }
@@ -349,31 +513,77 @@ function GroupsMode({ studentName }: { studentName: string }) {
     return function () { alive = false; clearInterval(iv) }
   }, [gPhase, meId])
 
-  /* ===== مؤقّت محلي للسؤال الحي — يجري بين البولينجات (300ms رندر) ===== */
-  var liveQ = gRoom && gRoom.status === 'live' ? gRoom.currentQuestion : null
-  var qIndex = liveQ ? liveQ.index : -1
+  /* ===== مؤقّت محلي — يجري كل 300ms طول ما إحنا في اللايف (ساعة + عدّاد) ===== */
   useEffect(function () {
-    if (qIndex < 0) return
+    if (gPhase !== 'live') return
     setGNow(Date.now())
     var iv = setInterval(function () { setGNow(Date.now()) }, 300)
     return function () { clearInterval(iv) }
-  }, [qIndex])
+  }, [gPhase])
 
-  /* الوقت المتبقي المحسوب لحظيًا */
-  var remainMs = 0
-  var remainLimitMs = 1
-  if (liveQ && qRemainBaseRef.current) {
-    remainLimitMs = Math.max(1, qRemainBaseRef.current.limitMs)
-    remainMs = Math.max(0, qRemainBaseRef.current.remainMs - (gNow - qRemainBaseRef.current.at))
-  } else if (liveQ) {
-    remainLimitMs = Math.max(8, Number(liveQ.timeLimitSec || 25)) * 1000
-    remainMs = Math.max(0, Number(liveQ.remainMs || 0))
+  /* ===== (و72) مؤقّت سؤالي — لما يخلص: فيدباك ⌛ + تقدّم تلقائي زي السيرفر ===== */
+  function onMyTimeUp(): void {
+    if (raceDoneRef.current || sendingRef.current) return
+    var cur = myQIdxRef.current
+    if (feedbackQIdxRef.current === cur) return
+    feedbackQIdxRef.current = cur
+    setMyFeedback({ correct: false, gained: 0, streak: 0, choice: -1, timeout: true, questionIndex: cur })
+    /* السيرفر بيتقدّم بعد سماحية قصيرة — نقدّم معاه بنفس الإيقاع */
+    var next = cur + 1
+    myQIdxRef.current = next
+    setMyQIdx(next)
+    var qs = roomQRef.current
+    var isLast = next >= qs.length
+    var nl = qs[next] ? Math.max(5, Number(qs[next].timeLimitSec || 25)) * 1000 : 30000
+    qRemainBaseRef.current = { remainMs: nl, at: Date.now(), limitMs: nl }
+    if (isLast) scheduleFinish(950)
+    else scheduleAdvance(950)
   }
-  var remainSec = Math.ceil(remainMs / 1000)
-  var remainPct = Math.max(0, Math.min(100, (remainMs / remainLimitMs) * 100))
+
+  useEffect(function () {
+    if (gPhase !== 'live' || raceDone || myFeedback || shownIdx !== myQIdx) return
+    var base = qRemainBaseRef.current
+    if (!base) return
+    var left = Math.max(0, base.remainMs - (Date.now() - base.at))
+    if (left > 0) {
+      var t = window.setTimeout(function () { onMyTimeUp() }, left + 60)
+      return function () { clearTimeout(t) }
+    }
+    onMyTimeUp()
+  }, [gPhase, shownIdx, myQIdx, raceDone, myFeedback, gNow])
+
+  /* الانتقال للسؤال اللي بعده بعد الفيدباك (~1 ثانية راحة) */
+  function scheduleAdvance(delayMs: number): void {
+    killAdvanceTimer()
+    advanceTimerRef.current = window.setTimeout(function () {
+      advanceTimerRef.current = null
+      if (raceDoneRef.current) return
+      feedbackQIdxRef.current = -999
+      setMyFeedback(null)
+      setPendingChoice(-1)
+      shownIdxRef.current = myQIdxRef.current
+      setShownIdx(myQIdxRef.current)
+    }, delayMs)
+  }
+
+  /* الخلوص: بعد فيدباك آخر سؤال → شاشة «خلصت» */
+  function scheduleFinish(delayMs: number): void {
+    killAdvanceTimer()
+    advanceTimerRef.current = window.setTimeout(function () {
+      advanceTimerRef.current = null
+      feedbackQIdxRef.current = -999
+      setMyFeedback(null)
+      setPendingChoice(-1)
+      raceDoneRef.current = true
+      setRaceDone(true)
+      setLocalFinishAt(Date.now())
+      shownIdxRef.current = myQIdxRef.current
+      setShownIdx(myQIdxRef.current)
+    }, delayMs)
+  }
 
   /* الوقت اللي خدته لحد لحظة الإجابة (للسرعة) */
-  function qElapsedMs(): number {
+  function myQElapsedMs(): number {
     var base = qRemainBaseRef.current
     if (!base) return 0
     var remain = Math.max(0, base.remainMs - (Date.now() - base.at))
@@ -388,7 +598,16 @@ function GroupsMode({ studentName }: { studentName: string }) {
     if (custom && custom.length < 4) { toast.error('الكود المخصص لازم 4 حروف على الأقل'); return }
     setBusy('create')
     try {
-      var out = await postJson('/api/arena/rooms', { name: name, customCode: custom || undefined })
+      /* (و72) خيارات السباق بتتبعت مع الطلب */
+      var out = await postJson('/api/arena/rooms', {
+        name: name,
+        customCode: custom || undefined,
+        studentId: studentId || '',
+        mode: optMode,
+        difficulty: optDiff,
+        rounds: optRounds,
+        cardSeconds: optCardSec,
+      })
       var data = out.data
       if (out.status === 404 || !out.data) { toast.error('مشكلة في إنشاء الغرفة — جرب تاني'); return }
       if (!data.ok) { toast.error(String(data.error || 'مشكلة في إنشاء الغرفة')); return }
@@ -402,6 +621,12 @@ function GroupsMode({ studentName }: { studentName: string }) {
         players: [],
         finalQuestions: null,
         finalAnswers: null,
+        mode: String(data.room.mode || optMode),
+        difficulty: String(data.room.difficulty || optDiff),
+        cardSeconds: Number(data.room.cardSeconds || optCardSec),
+        startedAt: 0,
+        questions: [],
+        leaderboard: [],
       })
       setCustomCode('')
       toast.success('اتعملت الغرفة! شارك الكود مع صحابك 🎉')
@@ -419,11 +644,12 @@ function GroupsMode({ studentName }: { studentName: string }) {
     if (!name) { toast.error('اكتب اسمك الأول'); return }
     setBusy('join')
     try {
-      var out = await postJson('/api/arena/rooms/' + encodeURIComponent(code), { action: 'join', name: name })
+      /* (و72) studentId بيتبعت — نفس الحساب بيرجع لنفس اللاعب (ريأتاتش) */
+      var out = await postJson('/api/arena/rooms/' + encodeURIComponent(code), { action: 'join', name: name, studentId: studentId || '' })
       var data = out.data
       if (out.status === 404) { toast.error('الغرفة مش موجودة — راجع الكود'); return }
       if (!data || !data.ok) { toast.error(String((data && data.error) || 'مشكلة في الدخول')); return }
-      applyJoined(String(data.room.code), { id: data.me.id, name: data.me.name, token: data.me.token, isHost: false, score: 0, streak: 0 }, {
+      applyJoined(String(data.room.code), { id: data.me.id, name: data.me.name, token: data.me.token, isHost: !!data.me.isHost, score: Number(data.me.score || 0), streak: Number(data.me.streak || 0) }, {
         code: String(data.room.code),
         status: (data.room.status === 'live' ? 'live' : data.room.status === 'ended' ? 'ended' : 'lobby'),
         currentIndex: 0,
@@ -433,6 +659,12 @@ function GroupsMode({ studentName }: { studentName: string }) {
         players: [],
         finalQuestions: null,
         finalAnswers: null,
+        mode: String(data.room.mode || 'general'),
+        difficulty: String(data.room.difficulty || 'mixed'),
+        cardSeconds: Number(data.room.cardSeconds || 15),
+        startedAt: 0,
+        questions: [],
+        leaderboard: [],
       })
       setJoinCode('')
       toast.success('دخلت الغرفة ' + String(data.room.code) + ' 🔥')
@@ -443,9 +675,9 @@ function GroupsMode({ studentName }: { studentName: string }) {
     }
   }
 
-  async function hostAction(action: 'start' | 'next' | 'end'): Promise<void> {
-    var me = gMe
-    var room = gRoom
+  async function hostAction(action: 'start' | 'end'): Promise<void> {
+    var me = gMeRef.current
+    var room = gRoomRef.current
     if (!me || !room) return
     if (action === 'end' && !window.confirm('متأكد إنك عايز تنهي التحدي؟')) return
     setBusy(action)
@@ -454,7 +686,7 @@ function GroupsMode({ studentName }: { studentName: string }) {
       var data = out.data
       if (out.status === 404) { resetGroups(); toast.error('الغرفة اتقفلت'); return }
       if (!data || !data.ok) { toast.error(String((data && data.error) || 'مشكلة في تنفيذ الطلب')); return }
-      if (action === 'start') toast.success('يلا نبدأ! 🚀')
+      if (action === 'start') toast.success('يلا يا شباب — السباق بدأ! 🚀')
     } catch (e) {
       toast.error('الشبكة بتلحس — جرب تاني')
     } finally {
@@ -463,31 +695,49 @@ function GroupsMode({ studentName }: { studentName: string }) {
   }
 
   async function answerQuestion(i: number): Promise<void> {
-    var me = gMe
-    var room = gRoom
-    if (!me || !room || !room.currentQuestion) return
-    if (sendingAnswer || myFeedback || me.myAnswer || room.revealed) return
-    var q = room.currentQuestion
-    var ms = qElapsedMs()
+    var me = gMeRef.current
+    var room = gRoomRef.current
+    var qIdx = myQIdxRef.current
+    var qs = roomQRef.current
+    var q = qs[qIdx]
+    if (!me || !room || room.status !== 'live' || raceDoneRef.current || !q) return
+    if (sendingRef.current || myFeedback || shownIdxRef.current !== qIdx) return
+    var ms = myQElapsedMs()
     setSendingAnswer(true)
     setPendingChoice(i)
     try {
       var out = await postJson('/api/arena/rooms/' + encodeURIComponent(room.code), {
-        action: 'answer', playerId: me.id, token: me.token, questionIndex: q.index, choice: i, ms: ms,
+        action: 'answer', playerId: me.id, token: me.token, questionIndex: qIdx, choice: i, ms: ms,
       })
       var data = out.data
       if (out.status === 404) { resetGroups(); toast.error('الغرفة اتقفلت'); return }
+      if (out.status === 403) {
+        var msg403 = String((data && data.error) || 'جلسة غير صالحة')
+        resetGroups()
+        toast.error(msg403)
+        return
+      }
       if (out.status === 409) {
-        /* (2026-و66) الوقت خلص أو السؤال اتغير — نتعامل بلطف من غير كسير قلب */
+        /* الوقت خلص على السؤال ده — فيدباك ⌛ والتقدّم هيجي من السيرفر */
         var msg = String((data && data.error) || 'الوقت خلص')
         toast.error(msg + ' ⌛')
-        feedbackQIdxRef.current = Number(q.index)
-        setMyFeedback({ correct: false, gained: 0, streak: 0, choice: i, timeout: true })
+        feedbackQIdxRef.current = qIdx
+        setMyFeedback({ correct: false, gained: 0, streak: 0, choice: i, timeout: true, questionIndex: qIdx })
+        scheduleAdvance(1100)
         return
       }
       if (!data || !data.ok) { toast.error(String((data && data.error) || 'حصلت مشكلة في إجابتك')); return }
-      feedbackQIdxRef.current = Number(q.index)
-      setMyFeedback({ correct: !!data.correct, gained: Number(data.gained || 0), streak: Number(data.streak || 0), choice: i })
+      /* (و72) فيدباك لحظي ~1 ثانية → السؤال اللي بعده فورًا (من غير انتظار حد) */
+      feedbackQIdxRef.current = qIdx
+      setMyFeedback({ correct: !!data.correct, gained: Number(data.gained || 0), streak: Number(data.streak || 0), choice: i, correctIndex: Number(data.correctIndex), questionIndex: qIdx })
+      var nextIdx = Number(data.nextIndex != null ? data.nextIndex : qIdx + 1)
+      myQIdxRef.current = nextIdx
+      setMyQIdx(nextIdx)
+      var nq = qs[nextIdx]
+      var nl = nq ? Math.max(5, Number(nq.timeLimitSec || 25)) * 1000 : 30000
+      qRemainBaseRef.current = { remainMs: nl, at: Date.now(), limitMs: nl }
+      if (data.finished) scheduleFinish(950)
+      else scheduleAdvance(950)
     } catch (e) {
       toast.error('الشبكة بتلحس — جرب تاني')
     } finally {
@@ -496,17 +746,20 @@ function GroupsMode({ studentName }: { studentName: string }) {
     }
   }
 
-  async function leaveRoom(): Promise<void> {
-    var me = gMe
-    var room = gRoom
-    if (me && room) {
+  /* (و72) الخروج — مسموح في أي مرحلة (لوبي أو لايف) + ممنوع الرجوع بعده */
+  async function exitRoom(ask: boolean): Promise<void> {
+    if (ask && !window.confirm('متأكد إنك عايز تخرج من التحدي؟ مش هتقدر ترجع تاني!')) return
+    var me = gMeRef.current
+    var code = gRoomCodeRef.current
+    if (me && code) {
       setBusy('leave')
       try {
-        await postJson('/api/arena/rooms/' + encodeURIComponent(room.code), { action: 'leave', playerId: me.id, token: me.token })
+        await postJson('/api/arena/rooms/' + encodeURIComponent(code), { action: 'leave', playerId: me.id, token: me.token })
       } catch (e) { /* خروج محلي برضه */ }
       setBusy('')
     }
     resetGroups()
+    toast('خرجت من التحدي')
   }
 
   async function copyCode(): Promise<void> {
@@ -538,19 +791,35 @@ function GroupsMode({ studentName }: { studentName: string }) {
 
   /* ===== مشتقات العرض ===== */
   var players = gRoom ? gRoom.players : []
-  var sortedPlayers = players.slice().sort(function (a, b) { return b.score - a.score })
+  var activeCount = players.filter(function (p) { return p.status !== 'left' }).length
   var isHost = !!(gMe && gMe.isHost)
-  var answeredNow = !!(gMe && gMe.myAnswer && liveQ)
-  var allAnswered = players.length > 0 && players.every(function (p) { return p.answeredCurrent })
-  var optionsLocked = sendingAnswer || !!myFeedback || answeredNow || !!(gRoom && gRoom.revealed)
-  /* نسخ غير-nullable للاستخدام جوه الـ callbacks (TS بيضيّع الـ narrowing جوه الفانكشنات) */
-  var revealedNow = gRoom ? gRoom.revealed : null
-  var myIdNow = gMe ? gMe.id : ''
+  var totalQ = gRoom ? (gRoom.totalRounds || (gRoom.questions ? gRoom.questions.length : 0)) : 0
+  var myQ = (gRoom && gRoom.questions && shownIdx >= 0 && shownIdx < gRoom.questions.length) ? gRoom.questions[shownIdx] : null
+  var boardRows = gRoom && gRoom.leaderboard ? gRoom.leaderboard : []
+
+  /* عدّاد سؤالي الحالي */
+  var remainMs = 0
+  var remainLimitMs = 1
+  var feedbackOnShown = !!(myFeedback && Number(myFeedback.questionIndex || -1) === shownIdx)
+  if (gPhase === 'live' && !raceDone && myQ && shownIdx === myQIdx && qRemainBaseRef.current) {
+    remainLimitMs = Math.max(1, qRemainBaseRef.current.limitMs)
+    remainMs = Math.max(0, qRemainBaseRef.current.remainMs - (gNow - qRemainBaseRef.current.at))
+  } else if (myQ) {
+    remainLimitMs = Math.max(1, Number(myQ.timeLimitSec || 25) * 1000)
+    remainMs = feedbackOnShown ? 0 : remainLimitMs
+  }
+  var remainSec = Math.ceil(remainMs / 1000)
+  var remainPct = Math.max(0, Math.min(100, (remainMs / remainLimitMs) * 100))
+
+  /* ساعة التوقيت — من بداية السباق */
+  var swMs = gRoom && Number(gRoom.startedAt || 0) > 0 ? Math.max(0, gNow - Number(gRoom.startedAt || 0)) : 0
+
+  var optionsLocked = sendingAnswer || !!myFeedback || raceDone || shownIdx !== myQIdx
 
   /* ===== الشاشات ===== */
   var phase = gRoom ? gRoom.status : 'idle'
 
-  /* ---------- idle: كرتين (إنشاء / دخول) ---------- */
+  /* ---------- idle: كرتين (إنشاء / دخول) + خيارات السباق ---------- */
   if (phase === 'idle') {
     return (
       <div className="space-y-4">
@@ -563,7 +832,7 @@ function GroupsMode({ studentName }: { studentName: string }) {
             </div>
             <CardContent className="p-5 space-y-4">
               <p className="text-sm text-muted-foreground leading-relaxed">
-                اعمل غرفة وابعته الكود لصحابك — كل واحد من موبايله ويتسابقوا لايف! 🎮
+                اعمل غرفة وابعته الكود لصحابك — سباق فردي: كل واحد على موبايله واللي يخلص الأول يكسب! 🏁
               </p>
               <div>
                 <label className="text-xs font-bold text-muted-foreground mb-1.5 block">اسمك في اللعبة</label>
@@ -590,6 +859,52 @@ function GroupsMode({ studentName }: { studentName: string }) {
                 />
                 <p className="mt-1 text-[11px] text-muted-foreground">من 4 لـ 8 حروف/أرقام — لو مستخدم هيجيلك رسالة تختار غيره</p>
               </div>
+
+              {/* (2026-و72) خيارات السباق */}
+              <div className="rounded-2xl border-2 border-dashed border-emerald-200 dark:border-emerald-900/70 p-3 space-y-3">
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground mb-1.5">نوع الأسئلة</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <OptionChip active={optMode === 'general'} onClick={function () { setOptMode('general') }}>📝 أسئلة عامة</OptionChip>
+                    <OptionChip active={optMode === 'flash'} onClick={function () { setOptMode('flash') }}>⚡ فلاش كاردز</OptionChip>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground mb-1.5">الصعوبة</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <OptionChip active={optDiff === 'easy'} onClick={function () { setOptDiff('easy') }}>سهل</OptionChip>
+                    <OptionChip active={optDiff === 'medium'} onClick={function () { setOptDiff('medium') }}>متوسط</OptionChip>
+                    <OptionChip active={optDiff === 'hard'} onClick={function () { setOptDiff('hard') }}>صعب</OptionChip>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground mb-1.5">عدد الأسئلة</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[5, 8, 10, 15].map(function (n) {
+                      return (
+                        <OptionChip key={n} active={optRounds === n} onClick={function () { setOptRounds(n) }}>
+                          <span dir="ltr">{n}</span>
+                        </OptionChip>
+                      )
+                    })}
+                  </div>
+                </div>
+                {optMode === 'flash' ? (
+                  <div>
+                    <p className="text-xs font-bold text-muted-foreground mb-1.5">⚡ وقت البطاقة الواحدة</p>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[8, 10, 15, 20, 30].map(function (s) {
+                        return (
+                          <OptionChip key={s} active={optCardSec === s} onClick={function () { setOptCardSec(s) }}>
+                            <span dir="ltr">{s}</span> ث
+                          </OptionChip>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
               <Button
                 onClick={function () { createRoom() }}
                 disabled={busy === 'create'}
@@ -635,7 +950,7 @@ function GroupsMode({ studentName }: { studentName: string }) {
             </CardContent>
           </Card>
         </div>
-        <p className="text-center text-xs text-muted-foreground font-bold">من 2 لـ 6 لاعبين — والدرجات بتتحسب بالدقة والسرعة 🏃‍♂️</p>
+        <p className="text-center text-xs text-muted-foreground font-bold">من 2 لـ 6 لاعبين — سباق فردي: الدقة + السرعة + اللي يخلص الأول 🏁</p>
       </div>
     )
   }
@@ -646,6 +961,14 @@ function GroupsMode({ studentName }: { studentName: string }) {
       <Card className="overflow-hidden">
         <div className="bg-gradient-to-l from-emerald-500 to-teal-600 px-5 py-4 text-white text-center">
           <h3 className="font-black text-lg">{gRoom?.title || 'غرفة التحدي'}</h3>
+          <p className="text-sm text-emerald-50/90 font-bold">
+            {gRoom?.mode === 'flash' ? '⚡ فلاش كاردز' : '📝 أسئلة عامة'}
+            {' • '}
+            {gRoom?.difficulty === 'easy' ? 'سهل' : gRoom?.difficulty === 'hard' ? 'صعب' : 'متوسط'}
+            {' • '}
+            <span dir="ltr">{gRoom?.totalRounds || 0}</span> أسئلة
+            {gRoom?.mode === 'flash' ? <> • <span dir="ltr">{gRoom?.cardSeconds || 15}</span> ث للبطاقة</> : null}
+          </p>
           <p className="text-sm text-emerald-50/90 font-bold">شارك الكود مع صحابك 👇</p>
         </div>
         <CardContent className="p-5 space-y-4">
@@ -666,12 +989,17 @@ function GroupsMode({ studentName }: { studentName: string }) {
             ) : (
               players.map(function (p) {
                 return (
-                  <div key={p.id} className="flex items-center gap-2 rounded-xl px-3 py-2 bg-stone-50 dark:bg-stone-900/50">
-                    <span className={'size-2.5 rounded-full shrink-0 ' + (p.online ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]' : 'bg-stone-300 dark:bg-stone-700')} />
-                    <span className="flex-1 font-bold text-sm truncate">
+                  <div key={p.id} className={'flex items-center gap-2 rounded-xl px-3 py-2 ' + (p.status === 'left' ? 'bg-stone-100 dark:bg-stone-900/30 opacity-60' : 'bg-stone-50 dark:bg-stone-900/50')}>
+                    <span className={'size-2.5 rounded-full shrink-0 ' + (p.status === 'left' ? 'bg-stone-300 dark:bg-stone-700' : p.online ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]' : 'bg-stone-300 dark:bg-stone-700')} />
+                    <span className={'flex-1 font-bold text-sm truncate ' + (p.status === 'left' ? 'line-through' : '')}>
                       {p.name}
                       {gMe && p.id === gMe.id ? <span className="text-xs text-muted-foreground font-normal"> (انت)</span> : null}
                     </span>
+                    {p.status === 'left' ? (
+                      <Badge variant="outline" className="text-[11px] font-black text-stone-500 border-stone-300 dark:border-stone-700 gap-1">
+                        <LogOut className="size-3" /> خرج
+                      </Badge>
+                    ) : null}
                     {p.streak >= 2 ? <span className="text-orange-500 text-xs font-black">🔥 ×{p.streak}</span> : null}
                     {p.isHost ? (
                       <Badge className="bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 gap-1">
@@ -689,15 +1017,15 @@ function GroupsMode({ studentName }: { studentName: string }) {
             <div className="space-y-2">
               <Button
                 onClick={function () { hostAction('start') }}
-                disabled={players.length < 2 || busy === 'start'}
+                disabled={activeCount < 1 || busy === 'start'}
                 className="w-full min-h-14 bg-gradient-to-l from-emerald-500 to-teal-600 text-white font-black text-lg shadow-lg shadow-emerald-500/25"
               >
                 {busy === 'start' ? <Loader2 className="size-5 animate-spin" /> : <Play className="size-5" />}
-                ابدأ التحدي 🚀
+                ابدأ السباق 🚀
               </Button>
-              {players.length < 2 ? (
+              {activeCount < 2 ? (
                 <p className="text-xs text-amber-600 dark:text-amber-400 text-center font-bold">
-                  استنى على الأقل 2 لاعبين — الأحلى 3-4! ⏳
+                  تقدر تجري لوحدك ضد الوقت ⏱ — أو استنى صحابك والأحلى 3-4! ⏳
                 </p>
               ) : null}
             </div>
@@ -711,91 +1039,185 @@ function GroupsMode({ studentName }: { studentName: string }) {
             </motion.div>
           )}
 
-          <Button variant="ghost" onClick={function () { leaveRoom() }} disabled={busy === 'leave'} className="w-full min-h-11 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 font-bold">
-            <LogOut className="size-4" /> خروج من الغرفة
+          {/* (و72) زرار الخروج — واضح لكل اللاعبين */}
+          <Button
+            variant="outline"
+            onClick={function () { exitRoom(true) }}
+            disabled={busy === 'leave'}
+            className="w-full min-h-12 border-2 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950/40 font-black"
+          >
+            {busy === 'leave' ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+            خروج من التحدي
           </Button>
         </CardContent>
       </Card>
     )
   }
 
-  /* ---------- live: السؤال الحي ---------- */
-  if (phase === 'live' && gRoom && liveQ) {
+  /* ---------- live: خلصت أسئلتي — زمني + «مين خلّص الأول» ---------- */
+  if (phase === 'live' && gRoom && raceDone) {
+    var startMsDone = Number(gRoom.startedAt || 0)
+    var myFinishMs = Number((gMe && gMe.finishedAt) || localFinishAt || 0)
+    var myTimeTxt = myFinishMs > 0 && startMsDone > 0 ? fmtCountdown(Math.max(0, myFinishMs - startMsDone)) : '—'
+    return (
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <Card className="overflow-hidden self-start">
+          <div className="bg-gradient-to-l from-emerald-500 to-teal-600 px-5 py-4 text-white text-center">
+            <h3 className="font-black text-lg">خلصت كل أسئلتك! 🏁</h3>
+            <p className="text-sm text-emerald-50/90 font-bold">
+              زمنك: <span className="font-black" dir="ltr">⏱ {myTimeTxt}</span> — نقاطك: <span className="font-black" dir="ltr">{gMe ? gMe.score : 0}</span>
+            </p>
+          </div>
+          <CardContent className="p-5 space-y-4">
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 px-4 py-3 text-center font-black text-amber-700 dark:text-amber-300">
+              استنى الباقيين يخلصوا — الترتيب بيتحدث لايف 👇
+            </div>
+
+            {/* مين خلّص الأول */}
+            <div>
+              <h4 className="font-black flex items-center gap-1.5 mb-2">
+                <Trophy className="size-4 text-amber-500" /> مين خلّص الأول
+              </h4>
+              <div className={'space-y-1.5 ' + SCROLL_CLS}>
+                {boardRows.map(function (r) {
+                  var rt = r.finished && startMsDone > 0 && r.finishedAt ? fmtCountdown(Math.max(0, Number(r.finishedAt) - startMsDone)) : ''
+                  return (
+                    <div
+                      key={r.id || String(r.rank)}
+                      className={'flex items-center gap-2 rounded-xl px-3 py-2 border ' +
+                        (r.isMe
+                          ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/40'
+                          : 'bg-stone-50 dark:bg-stone-900/50 border-transparent')}
+                    >
+                      <span className="w-7 text-center text-base shrink-0">{rankMedal(r.rank) || <span dir="ltr" className="font-black text-sm text-muted-foreground">{r.rank}</span>}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm truncate flex items-center gap-1">
+                          {r.name}
+                          {r.isHost ? <Crown className="size-3.5 text-amber-500 shrink-0" /> : null}
+                          {r.isMe ? <span className="text-[10px] text-muted-foreground font-normal">(انت)</span> : null}
+                        </p>
+                        <p className="text-[11px] font-bold">
+                          {r.finished ? (
+                            <span className="text-emerald-600" dir="ltr">⏱ {rt}</span>
+                          ) : (
+                            <span className="text-stone-400">بيحل… سؤال <span dir="ltr">{Math.min(r.qIndex + 1, totalQ)}/{totalQ}</span></span>
+                          )}
+                        </p>
+                      </div>
+                      <span className="font-black text-emerald-600" dir="ltr">{r.score}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {isHost ? (
+              <Button
+                variant="outline"
+                onClick={function () { hostAction('end') }}
+                disabled={busy === 'end'}
+                className="w-full min-h-11 font-black text-red-600 border-red-300 hover:bg-red-50 dark:hover:bg-red-950/40"
+              >
+                إنهاء التحدي للكل (هوست)
+              </Button>
+            ) : null}
+
+            {/* (و72) زرار الخروج — تحت وخاص بكل لاعب */}
+            <Button
+              variant="outline"
+              onClick={function () { exitRoom(true) }}
+              disabled={busy === 'leave'}
+              className="w-full min-h-12 border-2 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950/40 font-black"
+            >
+              {busy === 'leave' ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+              خروج من التحدي
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* شريط اللاعبين — موبايل */}
+        <div className="lg:hidden -mx-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 dark:[&::-webkit-scrollbar-thumb]:bg-stone-700">
+          <div className="flex gap-2 px-1 w-max">
+            {boardRows.map(function (r, i) {
+              return (
+                <div key={r.id || i} className="flex items-center gap-1.5 rounded-full border bg-white dark:bg-stone-900 px-3 py-1.5 shadow-sm shrink-0">
+                  <span className="text-sm">{rankMedal(r.rank) || (r.rank)}</span>
+                  <span className="font-bold text-xs max-w-[90px] truncate">{r.name}</span>
+                  {r.finished ? <span className="text-xs">🏁</span> : <span className="text-[10px] text-stone-400 font-bold" dir="ltr">{r.qIndex + 1}/{totalQ}</span>}
+                  <span className="font-black text-xs text-emerald-600" dir="ltr">{r.score}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  /* ---------- live: سباقي — سؤالي الحالي ومؤقتي ---------- */
+  if (phase === 'live' && gRoom && myQ) {
+    var shownQ: ArenaQ = myQ
     return (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* كرت السؤال */}
         <Card className="overflow-hidden self-start">
-          <div className="bg-gradient-to-l from-emerald-500 to-teal-600 px-5 py-3 text-white flex items-center justify-between gap-2 flex-wrap">
-            <span className="font-black text-sm">السؤال {liveQ.index + 1} من {gRoom.totalRounds}</span>
-            <span className={'flex items-center gap-1.5 font-black text-xl ' + (remainSec <= 5 ? 'text-amber-200' : 'text-white')}>
-              <Timer className="size-5" />
-              <span dir="ltr">{remainSec}</span>
-            </span>
-          </div>
-          <CardContent className="p-5 space-y-4">
-            {/* البار الرقيق للوقت */}
-            <div className="h-1.5 rounded-full bg-stone-200 dark:bg-stone-800 overflow-hidden">
+          <div className="bg-gradient-to-l from-emerald-500 to-teal-600 px-5 py-3 text-white space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="font-black text-sm">سؤال <span dir="ltr">{Math.min(myQIdx + 1, totalQ || 1)}</span> من <span dir="ltr">{totalQ || 1}</span></span>
+              {/* (و72) ساعة التوقيت — من بداية السباق */}
+              <span className="flex items-center gap-1.5 font-black text-lg" dir="ltr">
+                <Timer className="size-5" />
+                {fmtCountdown(swMs)}
+              </span>
+              <span className="font-black text-sm">🎯 <span dir="ltr">{gMe ? gMe.score : 0}</span></span>
+            </div>
+            {/* بار الوقت */}
+            <div className="h-1.5 rounded-full bg-white/25 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-l from-emerald-500 to-teal-400 transition-[width] duration-150 ease-linear"
+                className="h-full rounded-full bg-white transition-[width] duration-150 ease-linear"
                 style={{ width: remainPct + '%' }}
               />
             </div>
-
-            {/* (و71) السؤال والاختيارات بـ FractionText زي امتحانات المنصة —
-                الأس والكسور بتترسم صح ومفيش قلب اتجاه للأرقام */}
+          </div>
+          <CardContent className="p-5 space-y-4">
+            {/* (و71) السؤال والاختيارات بـ FractionText زي امتحانات المنصة */}
             <h3 dir="ltr" className="text-left text-xl font-bold leading-relaxed">
-              <FractionText text={liveQ.text} />
+              <FractionText text={shownQ.text} />
             </h3>
 
-            {/* كشف الإجابة لما وقت السؤال يخلص — لكل اللاعبين */}
-            {gRoom.revealed ? (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-3.5 space-y-1"
-              >
-                <p className="font-black text-emerald-700 dark:text-emerald-300">
-                  ✅ الإجابة الصح:{' '}
-                  {gRoom.revealed.correctIndex >= 0 ? (
-                    <span dir="ltr" className="inline-block"><FractionText text={liveQ.options[gRoom.revealed.correctIndex]} /></span>
-                  ) : '—'}
-                </p>
-                {gRoom.revealed.explanation ? (
-                  <p className="text-sm text-emerald-800/80 dark:text-emerald-200/80 leading-relaxed">💡 <FractionText text={gRoom.revealed.explanation} /></p>
-                ) : null}
-              </motion.div>
-            ) : null}
-
-            {/* فيدباك لحظي على كرتMy */}
+            {/* (و72) فيدباك لحظي — وبعده السؤال اللي بعده فورًا */}
             {myFeedback ? (
               <motion.div
                 initial={{ scale: 0.92, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className={'rounded-xl px-4 py-3 font-black text-sm flex items-center gap-2 ' +
+                className={'rounded-xl px-4 py-3 font-black text-sm space-y-1 ' +
                   (myFeedback.timeout
                     ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
                     : myFeedback.correct
                       ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200'
                       : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300')}
               >
-                {myFeedback.timeout ? (
-                  <><Timer className="size-4 shrink-0" /> الوقت خلص — استنى السؤال اللي بعده ⌛</>
-                ) : myFeedback.correct ? (
-                  <><Check className="size-4 shrink-0" /> صح! <span dir="ltr">+{myFeedback.gained}</span> نقطة{myFeedback.streak >= 2 ? ' — ستريك ×' + myFeedback.streak + '! 🔥' : ''}</>
-                ) : (
-                  <><X className="size-4 shrink-0" /> غلط — استنى باقي اللاعبين</>
-                )}
+                <p className="flex items-center gap-2">
+                  {myFeedback.timeout ? (
+                    <><Timer className="size-4 shrink-0" /> الوقت خلص على السؤال ده ⌛</>
+                  ) : myFeedback.correct ? (
+                    <><Check className="size-4 shrink-0" /> صح! <span dir="ltr">+{myFeedback.gained}</span> نقطة{myFeedback.streak >= 2 ? ' — ستريك ×' + myFeedback.streak + '! 🔥' : ''}</>
+                  ) : (
+                    <><X className="size-4 shrink-0" /> غلط — الإجابة الصح: {myFeedback.correctIndex != null && myFeedback.correctIndex >= 0 ? <span dir="ltr" className="inline-block"><FractionText text={shownQ.options[myFeedback.correctIndex] || ''} /></span> : '—'}</>
+                  )}
+                </p>
+                <p className="text-[11px] font-bold opacity-80">جاري نقلك للسؤال اللي بعده…</p>
               </motion.div>
             ) : null}
 
-            {/* الاختيارات */}
+            {/* الاختيارات — (و72) مفيش انتظار حد: دوس وتقدّم */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {liveQ.options.map(function (opt, i) {
+              {shownQ.options.map(function (opt, i) {
                 var cls = 'min-h-14 justify-start gap-2.5 text-base font-bold border-2'
-                if (myFeedback && i === myFeedback.choice && !myFeedback.timeout) {
+                if (myFeedback && !myFeedback.timeout && i === myFeedback.choice) {
                   cls += myFeedback.correct ? ' border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40' : ' border-red-400 bg-red-50 dark:bg-red-950/40'
                 }
-                if (revealedNow && i === revealedNow.correctIndex) {
+                if (myFeedback && !myFeedback.timeout && myFeedback.correctIndex != null && i === myFeedback.correctIndex) {
                   cls += ' border-emerald-500 bg-emerald-100 dark:bg-emerald-950/50'
                 }
                 return (
@@ -816,45 +1238,41 @@ function GroupsMode({ studentName }: { studentName: string }) {
               })}
             </div>
 
-            {/* أدوات الهوست في اللايف */}
-            {isHost ? (
-              <div className="space-y-2 pt-1 border-t">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3">
-                  <Button
-                    onClick={function () { hostAction('next') }}
-                    disabled={!allAnswered || busy === 'next'}
-                    className="min-h-12 bg-gradient-to-l from-emerald-500 to-teal-600 text-white font-black"
-                  >
-                    {busy === 'next' ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-                    السؤال التالي ⏭
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={function () { hostAction('end') }}
-                    disabled={busy === 'end'}
-                    className="min-h-12 font-black text-red-600 border-red-300 hover:bg-red-50 dark:hover:bg-red-950/40"
-                  >
-                    إنهاء التحدي
-                  </Button>
-                </div>
-                {!allAnswered ? (
-                  <p className="text-xs text-muted-foreground text-center font-bold">زرار «السؤال التالي» بينوّر لما الكل يجاوب ✨</p>
-                ) : null}
-              </div>
-            ) : null}
+            {/* (و72) زرار الخروج — تحت وخاص بكل لاعب في اللوبي واللايف */}
+            <div className="pt-2 border-t space-y-2">
+              {isHost ? (
+                <Button
+                  variant="ghost"
+                  onClick={function () { hostAction('end') }}
+                  disabled={busy === 'end'}
+                  className="w-full min-h-10 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold"
+                >
+                  إنهاء التحدي للكل (هوست)
+                </Button>
+              ) : null}
+              <Button
+                variant="outline"
+                onClick={function () { exitRoom(true) }}
+                disabled={busy === 'leave'}
+                className="w-full min-h-12 border-2 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950/40 font-black"
+              >
+                {busy === 'leave' ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+                خروج من التحدي
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
         {/* شريط اللاعبين الأفقي — موبايل بس */}
         <div className="lg:hidden -mx-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 dark:[&::-webkit-scrollbar-thumb]:bg-stone-700">
           <div className="flex gap-2 px-1 w-max">
-            {sortedPlayers.map(function (p, i) {
+            {boardRows.map(function (r, i) {
               return (
-                <div key={p.id} className="flex items-center gap-1.5 rounded-full border bg-white dark:bg-stone-900 px-3 py-1.5 shadow-sm shrink-0">
-                  <span className="text-sm">{rankMedal(i + 1) || (i + 1)}</span>
-                  <span className="font-bold text-xs max-w-[90px] truncate">{p.name}</span>
-                  {p.answeredCurrent ? <Check className="size-3.5 text-emerald-500" /> : null}
-                  <span className="font-black text-xs text-emerald-600" dir="ltr">{p.score}</span>
+                <div key={r.id || i} className="flex items-center gap-1.5 rounded-full border bg-white dark:bg-stone-900 px-3 py-1.5 shadow-sm shrink-0">
+                  <span className="text-sm">{rankMedal(r.rank) || (r.rank)}</span>
+                  <span className="font-bold text-xs max-w-[90px] truncate">{r.name}{r.isMe ? ' (انت)' : ''}</span>
+                  {r.finished ? <span className="text-xs">🏁</span> : <span className="text-[10px] text-stone-400 font-bold" dir="ltr">{r.qIndex + 1}/{totalQ}</span>}
+                  <span className="font-black text-xs text-emerald-600" dir="ltr">{r.score}</span>
                 </div>
               )
             })}
@@ -864,35 +1282,42 @@ function GroupsMode({ studentName }: { studentName: string }) {
         {/* الترتيب الحي — جانبي على الشاشات الكبيرة */}
         <Card className="hidden lg:block self-start sticky top-4">
           <CardContent className="p-4">
-            <h4 className="font-black flex items-center gap-1.5 mb-3">
-              <Trophy className="size-4 text-amber-500" /> الترتيب الحي
+            <h4 className="font-black flex items-center gap-1.5 mb-1">
+              <Trophy className="size-4 text-amber-500" /> مين خلّص الأول
             </h4>
+            <p className="text-[11px] text-muted-foreground font-bold mb-3 flex items-center gap-1">
+              <Timer className="size-3" /> السباق شغال — <span dir="ltr">{fmtCountdown(swMs)}</span>
+            </p>
             <div className={'space-y-2 ' + SCROLL_CLS}>
-              {sortedPlayers.map(function (p, i) {
+              {boardRows.map(function (r) {
                 return (
                   <motion.div
                     layout
-                    key={p.id}
+                    key={r.id || String(r.rank)}
                     transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                     className={'flex items-center gap-2 rounded-xl px-3 py-2 border ' +
-                      (gMe && p.id === gMe.id
+                      (r.isMe
                         ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/40'
                         : 'bg-stone-50 dark:bg-stone-900/50 border-transparent')}
                   >
-                    <span className="w-7 text-center text-base shrink-0">{rankMedal(i + 1) || <span dir="ltr" className="font-black text-sm text-muted-foreground">{i + 1}</span>}</span>
+                    <span className="w-7 text-center text-base shrink-0">{rankMedal(r.rank) || <span dir="ltr" className="font-black text-sm text-muted-foreground">{r.rank}</span>}</span>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm truncate flex items-center gap-1">
-                        {p.name}
-                        {p.isHost ? <Crown className="size-3.5 text-amber-500 shrink-0" /> : null}
-                        {gMe && p.id === gMe.id ? <span className="text-[10px] text-muted-foreground font-normal">(انت)</span> : null}
+                        {r.name}
+                        {r.isHost ? <Crown className="size-3.5 text-amber-500 shrink-0" /> : null}
+                        {r.isMe ? <span className="text-[10px] text-muted-foreground font-normal">(انت)</span> : null}
                       </p>
                       <div className="flex items-center gap-2 text-[11px]">
-                        {p.answeredCurrent ? <span className="text-emerald-600 font-black">جاوبت ✓</span> : <span className="text-stone-400">بيفكر…</span>}
-                        {p.streak >= 2 ? <span className="text-orange-500 font-black">🔥 ×{p.streak}</span> : null}
-                        {!p.online ? <span className="text-stone-400">أوفلاين</span> : null}
+                        {r.finished ? (
+                          <span className="text-emerald-600 font-black">خلّص 🏁</span>
+                        ) : (
+                          <span className="text-stone-400 font-bold" dir="ltr">سؤال {Math.min(r.qIndex + 1, totalQ)}/{totalQ}</span>
+                        )}
+                        {!r.online && r.status !== 'left' ? <span className="text-stone-400">أوفلاين</span> : null}
+                        {r.status === 'left' ? <span className="text-stone-400">خرج</span> : null}
                       </div>
                     </div>
-                    <span className="font-black text-emerald-600" dir="ltr">{p.score}</span>
+                    <span className="font-black text-emerald-600" dir="ltr">{r.score}</span>
                   </motion.div>
                 )
               })}
@@ -907,44 +1332,54 @@ function GroupsMode({ studentName }: { studentName: string }) {
   if (phase === 'ended' && gRoom) {
     var finals = gRoom.finalQuestions || []
     var myAnswers = gRoom.finalAnswers && gMe ? gRoom.finalAnswers[gMe.id] : null
-    var myRankIdx = myIdNow ? sortedPlayers.findIndex(function (p) { return p.id === myIdNow }) : -1
-    var myRank = myRankIdx >= 0 ? myRankIdx + 1 : 0
-    var first = sortedPlayers[0]
-    var second = sortedPlayers[1]
-    var third = sortedPlayers[2]
+    var startMsEnd = Number(gRoom.startedAt || 0)
+    var myBoardRow: ArenaBoardRow | null = null
+    for (var bi = 0; bi < boardRows.length; bi++) {
+      if (boardRows[bi].isMe) { myBoardRow = boardRows[bi]; break }
+    }
+    var myRank = myBoardRow ? myBoardRow.rank : 0
+    var myEndTime = myBoardRow && myBoardRow.finished && startMsEnd > 0 && myBoardRow.finishedAt
+      ? fmtCountdown(Math.max(0, Number(myBoardRow.finishedAt) - startMsEnd))
+      : ''
+    var first = boardRows[0]
+    var second = boardRows[1]
+    var third = boardRows[2]
     var podium = [
       second ? { p: second, rank: 2, h: 64, delay: 0.15 } : null,
       first ? { p: first, rank: 1, h: 96, delay: 0 } : null,
       third ? { p: third, rank: 3, h: 48, delay: 0.3 } : null,
-    ].filter(Boolean) as { p: ArenaPlayer; rank: number; h: number; delay: number }[]
+    ].filter(Boolean) as { p: ArenaBoardRow; rank: number; h: number; delay: number }[]
 
     return (
       <div className="space-y-4">
         <Card className="overflow-hidden">
           <div className="bg-gradient-to-l from-emerald-500 to-teal-600 px-5 py-4 text-white text-center">
-            <h3 className="font-black text-xl">خلص التحدي! 🎉</h3>
+            <h3 className="font-black text-xl">خلص السباق! 🎉</h3>
             <p className="text-sm text-emerald-50/90 font-bold">{gRoom.title || 'غرفة ' + gRoom.code}</p>
           </div>
           <CardContent className="p-5 space-y-5">
-            {/* البوديوم — التاني شمال والأول في النص والأولب ثالث يمين */}
+            {/* البوديوم — التاني شمال والأول في النص والتالت يمين */}
             {podium.length > 0 ? (
               <div dir="ltr" className="flex items-end justify-center gap-3 sm:gap-6 pt-2">
                 {podium.map(function (cell) {
                   return (
                     <motion.div
-                      key={cell.p.id}
+                      key={cell.p.id || String(cell.p.rank)}
                       initial={{ y: 70, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
                       transition={{ type: 'spring', stiffness: 220, damping: 16, delay: cell.delay }}
                       className="flex flex-col items-center gap-1.5 flex-1 max-w-[150px] min-w-0"
                     >
-                      <span className="text-2xl">{rankMedal(cell.rank)}</span>
+                      <span className="text-2xl">{rankMedal(cell.p.rank)}</span>
                       <p className="font-black text-sm truncate max-w-full" title={cell.p.name}>{cell.p.name}</p>
                       <div
-                        className={'w-full rounded-t-xl bg-gradient-to-t from-emerald-600 to-teal-400 flex items-start justify-center pt-2 shadow-lg shadow-emerald-500/20'}
+                        className={'w-full rounded-t-xl bg-gradient-to-t from-emerald-600 to-teal-400 flex flex-col items-start justify-start pt-2 px-2 shadow-lg shadow-emerald-500/20'}
                         style={{ height: cell.h + 'px' }}
                       >
                         <span className="font-black text-white" dir="ltr">{cell.p.score}</span>
+                        {cell.p.finished && startMsEnd > 0 && cell.p.finishedAt ? (
+                          <span className="text-[10px] font-bold text-white/90" dir="ltr">⏱ {fmtCountdown(Math.max(0, Number(cell.p.finishedAt) - startMsEnd))}</span>
+                        ) : null}
                       </div>
                     </motion.div>
                   )
@@ -962,11 +1397,14 @@ function GroupsMode({ studentName }: { studentName: string }) {
                 className="rounded-xl border-2 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-4 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <p className="font-black">مكانك: {rankMedal(myRank) || '#' + myRank} من {sortedPlayers.length}</p>
+                  <p className="font-black">مكانك: {rankMedal(myRank) || '#' + myRank} من {boardRows.length}</p>
                   <p className="text-sm text-muted-foreground font-bold truncate">
                     {gMe.name} — كسبت <span dir="ltr">{gMe.score}</span> نقطة
                     {gMe.streak >= 2 ? ' 🔥' : ''}
                   </p>
+                  {myEndTime ? (
+                    <p className="text-xs font-black text-emerald-600" dir="ltr">⏱ {myEndTime}</p>
+                  ) : null}
                 </div>
                 <Trophy className="size-8 text-amber-500 shrink-0" />
               </motion.div>
@@ -1007,12 +1445,12 @@ function GroupsMode({ studentName }: { studentName: string }) {
 
             <div className="grid grid-cols-2 gap-2">
               <Button
-                onClick={function () { leaveRoom() }}
+                onClick={function () { resetGroups() }}
                 className="min-h-12 bg-gradient-to-l from-emerald-500 to-teal-600 text-white font-black"
               >
                 <RotateCcw className="size-4" /> العب تاني 🔁
               </Button>
-              <Button variant="outline" onClick={function () { leaveRoom() }} className="min-h-12 font-black">
+              <Button variant="outline" onClick={function () { exitRoom(false) }} className="min-h-12 font-black">
                 <LogOut className="size-4" /> خروج
               </Button>
             </div>
@@ -1625,6 +2063,10 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
   var [myRowKey, setMyRowKey] = useState('')
   /* (و70-ج) مصدر الكروت: كروت المستر المرفوعة أو تدريب مولّد */
   var [deckSource, setDeckSource] = useState('generated')
+  /* (و72) الطالب يظبط جولته لوحده: العدد + وقت البطاقة + الصعوبة */
+  var [fcCount, setFcCount] = useState(10)
+  var [fcSeconds, setFcSeconds] = useState(15)
+  var [fcDiff, setFcDiff] = useState<'easy' | 'medium' | 'hard' | 'mixed'>('mixed')
 
   /* مراجع — الحكم اللحظي ميبقاش فيه state قديم */
   var cardsRef = useRef<FlashCard[]>([])
@@ -1669,7 +2111,7 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
     if (advanceTimerRef.current !== null) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null }
     setLoadingRound(true)
     try {
-      var res = await fetch('/api/arena/flashcards?mode=round', { cache: 'no-store' })
+      var res = await fetch('/api/arena/flashcards?mode=round&count=' + fcCount + '&seconds=' + fcSeconds + '&difficulty=' + fcDiff, { cache: 'no-store' })
       var d: any = await res.json()
       if (!d || !d.ok || !(d.cards || []).length) {
         toast.error(String((d && d.error) || 'مشكلة في تجهيز الجولة'))
@@ -1811,14 +2253,55 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
           </div>
           <CardContent className="p-5 space-y-4">
             <p className="leading-relaxed text-sm font-bold">
-              <span dir="ltr">10</span> بطاقات سريعة — كل بطاقة على مدة المستر! الدقة + السرعة = نقاط. <span dir="ltr">3</span> صح ورا بعض = بونص 🔥
+              <span dir="ltr">{fcCount}</span> بطاقة سريعة — انت اللي بتظبط وقت كل بطاقة والصعوبة! الدقة + السرعة = نقاط. <span dir="ltr">3</span> صح ورا بعض = بونص 🔥
             </p>
-            {/* (و70-ج) مصدر الجولة: كروت المستر المرفوعة أو تدريب مولّد */}
-            {deckSource === 'deck' ? (
-              <p className="rounded-xl bg-fuchsia-500/10 px-3 py-2 text-[13px] font-black text-fuchsia-700 dark:text-fuchsia-300 ring-1 ring-fuchsia-400/30">
-                🎯 الجولة دي على كروت المستر اللي حطها — ركّز يا بطل!
-              </p>
-            ) : null}
+            {/* (و72) تحكم الطالب في جولته: العدد + وقت البطاقة + الصعوبة */}
+            <div className="rounded-2xl border-2 border-dashed border-violet-200 dark:border-violet-900/70 p-3 space-y-3">
+              <div>
+                <p className="text-xs font-bold text-muted-foreground mb-1.5">عدد البطاقات</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[5, 10, 15, 20].map(function (n) {
+                    return (
+                      <button key={n} type="button" onClick={function () { setFcCount(n) }}
+                        className={'min-h-10 rounded-xl border-2 px-2 text-[13px] font-black transition-colors ' + (fcCount === n ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' : 'border-stone-200 bg-white text-stone-500 hover:border-violet-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400')}>
+                        <span dir="ltr">{n}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-muted-foreground mb-1.5">وقت البطاقة الواحدة</p>
+                <div className="grid grid-cols-5 gap-2">
+                  {[8, 10, 15, 20, 30].map(function (s) {
+                    return (
+                      <button key={s} type="button" onClick={function () { setFcSeconds(s) }}
+                        className={'min-h-10 rounded-xl border-2 px-2 text-[13px] font-black transition-colors ' + (fcSeconds === s ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' : 'border-stone-200 bg-white text-stone-500 hover:border-violet-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400')}>
+                        <span dir="ltr">{s}</span> ث
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-muted-foreground mb-1.5">الصعوبة</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {([['easy', 'سهل'], ['medium', 'متوسط'], ['hard', 'صعب'], ['mixed', 'مختلط']] as [string, string][]).map(function (d) {
+                    return (
+                      <button key={d[0]} type="button" onClick={function () { setFcDiff(d[0] as 'easy' | 'medium' | 'hard' | 'mixed') }}
+                        className={'min-h-10 rounded-xl border-2 px-2 text-[13px] font-black transition-colors ' + (fcDiff === d[0] ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' : 'border-stone-200 bg-white text-stone-500 hover:border-violet-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400')}>
+                        {d[1]}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              {deckSource === 'deck' ? (
+                <p className="rounded-xl bg-fuchsia-500/10 px-3 py-2 text-[12px] font-black text-fuchsia-700 dark:text-fuchsia-300 ring-1 ring-fuchsia-400/30">
+                  🎯 كروت المستر الجاهزة ليها الأولوية — ووقت البطاقة اللي اخترته بيتطبق عليها
+                </p>
+              ) : null}
+            </div>
             <Button
               onClick={function () { startRound() }}
               disabled={loadingRound}
@@ -2101,7 +2584,7 @@ export function BattleArena({ studentId, studentName, grade }: { studentId: stri
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.18 }}
         >
-          {tab === 'groups' ? <GroupsMode studentName={studentName} /> : null}
+          {tab === 'groups' ? <GroupsMode studentId={studentId} studentName={studentName} /> : null}
           {tab === 'teacher' ? <TeacherMode studentId={studentId} studentName={studentName} /> : null}
           {tab === 'flash' ? <FlashcardsMode studentId={studentId} studentName={studentName} /> : null}
         </motion.div>
