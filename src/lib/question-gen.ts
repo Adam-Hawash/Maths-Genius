@@ -11,7 +11,12 @@
 // (2026-و68) اللغة: كل نصوص الأسئلة/الحلول/الخدع **بالإنجليزي** — طلب
 // المستر الحرفي: «احنا متفقين إنها بالإنجليزي في الـ Math وبأسلوب الـ
 // Math اللي إحنا متعودين عليه» — الحسابات نفسها متلمستش خالص.
+// (2026-و71) تعقيم صارم لمخرجات الـ AI + مطابقة المواضيع المعروفة —
+// طلب المستر: «عاوز الحاجات تبقى بالماث… زي الحاجات بتاعة الماث اللي
+// إحنا عاملينها في منصتنا» → مفيش عربي ولا ماث مكسور يوصل للطالب أبدًا.
 // ============================================================
+
+import { repairCorruptMath } from '@/lib/math-text'
 
 export interface PracticeQuestion {
   id: string
@@ -726,6 +731,24 @@ var TOPIC_KEYWORDS: Array<{ re: RegExp; keys: string[] }> = [
   { re: /(تناسب|تناسب طردى|طردية|نسبة\s+سعر|proportion|ratio)/i, keys: ['proportion'] },
 ]
 
+/* (2026-و71) matchTopicKey — هل نص الطالب بيطابق موضوع من مواضيع المنصة المعروفة؟
+   بيرجع الـ keys المتطابقة (فاضية = مش موضوع معروف → ساعتها بس نتوجه للـ AI).
+   بتستخدم في /api/ai/practice عشان المحرك المحلي المضمون (ماث إنجليزي
+   محسوب بالكود زي امتحانات المنصة بالظبط) يشتغل **الأول** للمواضيع المعروفة. */
+export function matchTopicKey(text: string): string[] {
+  var t = String(text || '')
+  var keys: string[] = []
+  for (var i = 0; i < TOPIC_KEYWORDS.length; i++) {
+    if (TOPIC_KEYWORDS[i].re.test(t)) {
+      var ks = TOPIC_KEYWORDS[i].keys
+      for (var k = 0; k < ks.length; k++) {
+        if (keys.indexOf(ks[k]) === -1) keys.push(ks[k])
+      }
+    }
+  }
+  return keys
+}
+
 function pickGeneratorsFor(topic: string): Array<{ fn: Function; key: string }> {
   var t = String(topic || '')
   var keys: string[] = []
@@ -855,24 +878,51 @@ export function generateFlashcards(count: number, timeSec?: number): BattleQuest
   return qs
 }
 
-/* تحقق من مجموعة أسئلة AI — لو ناقصة بنكملها محليًا (المولد ما يفشلش أبدًا) */
+/* (2026-و71) تعقيم صارم لمجموعة أسئلة الـ AI — طلب المستر الحرفي:
+   «بيجيب لي الحاجات بالعربي بتبقى مش مظبوطة… أنا عاوز الحاجات تبقى بالماث».
+   القواعد:
+   • إصلاح الماث المكسور أولًا (repairCorruptMath: rac{ / U+FFFD / أسس متسلسلة)
+   • رفض أي سؤال/إجابة/خطوة/خدعة فيها حرف عربي /[\u0600-\u06FF]/
+   • رفض الأسئلة اللي فيها علامات ماث مكسور (\rac / \f / U+FFFD / undefined / NaN)
+   • الإجابة لازم تكون قصيرة منطقيًا (<= 40 حرف)
+   اللي يعدي التعقيم بيدخل — والباقي الـ route بيكمله من المحرك المحلي. */
+var ARABIC_RE = /[\u0600-\u06FF]/
+var BROKEN_MATH_RE = /(?:\uFFFD|\u000C|\\?\brac\s*[\s{(]|undefined|NaN)/
+
 export function sanitizeAiPractice(items: any): PracticeQuestion[] {
   var out: PracticeQuestion[] = []
   if (Array.isArray(items)) {
     for (var i = 0; i < items.length && out.length < 10; i++) {
       var it = items[i] || {}
-      var q = String(it.question || it.q || '').trim()
-      var a = String(it.answer || it.a || '').trim()
+      var q = repairCorruptMath(String(it.question || it.q || '')).trim()
+      var a = repairCorruptMath(String(it.answer || it.a || '')).trim()
+      var trick = repairCorruptMath(String(it.trick || it.tip || '')).trim()
+      var steps = Array.isArray(it.steps)
+        ? it.steps.map(function (s) { return repairCorruptMath(String(s)).trim() }).filter(Boolean)
+        : []
       if (!q || !a) continue
-      var steps = Array.isArray(it.steps) ? it.steps.map(function (s) { return String(s) }).filter(Boolean) : []
+      /* ممنوع عربي في أي حاجة بتتعرض للطالب — ماث إنجليزي بس */
+      if (ARABIC_RE.test(q) || ARABIC_RE.test(a) || ARABIC_RE.test(trick)) continue
+      var hasArabicStep = false
+      for (var si = 0; si < steps.length; si++) {
+        if (ARABIC_RE.test(steps[si])) { hasArabicStep = true; break }
+      }
+      if (hasArabicStep) continue
+      /* علامات الماث المكسور — نص السؤال/الإجابة */
+      if (BROKEN_MATH_RE.test(q) || BROKEN_MATH_RE.test(a)) continue
+      /* الإجابة القصيرة هي الإجابة — أي حاجة أطول من كده دي شرح مش إجابة */
+      if (a.length > 40) continue
       if (steps.length === 0) steps = [a]
+      var topicTxt = String(it.topic || '').trim()
+      /* موضوع بعربي؟ نشيله خالص (بادج عرض بس) من غير ما نضيّع السؤال السليم */
+      if (ARABIC_RE.test(topicTxt)) topicTxt = ''
       out.push({
         id: uid(),
         question: q,
         answer: a,
         steps: steps.slice(0, 6),
-        trick: String(it.trick || it.tip || '').trim(),
-        topic: String(it.topic || '').trim(),
+        trick: trick,
+        topic: topicTxt,
         difficulty: String(it.difficulty || 'Medium').trim(),
       })
     }

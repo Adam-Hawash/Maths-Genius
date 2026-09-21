@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
+import { FractionText } from '@/components/FractionText'
 import type { PracticeQuestion } from '@/lib/question-gen'
 
 /* ---------- ثوابت العرض ---------- */
@@ -170,8 +171,11 @@ function QuestionCardItem(props: {
             </div>
 
             <div className='min-w-0 flex-1 space-y-2.5'>
-              {/* نص السؤال — (2026-و68) إنجليزي فاتجاهه LTR */}
-              <p dir='ltr' className='break-words text-left text-base font-bold leading-relaxed sm:text-lg'>{q.question}</p>
+              {/* نص السؤال — (2026-و68) إنجليزي فاتجاهه LTR + (و71) FractionText
+                  زي امتحانات المنصة: 2^3 بقت 2³ والكسور بتترسم فعلية */}
+              <p dir='ltr' className='break-words text-left text-base font-bold leading-relaxed sm:text-lg'>
+                <FractionText text={q.question} />
+              </p>
 
               {/* البادجات + زر الحل */}
               <div className='flex flex-wrap items-center gap-2'>
@@ -213,7 +217,7 @@ function QuestionCardItem(props: {
                           <div className='min-w-0'>
                             <p className='text-xs font-semibold text-emerald-700 dark:text-emerald-400'>الإجابة:</p>
                             <p dir='ltr' className='break-words text-left text-base font-bold text-emerald-700 dark:text-emerald-300'>
-                              {q.answer}
+                              <FractionText text={q.answer} />
                             </p>
                           </div>
                         </div>
@@ -232,7 +236,9 @@ function QuestionCardItem(props: {
                                 <span className='mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-teal-500/30 bg-teal-500/15 text-xs font-bold text-teal-600 dark:text-teal-400'>
                                   {toArNum(si + 1)}
                                 </span>
-                                <span dir='ltr' className='break-words text-left text-sm leading-relaxed'>{st}</span>
+                                <span dir='ltr' className='break-words text-left text-sm leading-relaxed'>
+                                  <FractionText text={st} />
+                                </span>
                               </li>
                             )
                           })}
@@ -243,7 +249,7 @@ function QuestionCardItem(props: {
                       {q.trick ? (
                         <div className='rounded-lg border border-amber-500/30 bg-amber-500/10 p-3'>
                           <p dir='ltr' className='break-words text-left text-sm leading-relaxed text-amber-700 dark:text-amber-300'>
-                            <span className='font-bold'>💡 خدعة المستر:</span> {q.trick}
+                            <span className='font-bold'>💡 خدعة المستر:</span> <FractionText text={q.trick} />
                           </p>
                         </div>
                       ) : null}
