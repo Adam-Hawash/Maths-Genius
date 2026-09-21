@@ -20,7 +20,7 @@ var DEFAULTS = {
   hero_stat3_label: 'Progress Tracking',
   hero_developer_url: 'https://prime-developer-portfolio-11.vercel.app',
   hero_developer_label: 'Hero Developer',
-  footer_made_by_label: 'Developed by Adam Hawash',
+  footer_made_by_label: 'Developed by Adham Hawash',
   prime_developer_url: 'https://prime-developer-portfolio-11.vercel.app',
 
   // === Schedule Page ===
@@ -169,6 +169,16 @@ export async function GET() {
       if (typeof v !== 'string') continue
       if (v.indexOf('Mr. Sherif ElSayed') !== -1 || v.indexOf('مستر شريف السيد') !== -1 || v.indexOf('نصائح مستر شريف') !== -1 || v.indexOf('Mr. Wael El-Khadiry') !== -1 || v.indexOf('مستر وائل الخضيري') !== -1) {
         map[cfgKeys[k]] = v.split('Mr. Sherif ElSayed').join('Wael Khodair').split('مستر شريف السيد').join('مستر وائل خضير').split('نصائح مستر شريف').join('نصائح مستر وائل خضير').split('Mr. Wael El-Khadiry').join('Wael Khodair').split('مستر وائل الخضيري').join('مستر وائل خضير')
+      }
+    }
+    // اسم المطور الصحيح: **Adham Hawash** (أدهم حواش) — أي قيمة مخزنة فيها
+    // التهجئة الغلط ('Adam Hawash') من نسخة قديمة بتتصحح على القراءة هنا،
+    // والترحيل في ensure-schema بصلحه نهائيًا في قاعدة البيانات
+    var devNameKeys = ['footer_made_by_label', 'footer_made_by_label_en', 'hero_developer_label', 'hero_developer_label_en']
+    for (var d = 0; d < devNameKeys.length; d++) {
+      var dv = map[devNameKeys[d]]
+      if (typeof dv === 'string' && dv.indexOf('Adam Hawash') !== -1) {
+        map[devNameKeys[d]] = dv.split('Adam Hawash').join('Adham Hawash')
       }
     }
     return NextResponse.json(map)

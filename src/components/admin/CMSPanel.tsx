@@ -5,11 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Settings, Save, Upload, Loader2, Image as ImageIcon, Trash2, Link2, Type, Layout, GraduationCap, Compass, Lightbulb, BookOpen, Smartphone, Globe, CalendarClock } from 'lucide-react'
+import { Settings, Save, Upload, Loader2, Image as ImageIcon, Trash2, Link2, Type, Layout, GraduationCap, Compass, Lightbulb, BookOpen, Smartphone, Globe, CalendarClock, PlusCircle } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import type { SiteConfig } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
+/* (و78) المحتوى الديناميكي — نصائح ومميزات إضافية JSON آمن */
+import { parseCustomContent, emptyCustomItem } from '@/lib/custom-content'
+import type { CustomContentItem } from '@/lib/custom-content'
 
 interface FieldDef {
   key: string
@@ -164,6 +167,15 @@ var TEXT_SECTIONS: SectionDef[] = [
       { key: 'gallery_subtitle', label: 'وصف معرض الصور', type: 'textarea' },
     ],
   },
+  /* (و78) قسم المحتوى الديناميكي — مش حقول ثابتة، بيرسم CustomContentSection
+     (نصائح/مميزات إضافية من غير حدود) — والقديم فضل زي ما هو احتياطي */
+  {
+    id: 'custom-content',
+    title: 'إضافة نصائح ومميزات',
+    titleEn: 'Add Tips & Features',
+    icon: Lightbulb,
+    fields: [],
+  },
   {
     id: 'contact',
     title: 'التواصل والفوتر',
@@ -203,6 +215,149 @@ var IMAGE_SLOTS: ImageSlot[] = [
   { configKey: 'tip3_image', label: 'صورة نصيحة 3', labelEn: 'Tip 3', shape: 'square' },
   { configKey: 'favicon_url', label: 'أيقونة التبويب (Favicon)', labelEn: 'Browser Tab Icon', shape: 'square' },
 ]
+
+/* (و78) كارت قائمة ديناميكية (نصائح/مميزات إضافية) — العناصر JSON في مفتاح واحد
+   (custom_tips / custom_features). التعديل النصي بيتحدث في الحالة المحلية وبيتحفظ
+   بزرار «حفظ الكل» أو زرار الحفظ الصغير جوه كل عنصر — والإضافة/الحذف بيتحفظوا **فورًا**
+   (نفس آلية handleSave بالظبط: بناء كائن جديد + PUT /api/config + توست) */
+function CustomListCard(props: {
+  heading: string
+  configKey: string
+  addLabel: string
+  itemNoun: string
+  config: SiteConfig
+  setConfig: (c: SiteConfig) => void
+  persistNow: (c: SiteConfig) => Promise<void>
+}) {
+  var configKey = props.configKey
+  var items = parseCustomContent(props.config[configKey])
+
+  /* كتابة المصفوفة كـ JSON في الحالة المحلية — وترجع الكائن الجديد للحفظ الفوري */
+  var writeItems = function(next: CustomContentItem[]) {
+    var newConfig = Object.assign({}, props.config)
+    newConfig[configKey] = JSON.stringify(next)
+    props.setConfig(newConfig)
+    return newConfig
+  }
+
+  /* تعديل نصي — محلي بس (بيتحفظ بزرار الحفظ/حفظ الكل) */
+  var handleField = function(idx: number, field: string, value: string) {
+    var next: CustomContentItem[] = []
+    for (var i = 0; i < items.length; i++) {
+      if (i !== idx) { next.push(items[i]); continue }
+      var n = Object.assign({}, items[i])
+      n[field] = value
+      next.push(n)
+    }
+    writeItems(next)
+  }
+
+  /* حفظ فوري لعنصر واحد (الزرار الصغير جوه الكارت) */
+  var handleSaveItem = async function() {
+    var newConfig = Object.assign({}, props.config)
+    newConfig[configKey] = JSON.stringify(items)
+    props.setConfig(newConfig)
+    await props.persistNow(newConfig)
+  }
+
+  /* إضافة/حذف — بيتحفظوا فورًا */
+  var handleAdd = async function() {
+    var next = items.concat([emptyCustomItem()])
+    var newConfig = writeItems(next)
+    await props.persistNow(newConfig)
+  }
+
+  var handleDelete = async function(idx: number) {
+    var next: CustomContentItem[] = []
+    for (var i = 0; i < items.length; i++) { if (i !== idx) next.push(items[i]) }
+    var newConfig = writeItems(next)
+    await props.persistNow(newConfig)
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">{props.heading}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {items.length === 0 && (
+          <p className="text-xs text-muted-foreground">مفيش عناصر إضافية لسه — اضغط الزرار تحت لإضافة أول عنصر، وهيظهر في اللاندينج بعد الثابتة فورًا.</p>
+        )}
+        {items.map(function(item, idx) {
+          return (
+            <div key={'ci-' + idx} className="rounded-lg border border-border/60 p-4 space-y-3 bg-muted/20">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">{props.itemNoun} #{idx + 1}</span>
+                <div className="flex items-center gap-1.5">
+                  <Button variant="outline" size="sm" className="h-7" onClick={function() { handleSaveItem() }}>
+                    <Save className="h-3 w-3" />
+                    <span className="text-[10px] mr-1">حفظ</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7" onClick={function() { handleDelete(idx) }}>
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs mb-1 block">عنوان عربي</Label>
+                  <Input value={item.titleAr} onChange={function(e) { handleField(idx, 'titleAr', e.target.value) }} />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1 block" dir="ltr">Title EN</Label>
+                  <Input dir="ltr" value={item.titleEn} onChange={function(e) { handleField(idx, 'titleEn', e.target.value) }} />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1 block">وصف عربي</Label>
+                  <Textarea rows={3} value={item.descAr} onChange={function(e) { handleField(idx, 'descAr', e.target.value) }} />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1 block" dir="ltr">Description EN</Label>
+                  <Textarea rows={3} dir="ltr" value={item.descEn} onChange={function(e) { handleField(idx, 'descEn', e.target.value) }} />
+                </div>
+              </div>
+            </div>
+          )
+        })}
+        <Button variant="outline" onClick={function() { handleAdd() }}>
+          <PlusCircle className="h-4 w-4 ml-1" />
+          {props.addLabel}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+/* (و78) قسم «إضافة نصائح ومميزات» — كارتين: نصائح إضافية ومميزات إضافية.
+   أقسام التحرير القديمة (نصائح الأستاذ/قسم المميزات الثابتة) فضلوا زي ما هم احتياطي. */
+function CustomContentSection(props: {
+  config: SiteConfig
+  setConfig: (c: SiteConfig) => void
+  persistNow: (c: SiteConfig) => Promise<void>
+}) {
+  return (
+    <div className="space-y-6">
+      <CustomListCard
+        heading="نصائح إضافية | Custom Tips"
+        configKey="custom_tips"
+        addLabel="+ إضافة نصيحة جديدة"
+        itemNoun="نصيحة إضافية"
+        config={props.config}
+        setConfig={props.setConfig}
+        persistNow={props.persistNow}
+      />
+      <CustomListCard
+        heading="مميزات إضافية | Custom Features"
+        configKey="custom_features"
+        addLabel="+ إضافة ميزة جديدة"
+        itemNoun="ميزة إضافية"
+        config={props.config}
+        setConfig={props.setConfig}
+        persistNow={props.persistNow}
+      />
+    </div>
+  )
+}
 
 export function CMSPanel() {
   var [config, setConfig] = useState<SiteConfig>({})
@@ -267,6 +422,35 @@ export function CMSPanel() {
       }
     } catch(e) { toast.error('خطأ في الاتصال') }
     setSaving(false)
+  }
+
+  /* (و78) حفظ فوري لكائن الإعدادات الحالي — نفس آلية handleSave بالظبط
+     (تنقية المفاتيح + PUT /api/config + توست + مزامنة ستور اللاندينج).
+     بتستخدمها الإضافة/الحذف وزرار الحفظ السريع جوه العناصر الديناميكية */
+  var persistConfigNow = async function(newConfig: SiteConfig) {
+    try {
+      var cleanConfig: Record<string, string> = {}
+      var keys = Object.keys(newConfig)
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i]
+        if (key === 'error' || key === 'defaults') continue
+        cleanConfig[key] = newConfig[key]
+      }
+      var res = await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanConfig),
+      })
+      if (res.ok) {
+        toast.success('تم الحفظ فورًا | Saved')
+        var storeState = await (await import('@/stores/app-store')).useAppStore.getState()
+        storeState.setSiteConfig(cleanConfig)
+      } else {
+        var errText = ''
+        try { errText = await res.text() } catch(x) {}
+        toast.error('خطأ في الحفظ: ' + res.status + ' ' + errText.substring(0, 150))
+      }
+    } catch(e) { toast.error('خطأ في الاتصال') }
   }
 
   var handleUpload = async function(file: File, configKey: string) {
@@ -382,8 +566,12 @@ export function CMSPanel() {
       </div>
 
       {/* Active Section Fields */}
-      {TEXT_SECTIONS.map(function(section) {
-        if (section.id !== activeSection) return null
+      {activeSection === 'custom-content' ? (
+        /* (و78) قسم المحتوى الديناميكي: نصائح/مميزات إضافية من غير حدود */
+        <CustomContentSection config={config} setConfig={setConfig} persistNow={persistConfigNow} />
+      ) : (
+        TEXT_SECTIONS.map(function(section) {
+          if (section.id !== activeSection) return null
         var IconComp = section.icon
         return (
           <Card key={section.id}>
@@ -452,7 +640,8 @@ export function CMSPanel() {
             </CardContent>
           </Card>
         )
-      })}
+        })
+      )}
     </div>
   )
 }
