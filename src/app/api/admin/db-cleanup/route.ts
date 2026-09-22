@@ -140,6 +140,20 @@ export async function POST(request: NextRequest) {
       dryRun
     ))
 
+    // ===== (2026-و85) غرف التحدي القديمة — طلب المستر: «التحدي يتمسح
+    // بعديها بيوم عشان الطالب لو يقدر يجي يشوف درجته هو وزمايله».
+    // sweepArena بيمسحها أوتوماتيك من المنصة، والقاعدة دي بتلم المخزون
+    // القديم من الأدمن كمان. درجات جلسة اللعب مؤقتة في BattlePlayer بس —
+    // مش درجات امتحان/واجب (ExamResult/HomeworkResult/PointsLedger) فآمنة.
+    try {
+      var dayCut = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19)
+      var roomWhere = "(status IN ('ended','finished') AND updatedAt < '" + dayCut + "') OR createdAt < '" + dayCut + "'"
+      results.push(await runOrphanRule('BattleRoom', 'BattleRoom (غرف تحدي أكتر من يوم)', roomWhere, dryRun))
+      results.push(await runOrphanRule('BattlePlayer', 'BattlePlayer (لاعبو غرف تحدي اتمسحت)', 'roomId NOT IN (SELECT id FROM BattleRoom)', dryRun))
+    } catch (e: any) {
+      results.push({ table: 'BattleRoom (غرف تحدي قديمة)', found: 0, deleted: 0, err: String((e && e.message) || e).slice(0, 200) })
+    }
+
     // ===== (5) تذاكر تشغيل منتهية الصلاحية =====
     // expiresAt بصيغة Prisma DateTime — بنستخدم موديل Prisma نفسه عشان
     // المقارنة تبقى بنفس ترميز التواريخ المكتوب في الداتابيز بالظبط

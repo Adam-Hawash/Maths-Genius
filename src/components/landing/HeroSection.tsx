@@ -200,7 +200,7 @@ export default function HeroSection() {
             </div>
 
             {/* Title */}
-            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-white">
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-white">
               <span className="block text-[#E5BE5A]">
                 {L('hero_title_line1', 'Math Genius', 'Math Genius')}
               </span>
@@ -222,7 +222,7 @@ export default function HeroSection() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Button
                 size="lg"
-                className="text-base px-8 py-6 min-h-[44px] bg-[#C49A38] hover:bg-[#D4A843] text-white font-semibold transition-colors duration-200"
+                className="text-sm sm:text-base px-6 sm:px-8 py-3.5 sm:py-6 min-h-[44px] bg-[#C49A38] hover:bg-[#D4A843] text-white font-semibold transition-colors duration-200"
                 onClick={() => setView('auth-register')}
               >
                 {T('اعمل حسابك', 'Create Account')}
@@ -230,7 +230,7 @@ export default function HeroSection() {
               <Button
                 variant="outline"
                 size="lg"
-                className="text-base px-8 py-6 min-h-[44px] border-[#C49A38]/40 text-[#E5BE5A] hover:bg-[#C49A38]/10 hover:text-[#E5BE5A] transition-colors duration-200"
+                className="text-sm sm:text-base px-6 sm:px-8 py-3.5 sm:py-6 min-h-[44px] border-[#C49A38]/40 text-[#E5BE5A] hover:bg-[#C49A38]/10 hover:text-[#E5BE5A] transition-colors duration-200"
                 onClick={() => setView('auth-login')}
               >
                 {T('عندك حساب؟ ادخل هنا', 'Have an account? Log in')}
@@ -272,7 +272,7 @@ export default function HeroSection() {
             </div>
 
             {/* Stats Row */}
-            <div className="flex items-center justify-center lg:justify-start gap-8 pt-6">
+            <div className="flex items-center justify-center lg:justify-start gap-5 sm:gap-8 pt-6">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <BookOpen className="h-4 w-4 text-[#8B6914]/60 dark:text-[#E5BE5A]/60" />
