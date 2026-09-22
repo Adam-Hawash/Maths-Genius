@@ -324,28 +324,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
       if (!name) return NextResponse.json({ ok: false, error: 'اكتب اسمك الأول' }, { status: 400 })
       var studentId = String(body.studentId || '').trim().slice(0, 64)
 
-      /* (و72) نفس الطالب (studentId) موجود؟
-         • خرج قبل كده (left) → ممنوع يرجع
-         • لسه في الغرفة → REATTACH لنفس اللاعب (تحديث الجلسة — مش لاعب جديد) */
-      if (studentId) {
-        for (var si = 0; si < existingPlayers.length; si++) {
-          var sp = existingPlayers[si]
-          if (String(sp.studentId || '') !== studentId) continue
-          if (!isActive(sp)) {
-            return NextResponse.json({ ok: false, error: 'خرجت من التحدي ومش مسموح ترجع تاني' }, { status: 403 })
-          }
-          var newToken = Math.random().toString(36).slice(2) + Date.now().toString(36)
-          await safeWrite(function () {
-            return db.$executeRawUnsafe('UPDATE BattlePlayer SET token = ?, name = ?, lastSeen = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', newToken, name, String(Date.now()), sp.id)
-          })
-          return NextResponse.json({
-            ok: true,
-            reattached: true,
-            me: { id: sp.id, name: name, token: newToken, isHost: !!Number(sp.isHost || 0), score: Number(sp.score || 0), streak: Number(sp.streak || 0) },
-            room: { code: room.code, status: room.status, totalRounds: questions.length, mode: String(room.mode || 'general'), difficulty: String(room.difficulty || 'mixed'), cardSeconds: Number(room.cardSeconds || 15) },
-          })
-        }
-      }
+      /* (2026-و79) إصلاح علة «الصاحب دخل بحسابي تلقائي»:
+         مفيش REATTACH بالـ studentId خالص — أي حد بيدخل بالكود الصحيح
+         بيتعمله **لاعب جديد بحسابه هو** (اسمه + studentId بتاعته هو).
+         استرجاع جلسة نفس اللاعب بعد الريفريش بيحصل بالـ playerId+token
+         بس (في GET) — مش بالحساب. الكود الغلط مبيفتحش حاجة أصلًا (404). */
 
       /* (و72) دخول جديد بعد ما السباق بدأ → مرفوض (الدخول من اللوبي بس) */
       if (room.status === 'live') {

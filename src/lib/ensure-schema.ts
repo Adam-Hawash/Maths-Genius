@@ -34,6 +34,8 @@ export var SCHEMA_TABLES = [
   'CREATE TABLE IF NOT EXISTS Complaint (id TEXT PRIMARY KEY, studentId TEXT DEFAULT "", studentName TEXT DEFAULT "", phone TEXT DEFAULT "", grade TEXT DEFAULT "", message TEXT NOT NULL, summary TEXT DEFAULT "", source TEXT NOT NULL DEFAULT "student", status TEXT NOT NULL DEFAULT "new", reply TEXT DEFAULT "", reviewedAt DATETIME, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   // (2026-و37) حساب ولي الأمر — مربوط بحساب ابنه بـ studentId (زي ما هو في Student.parentPhone)
   'CREATE TABLE IF NOT EXISTS Parent (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT "", phone TEXT NOT NULL UNIQUE, password TEXT NOT NULL DEFAULT "", studentId TEXT NOT NULL, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  /* (2026-و79) ولي الأمر بعدة أبناء — كل الأبناء المدموجين في حساب واحد */
+  'CREATE TABLE IF NOT EXISTS ParentStudent (id TEXT PRIMARY KEY, parentId TEXT NOT NULL, studentId TEXT NOT NULL, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(parentId, studentId))',
   // (2026-و40) الكتب والملازم — مكتبة PDF للطالب (تاب أدمن + تاب طالب)
   // (و43) sourceUrl: لينك خارجي للكتب الكبيرة — من غير تخزين الملف في قاعدة البيانات
   'CREATE TABLE IF NOT EXISTS Book (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT \'\', filePath TEXT NOT NULL DEFAULT \'\', fileName TEXT NOT NULL DEFAULT \'\', sourceUrl TEXT NOT NULL DEFAULT \'\', fileType TEXT NOT NULL DEFAULT \'application/pdf\', sizeBytes INTEGER NOT NULL DEFAULT 0, grade TEXT NOT NULL DEFAULT \'\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL)',
@@ -172,10 +174,10 @@ var SCHEMA_FIXES = [
   // النافيبار بالعربي: مستر وائل خضير — من غير العصاية (|) ومن غير الإنجليزي (طلب المستر)
   "UPDATE SiteConfig SET value = 'مستر وائل خضير' WHERE key = 'navbar_subtitle' AND (value LIKE '%خضير%' OR value LIKE '%Khadir%' OR value LIKE '%Khodair%' OR value LIKE '%Khudair%' OR value LIKE '%Khodier%' OR value LIKE '%El-Kh%' OR value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%|%')",
   "UPDATE SiteConfig SET value = 'مستر وائل خضير' WHERE key IN ('hero_title_line2', 'instructor_name') AND (value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%الخضيري%')",
-  // ===== (و78) تصحيح اسم المطور (التهجئة الصحيحة: **Adham Hawash** — أدهم حواش) =====
-  // أي قيمة مخزنة فيها 'Adam Hawash' (تهجئة غلط من نسخة قديمة) بتتصحح مرة
+  // ===== (2026-و79) تصحيح اسم المطور (التهجئة المطلوبة من المستر: **Adam Hawash**) =====
+  // أي قيمة مخزنة فيها 'Adham Hawash' (التهجئة القديمة) بتتصحح مرة
   // واحدة هنا (idempotent) + على القراءة في /api/config
-  "UPDATE SiteConfig SET value = REPLACE(value, 'Adam Hawash', 'Adham Hawash') WHERE (key LIKE '%made_by%' OR key LIKE '%developer_label%') AND value LIKE '%Adam Hawash%'",
+  "UPDATE SiteConfig SET value = REPLACE(value, 'Adham Hawash', 'Adam Hawash') WHERE (key LIKE '%made_by%' OR key LIKE '%developer_label%') AND value LIKE '%Adham Hawash%'",
   // ===== (2026-و31) صورة المعلم = الأساسية والبديلة (طلب المستر حرفيًا: «صورة المعلم
   // تكون هي الأساسية والبديلة، ما تحطش حاجة من دماغك») =====
   // روابط الصور القديمة (i.imghos.co) كانت متخزنة في الكاش عند الطلاب بصورة مش

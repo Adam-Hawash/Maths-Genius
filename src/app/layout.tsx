@@ -50,15 +50,17 @@ export default async function RootLayout({
   var faviconUrl = initialConfig.favicon_url || "/logo.svg";
 
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning>
+    <html lang="en" dir="ltr" suppressHydrationWarning>
       <head>
         {/* (و64) سكريبت مبكر — الثيم (ليلي/نهاري) واللغة بيتريّكوا قبل أول رسم
-            عشان مفيش وميض غلط: الثيم من مفتاح next-themes «theme» والافتراضي ليلي،
-            واللغة من mg_lang لو مختار إنجليزي الاتجاه بيتقلب LTR */}
+            عشان مفيش وميض غلط: الثيم من مفتاح next-themes «theme» والافتراضي ليلي.
+            (2026-و79) اللغة الافتراضية بقت **إنجليزي LTR** — طلب المستر الحرفي:
+            «اللغة الإنجليزية تبقى هي اللغة الأساسية، الطالب يفتح يلاقيها» —
+            اللي مختار عربي (mg_lang=ar) الاتجاه بيتقلب RTL قبل أول رسم */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{var t=localStorage.getItem('theme');var c=(t==='light'?'light':'dark');var el=document.documentElement;el.classList.remove('dark','light');el.classList.add(c);el.style.colorScheme=c;if(localStorage.getItem('mg_lang')==='en'){el.lang='en';el.dir='ltr'}}catch(e){}",
+              "try{var t=localStorage.getItem('theme');var c=(t==='light'?'light':'dark');var el=document.documentElement;el.classList.remove('dark','light');el.classList.add(c);el.style.colorScheme=c;if(localStorage.getItem('mg_lang')==='ar'){el.lang='ar';el.dir='rtl'}}catch(e){}",
           }}
         />
         {/* Cairo via Google Fonts CDN (avoids Turbopack build error) */}
