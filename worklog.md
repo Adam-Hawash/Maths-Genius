@@ -3524,3 +3524,98 @@ Stage Summary:
 - المساحة: 502MB → المتوقع ينزل ~275MB (226.5MB ملفات + 1284 نشاط) — Turso بتعيد استخدام الصفحات تلقائيًا زي ما حصل في و82 (1296→502)
 - من النهاردة المساحة bounded: النشاط بيوم واحد + ملفات أسبوع — مش هترجع تتراكم للأبد
 - الحماية الثابتة: الطلاب والدرجات سليمين 100% (اتحقق بالأرقام قبل وبعد)
+
+---
+Task ID: 4-a
+Agent: general-purpose (Zicola 4-a)
+Task: نقل نظام إشعارات أولياء الأمور (و87) إلى Zicola-Math
+
+Work Log:
+- قرأت آخر الـ worklog (و79→و86) + ملفات MG المرجعية الأربعة + أنكورز MG الثلاثة (exams/submit بعد persistExamGrades(true) قبل '[exam-submit] background AI grading done' — homework/submit بلوكين: بعد hasWriting بشرط inserted && !hasWriting + بعد آخر persistPartial() قبل '[HW BG] Grading done' — ParentPortal قبل {/* كارت الطالب */})
+- نسخت حرفيًا: src/lib/parent-notify.ts + src/app/api/parent/notifications/route.ts (GET آخر 50 + PATCH مقروء/الكل) + src/components/parent/ParentNotificationsCard.tsx (بادج عداد + غير المقروء غليظ وبادج «جديد» + تعليم تلقائي بعد 5 ثواني + زرار تحديد الكل)
+- التعديل الإجباري الوحيد في قالبَي parent-notify.ts: «منصة Maths Genius» → «منصة Zicola In Math» والتوقيع 'Mr.Wael Khodair' → 'Zicola In Math' — المصدر: src/lib/parent-message.ts فيه WA_TEACHER_NAME='Zicola In Math' وDEFAULT_PARENT_TEMPLATE بيوقع بنفس الاسم حرفيًا (فمفيش داعي لفولباك «Mr. Ahmed Shaaban»)
+- prisma/schema.prisma (Zicola): أضفت موديل ParentNotification بآخرها — نفس بلوك MG بالظبط (parent_id/student_name/message/is_read/created_at + @@index([parentId, isRead]) + @@index([createdAt]) + @@map("parent_notifications"))
+- الربط (نفس أنكورز MG حرفيًا): exams/submit → import بعد isWritingQuestion + بلوك «(2026-و87) إشعار ولي الأمر بالدرجة النهائية» بعد `await persistExamGrades(true)` مباشرة وقبل console.log الختامي (الأنكور موجود زي MG بالظبط — مفيش حاجة للبحث عن بديل) | homework/submit → import + بلوك فوري بعد `var hasWriting` بشرط `if (inserted && !hasWriting)` + بلوك تاني جوه backgroundGrading بعد آخر `await persistPartial()` | ParentPortal.tsx → import ParentNotificationsCard + السطر `<ParentNotificationsCard parentId={currentParent && currentParent.id ? currentParent.id : ''} />` قبل {/* كارت الطالب */} — ملفات الـ submit أولها // @ts-nocheck زي ما هي
+- قاعدة البيانات المحلية: mkdir -p db → `DATABASE_URL="file:/home/z/platforms/Zicola-Math/db/custom.db" bunx prisma db push` (مفيش .env في Zicola فبَسّمت الـ URL يدويًا بمسار مطلق عشان الملف يطلع db/custom.db نفس اللي db.ts بيستخدمه افتراضيًا) — push نجح وولّد Prisma Client وجدول parent_notifications اتعمل (اتأكدت من sqlite_master) + db/ مستثنى في .gitignore أصلًا
+- bunx tsc --noEmit = 30 خطأ بالظبط (baseline: ui/* radix + skills/*) — صفر أخطاء في ملفاتي
+- E2E فعلي على dev server (3001): زرعت بيانات تجريبية بـ bun + @libsql/client من node_modules بتاع Zicola (طالب stu_pn_test «طالب التجربة» grade أولى ثانوي approved + parentPhone 01012345678 | Parent prt_pn_test بنفس التليفون | Exam exm_pn_test «اختبار تجربة الإشعارات» بسؤال اختياري واحد) — القاعدة المحلية كانت فاضية غير كده فمفيش خطر تصادم
+- curl POST /api/exams/submit {answers:[0]} → success:true | استنى 6 ثواني (after()) | curl GET /api/parent/notifications?parentId=prt_pn_test → ok:true + إشعار واحد unread:1 نصه «🎓 متابعة من منصة Zicola In Math / الطالب/ة: طالب التجربة / سلّم امتحان «اختبار تجربة الإشعارات» / الدرجة: 1 من 1 — النسبة 100%» | PATCH {all:true} → ok:true | GET بعدها → unread:0 وisRead:1 ✅
+- ملاحظة تشغيلية: بروسيس dev server بتموت مع نهاية كل أمر في البيئة دي — فالاختبار كله (تشغيل السيرفر + الزرع + الكولز + القتل) اتعمل في أمر واحد، وفي أول محاولة نسيان الـ cd خلّى الزرع يفشل («الامتحان غير موجود») واتصلح بمنفردة الـ cd عن الـ backgrounding
+- بعد النجاح: مسحت البيانات التجريبية (DELETE من Student/Parent/Exam/ExamResult/parent_notifications — الأعداد رجعت صفر) + مسحت السكريبت المؤقت + قتلت السيرفر والبورت 3001 اتفرغ
+- git add -A && git commit -m "(2026-و87) نظام إشعارات أولياء الأمور — تسليم امتحان/واجب → إشعار بالاسم والدرجة في بورتال ولي الأمر" → a3c5d86 (7 ملفات) — **مفيش push** (زي التعليمات)
+
+Stage Summary:
+- الملفات المتضافة في Zicola-Math: src/lib/parent-notify.ts (قوالب Zicola In Math + normalizeParentPhone + ensureParentNotificationsTable + notifyParentsOfResult) + src/app/api/parent/notifications/route.ts + src/components/parent/ParentNotificationsCard.tsx — المعدلة: prisma/schema.prisma (موديل ParentNotification) + api/exams/submit + api/homework/submit + components/parent/ParentPortal.tsx
+- tsc: 30/30 baseline بالظبط (زيادة صفرية) — E2E: نجحت كاملة (تسليم → إشعار unread:1 بالاسم والدرجة → تعليم الكل → unread:0) والبيانات التجريبية اتمسحت والسيرفر اتقفل
+- فروق الانكورز: مفيش — أنكورز Zicola مطابقة لـ MG حرفيًا (persistExamGrades(true) موجودة)؛ الفروق الوحيدة مواضع الـ import (exams: قبل export const runtime زي MG، hw: بعد question-figures زي MG، البورتال: قبل interface ResultRow بدل بعد BidiText — نفس النتيجة)
+- في الإنتاج الجدول هيتعمل لوحده من ensureParentNotificationsTable عند أول إشعار (نفس درس و45) — مفيش أي هجرة يدوية مطلوبة، ومفيش أي لمس لقواعد إنتاج أو Turso
+---
+---
+Task ID: 4-b
+Agent: general-purpose (Sherif 4-b)
+Task: نقل نظام إشعارات أولياء الأمور (و87) إلى Mr-Sherif-ElSayed
+
+Work Log:
+- قرأت آخر worklog + ملفات MG المرجعية كاملة (lib/parent-notify.ts + api/parent/notifications/route.ts + components/parent/ParentNotificationsCard.tsx + موديل ParentNotification) وفتحت الانكورز بنفسي في MG وفي منصة Sherif
+- انسخ الملفات الثلاثة بنفس محتوى MG حرفيًا — التعديل الإجباري الوحيد في parent-notify.ts: قالبا PARENT_EXAM/HOMEWORK بقوا «متابعة من منصة مستر شريف السيد» والتوقيع «Mr. Sherif ElSayed» (مأخوذ حرفيًا من src/lib/parent-message.ts: WA_TEACHER_NAME + «إحنا من منصة مستر شريف السيد» في DEFAULT_PARENT_TEMPLATE + instructor_name في api/config) — مفيش أي أثر لـ Maths Genius/Mr.Wael (grep أثبت)
+- prisma/schema.prisma: موديل ParentNotification مضاف آخر السكيما بنفس بلوك MG بالظبط (@@map parent_notifications + نفس الفهارس)
+- ربط exams/submit: import notifyParentsOfResult بعد isWritingQuestion + بلوك «(2026-و87) إشعار ولي الأمر بالدرجة النهائية» جوه after() مباشرة بعد `await persistExamGrades(true)` وقبل console.log '[exam-submit] background AI grading done' — نفس انكور MG بالظبط (persistExamGrades(true) موجود أصلاً — مفيش اختلاف)
+- ربط homework/submit: نفس الـ import + بلوك (أ) فوري بعد `var hasWriting = writingAnswers.length > 0` بشرط `if (inserted && !hasWriting)` قبل «Respond INSTANTLY» + بلوك (ب) جوه backgroundGrading بعد آخر `await persistPartial()` وقبل console.log '[HW BG] Grading done' — نفس انكور MG
+- ربط ParentPortal.tsx: import ParentNotificationsCard بعد BidiText + سطر `<ParentNotificationsCard parentId={currentParent && currentParent.id ? currentParent.id : ''} />` قبل التعليق {/* كارت الطالب */} — التعليق المضاف بنفس صياغة MG
+- قاعدة محلية: mkdir -p db ثم `DATABASE_URL="file:/home/z/platforms/Mr-Sherif-ElSayed/db/custom.db" bunx prisma db push` (من غير env مفيش .env في الريبو فالـ env بيتمرر يدوي) — custom.db اتعملت وparent_notifications اتأكدت موجودة (libsql check) + Prisma Client اتولّد
+- tsc: bunx tsc --noEmit = **30 خطأ بالظبط** (baseline) — وصفر أخطاء في الملفات الملموسة (grep على parent/submit رجع فاضي)
+- E2E ناجح بالكامل (dev server على 3002 بـ DATABASE_URL ممرر يدوي — ملفات المشروع ما اتلمستش): seed بطالب (id stu_pn_test — تليفون 11 خانة 01500000001 زي اشتراط الـ 11 خانة) + Parent (prt_pn_test بـ 01012345678) + امتحان سؤال اختياري واحد → POST /api/exams/submit answers=[0] رجع success:true → GET /api/parent/notifications?parentId=prt_pn_test من أول محاولة (بعد ~3 ثواني من التسليم): ok:true + إشعار واحد unread:1 فيه «طالب التجربة» + «اختبار تجربة الإشعارات» + «الدرجة: 1 من 1 — النسبة 100%» + اسم المنصة والتوقيع الصح → PATCH all:true رجع ok:true → GET بعدها unread:0 وisRead:1
+- ملاحظات فروق اكتشفتها: (1) Sherif مفيش فيه جدول/موديل ParentStudent — دالة notifyParentsOfResult بتتعامل معاه بـ try/catch أصلاً فما كسرتش حاجة (الإشعار بيوصل عبر Student.parentPhone + Parent المباشر) (2) أعمدة updatedAt في Student/Parent/Exam من غير default في SQLite محليًا — السكريبت التجريبي زوّد CURRENT_TIMESTAMP (زي ما التنويه توقع) (3) dev server بيتموت لو اتشغّل من سيشن باغلق — الاتحايل: تشغيل السيرفر والـ curl كله في سيشن واحدة متصلة (4) تليفون الطالب في التعليمات كان مكتوب 12 خانة — اتنفذ بـ 11 خانة 01500000001 التزامًا بقاعدة «11 خانة بالظبط» (تليفون ولي الأمر 01012345678 هو اللي بيُطبّع وهو 11 أصلًا)
+- تنظيف: مسح صفوف التجربة من ExamResult/parent_notifications/Parent/Student/Exam (COUNT=0 لكل جدول) + مسح السكريبت المؤقت + قفل السيرفر (بورت 3002 فاضي — process الـ my-project ما اتلمس) — db/custom.db متجاهلة في .gitignore (*‌.db) فماتكومِتش
+- COMMIT: 554fe40 في /home/z/platforms/Mr-Sherif-ElSayed — **بدون push** التزامًا بالتعليمات
+
+Stage Summary:
+- منصة مستر شريف بقى فيها نفس نظام إشعارات أولياء الأمور المختبر في MG: تسليم امتحان/واجب → إشعار فوري لكل رقم ولي أمر مربوط بالطالب بالاسم والعنوان والدرجة النهائية «X من Y — النسبة Z%»
+- بورتال ولي الأمر بقى فيه كارت «إشعاراتك» (بادج عداد أحمر + غير المقروء خلفية وغليظ + بادج «جديد» + تعليم تلقائي بعد 5 ثواني + تحديد الكل)
+- الجدول parent_notifications بيتبني لوحده في الإنتاج (Turso) من ensureParentNotificationsTable عند أول إشعار — مفيش أي تدخل يدوي على قواعد الإنتاج حصل
+- tsc 30/30 baseline + E2E كامل أخضر (submit → إشعار unread:1 → mark-all → unread:0)
+---
+---
+Task ID: 4-c
+Agent: general-purpose (Shaimaa 4-c)
+Task: نقل نظام إشعارات أولياء الأمور (و87) إلى shaimaa-selim-science
+
+Work Log:
+- قرأت آخر worklog + ملفات MG المرجعية (parent-notify.ts + api/parent/notifications + ParentNotificationsCard.tsx + بلوك ParentNotification في schema) وفتحت الانكورز في MG وshaimaa بنفسي قبل النقل
+- نسخ 1:1: src/lib/parent-notify.ts + src/app/api/parent/notifications/route.ts + src/components/parent/ParentNotificationsCard.tsx — التعديل الوحيد: قالبا PARENT_EXAM_TEMPLATE / PARENT_HOMEWORK_TEMPLATE بقوا «🎓/📝 متابعة من منصة د. شيماء ساينس للعلوم» والتوقيع «Dr. Shaimaa» (نفس WA_TEACHER_NAME واسم المنصة من DEFAULTS في api/config — navbar_brand/instructor_name واللي استُخدم في parent-message.ts من و81) بدل «منصة Maths Genius» و«Mr.Wael Khodair»
+- prisma/schema.prisma: بلوك موديل ParentNotification بنفس محتوى MG حرفيًا (parent_id/student_name/message/is_read/created_at + فهرسين + @@map("parent_notifications")) في آخر السكيما
+- ربط الانكورز (كلها موجودة بنفس شكل MG — مفيش فروق): exams/submit → import بعد isWritingQuestion + بلوك الإشعار جوه after() بعد `await persistExamGrades(true)` مباشرة وقبل console.log '[exam-submit] background AI grading done'؛ homework/submit → import + بلوك فوري بعد `var hasWriting = writingAnswers.length > 0` بشرط `if (inserted && !hasWriting)` + بلوك تاني جوه backgroundGrading بعد آخر `await persistPartial()` وقبل console.log '[HW BG] Grading done'؛ ParentPortal → import الكارت + `<ParentNotificationsCard parentId={...} />` قبل {/* كارت الطالب */} — ملفات الـ submit عند شيماء @ts-nocheck زي ما هو، والنصوص العربية الثابتة في الكارت مقصودة (منصة i18n ثنائية والكارت نسخة MG)
+- DB محلي: mkdir db + `DATABASE_URL="file:../db/custom.db" bunx prisma db push` (الريباث بيتحل من مجلد prisma/ — النتيجة db/custom.db بالجداول كاملة + generate للـ client)
+- tsc: bunx tsc --noEmit = 30 خطأ بالظبط (baseline) — صفر أخطاء في ملفاتي (اتأكدت بفلتر على أسماء الملفات)
+- E2E فعلية على next dev -p 3003 (قاعدة المنصة المحلية): زرعت Student stu_pn_test (015000000001, أولى ثانوي, approved, parentPhone 01012345678 — 11 خانة) + Parent prt_pn_test (01012345678/1234) + Exam exm_pn_test بسؤال اختياري واحد → POST /api/exams/submit {answers:[0]} رجع success:true → GET /api/parent/notifications?parentId=prt_pn_test رجع ok:true بإشعار واحد unread:1 نصه «🎓 متابعة من منصة د. شيماء ساينس للعلوم / الطالب/ة: طالب التجربة / سلّم امتحان «اختبار تجربة الإشعارات» / الدرجة: 1 من 1 — النسبة 100% / … / Dr. Shaimaa» → PATCH {all:true} رجع ok:true → GET بعدها unread:0 — **E2E نجحت بالكامل**
+- تنظيف: DELETE لكل صفوف الاختبار (اتأكدت Student/Parent/Exam/ExamResult/parent_notifications = 0) + مسح سكريبت الزرع المؤقت + قفل الـ dev server (بورت 3003 فاضي) — بدون أي push
+- **ملاحظة بيئية مهمة**: شل السانڈبوكس فيه DATABASE_URL=file:/home/z/my-project/db/custom.db موروثة — أول محاولتين من الـ dev server كنتوا رايحين على قاعدة MG المحلية (طلبات 404/401 بس بدون أي كتابة بيانات — بس DDL الـ CREATE TABLE IF NOT EXISTS الـ idempotent اتندّي هناك) — أعدت التشغيل بـ env -u TURSO… DATABASE_URL=file:../db/custom.db صريحة واتأكدت إن قاعدة MG المحلية سليمة وصفر صفوف اختبار فيها
+
+Stage Summary:
+- منصة شيماء بقى فيها نفس نظام إشعارات و87 بالظبط: تسليم امتحان/واجب → إشعار لكل رقم ولي أمر مربوط بالطالب (parentPhone + Parent + ParentStudent المدموجين) بالاسم والعنوان والدرجة «X من Y — النسبة Z%» بتوقيع د. شيماء، وكارت إشعارات في بورتال ولي الأمر (بادج عداد + غير المقروء مميز + تعليم تلقائي بعد 5 ثواني + تحديد الكل)
+- الجدول بيتعمل لوحده في الإنتاج من ensureParentNotificationsTable (نفس حماية MG) — مفيش أي هجرة يدوية
+- فحوصات: tsc 30/30 baseline + E2E حقيقية ناجحة (submit → إشعار unread:1 → PATCH → unread:0) + تنظيف كامل + كومِت 17b592b (بدون push)
+---
+
+---
+Task ID: 87 (main orchestrator — نظام إشعارات أولياء الأمور في المنصات الأربعة)
+Agent: main (Z.ai Code) + وكلاء متوازيون 4-a/4-b/4-c
+Task: طلب المستر: نظام Parent Notifications كامل — جدول parent_notifications (id/parent_id/student_name/message/is_read/created_at) + إشعار أوتوماتيك لما الطالب يسلّم امتحان أو واجب (فيه اسم الطالب + العنوان + الدرجة، وقالب الرسالة قابل للتعديل من إعداد واحد) + قسم «إشعارات» في بورتال ولي الأمر غير المقروء فيه مميز — «اعمله في جميع المنصات»
+
+Work Log:
+- استكشاف: المنصات فيها بالفعل حسابات أولياء أمور كاملة (Parent و37 + ParentStudent و79) وبورتال ولي أمر (/api/parent/results + ParentPortal) — بنينا الإشعارات فوقهم من غير ازدواج
+- سكيما: موديل ParentNotification بـ @@map("parent_notifications") بنفس الأعمدة المطلوبة حرفيًا (id INTEGER AUTOINCREMENT / parent_id TEXT / student_name TEXT / message TEXT / is_read INTEGER 0/1 / created_at DATETIME) + ensureParentNotificationsTable (نفس نمط heal بتاع notify.ts و45) بيعمل الجدول تلقائيًا في الإنتاج Turso من غير أي تدخل يدوي
+- parent_id = رقم موبايل ولي الأمر مطبّع 11 خانة (010xxxxxxxx — نفس تطبيع دخول ولي الأمر بالظبط) + fallback Parent.id؛ الإشعار بيتكتب لكل أرقام الأولياء المربوطين بالطالب (Student.parentPhone + Parent المباشر + ParentStudent multi-child و79)
+- القوالب القابلة للتعديل في src/lib/parent-notify.ts (PARENT_EXAM_TEMPLATE / PARENT_HOMEWORK_TEMPLATE بمتغيرات {student} {title} {score} {max} {percent} — الدرجة بصيغة «X من Y» درس و65) — نص كل منصة باسمها وموقّعها: MG «Maths Genius/Mr.Wael Khodair» | Zicola «Zicola In Math» | Sherif «منصة مستر شريف السيد/Mr. Sherif ElSayed» | Shaimaa «منصة د. شيماء ساينس للعلوم/Dr. Shaimaa»
+- الربط: exams/submit → الإشعار بعد الدرجة النهائية (جوه after() بعد persistExamGrades(true)) عشان الرقم يوصل نهائي؛ homework/submit → فوري للـ MCQ الصرف (inserted && !hasWriting) + بعد اكتمال تصحيح المقالي جوه backgroundGrading؛ كل الإشعارات try/catch فأي فشل مابيبوّظش التسليم أبدًا
+- API جديد /api/parent/notifications: GET (آخر 50 + عداد unread) + PATCH (إشعار واحد أو الكل) بنفس نمط جلسة /api/parent/results
+- واجهة ParentNotificationsCard جوه بورتال ولي الأمر (أول كارت بعد الهيدر): بادج عداد أحمر + غير المقروء خلفية بلون المنصة الخفيفة ونص غليظ وبادج «جديد» + تعليم تلقائي بعد 5 ثواني (زي الواتساب) + زرار «تحديد الكل كمقروء» + ضغطة على الإشعار بيحيّده — responsive ومتطابق مع ثيم كل منصة (shadcn tokens)
+- اختبار MG E2E كامل: تسليم امتحان MCQ حقيقي → إشعار «الدرجة: 1 من 1 — النسبة 100%» → البادج ظهر في البورتال → التعليم التلقائي بعد 5 ثواني حدّث الداتابيز فعلًا (unread=0) → PATCH فردي وجماعي ✓ — درس: رقم 12 خانة بيرفضه التطبيع (الصحيح 11)
+- النقل للمنصات (وكلاء متوازيون 4-a/4-b/4-c بأقسامهم تحت): Zicola a3c5d86 / Sherif 554fe40 / Shaimaa 17b592b — كل واحد tsc=30 baseline + E2E كامل ناجح (تسليم → إشعار unread:1 → PATCH → unread:0) + تنظيف بيانات التجربة والسكريبتات المؤقتة
+- ملاحظات الوكلاء: Sherif مفيهوش ParentStudent (الدالة بتتجاهله بأمان والإشعار بيوصل عبر parentPhone + Parent) + مفيش .env في المنصات (الإنتاج بياخد Turso والجدول بيتعمل لوحده) + env الموروثة DATABASE_URL في الساندبوكس بتشاور على قاعدة MG (اتعالجت بمسار صريح في اختبارات المنصات)
+
+Stage Summary:
+- من النهاردة: أول ما الطالب يسلّم امتحان أو واجب، كل ولي أمر مربوط بيه بياخد إشعار بالاسم والدرجة، بيلاقيه أول ما يفتح حسابه في كارت «إشعاراتك» — وتغيير كلام الرسالة كله من ملف واحد lib/parent-notify.ts
+- الإنتاج مش محتاج أي خطوة يدوية: جدول parent_notifications هيتعمل لوحده أول ما أول إشعار يتبعت
+- tsc: 30/30 baseline ×4 — صفر أخطاء جديدة. الطلاب ودرجاتهم ما اتلمسوش خالص
+- Push: Zicola 63c936c..a3c5d86 | Sherif 8765a66..554fe40 | Shaimaa 3eaaee2..17b592b | MG: كومِت و87 ده
