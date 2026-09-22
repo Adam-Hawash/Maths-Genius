@@ -660,9 +660,11 @@ function applyPlayerChrome(){
 }
 applyPlayerChrome();
 
-/* (MG-5) الاسم الثنائي — أول كلمتين بس (الرباعي ممنوع — طلب حرفي) */
+/* (MG-5) الاسم الثنائي — أول كلمتين بس (الرباعي ممنوع — طلب حرفي)
+   ملاحظة: الكود ده جوه template literal — لازم \\s مش \s عشان
+   الباك سلاش ما يتاكلش وقت توليد الـ HTML (دي كانت سبب علة «الرباعي» الأصلية!) */
 function wmShortName(){
-  var p = String(wmName||'').split(/\s+/).filter(Boolean);
+  var p = String(wmName||'').split(/\\s+/).filter(Boolean);
   return p.slice(0,2).join(' ');
 }
 function wmCardHtml(){
