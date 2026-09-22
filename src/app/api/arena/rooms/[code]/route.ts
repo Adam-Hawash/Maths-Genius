@@ -23,7 +23,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
-import { ensureArenaTables } from '@/lib/arena'
+import { ensureArenaTables, sweepArena } from '@/lib/arena'
 
 export const runtime = 'nodejs'
 
@@ -111,6 +111,9 @@ async function lazyTickRace(room: any): Promise<boolean> {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   try {
     await ensureArenaTables()
+    /* (2026-و84) سيف تلقائي مختنق (مرة كل 5 دقائق لكل instance) — غرف
+       خلصت من 30 دقيقة أو مهجورة من 6 ساعات بتتمسح هي ولاعبيها تلقائيًا */
+    try { await sweepArena() } catch (e) {}
     var code = String((await params).code || '').toUpperCase().trim()
     var url = new URL(request.url)
     var playerId = String(url.searchParams.get('playerId') || '')

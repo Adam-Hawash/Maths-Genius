@@ -10,6 +10,7 @@
 // ============================================================
 
 import { ensureSchema, makeLibsqlClient } from '@/lib/ensure-schema'
+import { db } from '@/lib/db'
 
 var _arenaReady: Promise<void> | null = null
 
@@ -42,4 +43,41 @@ export function makeId(prefix: string): string {
 
 export function makeToken(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
+}
+
+/* ============================================================
+   (2026-و84) sweepArena — تنظيف تلقائي لغرف التحدي
+   طلب المستر حرفيًا: «التحديات لو طالت دخل تحدي او خلصه او خرج منه
+   التحدي ده يتمسح لكن دلوقتي حفظ بس» — الغرف كانت بتفضل محفوظة
+   للأبد (السيف القديم كان بيشتغل عند إنشاء غرفة جديدة وبعد 6 ساعات بس).
+   القواعد:
+   1) غرف خلصت (ended/finished) من أكتر من 30 دقيقة → الغرفة + كل لاعبيها
+      (نص ساعة مهلة عشان اللاعبين يشوفوا نتيجتهم الأخيرة)
+   2) غرف مهجورة (أي حالة) من أكتر من 6 ساعات → الغرفة + كل لاعبيها
+      (lobbies فتحت ونسيان، تحديات اتسابت مفتوحة)
+   البيانات دي مؤقتة بطبيعتها (أسئلة مولدة + درجات جلسة لعب) — مش درجات
+   امتحانات ولا صفوف طلاب، فمسحها آمن تمامًا.
+   Throttle: مرة واحدة كل 5 دقائق على الأقل لكل instance — بتتنادى من
+   polling الغرفة والإنشاء، فمش هيدفع نداءات كتابة ضاية على Turso.
+   ============================================================ */
+var _lastArenaSweep = 0
+
+export async function sweepArena(): Promise<void> {
+  var now = Date.now()
+  if (now - _lastArenaSweep < 5 * 60 * 1000) return
+  _lastArenaSweep = now
+  try {
+    var cutoffEnded = new Date(now - 30 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19)
+    var cutoffOld = new Date(now - 6 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19)
+    var stale = (await db.$queryRawUnsafe(
+      "SELECT id FROM BattleRoom WHERE (status IN ('ended', 'finished') AND updatedAt < ?) OR createdAt < ?",
+      cutoffEnded, cutoffOld
+    )) || []
+    for (var i = 0; i < stale.length; i++) {
+      try { await db.$executeRawUnsafe('DELETE FROM BattlePlayer WHERE roomId = ?', stale[i].id) } catch (e) {}
+      try { await db.$executeRawUnsafe('DELETE FROM BattleRoom WHERE id = ?', stale[i].id) } catch (e) {}
+    }
+  } catch (e) {
+    /* التنظيف مش مفروض يبوّظ أي عملية لعب — نسكت */
+  }
 }

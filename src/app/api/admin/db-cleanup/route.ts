@@ -126,6 +126,16 @@ export async function POST(request: NextRequest) {
     // حساب أب أصله طالب اتمسح (الأب مربوط بحساب ابنه بـ studentId)
     results.push(await runOrphanRule('Parent', 'Parent', 'studentId NOT IN (SELECT id FROM Student)', dryRun))
 
+    // ===== (2026-و84) شكاوى اتحلت — طلب المستر: الشكوى بعد حلها تتمسح
+    // من صفحة الأدمن. من النهاردة الـ PATCH بيحذفها لحظة الحل، والقاعدة
+    // دي بتلم المخزون القديم (المحلولة = الطالب واخد إشعار الحل والرد)
+    results.push(await runOrphanRule(
+      'Complaint',
+      'Complaint (شكاوى اتحلت)',
+      "status = 'resolved'",
+      dryRun
+    ))
+
     // ===== (5) تذاكر تشغيل منتهية الصلاحية =====
     // expiresAt بصيغة Prisma DateTime — بنستخدم موديل Prisma نفسه عشان
     // المقارنة تبقى بنفس ترميز التواريخ المكتوب في الداتابيز بالظبط
