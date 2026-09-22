@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { isAdmin } from '@/lib/video-guard'
+import { collectMediaIds, deleteMediaByIds, examHomeworkMediaTexts } from '@/lib/media-cleanup'
 
 /* (25-ب1) جدولة الظهور — defensive ALTER بنفس نمط المشروع (ممنوع db:push) */
 /* (2026-و29) كاش على مستوى الموديول: كل ALTER = نداء شبكة لقاعدة البيانات — تنفيذها في كل ريكوست كان بيدفع نداءات ضاية في كل تحميل (من أكبر أسباب بطء المنصة) — دلوقتي مرة واحدة لكل instance */
@@ -166,6 +167,22 @@ export async function DELETE(
     // نفسه في نفس اللحظة — مفيش نتيجة يتيمة تفضل ظاهرة ولا نقاط بتتحسب من
     // واجب اتمسح. الفورين كي مش مفروض على داتابيز الإنتاج (اتعملت بـ raw SQL)
     // فبنمسح يدوي جوه transaction واحدة عشان النضيف يبقى كله أو لا حاجة.
+    // (2026-و82) مسح ملفات Media بتاعة الواجب قبل مسح صفوفه (نفس منطق الامتحان)
+    var mediaDeleted = 0
+    try {
+      var resRows: any[] = await db.$queryRawUnsafe(
+        'SELECT answers, writingResults FROM HomeworkResult WHERE homeworkId = ?', id
+      )
+      var texts = examHomeworkMediaTexts(existing as unknown as Record<string, unknown>)
+      for (var ri = 0; ri < resRows.length; ri++) {
+        texts.push(resRows[ri].answers)
+        texts.push(resRows[ri].writingResults)
+      }
+      mediaDeleted = await deleteMediaByIds(collectMediaIds(texts))
+    } catch (e) {
+      console.error('تنظيف ملفات الواجب فشل (الحذف مستمر):', e)
+    }
+
     try {
       await safeWrite(async function () {
         await db.$transaction([
@@ -185,7 +202,7 @@ export async function DELETE(
       await db.homework.delete({ where: { id } })
     }
 
-    return NextResponse.json({ message: 'تم حذف الواجب بنجاح' })
+    return NextResponse.json({ message: 'تم حذف الواجب بنجاح', mediaDeleted })
   } catch (error) {
     console.error('حذف الواجبفشل:', error)
     return NextResponse.json({ error: 'حدث خطأ في السيرفر' }, { status: 500 })
