@@ -16,7 +16,7 @@
 
 import { NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
-import { ensureArenaTables, makeRoomCode, makeId } from '@/lib/arena'
+import { ensureArenaTables, makeRoomCode, makeId, sweepArena } from '@/lib/arena'
 import { generateBattleQuestions } from '@/lib/question-gen'
 
 export const runtime = 'nodejs'
@@ -48,21 +48,9 @@ export async function POST(request: Request) {
       cardSeconds: cardSeconds,
     })
 
-    // نظافة: امسح الغرف القديمة (أقدم من 6 ساعات)
-    // (2026-و68-إضافي) إصلاح مقارنة الزمن: CURRENT_TIMESTAMP في SQLite بيتخزن
-    // "YYYY-MM-DD HH:MM:SS" (مسافة) — و toISOString بيرجع "YYYY-MM-DDTHH…"
-    // (حرف T) والمسافة أصغر من T نصيًا، فالمقارنة القديمة كانت تعتبر **كل**
-    // الغرف قديمة وتمسحها مع أول create — الغرف الشغالة بتختفي وكود الغرفة
-    // المخصص عمرو ما يلاقي التكرار. توحيد الصيغة للاتنين يصلح المقارنة.
-    try {
-      var cutoff = Date.now() - 6 * 60 * 60 * 1000
-      var cutoffSql = new Date(cutoff).toISOString().replace('T', ' ').substring(0, 19)
-      var old = await db.$queryRawUnsafe('SELECT id FROM BattleRoom WHERE createdAt < ?', cutoffSql)
-      for (var i = 0; i < (old || []).length; i++) {
-        await safeWrite(function () { return db.$executeRawUnsafe('DELETE FROM BattlePlayer WHERE roomId = ?', old[i].id) })
-        await safeWrite(function () { return db.$executeRawUnsafe('DELETE FROM BattleRoom WHERE id = ?', old[i].id) })
-      }
-    } catch (e) {}
+    /* (2026-و84) التنظيف بقى موحد في sweepArena — غرف خلصت من 30 دقيقة +
+       غرف مهجورة من 6 ساعات، وبيشتغل كمان من polling الغرفة مش من الإنشاء بس */
+    try { await sweepArena() } catch (e) {}
 
     // (2026-و68) كود مخصص من الطالب — أو كود أوتوماتيكي
     var code = ''
