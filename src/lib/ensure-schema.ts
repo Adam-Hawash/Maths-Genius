@@ -132,6 +132,9 @@ var SCHEMA_COLUMNS = [
   ['Homework', 'targetGroupIds', 'TEXT', "DEFAULT ''"],
   // (و43) الكتب بلينك خارجي — عمود sourceUrl لجدول Book (التخزين على الدرايف مش في القاعدة)
   ['Book', 'sourceUrl', 'TEXT', "NOT NULL DEFAULT ''"],
+  // (2026-و80) تصنيف الكتاب: واجب (homework) / أسئلة (questions) / الاتنين (both)
+  // — كان ناقص من و79 على Turso (العمود لازم يكون هنا + تغيير البصمة)
+  ['Book', 'usage', 'TEXT', "DEFAULT 'both'"],
   // (2026-و68-إضافي) فيديو المستر في تحدي المستر — طلب المستر: «يصور فيديو ويعمله
   // في التحديات» — videoUrl: لينك يوتيوب خام أو مسار /api/files/<id> لملف مرفوع،
   // videoType: 'youtube' | 'file' | '' (فاضي = مفيش فيديو — الواجهة بتخفي البلوك)
@@ -171,12 +174,13 @@ var SCHEMA_FIXES = [
   // أي قيمة مخزنة فيها اسم غلط (مستر شريف / 'مستر وائل الخضيري' من ترحيل قديم)
   // بتتصحح مرة واحدة هنا (idempotent) + على القراءة في /api/config
   "UPDATE SiteConfig SET value = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(value, 'Mr. Sherif ElSayed', 'Wael Khodair'), 'مستر شريف السيد', 'مستر وائل خضير'), 'نصائح مستر شريف', 'نصائح مستر وائل خضير'), 'Mr. Wael El-Khadiry', 'Wael Khodair'), 'مستر وائل الخضيري', 'مستر وائل خضير') WHERE value LIKE '%Sherif ElSayed%' OR value LIKE '%شريف السيد%' OR (value LIKE '%مستر شريف%' AND key LIKE 'tips_%') OR value LIKE '%Mr. Wael El-Khadiry%' OR value LIKE '%الخضيري%'",
-  // النافيبار بالعربي: مستر وائل خضير — من غير العصاية (|) ومن غير الإنجليزي (طلب المستر)
-  "UPDATE SiteConfig SET value = 'مستر وائل خضير' WHERE key = 'navbar_subtitle' AND (value LIKE '%خضير%' OR value LIKE '%Khadir%' OR value LIKE '%Khodair%' OR value LIKE '%Khudair%' OR value LIKE '%Khodier%' OR value LIKE '%El-Kh%' OR value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%|%')",
-  "UPDATE SiteConfig SET value = 'مستر وائل خضير' WHERE key IN ('hero_title_line2', 'instructor_name') AND (value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%الخضيري%')",
+  // ===== (و80) إصلاح «التغييرات بترجع بعد الـ reload» — شيل الترحيلات الإجبارية
+  // اللي كانت بتفرض أسماء ثابتة على مفاتيح بتعدلها الأدمن (navbar_subtitle /
+  // hero_title_line2 / instructor_name): كان أول نشر جديد بيرجّع القيم القديمة
+  // فوق تعديل الأدمن. التصحيحات القديمة اتعملت فعلاً على قاعدة البيانات من قبل،
+  // فمش محتاجين نكررها — والقراءة في /api/config بقت زي ما هي من غير أي تعديل.
   // ===== (2026-و79) تصحيح اسم المطور (التهجئة المطلوبة من المستر: **Adam Hawash**) =====
-  // أي قيمة مخزنة فيها 'Adham Hawash' (التهجئة القديمة) بتتصحح مرة
-  // واحدة هنا (idempotent) + على القراءة في /api/config
+  // أي قيمة مخزنة فيها 'Adham Hawash' (التهجئة القديمة) بتتصحح مرة واحدة هنا (idempotent)
   "UPDATE SiteConfig SET value = REPLACE(value, 'Adham Hawash', 'Adam Hawash') WHERE (key LIKE '%made_by%' OR key LIKE '%developer_label%') AND value LIKE '%Adham Hawash%'",
   // ===== (2026-و31) صورة المعلم = الأساسية والبديلة (طلب المستر حرفيًا: «صورة المعلم
   // تكون هي الأساسية والبديلة، ما تحطش حاجة من دماغك») =====
@@ -227,7 +231,7 @@ export var SCHEMA_INDEXES = [
 /* (2026-و66) الجداول الجديدة (ساحة التحدي + الخرائط الذهنية) دخلت CORE_TABLES
  * والبصمة اتبدّلت — نفس درس و38/و40/و43/و44/و45: من غير كده الجداول الجديدة
  * عمرها ما بتتعمل على Turso أول ريكوست بعد النشر */
-export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book', 'Notification', 'BattleRoom', 'BattlePlayer', 'TeacherChallenge', 'ChallengeEntry', 'FlashcardScore', 'MindMap', 'ChallengeBankQuestion', 'ChallengeAttempt', 'FlashcardCard']
+export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'ParentStudent', 'Book', 'Notification', 'BattleRoom', 'BattlePlayer', 'TeacherChallenge', 'ChallengeEntry', 'FlashcardScore', 'MindMap', 'ChallengeBankQuestion', 'ChallengeAttempt', 'FlashcardCard']
 
 /* (2026-و38) مفتاح البصمة اتبدل — البصمة القديمة كانت اتخزنت على الإنتاج
  * بعد ما كود و37 نزل (والجدول وقتها مش معمول لسه في CORE_TABLES فالترميم
@@ -254,7 +258,12 @@ export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homew
 /* (و72) مفتاح البصمة اتغير — أعمدة السباق الفردي في BattleRoom/BattlePlayer
  * دخلوا SCHEMA_COLUMNS — نفس الدرس الموثق (و38/و40/و43/و45/و68): من غير
  * تغيير المفتاح الأعمدة الجديدة عمرها ما بتتضاف على قواعد موجودة. */
-var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w72'
+/* (و80) مفتاح البصمة اتبدّل سابع — (1) جدول ParentStudent (ولي الأمر بعدة أبناء) كان
+ * دخل SCHEMA_TABLES في و79 من غير تغيير المفتاح — فممكن ما يكونش اتعمل على Turso!
+ * (2) عمود Book.usage كان ناقص خالص من SCHEMA_COLUMNS. تغيير المفتاح بيضمن إن أول
+ * ريكوست بعد النشر يعمل الفحص الكامل وينشئ الجدول والعمود على Turso (الدرس الموثق
+ * و38/و40/و43/و45/و68/و72). */
+var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w80'
 
 /* ============================================================
  * 2026-و23 — **إصلاح بطء المنصة** (طلب المستر: «المنصة بطيئة، تسجيل

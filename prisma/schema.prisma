@@ -65,6 +65,21 @@ model Parent {
   @@index([studentId])
 }
 
+/* (2026-و80) ولي الأمر بعدة أبناء — كل الأبناء المدموجين في حساب واحد.
+ * Parent.studentId القديم بيفضل شغال (الابن الأول/الأساسي) وParentStudent
+ * بيربط الأبناء الإضافيين بنفس حساب ولي الأمر. */
+model ParentStudent {
+  id        String   @id @default(cuid())
+  parentId  String
+  studentId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([parentId, studentId])
+  @@index([parentId])
+  @@index([studentId])
+}
+
 model StudentActivity {
   id        String   @id @default(cuid())
   studentId String
