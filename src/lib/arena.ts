@@ -46,15 +46,15 @@ export function makeToken(): string {
 }
 
 /* ============================================================
-   (2026-و84) sweepArena — تنظيف تلقائي لغرف التحدي
-   طلب المستر حرفيًا: «التحديات لو طالت دخل تحدي او خلصه او خرج منه
-   التحدي ده يتمسح لكن دلوقتي حفظ بس» — الغرف كانت بتفضل محفوظة
-   للأبد (السيف القديم كان بيشتغل عند إنشاء غرفة جديدة وبعد 6 ساعات بس).
-   القواعد:
-   1) غرف خلصت (ended/finished) من أكتر من 30 دقيقة → الغرفة + كل لاعبيها
-      (نص ساعة مهلة عشان اللاعبين يشوفوا نتيجتهم الأخيرة)
-   2) غرف مهجورة (أي حالة) من أكتر من 6 ساعات → الغرفة + كل لاعبيها
-      (lobbies فتحت ونسيان، تحديات اتسابت مفتوحة)
+   (2026-و85) sweepArena — تنظيف تلقائي لغرف التحدي
+   طلب المستر حرفيًا (و85): «التحدي يتمسح بعديها بيوم عشان الطالب
+   لو يقدر يجي يشوف درجته هو وزمايله» — يعني الغرفة تعيش يوم كامل
+   بعد خلصها وبعدها تتمسح أوتوماتيك.
+   القواعد (تحديث و85 — كانت 30 دقيقة/6 ساعات في و84):
+   1) غرف خلصت (ended/finished) من أكتر من 24 ساعة → الغرفة + كل لاعبيها
+      (يوم كامل مهلة عشان الطالب يشوف نتيجته هو وزمايله)
+   2) غرف مهجورة/عالقة (أي حالة) من أكتر من 24 ساعة → الغرفة + كل لاعبيها
+      (lobbies فتحت ونسيان، تحديات اتسابت مفتوحة — «لو طالت»)
    البيانات دي مؤقتة بطبيعتها (أسئلة مولدة + درجات جلسة لعب) — مش درجات
    امتحانات ولا صفوف طلاب، فمسحها آمن تمامًا.
    Throttle: مرة واحدة كل 5 دقائق على الأقل لكل instance — بتتنادى من
@@ -67,11 +67,11 @@ export async function sweepArena(): Promise<void> {
   if (now - _lastArenaSweep < 5 * 60 * 1000) return
   _lastArenaSweep = now
   try {
-    var cutoffEnded = new Date(now - 30 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19)
-    var cutoffOld = new Date(now - 6 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19)
+    /* يوم كامل (24 ساعة) للمخلّص والمهجور — طلب و85 */
+    var cutoffDay = new Date(now - 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19)
     var stale = (await db.$queryRawUnsafe(
       "SELECT id FROM BattleRoom WHERE (status IN ('ended', 'finished') AND updatedAt < ?) OR createdAt < ?",
-      cutoffEnded, cutoffOld
+      cutoffDay, cutoffDay
     )) || []
     for (var i = 0; i < stale.length; i++) {
       try { await db.$executeRawUnsafe('DELETE FROM BattlePlayer WHERE roomId = ?', stale[i].id) } catch (e) {}
