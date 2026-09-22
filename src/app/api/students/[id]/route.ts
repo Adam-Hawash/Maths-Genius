@@ -133,14 +133,70 @@ export async function DELETE(
       return NextResponse.json({ error: 'Student not found' }, { status: 404 })
     }
 
-    /* (2026-و56) تسليمات الواجبات ملهاش علاقة cascade بالطالب في البريزما —
-       من غير السطر ده مسح الطالب بيسيب تسليمات «شبح» تظهر عند المستر
-       في نتايج أي واجب حقيقي سلّمه الطالب قبل ما حسابه يتمسح.
-       (نتايج الامتحانات بتتمسح لوحدها — عندها cascade في السكيما) */
+    /* (2026-و81) حذف متسلسل — سبب انفخار قاعدة البيانات الرئيسي:
+       مسح الطالب كان بيسيب كل صفوفه في الجداول التانية يتيمة للأبد
+       (الفورين كي مش مفروضة فعليًا على داتابيز الإنتاج — اتعملت بـ raw SQL
+       وSQLite مش بيفعّلها افتراضيًا). فبنمسح يدوي من كل جدول مرتبط بـ studentId
+       — كل جدول في try/catch لوحده عشان فشل جدول واحد ما يمنعش الحذف —
+       وصف الطالب نفسه بيتمسح في الآخر إجباري.
+       ملاحظة: نتايج الامتحان (ExamResult) بتنمسح لوحدها بالـ FK cascade
+       في السكيما الجديدة، بس بنمسحها هنا كمان احتياط للداتابيز القديمة. */
+    var studentTables = [
+      'StudentActivity',
+      'ExamResult',
+      'HomeworkResult',
+      'VideoProgress',
+      'VideoAccess',
+      'Payment',
+      'Notification',
+      'Discussion',
+      'Complaint',
+      'ChallengeEntry',
+      'ChallengeAttempt',
+      'FlashcardScore',
+      'BattlePlayer',
+    ]
+    for (var ti = 0; ti < studentTables.length; ti++) {
+      try {
+        await db.$executeRawUnsafe('DELETE FROM ' + studentTables[ti] + ' WHERE studentId = ?', id)
+      } catch (e) {
+        console.error('Cascade cleanup on student delete (' + studentTables[ti] + '):', e)
+      }
+    }
+
+    // تذاكر التشغيل المرتبطة بالطالب
     try {
-      await db.$executeRawUnsafe('DELETE FROM HomeworkResult WHERE studentId = ?', id)
+      await db.$executeRawUnsafe('DELETE FROM PlayTicket WHERE studentId = ?', id)
     } catch (e) {
-      console.error('HomeworkResult cleanup on student delete:', e)
+      console.error('Cascade cleanup on student delete (PlayTicket):', e)
+    }
+
+    /* (2026-و80) حسابات أولياء الأمور — ولي الأمر مربوط بحساب ابنه بـ studentId
+       (والأبناء المدموجين بـ ParentStudent). لو الابن الأساسي اتمسح، حساب ولي
+       الأمر كله بيبقى يتيمة: بنجيب ids أولياء الأمور المسجلين على الطالب ده،
+       نمسح روابط ParentStudent بتاعتهم (روابط الطالب الممسوح + روابط الأب
+       الممسوح بأي ابن تاني)، وبعدين نمسح حسابات الأب نفسها. */
+    var parentIds: string[] = []
+    try {
+      var pRows: any[] = await db.$queryRawUnsafe('SELECT id FROM Parent WHERE studentId = ?', id)
+      parentIds = (pRows || []).map(function (r: any) { return String(r.id) }).filter(Boolean)
+    } catch (e) {
+      console.error('Cascade cleanup on student delete (Parent lookup):', e)
+    }
+    try {
+      if (parentIds.length > 0) {
+        var ph = parentIds.map(function () { return '?' }).join(',')
+        await db.$executeRawUnsafe.apply(db, ['DELETE FROM ParentStudent WHERE studentId = ? OR parentId IN (' + ph + ')', id].concat(parentIds))
+      } else {
+        await db.$executeRawUnsafe('DELETE FROM ParentStudent WHERE studentId = ?', id)
+      }
+    } catch (e) {
+      console.error('Cascade cleanup on student delete (ParentStudent):', e)
+    }
+    try {
+      await db.$executeRawUnsafe('DELETE FROM Parent WHERE studentId = ?', id)
+    } catch (e) {
+      console.error('Cascade cleanup on student delete (Parent):', e)
     }
 
     await db.student.delete({ where: { id } })
