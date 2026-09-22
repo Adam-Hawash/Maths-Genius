@@ -135,52 +135,13 @@ export async function GET() {
       var c = configs[i]
       map[c.key] = c.value
     }
-    // اسم المنصة الصحيح: Math Genius (من غير s) — لو قاعدة البيانات لسه فيها
-    // الاسم القديم من نسخة قديمة بنصلحه على القراءة، والترحيل في ensure-schema
-    // بصلحه نهائيًا في قاعدة البيانات
-    var brandKeys = ['navbar_brand', 'hero_title_line1', 'footer_brand', 'footer_copyright', 'guide_subtitle']
-    for (var b = 0; b < brandKeys.length; b++) {
-      if (typeof map[brandKeys[b]] === 'string' && map[brandKeys[b]].indexOf('Maths Genius') !== -1) {
-        map[brandKeys[b]] = map[brandKeys[b]].split('Maths Genius').join('Math Genius')
-      }
-    }
-    // اسم المستر في النافيبار: **مستر وائل خضير** بالعربي — من غير علامة
-    // العصاية (|) ومن غير الإنجليزي (طلب المستر: شيل العصاية واكتب بس
-    // مستر وائل خضير) — أي قيمة مخزنة قديمة بتتصحح على القراءة هنا،
-    // والترحيل في ensure-schema بصلحه نهائيًا
-    var navSub = map['navbar_subtitle']
-    if (typeof navSub === 'string' && navSub !== 'مستر وائل خضير' && (navSub.indexOf('خضير') !== -1 || navSub.indexOf('Khadir') !== -1 || navSub.indexOf('Khodair') !== -1 || navSub.indexOf('Khudair') !== -1 || navSub.indexOf('Khodier') !== -1 || navSub.indexOf('El-Kh') !== -1 || navSub.indexOf('Sherif') !== -1 || navSub.indexOf('شريف') !== -1 || navSub.indexOf('Mr') !== -1)) {
-      map['navbar_subtitle'] = 'مستر وائل خضير'
-    }
-    // اسم المستر العربي الصحيح للمنصة دي: **مستر وائل خضير** (الاسم الرسمي
-    // بطلب المستر حرفيًا) — أي قيمة قديمة مخزنة (مستر شريف أو تهجئة غلط
-    // 'الخضيري') بتتصحح على القراءة هنا، والترحيل في ensure-schema
-    // بصلحه نهائيًا في قاعدة البيانات
-    var arabicNameKeys = ['hero_title_line2', 'instructor_name']
-    for (var a = 0; a < arabicNameKeys.length; a++) {
-      var av = map[arabicNameKeys[a]]
-      if (typeof av === 'string' && (av.indexOf('Sherif') !== -1 || av.indexOf('شريف') !== -1 || av.indexOf('الخضيري') !== -1)) {
-        map[arabicNameKeys[a]] = 'مستر وائل خضير'
-      }
-    }
-    var cfgKeys = Object.keys(map)
-    for (var k = 0; k < cfgKeys.length; k++) {
-      var v = map[cfgKeys[k]]
-      if (typeof v !== 'string') continue
-      if (v.indexOf('Mr. Sherif ElSayed') !== -1 || v.indexOf('مستر شريف السيد') !== -1 || v.indexOf('نصائح مستر شريف') !== -1 || v.indexOf('Mr. Wael El-Khadiry') !== -1 || v.indexOf('مستر وائل الخضيري') !== -1) {
-        map[cfgKeys[k]] = v.split('Mr. Sherif ElSayed').join('Wael Khodair').split('مستر شريف السيد').join('مستر وائل خضير').split('نصائح مستر شريف').join('نصائح مستر وائل خضير').split('Mr. Wael El-Khadiry').join('Wael Khodair').split('مستر وائل الخضيري').join('مستر وائل خضير')
-      }
-    }
-    // اسم المطور — (2026-و79) طلب المستر الحرفي: **Adam Hawash** — أي قيمة
-    // مخزنة بالتهجئة القديمة ('Adham Hawash') بتتصحح على القراءة هنا،
-    // والترحيل في ensure-schema بصلحه نهائيًا في قاعدة البيانات
-    var devNameKeys = ['footer_made_by_label', 'footer_made_by_label_en', 'hero_developer_label', 'hero_developer_label_en']
-    for (var d = 0; d < devNameKeys.length; d++) {
-      var dv = map[devNameKeys[d]]
-      if (typeof dv === 'string' && dv.indexOf('Adham Hawash') !== -1) {
-        map[devNameKeys[d]] = dv.split('Adham Hawash').join('Adam Hawash')
-      }
-    }
+    /* (و80) إصلاح جذري لعلة «عدّل حاجة في الأدمن وبعد الـ reload بترجع زي ما كانت»:
+     * القراءة هنا بقت **زي ما هي من قاعدة البيانات من غير أي تعديل أو تصحيح مفروض** —
+     * كل التصحيحات القديمة (اسم المنصة/اسم المستر/اسم المطور) اتعملت مرة واحدة في
+     * ترحيلات ensure-schema على قاعدة البيانات نفسها، فمش محتاجين نكررها هنا —
+     * التكرار على القراءة كان بيلغي أي تعديل يعمله الأدمن فورًا فيظهرله إن
+     * «التغييرات بترجع» رغم إنها متخزنة فعلًا. أي تعديل من الأدمن دلوقتي بيتخزن
+     * وبيترجع زي ما هو. */
     return NextResponse.json(map)
   } catch (error) {
     console.error('Config fetch error:', error)
