@@ -90,7 +90,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
 
-    var dryRun = !(body && body.dryRun === true) && searchParams.get('dryRun') !== '1'
+    /* (2026-و84) إصلاح منطق معكوس كان في و81: الواجهة بتبعت dryRun:true للفحص
+       وdryRun:false للحذف الفعلي — الفورمولا القديم كان بياخدهم بالعكس
+       (الفحص بيمسح والحذف بيفحص!). الصح: افتراضي فحص، والحذف بس لما
+       dryRun=false ييجي صريح من البودي أو ?dryRun=0 */
+    var dryRun = !((body && body.dryRun === false) || searchParams.get('dryRun') === '0')
     var wantVacuum = searchParams.get('vacuum') === '1'
 
     var results: RuleResult[] = []
