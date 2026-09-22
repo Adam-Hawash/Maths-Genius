@@ -21,12 +21,14 @@ function applyToDocument(l: Lang) {
 }
 
 export function readStoredLang(): Lang {
-  if (typeof window === 'undefined') return 'ar'
+  if (typeof window === 'undefined') return 'en'
   try {
     var v = window.localStorage.getItem(LANG_KEY)
     if (v === 'en' || v === 'ar') return v
   } catch (e) { /* صامت */ }
-  return 'ar'
+  /* (2026-و79) طلب المستر الحرفي: «اللغة الإنجليزية تبقى هي اللغة الأساسية —
+     الطالب يفتح يلاقيها» — الافتراضي بقى إنجليزي وأي حد يبدّل عربي يتفكر */
+  return 'en'
 }
 
 interface LangStore {
@@ -36,7 +38,8 @@ interface LangStore {
 
 export var useLangStore = create<LangStore>(function () {
   return {
-    lang: 'ar',
+    /* (2026-و79) الافتراضي إنجليزي — «الإنجليزية هي اللغة الأساسية» */
+    lang: 'en',
     setLang: function (l) {
       try { window.localStorage.setItem(LANG_KEY, l) } catch (e) { /* صامت */ }
       applyToDocument(l)

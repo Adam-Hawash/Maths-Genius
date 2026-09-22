@@ -392,6 +392,9 @@ model Book {
   fileType    String   @default("application/pdf")
   sizeBytes   Int      @default(0)
   grade       String   @default("")
+  /* (2026-و79) الكتاب ده هيستخدم في إيه؟ — طلب المستر الحرفي:
+     «أقدر أحدد إن هل ده هيبقى واجب ولا أسئلة ولا الاثنين» */
+  usage       String   @default("both")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

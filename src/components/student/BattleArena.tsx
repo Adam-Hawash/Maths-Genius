@@ -188,27 +188,39 @@ interface FcFeedback {
  * ============================================================ */
 var LETTERS = ['A', 'B', 'C', 'D']
 
-/* (2026-و66) مفتاح حفظ جلسة اللاعب — قيمة = {playerId, token, ts} */
+/* (2026-و66) مفتاح حفظ جلسة اللاعب — قيمة = {playerId, token, ts}
+   (2026-و79) **sessionStorage بدل localStorage** — إصلاح علة «الصاحب دخل
+   بحسابي تلقائي»: الجلسة بقت بتاعة التاب الحالي بس — أي حد يفتح المنصة
+   في تاب/جلسة جديدة بيدخل **بحسابه هو** كلاعب جديد، ومفيش استرجاع تلقائي
+   لجلسة اللاعب اللي عملت الغرفة من نفس المتصفح. الريفريش في نفس التاب
+   لسه بيرجّع نفس اللاعب زي ما هو. */
 var ME_KEY_PREFIX = 'mg_battle_me_'
+
+function battleStore(): Storage | null {
+  try { return window.sessionStorage || null } catch (e) { return null }
+}
 
 function saveMeLocal(code: string, me: { id: string; token: string }): void {
   try {
-    localStorage.setItem(ME_KEY_PREFIX + code, JSON.stringify({ playerId: me.id, token: me.token, ts: Date.now() }))
+    var st = battleStore()
+    if (st) st.setItem(ME_KEY_PREFIX + code, JSON.stringify({ playerId: me.id, token: me.token, ts: Date.now() }))
   } catch (e) { /* التخزين ممكن يكون مقفول — مش مشكلة قاطعة */ }
 }
 
 function clearMeLocal(code: string): void {
-  try { localStorage.removeItem(ME_KEY_PREFIX + code) } catch (e) {}
+  try { var st = battleStore(); if (st) st.removeItem(ME_KEY_PREFIX + code) } catch (e) {}
 }
 
 /* آخر جلسة محفوظة (لو الطالب فتح أكتر من غرفة بنآخذ الأحدث بالتوقيت) */
 function readSavedMe(): { code: string; playerId: string; token: string } | null {
   try {
+    var st = battleStore()
+    if (!st) return null
     var best: { code: string; playerId: string; token: string; ts: number } | null = null
-    for (var i = 0; i < localStorage.length; i++) {
-      var k = localStorage.key(i)
+    for (var i = 0; i < st.length; i++) {
+      var k = st.key(i)
       if (!k || k.indexOf(ME_KEY_PREFIX) !== 0) continue
-      var v = JSON.parse(localStorage.getItem(k) || 'null')
+      var v = JSON.parse(st.getItem(k) || 'null')
       if (v && v.playerId && v.token) {
         var ts = Number(v.ts || 0)
         if (!best || ts > best.ts) {
