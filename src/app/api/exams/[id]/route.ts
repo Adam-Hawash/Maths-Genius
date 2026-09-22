@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { isAdmin } from '@/lib/video-guard'
+import { collectMediaIds, deleteMediaByIds, examHomeworkMediaTexts } from '@/lib/media-cleanup'
 
 /* (25-ب1) defensive ALTERs — نفس نمط المشروع: ممنوع db:push */
 /* (2026-و29) كاش على مستوى الموديول: كل ALTER = نداء شبكة لقاعدة البيانات — تنفيذها في كل ريكوست كان بيدفع نداءات ضاية في كل تحميل (من أكبر أسباب بطء المنصة) — دلوقتي مرة واحدة لكل instance */
@@ -184,6 +185,25 @@ export async function DELETE(
     // (transaction): نتايج الامتحان (الإجابات + تصحيحات الـ AI جواهم) + الامتحان
     // نفسه في نفس اللحظة — مفيش نتيجة يتيمة تفضل ظاهرة ولا نقاط بتتحسب من
     // امتحان اتمسح، ولو فشل حاجة بيرجع كل زي ما كان.
+    // (2026-و82) مسح ملفات Media بتاعة الامتحان قبل مسح صفوفه: ملف الـ PDF
+    // + مفتاح الحل + الصورة المصغرة + صور قص الأشكال جوه JSON الأسئلة
+    // + صور حلول الطلاب جوه نتايج الامتحان — من غير كده بتفضل يتيمة
+    // للأبد في جدول Media (كان أكبر مصدر تضخم للداتابيز)
+    var mediaDeleted = 0
+    try {
+      var resRows: any[] = await db.$queryRawUnsafe(
+        'SELECT answers, writingResults FROM ExamResult WHERE examId = ?', id
+      )
+      var texts = examHomeworkMediaTexts(existing as unknown as Record<string, unknown>)
+      for (var ri = 0; ri < resRows.length; ri++) {
+        texts.push(resRows[ri].answers)
+        texts.push(resRows[ri].writingResults)
+      }
+      mediaDeleted = await deleteMediaByIds(collectMediaIds(texts))
+    } catch (e) {
+      console.error('تنظيف ملفات الامتحان فشل (الحذف مستمر):', e)
+    }
+
     try {
       await safeWrite(async function () {
         await db.$transaction([
@@ -203,7 +223,7 @@ export async function DELETE(
       await db.exam.delete({ where: { id } })
     }
 
-    return NextResponse.json({ message: 'تم حذف الامتحان بنجاح' })
+    return NextResponse.json({ message: 'تم حذف الامتحان بنجاح', mediaDeleted })
   } catch (error) {
     console.error('حذف الامتحانفشل:', error)
     return NextResponse.json({ error: 'حدث خطأ في السيرفر' }, { status: 500 })

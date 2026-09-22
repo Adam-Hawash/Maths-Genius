@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isAdmin, getStudentAnyStatus, computePlayback, safeThumb } from "@/lib/video-guard";
+import { collectMediaIds, deleteMediaByIds } from "@/lib/media-cleanup";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,16 @@ export async function DELETE(
     try { await db.$executeRawUnsafe('DELETE FROM VideoGroupSchedule WHERE videoId = ?', id) } catch (e) {}
     try { await db.$executeRawUnsafe('DELETE FROM MindMap WHERE videoId = ?', id) } catch (e) {}
     try { await db.$executeRawUnsafe('DELETE FROM PlayTicket WHERE videoId = ?', id) } catch (e) {}
+    /* (2026-و82) مسح ملفات الفيديو نفسه من جدول Media (الملف المرفوع +
+       الصورة المصغرة) — من غير كده بتفضل يتيمة للأبد (22 ملف فيديو يتيم
+       = 80MB كانت لسه موجودة في الداتابيز) */
+    try {
+      var existing = await db.video.findUnique({ where: { id } });
+      if (existing) {
+        var vidMediaIds = collectMediaIds([existing.filePath, existing.thumbnail, existing.url, existing.nativeEmbed]);
+        await deleteMediaByIds(vidMediaIds);
+      }
+    } catch (e) {}
     await db.video.delete({ where: { id } });
     return NextResponse.json({ success: true, message: "تم حذف الفيديو بنجاح" });
   } catch (error: any) {

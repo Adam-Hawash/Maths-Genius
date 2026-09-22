@@ -141,6 +141,50 @@ export async function POST(request: NextRequest) {
       results.push({ table: 'PlayTicket (تذاكر منتهية)', found: 0, deleted: 0, err: String((e && e.message) || e).slice(0, 200) })
     }
 
+    // ===== (2026-و82) ملفات Media اليتيمة — كان أكبر مصدر تضخم في الداتابيز =====
+    // كل الملفات (صور حلول، فيديوهات، PDF، صور مصغرة) بتتخزن في جدول Media.
+    // ملف مش معروف في أي صف تاني (فيديو/امتحان/واجب/نتيجة/كتاب/معرض/إيصال...)
+    // = يتيمة اتشالت من المنصة وصفوفها اتمسحت بس الملف نفسه فضل. بنعمل
+    // «قش» واحد بكل النصوص من كل الجداول التانية وبندوّر على كل معرف Media
+    // فيه — اللي ملقيناش له أي ذكر بنحسبه يتيمة.
+    try {
+      var mediaRows: any[] = await db.$queryRawUnsafe('SELECT id FROM Media')
+      var mIds: string[] = mediaRows.map(function (r: any) { return String(r.id) })
+      var tRows: any[] = await db.$queryRawUnsafe(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'libsql_%'"
+      )
+      var tNames: string[] = tRows.map(function (r: any) { return String(r.name) }).filter(function (t) { return t !== 'Media' })
+      var hay = ''
+      for (var hi = 0; hi < tNames.length; hi++) {
+        try {
+          var hRows: any[] = await db.$queryRawUnsafe('SELECT * FROM "' + tNames[hi] + '"')
+          for (var hr = 0; hr < hRows.length; hr++) {
+            var rowObj = hRows[hr]
+            for (var hk in rowObj) {
+              var hv = rowObj[hk]
+              if (typeof hv === 'string' && hv.length > 0) hay += hv + '\n'
+            }
+          }
+        } catch (e) { /* جدول ناقص في داتابيز قديمة — نكمل */ }
+      }
+      var orphanMedia: string[] = mIds.filter(function (mid) { return hay.indexOf(mid) === -1 })
+      var orphanMediaDeleted = 0
+      if (!dryRun && orphanMedia.length > 0) {
+        for (var oi = 0; oi < orphanMedia.length; oi += 50) {
+          var oChunk = orphanMedia.slice(oi, oi + 50)
+            .filter(function (x) { return /^c[a-z0-9]{14,}$/i.test(x) })
+            .map(function (x) { return "'" + x + "'" })
+          if (oChunk.length === 0) continue
+          try {
+            orphanMediaDeleted += await db.$executeRawUnsafe('DELETE FROM Media WHERE id IN (' + oChunk.join(',') + ')')
+          } catch (e) { /* دفعة فشلت — نكمل الباقي */ }
+        }
+      }
+      results.push({ table: 'Media (ملفات يتيمة — الأكبر تضخمًا)', found: orphanMedia.length, deleted: orphanMediaDeleted })
+    } catch (e: any) {
+      results.push({ table: 'Media (ملفات يتيمة)', found: 0, deleted: 0, err: String((e && e.message) || e).slice(0, 200) })
+    }
+
     // ===== VACUUM (اختياري — ?vacuum=1) =====
     var vacuum: any = null
     if (wantVacuum) {
