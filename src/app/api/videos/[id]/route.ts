@@ -100,6 +100,15 @@ export async function DELETE(
       await db.videoAccess.deleteMany({ where: { videoId: id } });
       await db.videoProgress.deleteMany({ where: { videoId: id } });
     } catch (e) {}
+    /* (2026-و81) حذف متسلسل — باقي الجداول المرتبطة بـ videoId:
+       VideoGroupSchedule (جدولة المجموعات) + MindMap (الخرائط الذهنية
+       المولدة من الفيديو) + PlayTicket (تذاكر التشغيل القصيرة).
+       كل واحد في try/catch لوحده — فشل جدول ما يمنعش حذف الفيديو.
+       (Notification وPayment ملهمش videoId حقيقي في السكيما —
+       Notification بstudentId وPayment سجل مالي بصمة الفيديو نصية) */
+    try { await db.$executeRawUnsafe('DELETE FROM VideoGroupSchedule WHERE videoId = ?', id) } catch (e) {}
+    try { await db.$executeRawUnsafe('DELETE FROM MindMap WHERE videoId = ?', id) } catch (e) {}
+    try { await db.$executeRawUnsafe('DELETE FROM PlayTicket WHERE videoId = ?', id) } catch (e) {}
     await db.video.delete({ where: { id } });
     return NextResponse.json({ success: true, message: "تم حذف الفيديو بنجاح" });
   } catch (error: any) {

@@ -22,7 +22,8 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
-import { Save, RotateCcw, Plus, Trash2, Send, Move, MonitorPlay, Info } from 'lucide-react'
+import { Save, RotateCcw, Plus, Trash2, Send, Move, MonitorPlay, Info, Database, AlertTriangle, Loader2 } from 'lucide-react'
+import { useAppStore } from '@/stores/app-store'
 import {
   DEFAULT_PLAYER_CONFIG,
   sanitizePlayerConfig,
@@ -95,6 +96,49 @@ export function PlayerSettingsPanel() {
   const [sender, setSender] = useState('')
   const [savingCh, setSavingCh] = useState(false)
   const [testing, setTesting] = useState(false)
+  /* (2026-و81) تنظيف قاعدة البيانات — فحص/حذف البيانات اليتيمة + VACUUM */
+  const adminId = useAppStore(function (s) { return s.currentAdmin?.id || '' })
+  const [cleaning, setCleaning] = useState<'' | 'check' | 'delete' | 'vacuum'>('')
+  const [cleanupResults, setCleanupResults] = useState<Array<{ table: string; found: number; deleted: number; err?: string }> | null>(null)
+  const [cleanupWasDryRun, setCleanupWasDryRun] = useState(true)
+
+  async function runDbCleanup(dryRun: boolean) {
+    setCleaning(dryRun ? 'check' : 'delete')
+    try {
+      const r = await fetch('/api/admin/db-cleanup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminId, dryRun }) })
+      const d = await r.json()
+      if (!r.ok || !d.ok) { toast.error(d.error || 'فشل فحص قاعدة البيانات'); setCleaning(''); return }
+      setCleanupResults(d.results || [])
+      setCleanupWasDryRun(!!d.dryRun)
+      var totalFound = (d.results || []).reduce(function (a: number, x: any) { return a + (Number(x.found) || 0) }, 0)
+      var totalDeleted = (d.results || []).reduce(function (a: number, x: any) { return a + (Number(x.deleted) || 0) }, 0)
+      if (dryRun) {
+        if (totalFound > 0) toast.success('لقينا ' + totalFound + ' صف يتيم — راجع الجدول قبل الحذف النهائي')
+        else toast.success('مفيش أي بيانات يتيمة — قاعدة البيانات نضيفة')
+      } else {
+        toast.success(totalDeleted > 0 ? 'اتمسح ' + totalDeleted + ' صف يتيم نهائيًا — ممكن تعمل VACUUM بعد كده لضغط المساحة' : 'مفيش بيانات يتيمة اتمسحت')
+      }
+    } catch { toast.error('خطأ في الاتصال بالسيرفر') }
+    setCleaning('')
+  }
+
+  function deleteOrphans() {
+    if (!window.confirm('حذف البيانات اليتيمة نهائيًا؟ العملية مش بترجع — راجع نتيجة «الفحص» الأول لو لسه ما عملتهاش.')) return
+    runDbCleanup(false)
+  }
+
+  async function vacuumDb() {
+    if (!window.confirm('ضغط قاعدة البيانات (VACUUM)؟ ممكن ياخد من ثواني لدقيقة — المنصة هتفضل شغالة أثناءه.')) return
+    setCleaning('vacuum')
+    try {
+      const r = await fetch('/api/admin/db-cleanup?vacuum=1', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminId, dryRun: true }) })
+      const d = await r.json()
+      if (!r.ok || !d.ok) { toast.error(d.error || 'فشل ضغط قاعدة البيانات'); setCleaning(''); return }
+      if (d.vacuum && d.vacuum.ok) toast.success('تم ضغط قاعدة البيانات (VACUUM) بنجاح')
+      else toast.error('VACUUM ما نجحش: ' + ((d.vacuum && d.vacuum.error) || 'سبب غير معروف'))
+    } catch { toast.error('خطأ في الاتصال بالسيرفر') }
+    setCleaning('')
+  }
   const boxRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<Sel | null>(null)
 
@@ -564,6 +608,51 @@ export function PlayerSettingsPanel() {
             <span className="text-xs text-muted-foreground self-center">التجربة بتتبعت على موبايل الأدمن (11111111111)</span>
           </div>
           <p className="text-xs text-muted-foreground">المفاتيح السرية بتتخزن في السيرفر بس وبتتقنّع في الشاشة — مش بتترجع كاملة لأي متصفح.</p>
+        </CardContent>
+      </Card>
+
+      {/* ===== (هـ) تنظيف قاعدة البيانات (2026-و81) ===== */}
+      <Card className="border-destructive/30">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Database className="h-4 w-4 text-destructive" />تنظيف قاعدة البيانات</CardTitle>
+          <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-500" />
+            البيانات اليتيمة = بقايا طلاب/فيديوهات/امتحانات/واجبات اتمسحت من قبل، لسه عايشة في جداول تانية (أنشطة، نتايج، إشعارات، تذاكر تشغيل...) وهي سبب انفخار قاعدة البيانات. ابدأ دايمًا بفحص بدون حذف — والحذف النهائي مش بيرجع.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {cleanupResults && (
+            <div className="rounded-lg border bg-muted/30 divide-y max-h-60 overflow-y-auto">
+              {cleanupResults.map(function (r, i) {
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
+                    <span className="font-medium truncate" dir="ltr">{r.table}</span>
+                    <span className="shrink-0 text-muted-foreground">
+                      {r.err ? (
+                        <span className="text-destructive">تعذّر فحص الجدول</span>
+                      ) : cleanupWasDryRun ? (
+                        <span>يتيم: <b className="text-foreground">{r.found}</b></span>
+                      ) : (
+                        <span>اتمسح: <b className="text-emerald-600 dark:text-emerald-400">{r.deleted}</b> / {r.found}</span>
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" className="gap-1.5" onClick={() => runDbCleanup(true)} disabled={cleaning !== ''}>
+              <Database className="h-4 w-4" />{cleaning === 'check' ? 'بيفحص…' : 'فحص (بدون حذف)'}
+            </Button>
+            <Button variant="destructive" className="gap-1.5" onClick={deleteOrphans} disabled={cleaning !== ''}>
+              <Trash2 className="h-4 w-4" />{cleaning === 'delete' ? 'بيمسح…' : 'حذف البيانات اليتيمة نهائيًا'}
+            </Button>
+            <Button variant="outline" className="gap-1.5" onClick={vacuumDb} disabled={cleaning !== ''}>
+              {cleaning === 'vacuum' ? <Loader2 className="h-4 w-4 animate-spin" /> : <MonitorPlay className="h-4 w-4" />}ضغط قاعدة البيانات (VACUUM)
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">الحذف النهائي بيمسح بس الصفوف اللي أصليها مش موجود (طالب/فيديو/امتحان/واجب اتمسح) أو تذاكر تشغيل منتهية — ما بيلمسش أي بيانات حية.</p>
         </CardContent>
       </Card>
     </div>
