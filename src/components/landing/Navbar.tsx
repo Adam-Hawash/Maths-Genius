@@ -113,11 +113,11 @@ export function Navbar() {
         )}
         {/* (2026-و76) px-3 على الموبايل — توفير 8px عشان صف النافبار المزφο
            (أوائل + Geometry + ثيم + همبرجر + سويتش اللغة) ما يعديش 390px */}
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-3 sm:px-6">
+        <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center justify-between px-3 sm:px-6">
           {/* Brand - Right side (RTL start) */}
           <button
             onClick={handleGoHome}
-            className="flex items-center gap-2 transition-opacity hover:opacity-80 cursor-pointer"
+            className="flex items-center gap-2 transition-opacity hover:opacity-80 cursor-pointer shrink-0"
           >
             {instructorPhoto ? (
               <img
@@ -126,10 +126,10 @@ export function Navbar() {
                 width={36}
                 height={36}
                 /* (2026-و76) h-8 على الموبايل عشان صف النافبار المزحوم */
-                className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg object-cover border border-primary/30"
+                className="h-9 w-9 rounded-xl object-cover border border-primary/40 shadow-sm"
               />
             ) : (
-              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                 <span className="text-xs font-bold">MG</span>
               </div>
             )}
@@ -235,10 +235,10 @@ export function Navbar() {
               onClick={function () { setTopStudentsOpen(true) }}
               title="أوائل الطلبة — أفضل 3"
               aria-label="أوائل الطلبة — أفضل 3 طلاب"
-              className="md:hidden flex items-center gap-1 min-h-[44px] px-1.5 sm:px-2.5 rounded-xl text-[#8A6D22] dark:text-[#E5BE5A] bg-[#C49A38]/10 border border-[#C49A38]/40 hover:bg-[#C49A38]/20 transition-colors cursor-pointer"
+              className="md:hidden flex items-center gap-1 min-h-[36px] px-2 rounded-lg text-[#8A6D22] dark:text-[#E5BE5A] bg-[#C49A38]/10 border border-[#C49A38]/40 hover:bg-[#C49A38]/20 transition-colors cursor-pointer"
             >
-              <Trophy className="h-4 w-4 sm:h-5 sm:w-5" />
-              <span className="text-xs font-bold">الأوائل</span>
+              <Trophy className="h-4 w-4" />
+              <span className="text-[11px] font-bold">الأوائل</span>
             </button>
             {/* Geometry Laws — ظاهر على طول في الموبايل فوق من غير فتح القائمة
                 (طلب المستر: «عاوزه يبقى باين في الموبايل»)
@@ -247,10 +247,10 @@ export function Navbar() {
               href="/geometry-laws"
               title="Geometry Laws — قوانين الهندسة"
               aria-label="Geometry Laws — قوانين الهندسة"
-              className="md:hidden flex items-center gap-1 min-h-[44px] px-1.5 sm:px-2.5 rounded-xl text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
+              className="md:hidden flex items-center gap-1 min-h-[36px] px-2 rounded-lg text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
             >
-              <Shapes className="h-4 w-4 sm:h-5 sm:w-5" />
-              <span dir="ltr" className="text-xs font-bold">Geometry</span>
+              <Shapes className="h-4 w-4" />
+              <span dir="ltr" className="text-[11px] font-bold">Geometry</span>
             </a>
             {youtubeLink && (
               /* (2026-و76) آيفون مخفي على الموبايل الصغير — بيتعوض بأول عنصر في
@@ -274,7 +274,7 @@ export function Navbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden min-h-[44px] min-w-[44px]"
+              className="md:hidden h-9 w-9 min-h-[36px] min-w-[36px]"
               onClick={() => setMobileMenu(!mobileMenu)}
               aria-label={mobileMenu ? 'إغلاق القائمة' : 'فتح القائمة'}
             >
