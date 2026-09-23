@@ -4,11 +4,14 @@
 // ============================================================
 // زرار ✨ (الشرارة البنفسجية) في شاشة الفلاش كاردز — شكل الصورة.
 // الطالب داس → السيرفر بيبعت السؤال والاختيارات (من غير الإجابة الصح!)
-// للـ AI ويرجّع تلميح قصير بالمصري «يوّجه للمسار» من غير ما يحل.
+// للـ AI ويرجّع تلميح قصير «يوّجه للمسار» من غير ما يحل.
 //   POST { question: string, options: string[] }
 //   → { ok: true, hint: '...' } | { ok: false, error: '...' }
 // حمايات: مهلة 15 ثانية + أي فشل = ok:false (الواجهة بتتكيف بهدوء)
 // ممنوع نرسل correctIndex للـ AI أصلًا — التلميح مابيأشرش على الحرف.
+//
+// (2026-و89) التلميح بقى **بالإنجليزي** بطلب المستر: «التحديات انا
+// عاوزها كل التحديات بالانجليزي، دي منصة ماث — ما فيش ترجمة للعربي».
 // ============================================================
 import { NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
@@ -18,15 +21,15 @@ export const maxDuration = 30
 
 function buildHintPrompt(question: string, options: string[]): { system: string; user: string } {
   var system = [
-    'You are a warm Egyptian math teacher assistant on the "Maths Genius" platform.',
+    'You are a friendly math teacher assistant on the "Math Genius" platform (a math learning platform).',
     'A student is playing a fast flash-card game and tapped the "help" button.',
-    'Give ONE tiny hint in EGYPTIAN ARABIC (عامية مصرية) that points to the right approach or rule — NEVER the answer, NEVER a letter/option number, NEVER the final result.',
-    'Max 18 words. Friendly tone like: «فكرك بالقانون بتاع...» or «جرب تقسم الأول...».',
+    'Give ONE tiny hint in SIMPLE ENGLISH that points to the right approach or rule — NEVER the answer, NEVER a letter/option number, NEVER the final result.',
+    'Max 12 words. Friendly tone like: "Remember the rule for..." or "Try dividing first...".',
     'Return JSON only, exactly: {"hint":"..."}',
   ].join('\n')
-  var user = 'السؤال: ' + String(question || '').slice(0, 300)
+  var user = 'Question: ' + String(question || '').slice(0, 300)
   if (options && options.length) {
-    user += '\nالاختيارات: ' + options.slice(0, 4).map(function (o: any, i: number) { return '(' + (i + 1) + ') ' + String(o || '').slice(0, 60) }).join(' | ')
+    user += '\nOptions: ' + options.slice(0, 4).map(function (o: any, i: number) { return '(' + (i + 1) + ') ' + String(o || '').slice(0, 60) }).join(' | ')
   }
   return { system: system, user: user }
 }
@@ -58,7 +61,6 @@ export async function POST(request: Request) {
     if (!hint) return NextResponse.json({ ok: false, error: 'التلميح مش متاح دلوقتي' }, { status: 200 })
     return NextResponse.json({ ok: true, hint: hint })
   } catch (e: any) {
-    console.error('[arena/hint] failed:', String((e && e.message) || e))
-    return NextResponse.json({ ok: false, error: 'التلميح مش متاح دلوقتي — جرب تاني' }, { status: 200 })
+    return NextResponse.json({ ok: false, error: 'التلميح مش متاح دلوقتي' }, { status: 200 })
   }
 }

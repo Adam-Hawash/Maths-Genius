@@ -23,14 +23,13 @@ import { Input } from '@/components/ui/input'
 import {
   Swords, Zap, Crown, Trophy, Timer, Flame, Copy, LogOut, LogIn,
   Play, Check, X, Loader2, RotateCcw, UserPlus, Plus, GraduationCap, ListChecks, RefreshCw,
-  Languages, Sparkles,
+  Sparkles,
 } from 'lucide-react'
 /* (2026-و71) عارض الماث بتاع المنصة نفسه — الأس ² والكسور المكدسة
    زي الامتحانات بالظبط — طلب المستر: «عاوز الحاجات تبقى بالماث
    زي الحاجات بتاعة الماث اللي إحنا عاملينها في منصتنا» */
 import { FractionText } from '@/components/FractionText'
-/* (2026-و88) ترجمة فورية لأسئلة الفلاش كارد + زرار ✨ التلميح الذكي */
-import { arabicFlashStem } from '@/lib/flash-translate'
+/* (2026-و89) زرار ✨ التلميح الذكي — والتلميح بقى بالإنجليزي (التحديات كلها إنجليزي) */
 
 /* ============================================================
  * الأنواع — مطابقة لعقود الـ APIs الحية
@@ -2251,8 +2250,8 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
   var [fcCount, setFcCount] = useState(10)
   var [fcSeconds, setFcSeconds] = useState(15)
   var [fcDiff, setFcDiff] = useState<'easy' | 'medium' | 'hard' | 'mixed'>('mixed')
-  /* (و88) زرارين شكل الصورة: 🌐 ترجمة السؤال + ✨ تلميح ذكي */
-  var [showArabic, setShowArabic] = useState(false)
+/* (2026-و89) التحديات كلها بالإنجليزي بطلب المستر — زرار الترجمة اتنشال نهائيًا
+   (اتشالت lib/flash-translate.ts) — دي منصة ماث: الأسئلة إنجليزي من غير ترجمة */
   var [hint, setHint] = useState('')
   var [hintLoading, setHintLoading] = useState(false)
 
@@ -2337,10 +2336,9 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
     advanceTimerRef.current = null
     feedbackRef.current = null
     setFeedback(null)
-    /* (و88) نضيف التلميح والترجمة مع كل بطاقة جديدة */
+    /* (و88) نضيف التلميح مع كل بطاقة جديدة — (و89) مفيش ترجمة تاني */
     setHint('')
     setHintLoading(false)
-    setShowArabic(false)
     var next = idxRef.current + 1
     if (next >= cardsRef.current.length) {
       setPhase('end')
@@ -2557,12 +2555,11 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
     )
   }
 
-  /* ===== play: البطاقات — (و88) شكل الصورة: نقاط تقدم + «نقطة» + بار بنفسجي بعداد + كارت أبيض سؤال في النص واختيارات 2×2 + زرارين 🌐 و ✨ ===== */
+  /* ===== play: البطاقات — (و88) شكل الصورة: نقاط تقدم + «نقطة» + بار بنفسجي بعداد + كارت أبيض سؤال في النص واختيارات 2×2 + زرار ✨
+     (2026-و89) التحديات كلها بالإنجليزي — زرار الترجمة اتنشال نهائيًا بطلب المستر ===== */
   if (phase === 'play' && curCard) {
     /* نسخة غير-nullable — عشان TS ما يضيّعش الـ narrowing جوه الـ callbacks */
     var cardNow: FlashCard = curCard
-    var arText = arabicFlashStem(cardNow.text)
-    var shownText = showArabic && arText ? arText : cardNow.text
     return (
       <div className="space-y-4 relative">
         {/* شريط علوي: نقاط التقدم + سكور + ستريك */}
@@ -2606,27 +2603,12 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
             transition={{ duration: 0.16 }}
             className="relative"
           >
-            {/* 🌐 زرار الترجمة — على حافة الكارت (زي الصورة) — بيختفي لو مفيش ترجمة معروفة */}
-            {arText ? (
-              <button
-                type="button"
-                onClick={function () { setShowArabic(!showArabic) }}
-                aria-label="ترجمة السؤال للعربي"
-                title={showArabic ? 'رجّع الإنجليزي' : 'ترجم السؤال للعربي'}
-                className={'absolute -right-3 top-[42%] z-10 size-9 rounded-full border-2 shadow-md grid place-items-center transition-colors ' +
-                  (showArabic
-                    ? 'border-violet-500 bg-violet-50 text-violet-600 dark:bg-violet-950/60'
-                    : 'border-pink-300 bg-white text-pink-500 dark:bg-stone-900 hover:border-pink-400')}
-              >
-                <Languages className="size-4" />
-              </button>
-            ) : null}
             <div className="rounded-3xl border-2 border-stone-100 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-sm p-5 sm:p-7 space-y-5">
               {/* (و71) نص الكارد بـ FractionText — أس/كسور بتترسم زي المنصة.
-                  dir=auto: كروت المحرك الإنجليزي LTR وكروت المستر العربي RTL —
-                  (و88) مع زرار الترجمة بيتبدل للنص العربي */}
+                  dir=auto: كروت المحرك الإنجليزي LTR وكروت المستر العربي RTL.
+                  (2026-و89) مفيش ترجمة — السؤال بالإنجليزي زي ما هو بطلب المستر */}
               <p dir="auto" className="text-lg sm:text-xl font-bold leading-relaxed text-center">
-                <FractionText text={shownText} />
+                <FractionText text={cardNow.text} />
               </p>
               {/* (و88) 💡 فقاعة التلميح الذكي */}
               {hint ? (
