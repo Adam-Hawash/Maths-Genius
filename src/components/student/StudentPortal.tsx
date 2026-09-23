@@ -996,16 +996,24 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     kind: 'hw',
     onGiveUp: function () {
       try { toast.error('⛔ عدّيت الحد المسموح من المغادرات — الواجب هيتسلم تلقائيًا', { duration: 8000 }) } catch (e) {}
-      try {
-        var hwId = hwActiveRef.current
-        if (!hwId) return
-        var btn = document.getElementById('hw-submit-' + hwId) as HTMLButtonElement | null
-        if (!btn) return
-        /* صورة ورقة الحل لسه بتترفع — ممنوع التسليم قبل ما توصل كاملة (2026-و20) */
-        if (btn.getAttribute('data-photo-busy') === '1') return
-        if (btn.disabled) btn.disabled = false
-        btn.click()
-      } catch (e) {}
+      /* (2026-و92) إعادة محاولة بدل الصمت: لو صورة ورقة الحل لسه بتترفع
+         أو الزرار مش جاهز — نفحص كل ثانيتين (حتى 40 محاولة ≈ دقيقة و20 ثانية)
+         وبنسلّم أول ما تجهز — التسليم التلقائي ممنوع يضيع */
+      var tries = 0
+      var attempt = function () {
+        try {
+          var hwId = hwActiveRef.current
+          if (!hwId) return
+          var btn = document.getElementById('hw-submit-' + hwId) as HTMLButtonElement | null
+          if (!btn || btn.getAttribute('data-photo-busy') === '1') {
+            if (++tries <= 40) setTimeout(attempt, 2000)
+            return
+          }
+          if (btn.disabled) btn.disabled = false
+          btn.click()
+        } catch (e) {}
+      }
+      attempt()
     },
     onStrike: function (s: number) { hwCheatStrikesRef.current = s },
   })
@@ -2458,6 +2466,10 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   const [submitting, setSubmitting] = useState(false)
   /* 2026-و20 — ممنوع تسليم الامتحان لحد ما صور ورقة الحل توصل كاملة */
   const [examPhotoBusy, setExamPhotoBusy] = useState(false)
+  /* (2026-و92) مرآة متزامنة لحالة رفع الصورة — التسليم التلقائي (انتهاء وقت/
+     حد المغادرات) بيستناها تخلص قبل ما يسلّم بدل ما يضيع صامت */
+  const examPhotoBusyRef = useRef(false)
+  useEffect(function () { examPhotoBusyRef.current = examPhotoBusy }, [examPhotoBusy])
   const [examQuestions, setExamQuestions] = useState<any[]>([])
   const [examShuffleMap, setExamShuffleMap] = useState<number[]>([])
   const [examSubmitted, setExamSubmitted] = useState(false)
@@ -2686,6 +2698,17 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
     var auto = !!(opts && opts.auto)
     var fromCheat = !!(opts && opts.cheat)
     var examIdLocal = takingExam
+    /* (2026-و92) التسليم التلقائي ممنوع يضيع صامت — درس من شكوى المستر:
+       «أول ما يخلص الأربعة بتاعته يتسلم تلقائي عشان هو ما بيتسلمش».
+       لو صورة ورقة الحل لسه بتترفع لحظة التفعيل (حد المغادرات/انتهاء الوقت)
+       بنستنى تخلص (فحص كل ثانية ونص — حتى 3 دقايق) وبعدين نسلّم فورًا */
+    if (auto) {
+      var waitedMs = 0
+      while (examPhotoBusyRef.current && waitedMs < 180000 && !examSubmitInFlightRef.current) {
+        await new Promise(function (r) { setTimeout(r, 1500) })
+        waitedMs += 1500
+      }
+    }
     if (!examIdLocal || submitting || examPhotoBusy) return
     /* guard مزامن: التسليم مبيحصلش مرتين ولا من العداد ولا من الزرار */
     if (examSubmitInFlightRef.current) return
@@ -2744,8 +2767,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         if (data.showResult === true) setExamSubmitResult(data)
         else setExamSubmitResult(null)
         if (auto) {
-          /* (25-b2) التسليم حصل تلقائيًا بسبب انتهاء الوقت */
-          toast.warning('انتهى وقت الامتحان — تم تسليم إجاباتك')
+          /* (25-b2) التسليم حصل تلقائيًا — برسالة تناسب السبب (وقت/مغادرات) */
+          if (fromCheat) toast.warning('⛔ عدّيت حد المغادرات — تم تسليم الامتحان تلقائيًا')
+          else toast.warning('انتهى وقت الامتحان — تم تسليم إجاباتك')
           setExamTimeUpAuto(true)
         } else {
           /* (2026-و15) نص المستر: تم بنجاح + انتظر النتيجة من المستر —
