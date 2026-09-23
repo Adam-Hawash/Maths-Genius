@@ -23,11 +23,14 @@ import { Input } from '@/components/ui/input'
 import {
   Swords, Zap, Crown, Trophy, Timer, Flame, Copy, LogOut, LogIn,
   Play, Check, X, Loader2, RotateCcw, UserPlus, Plus, GraduationCap, ListChecks, RefreshCw,
+  Languages, Sparkles,
 } from 'lucide-react'
 /* (2026-و71) عارض الماث بتاع المنصة نفسه — الأس ² والكسور المكدسة
    زي الامتحانات بالظبط — طلب المستر: «عاوز الحاجات تبقى بالماث
    زي الحاجات بتاعة الماث اللي إحنا عاملينها في منصتنا» */
 import { FractionText } from '@/components/FractionText'
+/* (2026-و88) ترجمة فورية لأسئلة الفلاش كارد + زرار ✨ التلميح الذكي */
+import { arabicFlashStem } from '@/lib/flash-translate'
 
 /* ============================================================
  * الأنواع — مطابقة لعقود الـ APIs الحية
@@ -96,6 +99,9 @@ interface ArenaRoom {
   mode?: string
   difficulty?: string
   cardSeconds?: number
+  /* (و88) إعدادات التوقيت — بوقت/من غير وقت + ثواني السؤال (للأسئلة العامة) */
+  timed?: number
+  qSeconds?: number
   startedAt?: number
   questions?: ArenaQ[]
   leaderboard?: ArenaBoardRow[]
@@ -302,6 +308,9 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
   var [optDiff, setOptDiff] = useState<'easy' | 'medium' | 'hard'>('medium')
   var [optRounds, setOptRounds] = useState(8)
   var [optCardSec, setOptCardSec] = useState(15)
+  /* (2026-و88) الأسئلة العامة: بوقت ولا من غير وقت + مدة السؤال — طلب المستر */
+  var [optTimed, setOptTimed] = useState(true)
+  var [optQSec, setOptQSec] = useState(25)
   var [busy, setBusy] = useState('') // create | join | start | end | leave
   var [sendingAnswer, setSendingAnswer] = useState(false)
   var [pendingChoice, setPendingChoice] = useState(-1)
@@ -533,7 +542,8 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
     return function () { clearInterval(iv) }
   }, [gPhase])
 
-  /* ===== (و72) مؤقّت سؤالي — لما يخلص: فيدباك ⌛ + تقدّم تلقائي زي السيرفر ===== */
+  /* ===== (و72) مؤقّت سؤالي — لما يخلص: فيدباك ⌛ + تقدّم تلقائي زي السيرفر
+     (و88) الغرف «من غير وقت» مفيهاش مؤقّت سؤالي خالص — الطالب بياخد وقته */
   function onMyTimeUp(): void {
     if (raceDoneRef.current || sendingRef.current) return
     var cur = myQIdxRef.current
@@ -554,6 +564,9 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
 
   useEffect(function () {
     if (gPhase !== 'live' || raceDone || myFeedback || shownIdx !== myQIdx) return
+    /* (و88) من غير وقت → مفيش تايم أوت على السؤال خالص */
+    var curRoom = gRoomRef.current
+    if (curRoom && curRoom.timed === 0) return
     var base = qRemainBaseRef.current
     if (!base) return
     var left = Math.max(0, base.remainMs - (Date.now() - base.at))
@@ -610,7 +623,7 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
     if (custom && custom.length < 4) { toast.error('الكود المخصص لازم 4 حروف على الأقل'); return }
     setBusy('create')
     try {
-      /* (و72) خيارات السباق بتتبعت مع الطلب */
+      /* (و72) خيارات السباق بتتبعت مع الطلب — (و88) + التوقيت للأسئلة العامة */
       var out = await postJson('/api/arena/rooms', {
         name: name,
         customCode: custom || undefined,
@@ -619,6 +632,8 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
         difficulty: optDiff,
         rounds: optRounds,
         cardSeconds: optCardSec,
+        timed: optMode === 'general' ? (optTimed ? 1 : 0) : 1,
+        qSeconds: optQSec,
       })
       var data = out.data
       if (out.status === 404 || !out.data) { toast.error('مشكلة في إنشاء الغرفة — جرب تاني'); return }
@@ -636,6 +651,8 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
         mode: String(data.room.mode || optMode),
         difficulty: String(data.room.difficulty || optDiff),
         cardSeconds: Number(data.room.cardSeconds || optCardSec),
+        timed: Number(data.room.timed != null ? data.room.timed : 1),
+        qSeconds: Number(data.room.qSeconds || optQSec),
         startedAt: 0,
         questions: [],
         leaderboard: [],
@@ -674,6 +691,8 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
         mode: String(data.room.mode || 'general'),
         difficulty: String(data.room.difficulty || 'mixed'),
         cardSeconds: Number(data.room.cardSeconds || 15),
+        timed: Number(data.room.timed != null ? data.room.timed : 1),
+        qSeconds: Number(data.room.qSeconds || 25),
         startedAt: 0,
         questions: [],
         leaderboard: [],
@@ -901,6 +920,32 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
                     })}
                   </div>
                 </div>
+                {optMode === 'general' ? (
+                  /* (2026-و88) طلب المستر: السؤال يبقى بوقت ولا من غير وقت + يختار الوقت قد ايه */
+                  <>
+                    <div>
+                      <p className="text-xs font-bold text-muted-foreground mb-1.5">⏱ التوقيت</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <OptionChip active={optTimed} onClick={function () { setOptTimed(true) }}>⏱ بوقت</OptionChip>
+                        <OptionChip active={!optTimed} onClick={function () { setOptTimed(false) }}>♾️ من غير وقت</OptionChip>
+                      </div>
+                    </div>
+                    {optTimed ? (
+                      <div>
+                        <p className="text-xs font-bold text-muted-foreground mb-1.5">⏱ وقت السؤال الواحد</p>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[10, 15, 20, 25, 30, 45, 60, 90].map(function (s) {
+                            return (
+                              <OptionChip key={s} active={optQSec === s} onClick={function () { setOptQSec(s) }}>
+                                <span dir="ltr">{s}</span> ث
+                              </OptionChip>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
                 {optMode === 'flash' ? (
                   <div>
                     <p className="text-xs font-bold text-muted-foreground mb-1.5">⚡ وقت البطاقة الواحدة</p>
@@ -979,7 +1024,16 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
             {gRoom?.difficulty === 'easy' ? 'سهل' : gRoom?.difficulty === 'hard' ? 'صعب' : 'متوسط'}
             {' • '}
             <span dir="ltr">{gRoom?.totalRounds || 0}</span> أسئلة
-            {gRoom?.mode === 'flash' ? <> • <span dir="ltr">{gRoom?.cardSeconds || 15}</span> ث للبطاقة</> : null}
+            {gRoom?.mode === 'flash' ? (
+              <> • <span dir="ltr">{gRoom?.cardSeconds || 15}</span> ث للبطاقة</>
+            ) : (
+              /* (و88) عرض وضع التوقيت للأسئلة العامة */
+              gRoom?.timed === 0 ? (
+                <> • ♾️ من غير وقت</>
+              ) : (
+                <> • <span dir="ltr">{gRoom?.qSeconds || 25}</span> ث للسؤال</>
+              )
+            )}
           </p>
           <p className="text-sm text-emerald-50/90 font-bold">شارك الكود مع صحابك 👇</p>
         </div>
@@ -1169,9 +1223,121 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
   /* ---------- live: سباقي — سؤالي الحالي ومؤقتي ---------- */
   if (phase === 'live' && gRoom && myQ) {
     var shownQ: ArenaQ = myQ
+    /* (و88) الفلاش كارد في السباق بياخد شكل الصورة + الأسئلة العامة بتعرض وضع التوقيت */
+    var isFlashRace = gRoom.mode === 'flash'
+    var roomUntimed = gRoom.timed === 0
+    var dotCount = Math.max(1, Math.min(totalQ || 1, 20))
     return (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        {/* كرت السؤال */}
+        {isFlashRace ? (
+          /* ===== (و88) فلاش كاردز — شكل الصورة: نقاط تقدم + «نقطة» + بار بنفسجي بعداد + كارت أبيض سؤال في النص واختيارات 2×2 ===== */
+          <Card className="overflow-hidden self-start">
+            <CardContent className="p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {Array.from({ length: dotCount }).map(function (_, di) {
+                    var ans = gMe && gMe.answers ? (gMe.answers as any)[String(di)] : null
+                    var cls = 'rounded-full transition-all '
+                    if (di === shownIdx) cls += 'size-3 bg-violet-500 ring-2 ring-violet-300 dark:ring-violet-700'
+                    else if (ans && Number(ans.correct) === 1) cls += 'size-2.5 bg-emerald-500'
+                    else if (ans) cls += 'size-2.5 bg-red-400'
+                    else cls += 'size-2.5 bg-stone-300 dark:bg-stone-700'
+                    return <span key={di} className={cls} />
+                  })}
+                </div>
+                <div className="flex items-center gap-2 text-sm font-black">
+                  {gMe && gMe.streak >= 2 ? <span className="text-orange-500 flex items-center gap-1"><Flame className="size-4" /> ×{gMe.streak}</span> : null}
+                  <Badge variant="outline" className="font-black" dir="ltr">{gMe ? gMe.score : 0} نقطة</Badge>
+                </div>
+              </div>
+              {/* البار البنفسجي + عدد الثواني — زي الصورة */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-3 rounded-full bg-stone-200 dark:bg-stone-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-l from-fuchsia-500 to-violet-500 transition-[width] duration-100 ease-linear"
+                    style={{ width: remainPct + '%' }}
+                  />
+                </div>
+                <span dir="ltr" className={'font-black text-2xl w-10 text-center shrink-0 ' + (remainSec <= 3 ? 'text-red-600' : 'text-violet-600')}>{remainSec}</span>
+              </div>
+              {/* الكارت الأبيض: السؤال في النص + اختيارات 2×2 بحواف دائرية */}
+              <div className="rounded-3xl border-2 border-stone-100 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-sm p-5 sm:p-7 space-y-5">
+                <p dir="auto" className="text-lg sm:text-xl font-bold leading-relaxed text-center">
+                  <FractionText text={shownQ.text} />
+                </p>
+                {myFeedback ? (
+                  <motion.div
+                    initial={{ scale: 0.92, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className={'rounded-xl px-4 py-2.5 font-black text-sm text-center ' +
+                      (myFeedback.timeout
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                        : myFeedback.correct
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200'
+                          : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300')}
+                  >
+                    {myFeedback.timeout ? (
+                      <>⌛ الوقت خلص! الإجابة الصح: {myFeedback.correctIndex != null && myFeedback.correctIndex >= 0 ? <span dir="ltr" className="inline-block"><FractionText text={shownQ.options[myFeedback.correctIndex] || ''} /></span> : '—'}</>
+                    ) : myFeedback.correct ? (
+                      <>صح! <span dir="ltr">+{myFeedback.gained}</span>{myFeedback.streak >= 3 ? ' 🔥' : ''}</>
+                    ) : (
+                      <>غلط — الإجابة الصح: {myFeedback.correctIndex != null && myFeedback.correctIndex >= 0 ? <span dir="ltr" className="inline-block"><FractionText text={shownQ.options[myFeedback.correctIndex] || ''} /></span> : '—'}</>
+                    )}
+                  </motion.div>
+                ) : null}
+                <div className="grid grid-cols-2 gap-3">
+                  {shownQ.options.map(function (opt, i) {
+                    var cls = 'min-h-[52px] justify-center text-base font-bold border-2 rounded-xl'
+                    if (myFeedback && !myFeedback.timeout && i === myFeedback.choice) {
+                      cls += myFeedback.correct ? ' border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40' : ' border-red-400 bg-red-50 dark:bg-red-950/40'
+                    }
+                    if (myFeedback && !myFeedback.timeout && myFeedback.correctIndex != null && i === myFeedback.correctIndex) {
+                      cls += ' border-emerald-500 bg-emerald-100 dark:bg-emerald-950/50'
+                    }
+                    if (myFeedback && !myFeedback.timeout && i !== myFeedback.choice && i !== myFeedback.correctIndex) {
+                      cls += ' opacity-50'
+                    }
+                    return (
+                      <Button
+                        key={i}
+                        variant="outline"
+                        disabled={optionsLocked}
+                        onClick={function () { answerQuestion(i) }}
+                        className={cls}
+                      >
+                        <span dir="auto" className="leading-snug break-words"><FractionText text={opt} /></span>
+                        {sendingAnswer && pendingChoice === i ? <Loader2 className="size-4 animate-spin shrink-0" /> : null}
+                      </Button>
+                    )
+                  })}
+                </div>
+              </div>
+              {/* زرار الخروج */}
+              <div className="pt-1 space-y-2">
+                {isHost ? (
+                  <Button
+                    variant="ghost"
+                    onClick={function () { hostAction('end') }}
+                    disabled={busy === 'end'}
+                    className="w-full min-h-10 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold"
+                  >
+                    إنهاء التحدي للكل (هوست)
+                  </Button>
+                ) : null}
+                <Button
+                  variant="outline"
+                  onClick={function () { exitRoom(true) }}
+                  disabled={busy === 'leave'}
+                  className="w-full min-h-12 border-2 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950/40 font-black"
+                >
+                  {busy === 'leave' ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+                  خروج من التحدي
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+        /* ===== الأسئلة العامة — كرت السباق (و88: دعم «من غير وقت») ===== */
         <Card className="overflow-hidden self-start">
           <div className="bg-gradient-to-l from-emerald-500 to-teal-600 px-5 py-3 text-white space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1183,13 +1349,17 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
               </span>
               <span className="font-black text-sm">🎯 <span dir="ltr">{gMe ? gMe.score : 0}</span></span>
             </div>
-            {/* بار الوقت */}
-            <div className="h-1.5 rounded-full bg-white/25 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-white transition-[width] duration-150 ease-linear"
-                style={{ width: remainPct + '%' }}
-              />
-            </div>
+            {/* بار الوقت — (و88) مخفي في وضع «من غير وقت» */}
+            {roomUntimed ? (
+              <p className="text-[11px] font-black text-emerald-50/90">♾️ السؤال ده من غير وقت — خد وقتك براحتك</p>
+            ) : (
+              <div className="h-1.5 rounded-full bg-white/25 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-white transition-[width] duration-150 ease-linear"
+                  style={{ width: remainPct + '%' }}
+                />
+              </div>
+            )}
           </div>
           <CardContent className="p-5 space-y-4">
             {/* (و71) السؤال والاختيارات بـ FractionText زي امتحانات المنصة */}
@@ -1274,6 +1444,8 @@ function GroupsMode({ studentId, studentName }: { studentId: string; studentName
             </div>
           </CardContent>
         </Card>
+        )}
+        {/* (و88) نهاية اختيار كرت السؤال (فلاش / عام) */}
 
         {/* شريط اللاعبين الأفقي — موبايل بس */}
         <div className="lg:hidden -mx-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 dark:[&::-webkit-scrollbar-thumb]:bg-stone-700">
@@ -2079,6 +2251,10 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
   var [fcCount, setFcCount] = useState(10)
   var [fcSeconds, setFcSeconds] = useState(15)
   var [fcDiff, setFcDiff] = useState<'easy' | 'medium' | 'hard' | 'mixed'>('mixed')
+  /* (و88) زرارين شكل الصورة: 🌐 ترجمة السؤال + ✨ تلميح ذكي */
+  var [showArabic, setShowArabic] = useState(false)
+  var [hint, setHint] = useState('')
+  var [hintLoading, setHintLoading] = useState(false)
 
   /* مراجع — الحكم اللحظي ميبقاش فيه state قديم */
   var cardsRef = useRef<FlashCard[]>([])
@@ -2161,6 +2337,10 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
     advanceTimerRef.current = null
     feedbackRef.current = null
     setFeedback(null)
+    /* (و88) نضيف التلميح والترجمة مع كل بطاقة جديدة */
+    setHint('')
+    setHintLoading(false)
+    setShowArabic(false)
     var next = idxRef.current + 1
     if (next >= cardsRef.current.length) {
       setPhase('end')
@@ -2168,6 +2348,27 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
     } else {
       idxRef.current = next
       setIdx(next)
+    }
+  }
+
+  /* (و88) ✨ تلميح ذكي — نداء واحد لكل بطاقة، من غير الإجابة */
+  async function askHint(): Promise<void> {
+    if (feedbackRef.current || hintLoading || hint) return
+    var c = cardsRef.current[idxRef.current]
+    if (!c) return
+    setHintLoading(true)
+    try {
+      var out = await postJson('/api/arena/hint', { question: c.text, options: c.options || [] })
+      var d = out.data
+      if (d && d.ok && d.hint) {
+        setHint(String(d.hint).slice(0, 200))
+      } else {
+        toast.error(String((d && d.error) || 'التلميح مش متاح دلوقتي'))
+      }
+    } catch (e) {
+      toast.error('الشبكة بتلحس — جرب تاني')
+    } finally {
+      setHintLoading(false)
     }
   }
 
@@ -2356,12 +2557,14 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
     )
   }
 
-  /* ===== play: البطاقات ===== */
+  /* ===== play: البطاقات — (و88) شكل الصورة: نقاط تقدم + «نقطة» + بار بنفسجي بعداد + كارت أبيض سؤال في النص واختيارات 2×2 + زرارين 🌐 و ✨ ===== */
   if (phase === 'play' && curCard) {
     /* نسخة غير-nullable — عشان TS ما يضيّعش الـ narrowing جوه الـ callbacks */
     var cardNow: FlashCard = curCard
+    var arText = arabicFlashStem(cardNow.text)
+    var shownText = showArabic && arText ? arText : cardNow.text
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 relative">
         {/* شريط علوي: نقاط التقدم + سكور + ستريك */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -2382,20 +2585,18 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
           </div>
         </div>
 
-        {/* العدّاد الدائري البسيط: رقم + بار */}
+        {/* البار البنفسجي + عدد الثواني — زي الصورة */}
         <div className="flex items-center gap-3">
-          <div className={'font-black text-xl w-9 text-center ' + (remainSec <= 3 ? 'text-red-600' : 'text-violet-600')} dir="ltr">
-            {remainSec}
-          </div>
-          <div className="flex-1 h-2 rounded-full bg-stone-200 dark:bg-stone-800 overflow-hidden">
+          <div className="flex-1 h-3 rounded-full bg-stone-200 dark:bg-stone-800 overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-l from-violet-500 to-fuchsia-500 transition-[width] duration-100 ease-linear"
+              className="h-full rounded-full bg-gradient-to-l from-fuchsia-500 to-violet-500 transition-[width] duration-100 ease-linear"
               style={{ width: remainPct + '%' }}
             />
           </div>
+          <span dir="ltr" className={'font-black text-2xl w-10 text-center shrink-0 ' + (remainSec <= 3 ? 'text-red-600' : 'text-violet-600')}>{remainSec}</span>
         </div>
 
-        {/* الكارد — سلايد بين البطاقات */}
+        {/* الكارد — سلايد بين البطاقات — أبيض نضيف زي الصورة */}
         <AnimatePresence mode="wait">
           <motion.div
             key={idx}
@@ -2403,52 +2604,89 @@ function FlashcardsMode({ studentId, studentName }: { studentId: string; student
             animate={{ x: 0, opacity: 1, scale: 1 }}
             exit={{ x: 60, opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.16 }}
+            className="relative"
           >
-            <Card>
-              <CardContent className="p-5 space-y-4">
-                {/* (و71) نص الكارد بـ FractionText — أس/كسور بتترسم زي المنصة.
-                    dir=auto: كروت المحرك الإنجليزي LTR وكروت المستر العربي RTL */}
-                <p dir="auto" className="text-xl font-bold leading-relaxed text-center">
-                  <FractionText text={cardNow.text} />
-                </p>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {cardNow.options.map(function (opt, i) {
-                    var cls = 'min-h-12 text-base font-bold border-2 justify-center'
-                    if (feedback) {
-                      if (i === Number(cardNow.correctIndex)) {
-                        cls += ' border-emerald-500 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200'
-                      } else if (i === feedback.choice) {
-                        cls += ' border-red-400 bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300'
-                      } else {
-                        cls += ' opacity-50'
-                      }
+            {/* 🌐 زرار الترجمة — على حافة الكارت (زي الصورة) — بيختفي لو مفيش ترجمة معروفة */}
+            {arText ? (
+              <button
+                type="button"
+                onClick={function () { setShowArabic(!showArabic) }}
+                aria-label="ترجمة السؤال للعربي"
+                title={showArabic ? 'رجّع الإنجليزي' : 'ترجم السؤال للعربي'}
+                className={'absolute -right-3 top-[42%] z-10 size-9 rounded-full border-2 shadow-md grid place-items-center transition-colors ' +
+                  (showArabic
+                    ? 'border-violet-500 bg-violet-50 text-violet-600 dark:bg-violet-950/60'
+                    : 'border-pink-300 bg-white text-pink-500 dark:bg-stone-900 hover:border-pink-400')}
+              >
+                <Languages className="size-4" />
+              </button>
+            ) : null}
+            <div className="rounded-3xl border-2 border-stone-100 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-sm p-5 sm:p-7 space-y-5">
+              {/* (و71) نص الكارد بـ FractionText — أس/كسور بتترسم زي المنصة.
+                  dir=auto: كروت المحرك الإنجليزي LTR وكروت المستر العربي RTL —
+                  (و88) مع زرار الترجمة بيتبدل للنص العربي */}
+              <p dir="auto" className="text-lg sm:text-xl font-bold leading-relaxed text-center">
+                <FractionText text={shownText} />
+              </p>
+              {/* (و88) 💡 فقاعة التلميح الذكي */}
+              {hint ? (
+                <motion.p
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl bg-violet-500/10 px-3 py-2 text-center text-[13px] font-bold text-violet-700 dark:text-violet-300 ring-1 ring-violet-400/30"
+                >
+                  💡 {hint}
+                </motion.p>
+              ) : null}
+              <div className="grid grid-cols-2 gap-3">
+                {cardNow.options.map(function (opt, i) {
+                  var cls = 'min-h-[52px] text-base font-bold border-2 justify-center rounded-xl'
+                  if (feedback) {
+                    if (i === Number(cardNow.correctIndex)) {
+                      cls += ' border-emerald-500 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200'
+                    } else if (i === feedback.choice) {
+                      cls += ' border-red-400 bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300'
+                    } else {
+                      cls += ' opacity-50'
                     }
-                    return (
-                      <Button key={i} variant="outline" disabled={!!feedback} onClick={function () { fcSettle(i) }} className={cls}>
-                        <span dir="ltr" className="leading-snug"><FractionText text={opt} /></span>
-                      </Button>
-                    )
-                  })}
-                </div>
-                {feedback ? (
-                  <motion.p
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={'text-center font-black text-sm ' + (feedback.correct ? 'text-emerald-600' : 'text-red-500')}
-                  >
-                    {feedback.correct ? (
-                      <>صح! <span dir="ltr">+{feedback.gained}</span>{streak >= 3 ? ' 🔥 بونص الستريك' : ''}</>
-                    ) : feedback.timeout ? (
-                      <>⌛ الوقت خلص! الإجابة الصح: <span dir="ltr" className="inline-block"><FractionText text={cardNow.options[Number(cardNow.correctIndex)]} /></span></>
-                    ) : (
-                      <>❌ غلط — الإجابة الصح: <span dir="ltr" className="inline-block"><FractionText text={cardNow.options[Number(cardNow.correctIndex)]} /></span></>
-                    )}
-                  </motion.p>
-                ) : null}
-              </CardContent>
-            </Card>
+                  }
+                  return (
+                    <Button key={i} variant="outline" disabled={!!feedback} onClick={function () { fcSettle(i) }} className={cls}>
+                      <span dir="auto" className="leading-snug break-words"><FractionText text={opt} /></span>
+                    </Button>
+                  )
+                })}
+              </div>
+              {feedback ? (
+                <motion.p
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={'text-center font-black text-sm ' + (feedback.correct ? 'text-emerald-600' : 'text-red-500')}
+                >
+                  {feedback.correct ? (
+                    <>صح! <span dir="ltr">+{feedback.gained}</span>{streak >= 3 ? ' 🔥 بونص الستريك' : ''}</>
+                  ) : feedback.timeout ? (
+                    <>⌛ الوقت خلص! الإجابة الصح: <span dir="ltr" className="inline-block"><FractionText text={cardNow.options[Number(cardNow.correctIndex)]} /></span></>
+                  ) : (
+                    <>❌ غلط — الإجابة الصح: <span dir="ltr" className="inline-block"><FractionText text={cardNow.options[Number(cardNow.correctIndex)]} /></span></>
+                  )}
+                </motion.p>
+              ) : null}
+            </div>
           </motion.div>
         </AnimatePresence>
+
+        {/* ✨ زرار المساعدة الذكية — دايرة بنفسجية ثابتة (زي الصورة) — فوق زرار «مساعد ذكي» العالمي عشان ما يتغطيش */}
+        <button
+          type="button"
+          onClick={function () { askHint() }}
+          disabled={!!feedback || hintLoading || !!hint}
+          aria-label="مساعدة ذكية"
+          title="تلميح ذكي ✨"
+          className="fixed bottom-24 right-5 z-50 size-14 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-xl shadow-violet-500/30 grid place-items-center active:scale-95 transition-transform disabled:opacity-60"
+        >
+          {hintLoading ? <Loader2 className="size-6 animate-spin" /> : <Sparkles className="size-6" />}
+        </button>
       </div>
     )
   }

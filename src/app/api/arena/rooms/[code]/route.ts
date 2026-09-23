@@ -39,6 +39,24 @@ function questionLimitMs(q: any): number {
   return Math.max(5, Number(q && q.timeLimitSec || 25)) * 1000
 }
 
+/* (2026-و88) التوقيت بقى إعداد لكل غرفة — طلب المستر: في الأسئلة العامة
+   «يقدر يحدد السؤال يبقى بوقت ولا من غير وقت ويختار الوقت بتاعه قد ايه»
+   room.timed = 0 → من غير وقت (limit = 0 — مفيش تايم أوت ولا بونص سرعة)
+   room.qSeconds → وقت السؤال الواحد المختار (5-180 ث) — الغرف القديمة
+   (من غير العمود) بتتشاف بوقت افتراضي زي الأول */
+function roomTimed(room: any): boolean {
+  var raw = room ? room.timed : undefined
+  if (raw === undefined || raw === null || raw === '') return true /* غرف قديمة = بوقت */
+  return Number(raw) !== 0
+}
+
+function roomLimitMs(room: any, q: any): number {
+  if (!roomTimed(room)) return 0
+  var qs = Math.round(Number(room && room.qSeconds) || 0)
+  if (qs >= 5) return qs * 1000
+  return questionLimitMs(q)
+}
+
 function isActive(p: any): boolean {
   return String(p && p.status || 'active') !== 'left'
 }
@@ -76,9 +94,10 @@ async function lazyTickRace(room: any): Promise<boolean> {
       advanceTo = questions.length
     } else {
       var q = questions[qIndex] || {}
-      var limit = questionLimitMs(q)
+      var limit = roomLimitMs(room, q)
       var startAt = Number(p.qStartAt || room.startedAt || 0)
-      if (startAt > 0 && now - startAt > limit + ADVANCE_GRACE_MS) {
+      /* (و88) من غير وقت → مفيش تقدّم تلقائي بالتايم أوت — اللاعب بياخد وقته */
+      if (limit > 0 && startAt > 0 && now - startAt > limit + ADVANCE_GRACE_MS) {
         advanceTo = qIndex + 1
       }
     }
@@ -153,6 +172,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     var total = questions.length
     var live = room.status === 'live'
     var startedAt = Number(room.startedAt || 0)
+    /* (و88) إعدادات التوقيت الفعّالة للغرفة */
+    var effTimed = roomTimed(room)
+    var effQSec = Math.round(Number(room.qSeconds) || 0)
 
     /* بياناتي في السباق — كل لاعب بيجري في سباقه الخاص */
     var myQIndex = 0
@@ -172,7 +194,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       var curQ = questions[myQIndex]
       if (live && !myFinished && curQ) {
         var startAt = Number(me.qStartAt || room.startedAt || 0)
-        myRemainMs = startAt > 0 ? Math.max(0, questionLimitMs(curQ) - (now - startAt)) : questionLimitMs(curQ)
+        /* (و88) من غير وقت → مفيش عداد متبقي (remainMs = 0) */
+        myRemainMs = effTimed ? (startAt > 0 ? Math.max(0, roomLimitMs(room, curQ) - (now - startAt)) : roomLimitMs(room, curQ)) : 0
       }
     }
 
@@ -262,12 +285,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         mode: String(room.mode || 'general'),
         difficulty: String(room.difficulty || 'mixed'),
         cardSeconds: Number(room.cardSeconds || 15),
+        /* (و88) إعدادات التوقيت بتتنشر للواجهة */
+        timed: effTimed ? 1 : 0,
+        qSeconds: effQSec >= 5 ? effQSec : 25,
         startedAt: startedAt,
         currentQuestion: null, /* (و72) السؤال بقى لكل لاعب — في me بالأسفل */
         revealed: null,
-        /* أسئلة الغرفة من غير الإجابات — العميل بيعرض سؤاله منه فورًا */
+        /* أسئلة الغرفة من غير الإجابات — العميل بيعرض سؤاله منه فورًا
+           (و88) timeLimitSec = الفعّلي (اختيار صاحب الغرفة — صفر لو من غير وقت) */
         questions: questions.map(function (q: any, qi: number) {
-          return { index: qi, text: String(q.text || ''), options: q.options || [], timeLimitSec: Number(q.timeLimitSec || 25) }
+          var eff = effTimed ? (effQSec >= 5 ? effQSec : Number(q.timeLimitSec || 25)) : 0
+          return { index: qi, text: String(q.text || ''), options: q.options || [], timeLimitSec: eff }
         }),
         players: playersOut,
         leaderboard: leaderboard,
@@ -354,7 +382,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
       return NextResponse.json({
         ok: true,
         me: { id: pid, name: name, token: ptoken, isHost: false, score: 0, streak: 0 },
-        room: { code: room.code, status: room.status, totalRounds: questions.length, mode: String(room.mode || 'general'), difficulty: String(room.difficulty || 'mixed'), cardSeconds: Number(room.cardSeconds || 15) },
+        room: { code: room.code, status: room.status, totalRounds: questions.length, mode: String(room.mode || 'general'), difficulty: String(room.difficulty || 'mixed'), cardSeconds: Number(room.cardSeconds || 15), timed: roomTimed(room) ? 1 : 0, qSeconds: Math.max(25, Math.round(Number(room.qSeconds) || 0)) },
       })
     }
 
@@ -398,10 +426,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
       }
       var q = questions[idx]
       if (!q) return NextResponse.json({ ok: false, error: 'سؤال غير موجود' }, { status: 404 })
-      var limitMs = questionLimitMs(q)
+      var limitMs = roomLimitMs(room, q)
       var startAt = Number(me.qStartAt || room.startedAt || 0)
       var elapsed = startAt > 0 ? Math.max(0, Date.now() - startAt) : 0
-      if (elapsed > limitMs + ADVANCE_GRACE_MS) {
+      /* (و88) من غير وقت → مفيش رفض بالوقت خالص */
+      if (limitMs > 0 && elapsed > limitMs + ADVANCE_GRACE_MS) {
         return NextResponse.json({ ok: false, error: 'الوقت خلص على السؤال ده' }, { status: 409 })
       }
       var answersObj = parseObj(me.answers)
@@ -414,8 +443,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
       var gained = 0
       var streak = Number(me.streak || 0)
       if (correct) {
-        var remainFrac = Math.max(0, 1 - ms / limitMs)
-        gained = 60 + Math.round(40 * remainFrac)
+        /* (و88) بوقت → بونص سرعة (كل ما تجاوب أسرع) / من غير وقت → 60 ثابتة */
+        if (limitMs > 0) {
+          var remainFrac = Math.max(0, 1 - ms / limitMs)
+          gained = 60 + Math.round(40 * remainFrac)
+        } else {
+          gained = 60
+        }
         streak = streak + 1
         if (streak >= 3) gained += 15 // بونص الستريك — تلات إجابات صح ورا بعض
       } else {

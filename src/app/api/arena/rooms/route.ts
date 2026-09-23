@@ -10,6 +10,10 @@
 //     • difficulty: 'easy' | 'medium' | 'hard' (فلتر عائلات المولد)
 //     • rounds: 3-15 (افتراضي 8) • cardSeconds: 5-90 (فلاش — افتراضي 15)
 //     • studentId: ربط اللاعب بحساب الطالب (ريأتاتش بدل التكرار)
+//   (2026-و88) طلب المستر: في الأسئلة العامة «يقدر يحدد السؤال يبقى
+//     بوقت ولا من غير وقت ويختار الوقت بتاعه قد ايه»:
+//     • timed: 1/0 (افتراضي 1 = بوقت)
+//     • qSeconds: 5-180 ثواني للسؤال الواحد (افتراضي 25 — للـ general)
 //   الأسئلة بتتولد لحظة الإنشاء من المحرك الرياضي المحلي
 //   (أرقام جديدة كل مرة — مفيش غرفتين بنفس الأسئلة تقريبًا)
 // ============================================================
@@ -41,12 +45,22 @@ export async function POST(request: Request) {
     var rounds = Math.max(3, Math.min(Number(body.rounds) || ROOM_ROUNDS, 15))
     var cardSeconds = Math.max(5, Math.min(Math.round(Number(body.cardSeconds) || 15), 90))
     var studentId = String(body.studentId || '').trim().slice(0, 64)
+    /* (و88) التوقيت — بوقت/من غير وقت + مدة السؤال (للأسئلة العامة) */
+    var timed = (body.timed === 0 || body.timed === false || body.timed === '0' || body.timed === 'off') ? 0 : 1
+    var qSeconds = Math.max(5, Math.min(Math.round(Number(body.qSeconds) || 25), 180))
 
     var questions = generateBattleQuestions(rounds, {
       difficulty: difficulty,
       style: mode === 'flash' ? 'flash' : 'general',
       cardSeconds: cardSeconds,
     })
+    /* (و88) الأسئلة العامة + بوقت → وقت السؤال الواحد بيبقى اختيار صاحب الغرفة */
+    if (mode === 'general' && timed) {
+      questions = questions.map(function (q: any) {
+        q.timeLimitSec = qSeconds
+        return q
+      })
+    }
 
     /* (2026-و85) التنظيف موحد في sweepArena — غرف خلصت من أكتر من يوم +
        غرف مهجورة من يوم (طلب المستر: التحدي يعيش يوم عشان الطلاب يشوفوا
@@ -80,8 +94,8 @@ export async function POST(request: Request) {
 
     await safeWrite(function () {
       return db.$executeRawUnsafe(
-        'INSERT INTO BattleRoom (id, code, title, hostPlayerId, status, questions, currentIndex, questionStartAt, startedAt, mode, difficulty, cardSeconds, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-        roomId, code, 'تحدي ' + name, hostId, 'lobby', JSON.stringify(questions), 0, 0, '', mode, difficulty, cardSeconds
+        'INSERT INTO BattleRoom (id, code, title, hostPlayerId, status, questions, currentIndex, questionStartAt, startedAt, mode, difficulty, cardSeconds, timed, qSeconds, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+        roomId, code, 'تحدي ' + name, hostId, 'lobby', JSON.stringify(questions), 0, 0, '', mode, difficulty, cardSeconds, timed, qSeconds
       )
     })
     await safeWrite(function () {
@@ -93,7 +107,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      room: { id: roomId, code: code, status: 'lobby', totalRounds: rounds, mode: mode, difficulty: difficulty, cardSeconds: cardSeconds },
+      room: { id: roomId, code: code, status: 'lobby', totalRounds: rounds, mode: mode, difficulty: difficulty, cardSeconds: cardSeconds, timed: timed, qSeconds: qSeconds },
       me: { id: hostId, name: name, token: token, isHost: true, score: 0 },
     })
   } catch (e: any) {
