@@ -41,8 +41,9 @@ export var SCHEMA_TABLES = [
   'CREATE TABLE IF NOT EXISTS Book (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT \'\', filePath TEXT NOT NULL DEFAULT \'\', fileName TEXT NOT NULL DEFAULT \'\', sourceUrl TEXT NOT NULL DEFAULT \'\', fileType TEXT NOT NULL DEFAULT \'application/pdf\', sizeBytes INTEGER NOT NULL DEFAULT 0, grade TEXT NOT NULL DEFAULT \'\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL)',
   // (2026-و44) الإشعارات — رد الشكوى/الكتب الجديدة/امتحانات وواجبات جديدة
   'CREATE TABLE IF NOT EXISTS Notification (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, type TEXT NOT NULL DEFAULT \'general\', title TEXT NOT NULL, body TEXT NOT NULL DEFAULT \'\', read INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
-  /* (2026-و66) ساحة التحدي — غرف الجروبات + اللاعبين + تحدي المستر + الفلاش كاردز */
-  'CREATE TABLE IF NOT EXISTS BattleRoom (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, title TEXT DEFAULT \'\', hostPlayerId TEXT DEFAULT \'\', status TEXT NOT NULL DEFAULT \'lobby\', questions TEXT NOT NULL DEFAULT \'[]\', currentIndex INTEGER NOT NULL DEFAULT 0, questionStartAt TEXT NOT NULL DEFAULT \'0\', startedAt TEXT DEFAULT \'\', mode TEXT DEFAULT \'general\', difficulty TEXT DEFAULT \'mixed\', cardSeconds INTEGER DEFAULT 15, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  /* (2026-و66) ساحة التحدي — غرف الجروبات + اللاعبين + تحدي المستر + الفلاش كاردز
+     (2026-و88) timed (بوقت/من غير وقت) + qSeconds (ثواني السؤال الواحد للأسئلة العامة) */
+  'CREATE TABLE IF NOT EXISTS BattleRoom (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, title TEXT DEFAULT \'\', hostPlayerId TEXT DEFAULT \'\', status TEXT NOT NULL DEFAULT \'lobby\', questions TEXT NOT NULL DEFAULT \'[]\', currentIndex INTEGER NOT NULL DEFAULT 0, questionStartAt TEXT NOT NULL DEFAULT \'0\', startedAt TEXT DEFAULT \'\', mode TEXT DEFAULT \'general\', difficulty TEXT DEFAULT \'mixed\', cardSeconds INTEGER DEFAULT 15, timed INTEGER DEFAULT 1, qSeconds INTEGER DEFAULT 25, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   'CREATE TABLE IF NOT EXISTS BattlePlayer (id TEXT PRIMARY KEY, roomId TEXT NOT NULL, name TEXT NOT NULL, token TEXT DEFAULT \'\', isHost INTEGER NOT NULL DEFAULT 0, score INTEGER NOT NULL DEFAULT 0, streak INTEGER NOT NULL DEFAULT 0, answers TEXT NOT NULL DEFAULT \'{}\', lastSeen TEXT NOT NULL DEFAULT \'0\', studentId TEXT DEFAULT \'\', qIndex INTEGER DEFAULT 0, qStartAt TEXT DEFAULT \'\', finishedAt TEXT DEFAULT \'\', finished INTEGER DEFAULT 0, status TEXT DEFAULT \'active\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   'CREATE TABLE IF NOT EXISTS TeacherChallenge (id TEXT PRIMARY KEY, title TEXT NOT NULL, question TEXT NOT NULL, options TEXT NOT NULL DEFAULT \'[]\', correctIndex INTEGER NOT NULL DEFAULT 0, points INTEGER NOT NULL DEFAULT 30, durationMin INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, closesAt DATETIME, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
   'CREATE TABLE IF NOT EXISTS ChallengeEntry (id TEXT PRIMARY KEY, challengeId TEXT NOT NULL, studentId TEXT DEFAULT \'\', name TEXT NOT NULL, isTeacher INTEGER NOT NULL DEFAULT 0, choice INTEGER NOT NULL DEFAULT -1, correct INTEGER NOT NULL DEFAULT 0, timeMs INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
@@ -156,6 +157,10 @@ var SCHEMA_COLUMNS = [
   ['BattleRoom', 'mode', 'TEXT', "DEFAULT 'general'"],
   ['BattleRoom', 'difficulty', 'TEXT', "DEFAULT 'mixed'"],
   ['BattleRoom', 'cardSeconds', 'INTEGER', 'DEFAULT 15'],
+  // (2026-و88) وضع التوقيت في تحدي الجروبات — طلب المستر: في الأسئلة العامة
+  // «يقدر يحدد السؤال يبقى بوقت ولا من غير وقت ويختار الوقت بتاعه قد ايه»
+  ['BattleRoom', 'timed', 'INTEGER', 'DEFAULT 1'],
+  ['BattleRoom', 'qSeconds', 'INTEGER', 'DEFAULT 25'],
 ]
 
 var SCHEMA_FIXES = [
@@ -263,7 +268,7 @@ export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homew
  * (2) عمود Book.usage كان ناقص خالص من SCHEMA_COLUMNS. تغيير المفتاح بيضمن إن أول
  * ريكوست بعد النشر يعمل الفحص الكامل وينشئ الجدول والعمود على Turso (الدرس الموثق
  * و38/و40/و43/و45/و68/و72). */
-var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w80'
+var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w88'
 
 /* ============================================================
  * 2026-و23 — **إصلاح بطء المنصة** (طلب المستر: «المنصة بطيئة، تسجيل
