@@ -17,9 +17,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { BellRing, BellOff, Loader2, Smartphone, Send, CheckCircle2, QrCode, X } from 'lucide-react'
+import { BellRing, BellOff, Loader2, Smartphone, Send, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
-import QRCode from 'qrcode'
 import {
   enableParentPush,
   disableParentPush,
@@ -30,70 +29,28 @@ import {
 } from '@/lib/parent-push-client'
 
 /* ============================================================
- * (2026-و90) قسم QR — «فعّلها من موبايلك الشخصي»
- * درس من شكوى المستر: الإشعار كان بييجي على الجهاز اللي ات فعّل منه
- * (اللابتوب اللي الطالب شغال منه) مش موبايل ولي الأمر — لأن Web Push
- * بيشتغل لكل جهاز لوحده. الحل: كود QR يفتح المنصة على موبايل ولي الأمر
- * عشان يسجل دخوله ويفعّل الإشعارات هناك — وساعتها كل إشعار هييجي
- * على موبايله بره.
+ * (2026-و91) تنبيه نصي بطلب المستر الحرفي — كود الـ QR اتشال خالص
+ * («مش مظبوط — شيله») وح محله كلام واضح يخلي ولي الأمر يفهم بنفسه:
+ * التفعيل لازم يكون من موبايله هو (الجهاز الأساسي اللي هيجي له منه
+ * الإشارات) — لأن Web Push لكل جهاز لوحده.
+ * + نصيحة ضغط على الإشعار لما يوصل — عشان كروم مايعتبرهاش إشعارات
+ *   مزعجة وما يحولهاش صامتة (الإشعارات اللي بيتجاهلها المستخدم
+ *   بيتعامل معاها المتصفح كسبام بعد فترة).
  * ============================================================ */
-function PhoneQrSection() {
-  var sq = useState(false)
-  var show = sq[0]
-  var setShow = sq[1]
-  var qsq = useState('')
-  var qr = qsq[0]
-  var setQr = qsq[1]
-
-  useEffect(function () {
-    try {
-      var origin = window.location.origin
-      QRCode.toDataURL(origin, { width: 320, margin: 1, errorCorrectionLevel: 'M' })
-        .then(function (url: string) { setQr(url) })
-        .catch(function () {})
-    } catch (e) {}
-  }, [])
-
-  if (!show) {
-    return (
-      <button
-        type="button"
-        onClick={function () { setShow(true) }}
-        className="w-full flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/[0.04] px-3.5 py-2.5 text-right hover:bg-primary/[0.08] transition-colors cursor-pointer min-h-[44px]"
-      >
-        <QrCode className="h-4.5 w-4.5 text-primary shrink-0" />
-        <span className="text-[12.5px] font-bold text-foreground leading-snug">
-          عايز الإشعار يوصلك على موبايلك الشخصي؟ امسح كود QR ده ←
-        </span>
-      </button>
-    )
-  }
-
+function DeviceHintNote({ tone }: { tone: 'primary' | 'amber' | 'emerald' }) {
+  var box = tone === 'emerald'
+    ? 'border-emerald-500/20 bg-emerald-500/[0.05]'
+    : tone === 'amber'
+    ? 'border-amber-500/25 bg-amber-500/[0.06]'
+    : 'border-primary/20 bg-primary/[0.05]'
+  var iconColor = tone === 'emerald' ? 'text-emerald-600' : tone === 'amber' ? 'text-amber-600' : 'text-primary'
   return (
-    <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-3.5">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <p className="text-[12.5px] font-black text-foreground flex items-center gap-1.5">
-          <QrCode className="h-4 w-4 text-primary" />
-          فعّل الإشعارات من موبايلك
-        </p>
-        <button type="button" onClick={function () { setShow(false) }} className="text-muted-foreground hover:text-foreground cursor-pointer" aria-label="إغلاق">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-      <div className="flex items-start gap-3">
-        {qr ? (
-          <img src={qr} alt="كود QR — افتح المنصة من موبايلك" className="h-28 w-28 rounded-lg border border-border bg-white p-1 shrink-0" />
-        ) : (
-          <div className="h-28 w-28 rounded-lg border border-border bg-muted animate-pulse shrink-0" />
-        )}
-        <ol className="text-[11.5px] leading-relaxed text-foreground/85 font-medium space-y-1 list-decimal pr-3.5">
-          <li>امسح الكود ده بكاميرا موبايلك</li>
-          <li>سجّل دخولك برقمك الشخصي وباسوردك (نفس الحساب)</li>
-          <li>اضغط «سماح بالتنبيهات» ووافق — وخلاص: كل إشعار هييجي على موبايلك بره على طول</li>
-        </ol>
-      </div>
-      <p className="text-[10px] text-muted-foreground/80 mt-2 leading-relaxed">
-        الإشعارات بتوصل على كل جهاز فعّلت منها لوحده — فعّلها من موبايلك مرة واحدة وهتفضل شغالة فيه دايمًا.
+    <div className={'flex items-start gap-2 rounded-xl border px-3.5 py-2.5 ' + box}>
+      <Smartphone className={'h-4 w-4 shrink-0 mt-0.5 ' + iconColor} />
+      <p className="text-[11.5px] leading-relaxed text-foreground/85 font-medium">
+        <span className="font-black">مهم: الإشعارات بتوصل على الجهاز اللي بتفعّل منها لوحده</span> — يعني تفعيلها من جهاز تاني/كمبيوتر مش هيوصلك حاجة على موبايلك.
+        عشان توصلك على موبايلك: افتح المنصة من كروم على <span className="font-black">موبايلك الشخصي</span>، سجّل دخولك بحسابك، واضغط «سماح بالتنبيهات» هناك مرة واحدة — وده الجهاز الأساسي اللي كل الإشعارات هتوصلك منه.
+        <span className="block mt-1 text-foreground/70">ولما الإشعار يوصلك اضغط عليه — كده الموبايل بيأكد إنها رسايل مهمة وبتفضل تظهر عادي ومش مزعجة.</span>
       </p>
     </div>
   )
@@ -222,9 +179,9 @@ export default function PushPermissionBanner({ parentId }: { parentId: string })
               </Button>
             </div>
           </div>
-          {/* (و90) عشان الإشعار ييجي على موبايل ولي الأمر الشخصي مش على الجهاز ده بس */}
+          {/* (و91) تنبيه نصي — التفعيل من موبايل ولي الأمر هو الجهاز الأساسي */}
           <div className="mt-3 pt-3 border-t border-emerald-500/15">
-            <PhoneQrSection />
+            <DeviceHintNote tone="emerald" />
           </div>
         </CardContent>
       </Card>
@@ -244,9 +201,9 @@ export default function PushPermissionBanner({ parentId }: { parentId: string })
               <p className="text-[11px] text-muted-foreground leading-relaxed">افتح إعدادات الموقع (أيقونة القفل 🔒 جنب اللينك) وسمح بالإشعارات عشان درجات ابنك توصلك على الموبايل</p>
             </div>
           </div>
-          {/* (و90) حتى لو الإشعارات متقفلة على الجهاز ده — يقدر يفعّلها من موبايله بالـ QR */}
+          {/* (و91) تنبيه نصي — يفعّلها من موبايله الشخصي */}
           <div className="mt-3 pt-3 border-t border-amber-500/15">
-            <PhoneQrSection />
+            <DeviceHintNote tone="amber" />
           </div>
         </CardContent>
       </Card>
@@ -288,9 +245,9 @@ export default function PushPermissionBanner({ parentId }: { parentId: string })
               سماح بالتنبيهات
             </Button>
           </div>
-          {/* (و90) عشان الإشعار ييجي على موبايل ولي الأمر الشخصي */}
+          {/* (و91) تنبيه نصي — التفعيل من موبايل ولي الأمر هو الجهاز الأساسي */}
           <div className="mt-3 pt-3 border-t border-primary/15">
-            <PhoneQrSection />
+            <DeviceHintNote tone="primary" />
           </div>
         </CardContent>
       </Card>
@@ -319,11 +276,11 @@ export default function PushPermissionBanner({ parentId }: { parentId: string })
                 أول ما يوصلك الإشعار على شاشة موبايلك، اضغط عليه — هيفتح لك المنصة على شاشة تسجيل دخولك، وبعد الدخول تلاقي كل الإشعارات جوه المنصة.
               </p>
             </div>
-            {/* (و90) الإشعارات لكل جهاز لوحده — وضّح لولي الأمر إنه لازم يفعّلها من موبايله نفسه */}
+            {/* (و91) وضّح لولي الأمر إن التفعيل لازم يكون من موبايله هو — من غير أي QR */}
             <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-3.5 py-2.5">
-              <QrCode className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <Smartphone className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-[11.5px] leading-relaxed text-foreground/85 font-medium">
-                مهم: الإشعارات بتوصل على الجهاز اللي بتفعّل منها. لو بتستخدم المنصة من كمبيوتر — فعّلها كمان من <span className="font-black">موبايلك الشخصي</span> بكود الـ QR اللي هتلاقيه فوق كارت الإشعارات بعد ما تسجل دخولك.
+                مهم: الإشعارات بتوصل على الجهاز اللي بتفعّل منها لوحده — عشان توصلك على موبايلك، افتح المنصة من كروم على <span className="font-black">موبايلك الشخصي</span>، سجّل دخولك، واضغط «تفعيل الإشعارات الآن» هناك — وده الجهاز الأساسي اللي كل الإشعارات هتوصلك منه.
               </p>
             </div>
             <Button className="w-full min-h-[48px] font-black text-base gap-2" onClick={enable} disabled={busy}>

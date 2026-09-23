@@ -32,8 +32,12 @@ self.addEventListener('push', function (event) {
     body: String(data.body || ''),
     icon: String(data.icon || '/push-icon.png'),
     badge: String(data.badge || '/push-icon.png'),
+    /* (و91) tag ثابت — بدل tag بيتغير كل مرة — عشان الإشعارات المتتالية
+       بتستبدل بعضها في شريط الموبايل بدل ما تتكدس، وكروم مايعتبرهاش
+       إشعارات مزعجة (سبام) وما يحولهاش صامتة.
+       + شيلنا renotify — إعادة التنبيه على الاستبدال بتتحسب من كروم
+       سلوك عدواني وزيادة احتمال التصفية كسبام */
     tag: String(data.tag || 'parent-notification'),
-    renotify: true,
     vibrate: [200, 100, 200],
     requireInteraction: false,
     data: { url: String(data.url || '/#parent-login') },

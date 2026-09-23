@@ -73,8 +73,47 @@ export const PARENT_PUSH_HOMEWORK_TITLE = '📝 متابعة من منصة Math 
 export const PARENT_PUSH_EXAM_BODY = 'الطالب/ة {student} سلّم امتحان «{title}» — الدرجة: {score} من {max} ({percent}%)'
 export const PARENT_PUSH_HOMEWORK_BODY = 'الطالب/ة {student} سلّم واجب «{title}» — الدرجة: {score} من {max} ({percent}%)'
 
-/* ملامة قالب الإشعار الخارجي (Push payload) بالقيم الحقيقية */
-export function buildParentPushPayload(kind: 'exam' | 'homework', studentName: string, title: string, score: number, maxScore: number): { title: string; body: string; url: string; tag: string; icon: string } {
+/* ============================================================
+   (2026-و91) أيقونة الإشعار الخارجي بطلب المستر: «الاشعار يكون
+   بالصورة بتاعة المنصة — صورة الفافيكون بتاعة المستر» — بدل الجرس
+   الأصفر. بنقرا favicon_url من إعدادات المنصة (نفس الصورة اللي جنب
+   لينك الموقع) — ولو مش متاحة أو SVG (متعتمش في إشعارات النظام)
+   بنرجّع للأيقونة الافتراضية. الكاش لكل process — إعدادات المنصة
+   مابتتغيرش كتير، وأي تعديل لوجو بيتطبق بعد أول إرسال جديد.
+   ============================================================ */
+function isValidNotifIcon(p: string): boolean {
+  if (!p) return false
+  if (/\.svg(\?.*)?$/i.test(p)) return false /* الـ SVG مش بيتعرض في إشعارات الموبايل */
+  return /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(p)
+}
+
+var _pushIcon = ''
+export async function resolveParentPushIcon(): Promise<string> {
+  if (_pushIcon) return _pushIcon
+  try {
+    var rows: any = await db.$queryRawUnsafe("SELECT key, value FROM SiteConfig WHERE key IN ('favicon_url','site_logo')")
+    rows = rows || []
+    var v = ''
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i] && rows[i].key) === 'favicon_url') { v = String((rows[i] && rows[i].value) || ''); break }
+    }
+    if (!isValidNotifIcon(v)) {
+      v = ''
+      for (var j = 0; j < rows.length; j++) {
+        if (String(rows[j] && rows[j].key) === 'site_logo') { v = String((rows[j] && rows[j].value) || ''); break }
+      }
+    }
+    if (isValidNotifIcon(v)) _pushIcon = v
+  } catch (e) {}
+  if (!_pushIcon) _pushIcon = '/push-icon.png'
+  return _pushIcon
+}
+
+/* ملامة قالب الإشعار الخارجي (Push payload) بالقيم الحقيقية.
+   (و91) tag ثابت لكل نوع — بدل Date.now() — عشان الإشعارات المتتالية
+   بتستبدل بعضها في شريط الموبايل بدل ما تتكدس، وكروم مايعتبرهاش
+   إشعارات مزعجة (سبام) ومانحطهاش صامتة */
+export async function buildParentPushPayload(kind: 'exam' | 'homework', studentName: string, title: string, score: number, maxScore: number): Promise<{ title: string; body: string; url: string; tag: string; icon: string }> {
   var s = Number(score) || 0
   var m = Number(maxScore) || 0
   var pct = m > 0 ? Math.round((s / m) * 100) : 0
@@ -86,12 +125,14 @@ export function buildParentPushPayload(kind: 'exam' | 'homework', studentName: s
     .split('{score}').join(String(s))
     .split('{max}').join(String(m))
     .split('{percent}').join(String(pct))
+  var icon = '/push-icon.png'
+  try { icon = await resolveParentPushIcon() } catch (e) {}
   return {
     title: String(t),
     body: body,
     url: '/#parent-login', /* ضغطة الإشعار بتفتح شاشة دخول ولي الأمر */
-    tag: 'parent-' + kind + '-' + Date.now(),
-    icon: '/push-icon.png',
+    tag: 'parent-' + kind,
+    icon: icon,
   }
 }
 
@@ -211,7 +252,7 @@ export async function notifyParentsOfResult(opts: { studentId: string; kind: 'ex
        بنبعت لكل جهاز اشترك لرقم ولي الأمر (ParentPushSubscription).
        مفيش اشتراكات = مفيش إشعار خارجي — الإشعار الداخلي شغال زي ما هو. */
     try {
-      var payload = buildParentPushPayload(opts.kind, studentName, opts.title, opts.score, opts.maxScore)
+      var payload = await buildParentPushPayload(opts.kind, studentName, opts.title, opts.score, opts.maxScore)
       var pushOut = await Promise.all(targets.map(function (t: string) {
         return sendParentPush(t, payload).catch(function () { return { sent: 0, failed: 0 } })
       }))
