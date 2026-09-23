@@ -17,8 +17,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { BellRing, BellOff, Loader2, Smartphone, Send, CheckCircle2 } from 'lucide-react'
+import { BellRing, BellOff, Loader2, Smartphone, Send, CheckCircle2, QrCode, X } from 'lucide-react'
 import { toast } from 'sonner'
+import QRCode from 'qrcode'
 import {
   enableParentPush,
   disableParentPush,
@@ -27,6 +28,76 @@ import {
   getPushPermissionState,
   type PushPermState,
 } from '@/lib/parent-push-client'
+
+/* ============================================================
+ * (2026-و90) قسم QR — «فعّلها من موبايلك الشخصي»
+ * درس من شكوى المستر: الإشعار كان بييجي على الجهاز اللي ات فعّل منه
+ * (اللابتوب اللي الطالب شغال منه) مش موبايل ولي الأمر — لأن Web Push
+ * بيشتغل لكل جهاز لوحده. الحل: كود QR يفتح المنصة على موبايل ولي الأمر
+ * عشان يسجل دخوله ويفعّل الإشعارات هناك — وساعتها كل إشعار هييجي
+ * على موبايله بره.
+ * ============================================================ */
+function PhoneQrSection() {
+  var sq = useState(false)
+  var show = sq[0]
+  var setShow = sq[1]
+  var qsq = useState('')
+  var qr = qsq[0]
+  var setQr = qsq[1]
+
+  useEffect(function () {
+    try {
+      var origin = window.location.origin
+      QRCode.toDataURL(origin, { width: 320, margin: 1, errorCorrectionLevel: 'M' })
+        .then(function (url: string) { setQr(url) })
+        .catch(function () {})
+    } catch (e) {}
+  }, [])
+
+  if (!show) {
+    return (
+      <button
+        type="button"
+        onClick={function () { setShow(true) }}
+        className="w-full flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/[0.04] px-3.5 py-2.5 text-right hover:bg-primary/[0.08] transition-colors cursor-pointer min-h-[44px]"
+      >
+        <QrCode className="h-4.5 w-4.5 text-primary shrink-0" />
+        <span className="text-[12.5px] font-bold text-foreground leading-snug">
+          عايز الإشعار يوصلك على موبايلك الشخصي؟ امسح كود QR ده ←
+        </span>
+      </button>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-3.5">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className="text-[12.5px] font-black text-foreground flex items-center gap-1.5">
+          <QrCode className="h-4 w-4 text-primary" />
+          فعّل الإشعارات من موبايلك
+        </p>
+        <button type="button" onClick={function () { setShow(false) }} className="text-muted-foreground hover:text-foreground cursor-pointer" aria-label="إغلاق">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="flex items-start gap-3">
+        {qr ? (
+          <img src={qr} alt="كود QR — افتح المنصة من موبايلك" className="h-28 w-28 rounded-lg border border-border bg-white p-1 shrink-0" />
+        ) : (
+          <div className="h-28 w-28 rounded-lg border border-border bg-muted animate-pulse shrink-0" />
+        )}
+        <ol className="text-[11.5px] leading-relaxed text-foreground/85 font-medium space-y-1 list-decimal pr-3.5">
+          <li>امسح الكود ده بكاميرا موبايلك</li>
+          <li>سجّل دخولك برقمك الشخصي وباسوردك (نفس الحساب)</li>
+          <li>اضغط «سماح بالتنبيهات» ووافق — وخلاص: كل إشعار هييجي على موبايلك بره على طول</li>
+        </ol>
+      </div>
+      <p className="text-[10px] text-muted-foreground/80 mt-2 leading-relaxed">
+        الإشعارات بتوصل على كل جهاز فعّلت منها لوحده — فعّلها من موبايلك مرة واحدة وهتفضل شغالة فيه دايمًا.
+      </p>
+    </div>
+  )
+}
 
 export default function PushPermissionBanner({ parentId }: { parentId: string }) {
   var permState = useState<PushPermState>('default')
@@ -79,14 +150,24 @@ export default function PushPermissionBanner({ parentId }: { parentId: string })
       setPerm(getPushPermissionState())
       setEnabled(true)
       setOpen(false)
-      toast.success('تمام كده! 🎉 الإشعارات مفعّلة — أول ما ابنك يسلّم امتحان أو واجب هتوصلك درجته على موبايلك أول بأول', { duration: 6000 })
+      toast.success('تمام كده! 🎉 الإشعارات مفعّلة على الجهاز ده — أول ما ابنك يسلّم امتحان أو واجب هتوصلك درجته هنا أول بأول', { duration: 6000 })
     } else if (r.reason === 'denied') {
       setPerm('denied')
       setOpen(false)
       toast.error('الإشعارات متقفلة من المتصفح — افتح إعدادات الموقع (القفل جنب اللينك) وسمح ليها', { duration: 8000 })
+    } else if (r.reason === 'dismissed') {
+      toast.error('مقفلتش نافذة الإذن — اضغط «تفعيل الإشعارات الآن» تاني ووافق على رسالة المتصفح', { duration: 8000 })
     } else if (r.reason === 'unsupported') {
       setOpen(false)
       toast.error('المتصفح ده مش بيدعم الإشعارات — جرب كروم على الموبايل', { duration: 8000 })
+    } else if (r.reason === 'sw-failed') {
+      toast.error('المنصة بتجهز نفسها دلوقتي (أول زيارة بتاخد ثواني) — جرب تاني بعد لحظة', { duration: 8000 })
+    } else if (r.reason === 'no-key') {
+      toast.error('السيرفر مش جاهز لسه — استنى ثواني وجرب تاني', { duration: 8000 })
+    } else if (r.reason === 'subscribe-failed') {
+      toast.error('المتصفح رفض الاشتراك اللحظة دي — جرب تاني وهينجح', { duration: 8000 })
+    } else if (r.reason === 'save-failed') {
+      toast.error('الاتصال ضعيف — مش قادرين نحفظ التفعيل، اتأكد من النت وجرب تاني', { duration: 8000 })
     } else {
       toast.error('حصلت مشكلة في تفعيل الإشعارات — جرب تاني بعد لحظات', { duration: 6000 })
     }
@@ -141,6 +222,10 @@ export default function PushPermissionBanner({ parentId }: { parentId: string })
               </Button>
             </div>
           </div>
+          {/* (و90) عشان الإشعار ييجي على موبايل ولي الأمر الشخصي مش على الجهاز ده بس */}
+          <div className="mt-3 pt-3 border-t border-emerald-500/15">
+            <PhoneQrSection />
+          </div>
         </CardContent>
       </Card>
     )
@@ -158,6 +243,10 @@ export default function PushPermissionBanner({ parentId }: { parentId: string })
               <p className="text-sm font-bold text-foreground">الإشعارات متقفلة من المتصفح</p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">افتح إعدادات الموقع (أيقونة القفل 🔒 جنب اللينك) وسمح بالإشعارات عشان درجات ابنك توصلك على الموبايل</p>
             </div>
+          </div>
+          {/* (و90) حتى لو الإشعارات متقفلة على الجهاز ده — يقدر يفعّلها من موبايله بالـ QR */}
+          <div className="mt-3 pt-3 border-t border-amber-500/15">
+            <PhoneQrSection />
           </div>
         </CardContent>
       </Card>
@@ -199,6 +288,10 @@ export default function PushPermissionBanner({ parentId }: { parentId: string })
               سماح بالتنبيهات
             </Button>
           </div>
+          {/* (و90) عشان الإشعار ييجي على موبايل ولي الأمر الشخصي */}
+          <div className="mt-3 pt-3 border-t border-primary/15">
+            <PhoneQrSection />
+          </div>
         </CardContent>
       </Card>
 
@@ -224,6 +317,13 @@ export default function PushPermissionBanner({ parentId }: { parentId: string })
               <Smartphone className="h-4 w-4 text-primary shrink-0 mt-0.5" />
               <p className="text-[11.5px] leading-relaxed text-foreground/80 font-medium">
                 أول ما يوصلك الإشعار على شاشة موبايلك، اضغط عليه — هيفتح لك المنصة على شاشة تسجيل دخولك، وبعد الدخول تلاقي كل الإشعارات جوه المنصة.
+              </p>
+            </div>
+            {/* (و90) الإشعارات لكل جهاز لوحده — وضّح لولي الأمر إنه لازم يفعّلها من موبايله نفسه */}
+            <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-3.5 py-2.5">
+              <QrCode className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-[11.5px] leading-relaxed text-foreground/85 font-medium">
+                مهم: الإشعارات بتوصل على الجهاز اللي بتفعّل منها. لو بتستخدم المنصة من كمبيوتر — فعّلها كمان من <span className="font-black">موبايلك الشخصي</span> بكود الـ QR اللي هتلاقيه فوق كارت الإشعارات بعد ما تسجل دخولك.
               </p>
             </div>
             <Button className="w-full min-h-[48px] font-black text-base gap-2" onClick={enable} disabled={busy}>

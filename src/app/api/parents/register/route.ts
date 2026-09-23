@@ -63,15 +63,25 @@ export async function POST(request: NextRequest) {
       else if (digits.length === 10 && digits.indexOf('1') === 0) digits = '0' + digits
       return digits
     }
+    /* (و90) + تطبيع الحروف العربية المتشابهة (أ/ا، ى/ي، ة/ه، ؤ/و، ئ/ي) —
+       الكيبورد بتكتبها مختلفة من موبايل لموبايل وكانت بتكسر مطابقة صحيحة */
+    var foldArabic = function (t: string): string {
+      return t
+        .replace(/[أإآ]/g, 'ا')
+        .replace(/ى/g, 'ي')
+        .replace(/ة/g, 'ه')
+        .replace(/ؤ/g, 'و')
+        .replace(/ئ/g, 'ي')
+    }
     var normPwd = function (v: string): string {
       var t = String(v || '')
       t = t.replace(/[٠-٩]/g, function (d) { return String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)) })
       t = t.replace(/[۰-۹]/g, function (d) { return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)) })
-      return t.replace(/\s+/g, '').trim().toLowerCase()
+      return foldArabic(t.replace(/\s+/g, '')).trim().toLowerCase()
     }
     // اسم الطالب: مسافات مضبوطة + حالة حروف متساهلة — عشان الكتابة الطبيعية تتقبل
     var normName = function (v: string): string {
-      return String(v || '').replace(/\s+/g, ' ').trim().toLowerCase()
+      return foldArabic(String(v || '').replace(/\s+/g, ' ').trim().toLowerCase())
     }
 
     if (!studentName) {
@@ -94,48 +104,80 @@ export async function POST(request: NextRequest) {
     }
 
     // ===== 1) جيب حساب ابنك =====
+    /* (و90) درس من شكوى المستر: «كلمة مرور ابنك غلط» رغم إنها صح — الأسباب:
+       (أ) الرقم ممكن يكون متخزن بصيغة تانية (20xxxxxxxxx / مسافات / أرقام عربية)
+       (ب) لو فيه أكتر من حساب بنفس الرقم — findFirst بيرجّع حساب قديم باسورده مختلف
+       (ج) حروف عربية متشابهة (أ/ا، ى/ي، ة/ه) في الباسورد أو الاسم
+       الحل: بحث بكل صيغ الرقم على كل الحسابات المرشحة + فحص (اسم + باسورد
+       + رقم ولي الأمر) على كل مرشح — أول واحد يطابق كلهم هو الحساب المعتمد. */
     try { await ensureParentTable() } catch (eDdl) {}
-    var student = null as any
+    var digitsOnly = studentPhone.replace(/[^0-9]/g, '')
+    var phoneVariants: string[] = []
+    var pushVariant = function (v: string) { if (v && phoneVariants.indexOf(v) === -1) phoneVariants.push(v) }
+    pushVariant(studentPhoneNorm)
+    if (digitsOnly.length === 12 && digitsOnly.indexOf('20') === 0) pushVariant('0' + digitsOnly.slice(2))
+    if (studentPhoneNorm.length === 11 && studentPhoneNorm.indexOf('0') === 0) pushVariant('20' + studentPhoneNorm.slice(1))
+    pushVariant(digitsOnly)
+
+    var candidates: any[] = []
+    var loadCandidates = function () { return db.student.findMany({ where: { phone: { in: phoneVariants } } }) }
     try {
-      student = await safeWrite(function () { return db.student.findFirst({ where: { phone: studentPhoneNorm } }) })
+      candidates = await safeWrite(loadCandidates)
     } catch (e1) {
-      try { student = await db.student.findFirst({ where: { phone: studentPhoneNorm } }) } catch (e2) {}
+      try { candidates = await loadCandidates() } catch (e2) { candidates = [] }
     }
-    if (!student) {
+    if (!candidates || !candidates.length) {
       return NextResponse.json(
         { error: 'مفيش طالب مسجل بالرقم ده في المنصة — اتأكد إنك كاتب رقم تليفون ابنك الصح (نفس الرقم اللي اتسجل بيه)', field: 'studentPhone' },
         { status: 404 }
       )
     }
 
-    // ===== 2) اسم الطالب لازم يطابق المسجل =====
-    var storedName = normName(student.name)
+    // ===== 2+3+4) مطابقة الاسم والباسورد ورقم ولي الأمر على كل المرشحين =====
     var typedName = normName(studentName)
-    var nameOk = storedName === typedName || (typedName.length >= 4 && storedName.indexOf(typedName) !== -1)
-    if (!nameOk) {
-      return NextResponse.json(
-        { error: 'الاسم مش مطابق لحساب الطالب المسجل بالرقم ده — اكتب اسم ابنك زي ما هو متسجل في المنصة بالظبط', field: 'studentName' },
-        { status: 400 }
-      )
+    var nameMatch = function (s: any): boolean {
+      var storedName = normName(s.name)
+      return storedName === typedName || (typedName.length >= 4 && storedName.indexOf(typedName) !== -1)
     }
-
-    // ===== 3) باسورد الطالب لازم يطابق =====
-    if (!studentPassword || normPwd(student.password) !== normPwd(studentPassword)) {
-      return NextResponse.json(
-        { error: 'باسورد الطالب غلط — اكتب نفس الباسورد اللي ابنك بيدخل بيه في المنصة', field: 'studentPassword' },
-        { status: 400 }
-      )
+    var pwdMatch = function (s: any): boolean {
+      return !!studentPassword && normPwd(s.password) === normPwd(studentPassword)
     }
-
-    // ===== 4) رقم ولي الأمر لازم يكون هو المسجل على حساب ابنه =====
-    var storedParentPhone = normPhone(String(student.parentPhone || ''))
-    if (!storedParentPhone) {
-      return NextResponse.json(
-        { error: 'حساب ابنك مش مسجل عليه رقم ولي أمر — كلمني أظبطه الأول', field: 'parentPhone' },
-        { status: 400 }
-      )
+    var student = null as any
+    var nameHitButWrongPwd = false
+    var anyParentPhoneStored = false
+    for (var ci = 0; ci < candidates.length; ci++) {
+      var cand = candidates[ci]
+      if (!nameMatch(cand)) continue
+      if (!pwdMatch(cand)) { nameHitButWrongPwd = true; continue }
+      var candParentPhone = normPhone(String(cand.parentPhone || ''))
+      if (!candParentPhone) { continue }
+      anyParentPhoneStored = true
+      if (candParentPhone !== parentPhoneNorm) { continue }
+      student = cand
+      break
     }
-    if (storedParentPhone !== parentPhoneNorm) {
+    if (!student) {
+      /* رسالة واضحة حسب السبب الحقيقي — بدل رسالة واحدة مضللة */
+      var anyNameMatch = false
+      for (var ai = 0; ai < candidates.length; ai++) { if (nameMatch(candidates[ai])) { anyNameMatch = true; break } }
+      if (!anyNameMatch) {
+        return NextResponse.json(
+          { error: 'الاسم مش مطابق لحساب الطالب المسجل بالرقم ده — اكتب اسم ابنك زي ما هو متسجل في المنصة بالظبط', field: 'studentName' },
+          { status: 400 }
+        )
+      }
+      if (nameHitButWrongPwd) {
+        return NextResponse.json(
+          { error: 'باسورد الطالب غلط — اكتب نفس الباسورد اللي ابنك بيدخل بيه في المنصة (اتأكد إنه هو نفسه اللي ابنك بيدخل بيه دلوقتي)', field: 'studentPassword' },
+          { status: 400 }
+        )
+      }
+      if (!anyParentPhoneStored) {
+        return NextResponse.json(
+          { error: 'حساب ابنك مش مسجل عليه رقم ولي أمر — كلمني أظبطه الأول', field: 'parentPhone' },
+          { status: 400 }
+        )
+      }
       return NextResponse.json(
         { error: 'رقمك الشخصي مش هو المسجل على حساب ابنك في المنصة — لازم نفس الرقم اللي اتسجل بيه وقت ما ابنك عمل حسابه', field: 'parentPhone' },
         { status: 400 }
