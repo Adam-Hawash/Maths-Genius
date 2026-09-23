@@ -1,0 +1,704 @@
+     1→// @ts-nocheck
+     2→// POST /api/exams/submit - Submit exam answers, save INSTANTLY, then AI-grade in background
+     3→//
+     4→// **(إصلاح 2026-و10 — علة «الطالب اللي بيقدم الامتحان بيختفي من عندي»)**:
+     5→//   التدفق القديم كان بيصحّح كل الأسئلة المقالية بالذكاء الاصطناعي **قبل** ما
+     6→//   يحفظ أي حاجة (كل صورة VLM بـ 35 ثانية) — والعميل بيقطع بعد 120 ثانية
+     7→//   ويقول للطالب «تم التقديم» **بالكذب** والسيرفر لسه ما حفظش → مفيش صف في
+     8→//   ExamResult → الامتحان يختفي من عند المستر خالص + حارس التسلسل يفتكر
+     9→//   إن الطالب ما خدش الامتحان → قفل كاذب على كل اللي بعده.
+    10→//   التدفق الجديد (نفس نهج الواجبات المصلح):
+    11→//   1) تصحيح الاختياري فورًا (محلي، بلا ثواني)
+    12→//   2) حفظ صف ExamResult فورًا (درجة الاختياري + الأسئلة المقالية بحالة pending)
+    13→//   3) رد 200 على الطالب في ثواني — «التسليم وصل» كلام صادق مضمون
+    14→//   4) التصحيح الذكي للمقالي كله في الخلفية (after) وبعدها UPDATE الدرجة
+    15→//   كمان: امتحانات النماذج (models) بقيت مدعومة في التسليم — نفس اختيار
+    16→//   النموذج الحتمي اللي الطالب شافه في القايمة (pickModelIdx + fixedModel)
+    17→
+    18→import { NextResponse } from 'next/server'
+    19→import { after } from 'next/server'
+    20→import { db } from '@/lib/db'
+    21→import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds, finalAnswerCandidates } from '@/lib/ai-image-grader'
+    22→import { quickSmartMatch, gradeFallbackDecisive } from '@/lib/smart-grader'
+    23→/* (2026-و44) تسريع التصحيح — توازي محدود (اتنين) بمرحلة بداية متدرجة */
+    24→import { runGradePool } from '@/lib/grade-pool'
+    25→/* (2026-و33) مصدر واحد لمفتاح الإجابة — نفس الدالة اللي شاشة المراجعة بتستخدمها على العميل */
+    26→import { normalizeCorrectKey } from '@/lib/correct-key'
+    27→/* (2026-و29) مسار gradeWritingSmart الجماعي اتشال من التسليم — كان نداء AI واحد
+    28→   لكل الأسئلة المقالية: أي 429/timeout/JSON مقطوع = فولباك للدفعة كلها = «كله غلط».
+    29→   دلوقتي تصحيح متسلسل سؤال-بسؤال (نفس إصلاح الواجب و25) — فشل سؤال ما يأثرش على غيره. */
+    30→import { checkExamSequential } from '@/lib/sequential-guard'
+    31→import { parseQuestions, resolveQuestionsForStudent } from '@/lib/exam-models'
+    32→/* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات صور = اختياري مش مقالي */
+    33→import { isWritingQuestion } from '@/lib/question-figures'
+    34→/* (2026-و87) إشعار ولي الأمر بعد التسليم — القوالب من lib/parent-notify */
+    35→import { notifyParentsOfResult } from '@/lib/parent-notify'
+    36→
+    37→export const runtime = 'nodejs'
+    38→export const maxDuration = 300
+    39→
+    40→/* (2026-و29) كاش على مستوى الموديول: كل ALTER = نداء شبكة لقاعدة البيانات — تنفيذها في كل ريكوست كان بيدفع نداءات ضاية في كل تحميل (من أكبر أسباب بطء المنصة) — دلوقتي مرة واحدة لكل instance */
+    41→var _examResultReady: Promise<void> | null = null
+    42→async function ensureTable() {
+    43→  if (!_examResultReady) {
+    44→    _examResultReady = (async function () {
+    45→  try {
+    46→    await db.$executeRawUnsafe(`
+    47→      CREATE TABLE IF NOT EXISTS ExamResult (
+    48→        id TEXT PRIMARY KEY,
+    49→        examId TEXT NOT NULL,
+    50→        studentId TEXT NOT NULL,
+    51→        score REAL NOT NULL DEFAULT 0,
+    52→        maxScore REAL NOT NULL DEFAULT 100,
+    53→        answers TEXT DEFAULT '',
+    54→        writingGrades TEXT DEFAULT '',
+    55→        submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    56→      )
+    57→    `)
+    58→    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN answers TEXT DEFAULT ""') } catch(e) {}
+    59→    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN writingGrades TEXT DEFAULT ""') } catch(e) {}
+    60→    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN writingResults TEXT DEFAULT ""') } catch(e) {}
+    61→    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN gradeOverrides TEXT DEFAULT ""') } catch(e) {}
+    62→    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP') } catch(e) {}
+    63→    /* (25-ب1) أعمدة الميزات الجديدة على Exam/Homework — defensive ALTERs
+    64→       بنفس نمط المشروع (ممنوع db:push): إظهار الإجابات + المؤقت + الجدولة */
+    65→    try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN showResult INTEGER DEFAULT 0') } catch(e) {}
+    66→    try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN timeLimitMin INTEGER DEFAULT 0') } catch(e) {}
+    67→    try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN scheduledAt DATETIME') } catch(e) {}
+    68→    try { await db.$executeRawUnsafe('ALTER TABLE Homework ADD COLUMN scheduledAt DATETIME') } catch(e) {}
+    69→    try { await db.$executeRawUnsafe("ALTER TABLE Exam ADD COLUMN targetStudentIds TEXT DEFAULT ''") } catch(e) {}
+    70→    /* (2026-و29) استهداف المجموعات */
+    71→    try { await db.$executeRawUnsafe("ALTER TABLE Exam ADD COLUMN targetGroupIds TEXT DEFAULT ''") } catch(e) {}
+    72→  } catch (e) {
+    73→    console.error('Ensure ExamResult table error:', e)
+    74→  }
+    75→})()
+    76→  }
+    77→  await _examResultReady
+    78→}
+    79→
+    80→/* ===== اختيار النموذج الحتمي — بقى مشترك من lib/exam-models (2026-و22)
+    81→   عشان كل مكان (تسليم/عرض/إعادة تصحيح) يحسب نفس أسئلة الطالب بالظبط ===== */
+    82→
+    83→
+    84→/* (2026-و33) دالة تطبيع مفتاح الإجابة اتنقلت للمكتبة المشتركة src/lib/correct-key.ts
+    85→   عشان السيرفر وشاشة المراجعة على العميل يحسبوا نفس المفتاح بالظبط */
+    86→
+    87→export async function POST(request) {
+    88→  try {
+    89→    var body = await request.json()
+    90→    var studentId = body.studentId
+    91→    var examId = body.examId
+    92→    var answers = body.answers
+    93→
+    94→    if (!studentId || !examId || answers === undefined || answers === null) {
+    95→      return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
+    96→    }
+    97→
+    98→    await ensureTable()
+    99→
+   100→    // Check double submission
+   101→    try {
+   102→      var existing = await db.$queryRawUnsafe(
+   103→        'SELECT id FROM ExamResult WHERE studentId = ? AND examId = ? LIMIT 1',
+   104→        studentId, examId
+   105→      )
+   106→      if (existing && existing.length > 0) {
+   107→        return NextResponse.json({ alreadySubmitted: true, submitted: true, blocked: true }, { status: 200 })
+   108→      }
+   109→    } catch (e) {
+   110→      console.error('Check existing exam result error:', e)
+   111→    }
+   112→
+   113→    // الترتيب التسلسلي (نفس نظام الفيديوهات — طلب المستر)
+   114→    try {
+   115→      var seqCheck = await checkExamSequential(examId, studentId)
+   116→      if (!seqCheck.ok) {
+   117→        return NextResponse.json({ error: seqCheck.reason, sequentialLocked: true }, { status: seqCheck.code || 423 })
+   118→      }
+   119→    } catch (e) {}
+   120→
+   121→    // Fetch exam (مع النماذج عشان نعرف أسئلة الطالب الفعلية)
+   122→    var exam = null
+   123→    try {
+   124→      /* (25-ب1) showResult مضاف للـ SELECT — بنقرأه بس للرد النهائي
+   125→         (إظهار نتيجة الاختياري للطالب أو رسالة الانتظار) */
+   126→      var examRows = await db.$queryRawUnsafe(
+   127→        'SELECT id, title, questions, passScore, models, modelMode, fixedModel, showResult, targetStudentIds, targetGroupIds FROM Exam WHERE id = ? LIMIT 1',
+   128→        examId
+   129→      )
+   130→      exam = examRows && examRows.length > 0 ? examRows[0] : null
+   131→    } catch (e) {
+   132→      console.error('Fetch exam error:', e)
+   133→      return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
+   134→    }
+   135→    if (!exam) {
+   136→      return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
+   137→    }
+   138→
+   139→    /* (2026-و26) حارس الاستهداف: الامتحان الموجه لطلاب محددين — التسليم
+   140→       مسموح للي اسمه في القايمة بس (حتى لو طلبه بنفسه بالـ API)
+   141→       (2026-و29) + استهداف المجموعات: عضو المجموعة المستهدفة مسموح برضه */
+   142→    try {
+   143→      var tParsed = JSON.parse(String((exam as any).targetStudentIds || '[]'))
+   144→      var gParsed: string[] = []
+   145→      try { var gpX = JSON.parse(String((exam as any).targetGroupIds || '[]')); if (Array.isArray(gpX)) gParsed = gpX } catch (e) {}
+   146→      var allowedHere = true
+   147→      var studentGroupHere = ''
+   148→      if ((Array.isArray(tParsed) && tParsed.length > 0) || gParsed.length > 0) {
+   149→        allowedHere = false
+   150→        if (Array.isArray(tParsed) && tParsed.indexOf(String(studentId)) !== -1) allowedHere = true
+   151→        if (!allowedHere && gParsed.length > 0) {
+   152→          try {
+   153→            var sgRowsHere = await db.$queryRawUnsafe('SELECT groupId FROM Student WHERE id = ? LIMIT 1', studentId) as any[]
+   154→            if (sgRowsHere && sgRowsHere.length > 0) studentGroupHere = String(sgRowsHere[0].groupId || '')
+   155→            if (studentGroupHere && gParsed.indexOf(studentGroupHere) !== -1) allowedHere = true
+   156→          } catch (sgErr) {}
+   157→        }
+   158→      }
+   159→      if (!allowedHere) {
+   160→        return NextResponse.json({ error: 'الامتحان ده مش موجه ليك — كلمني لو فيه غلط' }, { status: 403 })
+   161→      }
+   162→    } catch (e) {}
+   163→
+   164→    // Parse questions — (2026-و22) الـ helper المشترك resolveQuestionsForStudent:
+   165→    // لو الامتحان فيه نماذج ← أسئلة نموذج الطالب هو هي الأصل للتصحيح
+   166→    // (حتى لو فيه أسئلة أساس — الطالب شاف النموذج بتاعه فلازم يتصحح عليه)،
+   167→    // والأساس بوابه احتياط. نفس الدالة اللي بتقرأ شاشات الأدمن — صفر تعارض.
+   168→    var questions = resolveQuestionsForStudent(exam, studentId, examId)
+   169→    if (questions.length === 0) {
+   170→      questions = parseQuestions(exam.questions)
+   171→    }
+   172→    if (questions.length === 0) {
+   173→      return NextResponse.json({ error: 'لا توجد أسئلة في هذا الامتحان' }, { status: 400 })
+   174→    }
+   175→
+   176→    // Helper: look up student answer by original index
+   177→    function lookupAnswer(ans: any, idx: number): any {
+   178→      try {
+   179→        if (Array.isArray(ans)) return ans[idx]
+   180→        if (ans !== null && typeof ans === 'object') {
+   181→          return ans[idx] !== undefined ? ans[idx] : ans[String(idx)]
+   182→        }
+   183→      } catch (e) {}
+   184→      return undefined
+   185→    }
+   186→
+   187→    // Separate MCQ from writing questions - track original index
+   188→    var mcqQuestions: any[] = []
+   189→    var writingQuestions: any[] = []
+   190→    questions.forEach(function(q, idx) {
+   191→      /* (و45) تصنيف موحّد: سؤال له اختيارات (نص أو صور/رسومات) = اختياري دايمًا */
+   192→      var isWriting = isWritingQuestion(q)
+   193→      if (isWriting) writingQuestions.push({ q: q, origIdx: idx })
+   194→      else mcqQuestions.push({ q: q, origIdx: idx })
+   195→    })
+   196→
+   197→    // ===== المرحلة 1: تصحيح الاختياري فورًا (محلي — مفيش انتظار) =====
+   198→    var score = 0
+   199→    var maxScore = 0
+   200→    /* 2026-و11 — أسئلة اختيارية من غير مفتاح مؤكد: صفر درجة + مراجعة مستر — مش (A) بالحر */
+   201→    var keylessMcq: any[] = []
+   202→    mcqQuestions.forEach(function(item, i) {
+   203→      var q = item.q
+   204→      var origIdx = item.origIdx
+   205→      var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+   206→      maxScore += pts
+   207→      var opts = Array.isArray(q.options) ? q.options : []
+   208→      /* (2026-و32) تطبيع مفتاح الإجابة (normalizeCorrectKey تحت) — أي صيغة مخزنة غريبة ما تخلّيش السؤال keyless واللي حل صح ياخد صفر */
+   209→      var correctIdx = normalizeCorrectKey(q, opts)
+   210→      if (correctIdx < 0 || correctIdx >= opts.length) {
+   211→        keylessMcq.push({
+   212→          index: origIdx,
+   213→          question: String(q.question || q.q || ('السؤال ' + (origIdx + 1))),
+   214→          points: pts,
+   215→          studentAnswer: lookupAnswer(answers, origIdx),
+   216→        })
+   217→        return /* صفر درجة — مفيش تخمين */
+   218→      }
+   219→      var studentAnswer = lookupAnswer(answers, origIdx)
+   220→      if (studentAnswer !== undefined && studentAnswer !== null && Number(studentAnswer) === correctIdx) {
+   221→        score += pts
+   222→      }
+   223→    })
+   224→
+   225→    // بناء مصفوفة أسئلة المقالي بحالة pending (التصحيح الذكي في الخلفية)
+   226→    var textWorkload: any[] = []
+   227→    var imageWorkload: any[] = []
+   228→    var pendingGrades: any[] = []
+   229→    var ptsByOrig: Record<number, number> = {}
+   230→
+   231→    for (var wi = 0; wi < writingQuestions.length; wi++) {
+   232→      var wItem = writingQuestions[wi]
+   233→      var wq = wItem.q
+   234→      var wOrigIdx = wItem.origIdx
+   235→      var pts = (typeof wq.points === 'number' && wq.points > 0) ? wq.points : 5
+   236→      maxScore += pts
+   237→      ptsByOrig[wOrigIdx] = pts
+   238→
+   239→      var lookedUp = lookupAnswer(answers, wOrigIdx)
+   240→      var studentText = lookedUp !== undefined && lookedUp !== null ? String(lookedUp) : ''
+   241→
+   242→      var wEntry = {
+   243→        origIdx: wOrigIdx,
+   244→        question: wq.question || wq.q || '',
+   245→        modelAnswer: wq.modelAnswer || wq.answer || '',
+   246→        acceptedAnswers: Array.isArray(wq.acceptedAnswers) ? wq.acceptedAnswers : [],
+   247→        points: pts,
+   248→        studentText: studentText,
+   249→      }
+   250→
+   251→      pendingGrades.push({
+   252→        origIdx: wOrigIdx,
+   253→        question: wEntry.question,
+   254→        answer: studentText,
+   255→        modelAnswer: wEntry.modelAnswer,
+   256→        awardedPoints: 0,
+   257→        maxPoints: pts,
+   258→        isCorrect: false,
+   259→        feedback: 'التصحيح الذكي جاري — هتظهر درجتك كاملة بعد لحظات',
+   260→        gradingStatus: 'pending',
+   261→      })
+   262→
+   263→      var mediaIds = extractImageMediaIds(studentText)
+   264→      if (mediaIds.length > 0) imageWorkload.push(wEntry)
+   265→      else textWorkload.push(wEntry)
+   266→    }
+   267→
+   268→    /* 2026-و11 — أسئلة المفتاح الناقص بتتحط في المراجعة بحالة graded
+   269→       (مش pending عشان إعادة التصحيح الذاتي متحاولش تصححها بالـ AI)
+   270→       — صفر درجة صادق + رسالة واضحة للطالب والمستر */
+   271→    for (var ki = 0; ki < keylessMcq.length; ki++) {
+   272→      var km = keylessMcq[ki]
+   273→      pendingGrades.push({
+   274→        origIdx: km.index,
+   275→        question: km.question,
+   276→        answer: km.studentAnswer !== undefined && km.studentAnswer !== null ? String(km.studentAnswer) : '',
+   277→        modelAnswer: '⚠ السؤال ده من غير إجابة مؤكدة في مفتاح الدرجات — المستر هيحدد الإجابة الصحيحة ويعيد التصحيح',
+   278→        awardedPoints: 0,
+   279→        maxPoints: km.points,
+   280→        isCorrect: false,
+   281→        feedback: '⚠ السؤال ده محتاج مراجعة المستر — إجابته مش مؤكدة في مفتاح الدرجات',
+   282→        gradingStatus: 'graded',
+   283→        needsManualKey: true,
+   284→      })
+   285→    }
+   286→
+   287→    if (maxScore === 0) { maxScore = questions.length }
+   288→
+   289→    // ===== المرحلة 2: **حفظ فوري** — الصف موجود من اللحظة دي في عند المستر =====
+   290→    var resultId = 'exr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+   291→    var answersJson = ''
+   292→    if (answers !== undefined && answers !== null) {
+   293→      /* (2026-و40-w) قيم جداول ورقة العمل بتيجي في body.tableAnswers
+   294→         (مفتاح: الفهرس الأصلي للسؤال → مصفوفة مصفوفات) — بتتخزن جوه
+   295→         JSON الإجابات نفسه تحت مفتاح مميز __tableAnswers عشان شاشات
+   296→         المراجعة تعرض الجدول معبى — مفيش أي تأثير على التصحيح
+   297→         (التصحيح بيقرأ الفهارس الرقمية بس) */
+   298→      var storedAnswers: any = answers
+   299→      try {
+   300→        if (body && body.tableAnswers && typeof body.tableAnswers === 'object' && !Array.isArray(body.tableAnswers) && Object.keys(body.tableAnswers).length > 0) {
+   301→          storedAnswers = Object.assign({}, answers, { __tableAnswers: body.tableAnswers })
+   302→        }
+   303→      } catch (eTa) {}
+   304→      try { answersJson = JSON.stringify(storedAnswers) } catch(e) { answersJson = '' }
+   305→    }
+   306→    var writingGradesJson = ''
+   307→    try { writingGradesJson = JSON.stringify(pendingGrades) } catch(e) { writingGradesJson = '' }
+   308→
+   309→    try {
+   310→      /* 2026-و22 — بنكتب العمودين مع بعض (writingGrades + writingResults):
+   311→         شاشات الأدمن بتقرأ writingResults — لو ما اتكتبش كان البادج
+   312→         «بيتصحح بالذكاء الاصطناعي» فضل ظاهر لحد ما الإصلاح الذاتي يعدّي */
+   313→      await db.$executeRawUnsafe(
+   314→        'INSERT INTO ExamResult (id, studentId, examId, score, maxScore, answers, writingGrades, writingResults) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+   315→        resultId, studentId, examId, score, maxScore, answersJson, writingGradesJson, writingGradesJson
+   316→      )
+   317→    } catch (insertErr) {
+   318→      console.error('Insert exam result error:', insertErr)
+   319→      try {
+   320→        await db.$executeRawUnsafe(
+   321→          'INSERT INTO ExamResult (id, studentId, examId, score, maxScore, answers, writingGrades) VALUES (?, ?, ?, ?, ?, ?, ?)',
+   322→          resultId, studentId, examId, score, maxScore, answersJson, writingGradesJson
+   323→        )
+   324→      } catch (retryErr) {
+   325→        console.error('Retry insert exam result error:', retryErr)
+   326→        return NextResponse.json({ error: 'حدث خطأ أثناء تسليم الامتحان' }, { status: 500 })
+   327→      }
+   328→    }
+   329→
+   330→    // ===== المرحلة 3: رد فوري صادق — التسليم وصل مضمون =====
+   331→    // (التصحيح الذكي للمقالي بيكمل في after() وبعدها UPDATE الدرجة)
+   332→    after(async () => {
+   333→      // 3أ) نص → التصحيح الذكي (مطابقة سريعة + دفعة AI واحدة + fallback)
+   334→      var textGraded: any[] = []
+   335→      var imageGraded: any[] = []
+   336→
+   337→      /* (2026-و25) partial persist — بنكتب الحكم الحالي بعد كل مرحلة: لو
+   338→         التسليم الخلفي اتقطع (serverless timeout/crash) اللي اتصحح مش بيضيع،
+   339→         والباقي بيفضل pending و gradesLookPending بيلقطه للإصلاح الذاتي
+   340→         (sweep / إعادة تصحيح الأدمن). الحكم النهائي (isFinal) بس هو اللي
+   341→         بيحوّل اللي ماتصححش لفولباك حاسم بدل ما يفضل معلق. */
+   342→      var persistExamGrades = async function(isFinal: boolean) {
+   343→        try {
+   344→          var gradesByOrig: Record<number, any> = {}
+   345→          for (var tx = 0; tx < textWorkload.length; tx++) {
+   346→            var tg = textGraded[tx]
+   347→            if (tg) gradesByOrig[textWorkload[tx].origIdx] = tg
+   348→          }
+   349→          for (var ix = 0; ix < imageWorkload.length; ix++) {
+   350→            var ig = imageGraded[ix]
+   351→            if (ig) gradesByOrig[imageWorkload[ix].origIdx] = ig
+   352→          }
+   353→          var writingScore = 0
+   354→          var finalGrades: any[] = []
+   355→          for (var pi = 0; pi < pendingGrades.length; pi++) {
+   356→            var pg = pendingGrades[pi]
+   357→            var gr = gradesByOrig[pg.origIdx]
+   358→            if (gr) {
+   359→              writingScore += Number(gr.awardedPoints) || 0
+   360→              finalGrades.push({
+   361→                origIdx: pg.origIdx,
+   362→                question: gr.question || pg.question,
+   363→                answer: gr.answer !== undefined ? gr.answer : pg.answer,
+   364→                modelAnswer: gr.modelAnswer || pg.modelAnswer,
+   365→                awardedPoints: gr.awardedPoints,
+   366→                maxPoints: gr.maxPoints || pg.maxPoints,
+   367→                isCorrect: gr.isCorrect,
+   368→                feedback: gr.feedback,
+   369→                gradingStatus: gr.gradingStatus || 'graded',
+   370→                needsGrading: gr.needsGrading === true ? true : undefined,
+   371→                aiExtractedAnswer: gr.aiExtractedAnswer || '',
+   372→              })
+   373→            } else if (pg.needsManualKey || pg.gradingStatus !== 'pending') {
+   374→              // أسئلة مفتاح ناقص — حكمها جاهز من التسليم
+   375→              finalGrades.push(pg)
+   376→            } else if (!isFinal) {
+   377→              // snapshot جزئي: لسه ما اتصرحش — بيفضل pending للإصلاح الذاتي
+   378→              finalGrades.push(pg)
+   379→            } else if ((pg.answer || '').trim()) {
+   380→              // (2026-و25) سؤال اتجاوب عليه فعلاً ومقدرناش نصححه (فشل كلي) —
+   381→              // ممنوع الصفر الصامت «لم يتم الإجابة» على محاولة حقيقية:
+   382→              // صورة → نص درجة المحاولة، نص → fallback حاسم بالقيم/التشابه
+   383→              if (/\[📷/.test(pg.answer || '')) {
+   384→                var imHalf = Math.ceil((pg.maxPoints || 1) / 2)
+   385→                writingScore += imHalf
+   386→                finalGrades.push({
+   387→                  origIdx: pg.origIdx,
+   388→                  question: pg.question,
+   389→                  answer: pg.answer,
+   390→                  modelAnswer: pg.modelAnswer,
+   391→                  awardedPoints: imHalf,
+   392→                  maxPoints: pg.maxPoints,
+   393→                  isCorrect: false,
+   394→                  feedback: 'صورة الحل اترفعت — درجة مؤقتة لحد ما المستر يراجعها وعدّلها من لوحته',
+   395→                  gradingStatus: 'graded',
+   396→                  aiExtractedAnswer: '(صورة الحل مقدرناش نقراها بدقة)',
+   397→                })
+   398→              } else {
+   399→                var fbD = gradeFallbackDecisive({
+   400→                  question: pg.question,
+   401→                  answer: pg.answer,
+   402→                  modelAnswer: pg.modelAnswer || '',
+   403→                  acceptedAnswers: [],
+   404→                  points: pg.maxPoints || 1,
+   405→                })
+   406→                writingScore += Number(fbD.awardedPoints) || 0
+   407→                finalGrades.push({
+   408→                  origIdx: pg.origIdx,
+   409→                  question: pg.question,
+   410→                  answer: pg.answer,
+   411→                  modelAnswer: pg.modelAnswer,
+   412→                  awardedPoints: fbD.awardedPoints,
+   413→                  maxPoints: fbD.maxPoints,
+   414→                  isCorrect: fbD.isCorrect,
+   415→                  feedback: fbD.feedback,
+   416→                  gradingStatus: 'graded',
+   417→                })
+   418→              }
+   419→            } else {
+   420→              // السؤال ده اتسلّم من غير نص ولا صورة → صفر صريح مش pending
+   421→              finalGrades.push({
+   422→                origIdx: pg.origIdx,
+   423→                question: pg.question,
+   424→                answer: pg.answer,
+   425→                modelAnswer: pg.modelAnswer,
+   426→                awardedPoints: 0,
+   427→                maxPoints: pg.maxPoints,
+   428→                isCorrect: false,
+   429→                feedback: 'لم يتم الإجابة',
+   430→                gradingStatus: 'graded',
+   431→              })
+   432→            }
+   433→          }
+   434→
+   435→          var finalScore = score + writingScore
+   436→          var finalJson = ''
+   437→          try { finalJson = JSON.stringify(finalGrades) } catch(e) { finalJson = writingGradesJson }
+   438→
+   439→          /* 2026-و22 — العمودين مع بعض (writingGrades + writingResults) */
+   440→          await db.$executeRawUnsafe(
+   441→            'UPDATE ExamResult SET score = ?, writingGrades = ?, writingResults = ? WHERE id = ?',
+   442→            finalScore, finalJson, finalJson, resultId
+   443→          )
+   444→        } catch (pErr) {
+   445→          console.error('Exam persist grades error:', pErr)
+   446→        }
+   447→      }
+   448→
+   449→      /* (2026-و29 + و44) تصحيح سؤال-بسؤال بتوازي محدود (اتنين مع بعض):
+   450→         1) مطابقة سريعة محلية (quickSmartMatch) → كاملة من غير AI
+   451→         2) AI لكل سؤال لوحده (gradeTextAnswer — فيه تحقق قيم مدمج STRICT VERIFY)
+   452→         3) فشل/عدم تأكد → فولباك حاسم للسؤال ده بس (مش الدفعة كلها)
+   453→         + partial persist بعد كل سؤال — اللي اتصحح مش بيضيع لو اتقطعنا
+   454→         + (و44) طلب المستر «تسرع التصحيح»: النصي والصور في pool واحد
+   455→           بعاملين مع تأخير بداية — نفس منطق كل سؤال بالظبط، بس أسرع ~1.8x */
+   456→      var gradeTasks: (() => Promise<void>)[] = []
+   457→      var _tw2: number
+   458→      for (_tw2 = 0; _tw2 < textWorkload.length; _tw2++) {
+   459→        (function (tw: number) {
+   460→          gradeTasks.push(async function () {
+   461→            try {
+   462→              var twItem = textWorkload[tw]
+   463→              var twAnswer = twItem.studentText || ''
+   464→              var graded1: any = null
+   465→              if (!twAnswer.trim() || twAnswer.trim() === '[📷 صورة مرفقة]') {
+   466→                graded1 = {
+   467→                  question: twItem.question, answer: twAnswer, modelAnswer: twItem.modelAnswer,
+   468→                  awardedPoints: 0, maxPoints: twItem.points, isCorrect: false,
+   469→                  feedback: 'لم يتم الإجابة', gradingStatus: 'graded',
+   470→                }
+   471→              } else if (quickSmartMatch(twAnswer, twItem.modelAnswer || '', twItem.acceptedAnswers || []) === true) {
+   472→                /* (و24) ملاحظة شخصية زي معلم بيتكلم مع الطالب — حتى في المسار السريع */
+   473→                var stNote = (finalAnswerCandidates(twAnswer)[0] || twAnswer.trim() || '').slice(0, 40)
+   474→                graded1 = {
+   475→                  question: twItem.question, answer: twAnswer, modelAnswer: twItem.modelAnswer,
+   476→                  awardedPoints: twItem.points, maxPoints: twItem.points, isCorrect: true,
+   477→                  feedback: 'برافو عليك ✓ الإجابة النهائية (' + stNote + ') مطابقة للإجابة الصحيحة',
+   478→                  gradingStatus: 'graded',
+   479→                }
+   480→              } else {
+   481→                var tGrade: any = null
+   482→                try {
+   483→                  tGrade = await gradeTextAnswer({
+   484→                    question: twItem.question,
+   485→                    studentAnswer: twAnswer,
+   486→                    modelAnswer: twItem.modelAnswer || '',
+   487→                    acceptedAnswers: twItem.acceptedAnswers || [],
+   488→                    maxPoints: twItem.points,
+   489→                  })
+   490→                } catch (tgErr) { console.error('[exam-submit] text grade error:', tgErr) }
+   491→                if (tGrade && !tGrade.needsGrading) {
+   492→                  graded1 = {
+   493→                    question: twItem.question, answer: twAnswer, modelAnswer: twItem.modelAnswer,
+   494→                    awardedPoints: tGrade.awardedPoints || 0, maxPoints: twItem.points,
+   495→                    isCorrect: tGrade.isCorrect === true,
+   496→                    feedback: tGrade.feedback || (tGrade.isCorrect ? 'إجابة صحيحة' : 'إجابة مختلفة عن الإجابة الصحيحة'),
+   497→                    gradingStatus: 'graded',
+   498→                  }
+   499→                } else {
+   500→                  /* AI فشل أو مش متأكد في السؤال ده بس → فولباك حاسم —
+   501→                     تكافؤ القيم → كاملة، علاقة بالحل → نص درجة + مراجعة */
+   502→                  graded1 = gradeFallbackDecisive({
+   503→                    question: twItem.question, answer: twAnswer,
+   504→                    modelAnswer: twItem.modelAnswer || '',
+   505→                    acceptedAnswers: twItem.acceptedAnswers || [],
+   506→                    points: twItem.points,
+   507→                  })
+   508→                }
+   509→              }
+   510→              textGraded[tw] = graded1
+   511→              await persistExamGrades(false)
+   512→            } catch (twErr) {
+   513→              console.error('[exam-submit] text task error:', twErr)
+   514→            }
+   515→          })
+   516→        })(_tw2)
+   517→      }
+   518→      /* الصور في نفس الـ pool — بتتقص على اتنين زي النصي بالظبط */
+   519→      var _im2: number
+   520→      for (_im2 = 0; _im2 < imageWorkload.length; _im2++) {
+   521→        (function (im: number) {
+   522→          gradeTasks.push(async function () {
+   523→            var iw = imageWorkload[im]
+   524→            var mediaIds2 = extractImageMediaIds(iw.studentText)
+   525→            var gradeData: any = null
+   526→            try {
+   527→              gradeData = await gradeImageAnswer({
+   528→                mediaId: mediaIds2[0],
+   529→                question: iw.question,
+   530→                modelAnswer: iw.modelAnswer,
+   531→                acceptedAnswers: iw.acceptedAnswers,
+   532→                maxPoints: iw.points,
+   533→                /* (و44) النص الكامل للإجابة — عشان «الجدول: …» المكتوب بالكيبورد
+   534→                   يتحسب مع الرسمة المصورة في نفس الحكم (المستر: التصحيح من الاثنين) */
+   535→                studentText: iw.studentText || '',
+   536→              })
+   537→            } catch (imErr) {
+   538→              console.error('Exam writing image grade error:', imErr)
+   539→            }
+   540→            if (gradeData && gradeData.needsGrading !== true) {
+   541→              /* حكم الـ AI الواثق — نهائي: صح/جزئي/غلط (زي الواجب بالظبط) */
+   542→              var imAwarded = Math.min(Math.max(Math.round(Number(gradeData.awardedPoints) || (gradeData.isCorrect ? iw.points : 0)), 0), iw.points)
+   543→              imageGraded[im] = {
+   544→                question: iw.question,
+   545→                answer: iw.studentText,
+   546→                modelAnswer: iw.modelAnswer,
+   547→                awardedPoints: imAwarded,
+   548→                maxPoints: iw.points,
+   549→                isCorrect: imAwarded >= Math.ceil(iw.points * 0.5) && imAwarded > 0,
+   550→                feedback: gradeData.feedback || (imAwarded > 0 ? 'تم تصحيح صورة الحل' : 'الحل مش مطابق'),
+   551→                gradingStatus: 'graded',
+   552→                aiExtractedAnswer: gradeData.extractedAnswer || '',
+   553→              }
+   554→            } else {
+   555→              /* 2026-و13 — طلب المستر الحرفي: الامتحان يتصرف زي الواجب بالظبط —
+   556→                 مفيش حالة «محتاجة مراجعة» معلقة وخالص: الـ AI مش متأكد من قراية
+   557→                 الصورة ← درجة مؤقتة عادلة (نص درجة المحاولة) والمستر يقدر يعدلها
+   558→                 بضغطة من لوحته — مفيش صفر ظالم ومفيش بادج معلق */
+   559→              var hasRealWork = iw.studentText.replace(/\[📷[^\]]*\]/g, '').trim().length > 0
+   560→              imageGraded[im] = {
+   561→                question: iw.question,
+   562→                answer: iw.studentText,
+   563→                modelAnswer: iw.modelAnswer,
+   564→                awardedPoints: hasRealWork ? Math.ceil(iw.points / 2) : 0,
+   565→                maxPoints: iw.points,
+   566→                isCorrect: false,
+   567→                feedback: hasRealWork
+   568→                  ? 'صورة الحل اترفعت — درجة مؤقتة لحد ما تراجعها وعدّلها من لوحتك'
+   569→                  : 'لم يتم الإجابة',
+   570→                gradingStatus: 'graded',
+   571→                aiExtractedAnswer: hasRealWork ? '(صورة الحل مقدرناش نقراها بدقة)' : '',
+   572→              }
+   573→            }
+   574→            /* (2026-و25) snapshot بعد كل صورة — اللي اتصحح متضيعش لو اتقطعنا */
+   575→            await persistExamGrades(false)
+   576→          })
+   577→        })(_im2)
+   578→      }
+   579→      try {
+   580→        await runGradePool(gradeTasks, 2, 400)
+   581→      } catch (grErr) {
+   582→        console.error('Exam writing grade error:', grErr)
+   583→      }
+   584→      /* شبكة أمان: أي سؤال نصي ماحصلش حكم ليه → فولباك حاسم (مفيش pending) */
+   585→      for (var twF = 0; twF < textWorkload.length; twF++) {
+   586→        if (!textGraded[twF]) {
+   587→          textGraded[twF] = gradeFallbackDecisive({
+   588→            question: textWorkload[twF].question,
+   589→            answer: textWorkload[twF].studentText,
+   590→            modelAnswer: textWorkload[twF].modelAnswer || '',
+   591→            acceptedAnswers: textWorkload[twF].acceptedAnswers || [],
+   592→            points: textWorkload[twF].points,
+   593→          })
+   594→        }
+   595→      }
+   596→      await persistExamGrades(false)
+   597→
+   598→      // 3ج) الحكم النهائي — كل اللي ماتصححش بياخد fallback حاسم (مش pending)
+   599→      await persistExamGrades(true)
+   600→
+   601→      /* (2026-و87) إشعار ولي الأمر بالدرجة النهائية — طلب المستر: «لما الطالب
+   602→         يسلّم الامتحان ولي الأمر ياخد إشعار بالاسم والدرجة» — بنستنى اكتمال
+   603→         التصحيح كله عشان الرقم يكون نهائي وصادق. أي فشل ما يبوّظش حاجة. */
+   604→      try {
+   605→        var exFin: any = await db.$queryRawUnsafe('SELECT score, maxScore FROM ExamResult WHERE id = ? LIMIT 1', resultId)
+   606→        exFin = exFin || []
+   607→        if (exFin.length > 0) {
+   608→          /* (و88) siteUrl = origin المنصة — عشان رسالة الواتساب الخارجية
+   609→             تيجي بلينك بيفتح صفحة تسجيل دخول ولي الأمر على طول */
+   610→          var requestOrigin = ''
+   611→          try { requestOrigin = new URL(request.url).origin } catch (roErr) {}
+   612→          await notifyParentsOfResult({
+   613→            studentId: studentId,
+   614→            kind: 'exam',
+   615→            title: String((exam as any).title || 'امتحان'),
+   616→            score: Number(exFin[0].score) || 0,
+   617→            maxScore: Number(exFin[0].maxScore) || 0,
+   618→            siteUrl: requestOrigin,
+   619→          })
+   620→        }
+   621→      } catch (pnErr) {
+   622→        console.error('[exam-submit] parent notify error (ignored):', pnErr)
+   623→      }
+   624→
+   625→      console.log('[exam-submit] background AI grading done:', resultId)
+   626→    })
+   627→
+   628→    /* (25-ب1) طلب المستر: حرية إظهار/إخفاء الإجابات بعد التسليم —
+   629→       showResult=false (الافتراضي): نفس الرد القديم حرفيًا — بدون أي نتيجة.
+   630→       showResult=true: الطالب يشوف نتيجة الاختياري فورًا (mcqScore + تفاصيل
+   631→       كل سؤال اختياري) والمقالي بيفضل «بانتظار تصحيح المستر».
+   632→       بناء mcqResults من الاختياري المحسوب مسبقًا في المرحلة 1 (mcqQuestions)
+   633→       — نفس مقارنة الدرجة بالظبط، بدون أي إعادة تصحيح ولا لمس after() */
+   634→    /* (2026-و29) الدرجة العظمى للاختياري لوحده — عشان هيدر النتيجة الفورية
+   635→       «درجتك في الاختياري» يعرض mcqScore/mcqMaxScore صح بدل إجمالي شامل المقالي */
+   636→    var mcqMaxScore = 0
+   637→    mcqQuestions.forEach(function (item) {
+   638→      var pts = (typeof item.q.points === 'number' && item.q.points > 0) ? item.q.points : 1
+   639→      mcqMaxScore += pts
+   640→    })
+   641→
+   642→    var showResultOn = exam.showResult === 1 || exam.showResult === true
+   643→    if (showResultOn) {
+   644→      var mcqResults = mcqQuestions.map(function (item) {
+   645→        var q = item.q
+   646→        var origIdx = item.origIdx
+   647→        var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : 1
+   648→        var opts = Array.isArray(q.options) ? q.options : []
+   649→        /* (2026-و32) نفس التطبيع بتاع مرحلة الدرجات (normalizeCorrectKey فوق) — عرض نتيجة متطابق */
+   650→        var correctIdx = normalizeCorrectKey(q, opts)
+   651→        var keyless = correctIdx < 0 || correctIdx >= opts.length
+   652→        var raw = lookupAnswer(answers, origIdx)
+   653→        var isNum = raw !== undefined && raw !== null && raw !== '' && !isNaN(Number(raw))
+   654→        /* إجابة الطالب كنص: لو رقم → نص الخيار المختار عشان الطالب يشوف كلامه
+   655→           (لو الرقم بره حدود الخيارات → يظهر اللي بعته زي ما هو) */
+   656→        var studentText = ''
+   657→        if (raw !== undefined && raw !== null) {
+   658→          /* إجابة الطالب كنص: لو رقم → نص الخيار المختار عشان الطالب يشوف كلامه
+   659→             (لو الرقم بره حدود الخيارات → يظهر اللي بعته زي ما هو) */
+   660→          studentText = isNum ? String(opts[Number(raw)] ?? raw) : String(raw)
+   661→        }
+   662→        var isCorrect = !keyless && raw !== undefined && raw !== null && Number(raw) === correctIdx
+   663→        var entry: any = {
+   664→          origIdx: origIdx,
+   665→          question: String(q.question || q.q || ('السؤال ' + (origIdx + 1))),
+   666→          studentAnswer: studentText,
+   667→          correctAnswer: keyless ? '' : String(opts[correctIdx] || ''),
+   668→          isCorrect: isCorrect,
+   669→          points: pts,
+   670→        }
+   671→        if (keyless) {
+   672→          /* ملاحظة داخلية: سؤال اختياري من غير مفتاح مؤكد — صفر + مراجعة مستر
+   673→             (نفس منطق المرحلة 1 بالظبط — الحكم بييجي من المستر لاحقًا) */
+   674→          entry.needsManualKey = true
+   675→          entry.internalNote = '⚠ السؤال ده من غير إجابة مؤكدة في مفتاح الدرجات — المستر هيحدد الإجابة الصحيحة ويعيد التصحيح'
+   676→        }
+   677→        return entry
+   678→      })
+   679→      return NextResponse.json({
+   680→        success: true,
+   681→        submitted: true,
+   682→        showResult: true,
+   683→        message: 'تم تسليم الامتحان بنجاح',
+   684→        /* (2026-و33) معرف النتيجة — بيتستخدم كاش ملاحظات الاختيارات الذكية */
+   685→        resultId: resultId,
+   686→        mcqScore: score,
+   687→        maxScore: maxScore,
+   688→        mcqMaxScore: mcqMaxScore,
+   689→        writingPending: writingQuestions.length > 0,
+   690→        mcqResults: mcqResults,
+   691→      })
+   692→    }
+   693→
+   694→    return NextResponse.json({
+   695→      success: true,
+   696→      submitted: true,
+   697→      message: 'تم تسليم الامتحان بنجاح — انتظر النتيجة من المس',
+   698→    })
+   699→  } catch (error) {
+   700→    console.error('Exam submit error:', error)
+   701→    return NextResponse.json({ error: 'حدث خطأ أثناء تسليم الامتحان' }, { status: 500 })
+   702→  }
+   703→}
+   704→
