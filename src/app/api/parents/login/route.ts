@@ -39,11 +39,20 @@ export async function POST(request: NextRequest) {
       else if (digits.length === 10 && digits.indexOf('1') === 0) digits = '0' + digits
       return digits
     }
+    /* (و90) + تطبيع الحروف العربية المتشابهة (أ/ا، ى/ي، ة/ه…) — نفس تطبيع التسجيل */
+    var foldArabic = function (t: string): string {
+      return t
+        .replace(/[أإآ]/g, 'ا')
+        .replace(/ى/g, 'ي')
+        .replace(/ة/g, 'ه')
+        .replace(/ؤ/g, 'و')
+        .replace(/ئ/g, 'ي')
+    }
     var normPwd = function (v: string): string {
       var t = String(v || '')
       t = t.replace(/[٠-٩]/g, function (d) { return String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)) })
       t = t.replace(/[۰-۹]/g, function (d) { return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)) })
-      return t.replace(/\s+/g, '').trim().toLowerCase()
+      return foldArabic(t.replace(/\s+/g, '')).trim().toLowerCase()
     }
 
     var phoneNorm = normPhone(phone)
@@ -53,11 +62,23 @@ export async function POST(request: NextRequest) {
 
     try { await ensureParentTable() } catch (eDdl) {}
 
+    /* (و90) بحث بكل صيغ الرقم (المطبّع + الدولي 20xx + الأرقام الخام)
+       عشان أي اختلاف تخزين قديم ما يمنعش ولي الأمر من دخوله */
     var parent = null as any
-    try {
-      parent = await safeWrite(function () { return db.parent.findFirst({ where: { phone: phoneNorm } }) })
-    } catch (e1) {
-      try { parent = await db.parent.findFirst({ where: { phone: phoneNorm } }) } catch (e2) {}
+    var digitsOnly = phone.replace(/[^0-9]/g, '')
+    var phoneVariants: string[] = []
+    var pushVariant = function (v: string) { if (v && phoneVariants.indexOf(v) === -1) phoneVariants.push(v) }
+    pushVariant(phoneNorm)
+    if (digitsOnly.length === 12 && digitsOnly.indexOf('20') === 0) pushVariant('0' + digitsOnly.slice(2))
+    if (phoneNorm.length === 11 && phoneNorm.indexOf('0') === 0) pushVariant('20' + phoneNorm.slice(1))
+    pushVariant(digitsOnly)
+    for (var vi = 0; vi < phoneVariants.length; vi++) {
+      try {
+        parent = await safeWrite(function () { var pp = phoneVariants[vi]; return db.parent.findFirst({ where: { phone: pp } }) })
+      } catch (e1) {
+        try { var pp2 = phoneVariants[vi]; parent = await db.parent.findFirst({ where: { phone: pp2 } }) } catch (e2) {}
+      }
+      if (parent) break
     }
     if (!parent || normPwd(parent.password) !== normPwd(password)) {
       return NextResponse.json({ error: 'الباسورد أو الرقم بتاعك غلط' }, { status: 401 })

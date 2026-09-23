@@ -39,6 +39,7 @@ import { GroupTargetPicker } from './GroupTargetPicker'
 import { VideoGroupScheduleDialog } from './VideoGroupScheduleDialog'
 import { CommunityPanel } from './CommunityPanel'
 import { ActivityPanel } from './ActivityPanel'
+import { ParentsManager } from './ParentsManager'
 import { PaymentsPanel } from '@/components/PaymentsPanel'
 import { StudentTargetPicker, parseTargetStudentIds } from '@/components/admin/StudentTargetPicker'
 import { PlayerSettingsPanel } from '@/components/admin/PlayerSettingsPanel'
@@ -407,6 +408,8 @@ export function AdminDashboard() {
         <Tabs value={adminTab} onValueChange={setAdminTab} className="space-y-6">
           <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
             <TabsTrigger value="students" className="text-xs sm:text-sm gap-1"><Users className="h-4 w-4" /><span className="hidden sm:inline">{T('الطلاب', 'Students')}</span></TabsTrigger>
+            {/* (2026-و90) تاب أولياء الأمور — طلب المستر: «جنب قسم الطلاب… أول ما أضغط عليه يجيب لي أولياء الأمور اللي في المنصة فأقدر أمسح فيهم» */}
+            <TabsTrigger value="parents" className="text-xs sm:text-sm gap-1"><UserCheck className="h-4 w-4" /><span className="hidden sm:inline">{T('أولياء الأمور', 'Parents')}</span></TabsTrigger>
             {/* (2026-و29) تاب المجموعات — طلب المستر: تقسيم الطلاب مجموعات بأسماء الأيام */}
             <TabsTrigger value="groups" className="text-xs sm:text-sm gap-1"><UsersRound className="h-4 w-4" /><span className="hidden sm:inline">{T('المجموعات', 'Groups')}</span></TabsTrigger>
             <TabsTrigger value="my-students" className="text-xs sm:text-sm gap-1"><BarChart3 className="h-4 w-4" /><span className="hidden sm:inline">{T('طلابي', 'My Students')}</span></TabsTrigger>
@@ -435,6 +438,8 @@ export function AdminDashboard() {
           </TabsList>
 
           <TabsContent value="students"><StudentsManager onStatsRefresh={fetchStats} onViewImage={setImageModalSrc} /></TabsContent>
+          {/* (2026-و90) تاب أولياء الأمور */}
+          <TabsContent value="parents"><ParentsManager adminId={(currentAdmin && currentAdmin.id) || ''} /></TabsContent>
           {/* (2026-و29) تاب المجموعات */}
           <TabsContent value="groups"><GroupsManager /></TabsContent>
           <TabsContent value="my-students"><MyStudentsPanel onViewImage={setImageModalSrc} /></TabsContent>

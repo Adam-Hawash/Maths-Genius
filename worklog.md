@@ -3707,3 +3707,137 @@ Stage Summary:
 - في MG: تحديات الأسئلة العامة بقى فيها بوقت/من غير وقت ومدة يختارها صاحب الغرفة (الدرجة في وضع من غير وقت 60 ثابتة + ستريك)، والفلاش كاردز (في السباق والتاب المستقل) بالتصميم الجديد زي الصورة مع زرار ترجمة فوري وزرار مساعدة ذكية AI
 - الإنتاج محتاج صفر خطوات يدوية: أعمدة BattleRoom الجديدة بتتعمل لوحدها من بصمة السكيما (v2_w88)، وجدول parent_notifications موجود من و87
 - tsc: 30/30 baseline ×4 منصات — صفر أخطاء جديدة. الطلاب ودرجاتهم والتحدي (24 ساعة) ما اتلمسوش
+
+---
+Task ID: 89-c
+Agent: general-purpose (Shaimaa 89-c)
+Task: نقل Web Push لولي الأمر (و89) من MG إلى shaimaa-selim-science — استبدال واتساب و88 بإشعارات براوزر حقيقية + بانر تفعيل + sw.js
+
+Work Log:
+- البيئة: /home/z/platforms كان مفقود (الساندبوكس رجع snapshot) → re-clone shaimaa-selim-science من GitHub (Adam-Hawash) على آخر و88 (537c2cc) — HEAD مطابق لـ origin/main قبل الشغل
+- قرأت المرجع في MG كومِت 89a8a1c: lib/push.ts + مسارات /api/push/* الأربعة + public/sw.js + parent-push-client.ts + PushPermissionBanner.tsx + بلوك و89 في parent-notify.ts + page.tsx (سطور ~94-127) + ParentPortal (33-35/356-357) + ensure-schema (ParentPushSubscription + بصمة v2_w89) + موديل Prisma — وقرأت نظيراتها في شيماء قبل أي كتابة
+- (1) bun add web-push@^3.6.7 + bun add -d @types/web-push@^3.6.4 (package.json + bun.lock — مفيش churn تاني)
+- (2) prisma/schema.prisma: موديل ParentPushSubscription آخر السكيما بنفس نص MG حرفيًا (نفس الكومنت والحقول و@@index([parentId])) + mkdir db + DATABASE_URL="file:../db/custom.db" (تجاوزًا للـ DATABASE_URL الموروثة اللي بتشاور على قاعدة MG — نفس ملاحظة و4-c) bunx prisma db push → الجدول اتعمل واتأكدت منه (sqlite_master) + Prisma Client اتحرر
+- (3) src/lib/push.ts منسوخ 1:1 — التعديلات: مفاتيح VAPID بتاعة شيماء (Public BAWiULuK…1ixKc / Private cfuwAz8…7MEE / Subject mailto:shaimaascience@platform.com) + كومنت البراندنج «مولدة مرة واحدة لمنصة د. شيماء ساينس (Dr. Shaimaa)» — diff ضد MG = الأسطر الستة دي بس
+- (4) مسارات /api/push/vapid|subscribe|unsubscribe منسوخة حرفيًا (diff = صفر) + test/route.ts عنوانه بقى «🔔 إشعار تجريبي من منصة د. شيماء ساينس» (diff = السطر ده بس)
+- (5) public/sw.js + public/push-icon.png + public/push-icon-96.png (cp حرفي — md5 متطابقة) + src/lib/parent-push-client.ts + src/components/parent/PushPermissionBanner.tsx منسوخين حرفيًا (diff -q = صفر اختلاف) — جملة الشرح المطلوبة في البانر متحقق منها حرفيًا (grep = 1)
+- (6) src/lib/parent-notify.ts: شيلت imports normalizeWaPhone/sendViaChannel + بلوك و88 في الهيدر + PARENT_WA_EXAM/HOMEWORK_TEMPLATE + buildParentWaMessage — ضفت import { sendParentPush } from '@/lib/push' + بلوك و89 في الهيدر (نفس صياغة MG) + قوالب PARENT_PUSH_EXAM/HOMEWORK_TITLE «🔔/📝 متابعة من منصة د. شيماء ساينس» + BODY بنفس صياغة MG ({percent} بين أقواس) + buildParentPushPayload (نفس كود MG حرفيًا — url '/#parent-login' وicon '/push-icon.png') + بلوك الإرسال الخارجي بقى Promise.all(targets → sendParentPush) بنفس نص MG — siteUrl?: string في التوقيع فضلت زي ما هي ومسارات submit ما اتلمستش (البراميتر بيفضل بدون استخدام زي MG بالظبط)
+- (7) src/app/page.tsx: نفس إضافة MG بالظبط — هاندلر #parent-login بقى يشوف currentParent (مسجل → 'parent-portal' / غير مسجل → 'parent-login') + بلوك Service Worker جديد (register /sw.js + listener لرسالة parent-notification-click بيوجّه الصفحة بنفس المنطق) — متغيرات الهاندلر (par/h/d/st) مفيش تعارض في السكوب
+- (8) src/components/parent/ParentPortal.tsx: import PushPermissionBanner بعد ParentNotificationsCard (بنفس كومنت MG) + <PushPermissionBanner parentId={currentParent && currentParent.id ? currentParent.id : ''} /> فوق كارت الإشعارات بنفس سطر parentId بالظبط
+- (9) src/lib/ensure-schema.ts: CREATE TABLE IF NOT EXISTS ParentPushSubscription + idx_pps_parent آخر SCHEMA_TABLES (بنفس نص MG وكومنت و89) + SCHEMA_HASH_KEY اتغيرت من 'schema_heal_hash_v3_w73' (القيمة المحلية الحالية — MG كان عندها v2_w88) إلى 'schema_heal_hash_v2_w89' زي ما التعليمات طلبت — الجدول هيتعمل لوحده على Turso أول ريكوست بعد النشر
+- (10) bunx tsc --noEmit = **30 خطأ بالظبط** (baseline: ui/* radix + skills/* + examples/*) — صفر أخطاء في ملفاتي (كل الأخطاء الـ30 في الملفات الكاذبة المعروفة)
+- (11) اختبار بدون dev server: سكريبت مؤقت جوه المنصة استدعى buildParentPushPayload('exam','أحمد','امتحان تجريبي',8,10) → title «🔔 متابعة من منصة د. شيماء ساينس» + body «الطالب/ة أحمد سلّم امتحان «امتحان تجريبي» — الدرجة: 8 من 10 (80%)» + url '/#parent-login' + icon '/push-icon.png' ✓ — السكريبت اتمسح
+- فحص تسريب هوية: grep «Maths Genius/Math Genius/Mr.Wael/Khodair/mathsgenius» في كل الملفات الجديدة/المعدلة = صفر نتائج — وmg الاشتراكات/الإرسال بيستخدموا ParentPushSubscription وdb.parent الموجودين عند شيماء من و37
+- (12) git fetch origin main (مفيش جديد — origin/main == HEAD == 537c2cc) → stage الملفات الـ17 بس (bun.lock + package.json + schema.prisma + 4 معدلة + 11 جديدة — بدون tool-results وبدون db/ المتجاهلة) → كومِت 6ab5ca8 (17 files, +877/−58) → push origin main نجح (537c2cc..6ab5ca8)
+
+Stage Summary:
+- منصة د. شيماء بقى فيها Web Push حقيقي بدل الواتساب (و88 اتشال من مسار parent-notify): لما الطالب يسلّم امتحان/واجب → الإشعار الداخلي (و87) بيتكتب زي ما هو + إشعار براوزر حقيقي (VAPID + Service Worker) بيظهر على شاشة موبايل ولي الأمر بره المنصة لكل جهاز اشترك، وضغطة عليه بتفتح /#parent-login (بورتال لو مسجل / شاشة دخول لو لأ) والإشعار جوه المنصة زي ما هو
+- التفعيل: بوب-أب ودود في بورتال ولي الأمر (PushPermissionBanner) → برومبت البراوزر → حفظ الاشتراك في ParentPushSubscription (كل جهاز صف — نفس endpoint بيتحدث مش بيتضاعف) + كارت حالة + إشعار تجريبي + إيقاف — الاشتراكات الميتة (404/410) بتنضف تلقائيًا من sendParentPush
+- مفيش اشتراكات = مفيش إشعار خارجي والإشعار الداخلي شغال — والتسليم نفسه محمي بـ try/catch في كل الطبقات
+- مفاتيح VAPID مستقلة لشيماء (مش مفاتيح MG) — Public: BAWiULuK…1ixKc | Subject: mailto:shaimaascience@platform.com
+- الإنتاج صفر خطوات يدوية: جدول ParentPushSubscription هيتعمل لوحده من بصمة schema_heal_hash_v2_w89 أول ريكوست بعد النشر
+- tsc 30/30 baseline + buildParentPushPayload متحقق منها + ملفات: push.ts / parent-push-client.ts / PushPermissionBanner.tsx / sw.js / push-icon ×2 / api/push ×4 / parent-notify.ts / page.tsx / ParentPortal.tsx / ensure-schema.ts / prisma schema / package.json + bun.lock — كومِت **6ab5ca8** مرفوع على main
+
+---
+Task ID: 89-b
+Agent: general-purpose (Sherif 89-b)
+Task: نقل Web Push لولي الأمر (و89) من MG إلى Mr-Sherif-ElSayed — استبدال واتساب و88 بإشعارات براوزر حقيقية + بانر تفعيل + sw.js
+
+Work Log:
+- البيئة: /home/z/platforms كانت متمسحة (نفس درس و88) → re-clone من GitHub بتوكن Adam-Hawash (نفس التوكن المضمن في remote بتاع my-project) →clone على 99947c5 (و88) + bun install (234 باكج) + ضبط هوية git محليًا Adam-Hawash / 223343744+Adam-Hawash@users.noreply.github.com (كانت z@container على النسخة الجديدة — درس بلوك Vercel و21/و35)
+- قريت آخر الـ worklog (و87/و88 + سجل 7-b بتاعي) + ملفات MG المرجعية للـ و89: lib/push.ts + مسارات api/push الأربعة + public/sw.js + lib/parent-push-client.ts + PushPermissionBanner.tsx + parent-notify.ts (بلوك و89) + page.tsx (سطور 94-126) + ParentPortal (33-35/356-357) + ensure-schema (SCHEMA_TABLES + مفتاح v2_w89) + موديل ParentPushSubscription
+- A) bun add web-push (3.6.7) + bun add -d @types/web-push (3.6.4) — دخلوا dependencies صح
+- B) prisma/schema.prisma: موديل ParentPushSubscription بنص MG حرفيًا + نفس الكومنت في آخر الملف بعد ParentNotification → bunx prisma db push على sqlite محلي بمسار صريح (DATABASE_URL وراثة الساندبوكس بتشاور على قاعدة MG — اتعالج بـ env صريح file:/home/z/platforms/Mr-Sherif-ElSayed/db/custom.db) — الجدول اتعمل واتتحقق بـ sqlite_master وdb/ جوه .gitignore (db/custom.db*)
+- C) lib/push.ts منسوخ من MG مع: مفاتيح VAPID بتاعة شريف (Public BLO8PJ-... / Private LR38I_... / Subject mailto:sherifelsayed@platform.com) + كومنت البراندنج «مولدة مرة واحدة لمنصة مستر شريف السيد» — اتحققت إن الزوجين valid عبر web-push.setVapidDetails فعليًا (VAPID pair OK) — باقي الملف (ensureParentPushTable + save/delete + sendParentPush بتنضيف 404/410) متطابق حرفيًا
+- D) مسارات API الأربعة منسوخة حرفيًا (diff=0 ضد MG) وفي test/route.ts العنوان بقى «🔔 إشعار تجريبي من منصة مستر شريف السيد» — vapid/subscribe/unsubscribe زي ما هما (subscribe بيستخدم normalizeParentPhone من parent-notify الموجودة أصلًا)
+- E) public/sw.js + push-icon.png (14KB) + push-icon-96.png (6.4KB) + lib/parent-push-client.ts + components/parent/PushPermissionBanner.tsx منسوخين حرفيًا — diff=0 للكل (البانر بنصه العام وجملة الشرح المطلوبة حرفيًا: «عشان تتابع درجات ابنك أو بنتك أول بأول على الموبايل بره...»)
+- F) lib/parent-notify.ts: شيلت imports normalizeWaPhone/sendViaChannel + كتلة و88 في الهيدر اتبدلت بكتلة و89 (نفس نص MG) + import sendParentPush من '@/lib/push' + قوالب PARENT_PUSH_EXAM/HOMEWORK_TITLE باسم «منصة مستر شريف السيد» + BODYها زي MG حرفيًا + buildParentPushPayload (url '/#parent-login' + icon '/push-icon.png' + tag parent-{kind}-{ts}) + بلوك الإرسال الخارجي الجديد (Promise.all + sendParentPush لكل targets + لوج فشل متسامح) مكان بلوك الواتساب — diff ضد MG بعد الاستبعاد = 6 أسطر براندنج بس (قوالب و87 الداخلية بتاعة شريف زي ما هي) — توقيع siteUrl? فضل زي ما هو ومسارات submit ما اتلمستش — lib/wa-send.ts سايبة زي ما هي (بقت غير مستخدمة من parent-notify بس مفيش كسر — MG كمان سايبها)
+- G) page.tsx: نفس إضافة MG بالظبط — هاندلر #parent-login بقى شرطي (currentParent موجود → setView('parent-portal') / غير كده → 'parent-login') + كتلة تسجيل navigator.serviceWorker.register('/sw.js', {scope:'/'}) + listener لرسالة parent-notification-click بنفس التحويل — اتأكدت إن 'parent-portal' و'parent-login' وcurrentParent موجودين في app-store شريف والعرض في page.tsx سطر 240/248 زي ما هو
+- H) ParentPortal.tsx: import PushPermissionBanner + عرضه فوق ParentNotificationsCard بنفس سطر الـ parentId الحالي (سطر 356-357 — نفس مكانية MG)
+- I) ensure-schema.ts: سطر CREATE TABLE IF NOT EXISTS ParentPushSubscription + idx_pps_parent في آخر SCHEMA_TABLES (نفس نص MG) + كومنت (و89) خامس + SCHEMA_HASH_KEY من 'schema_heal_hash_v2_w45' → 'schema_heal_hash_v2_w89'
+- J) tsc: bunx tsc --noEmit = **30 خطأ بالظبط** (baseline ui/* + examples/* + skills/*) وفلتر على ملفاتي (lib/app/components/parent/page.tsx) = صفر أخطاء
+- K) سكريبت مؤقت جوه الريبو استدعى buildParentPushPayload('exam','أحمد','امتحان تجريبي',8,10) → «🔔 متابعة من منصة مستر شريف السيد» / «الطالب/ة أحمد سلّم امتحان «امتحان تجريبي» — الدرجة: 8 من 10 (80%)» / url '/#parent-login' / icon '/push-icon.png' ✓ (+homework 5/10=50%) — السكريبت اتمسح بعد التشغيل
+- L) git: fetch origin main (origin/main == HEAD == 99947c5 مفيش جديد) → staged ملفاتي الـ 17 بس (مفيش tool-results ولا mode changes ولا db/) → كومِت f2cf88c → push origin main نجح (99947c5..f2cf88c)
+
+Stage Summary:
+- منصة مستر شريف بقى فيها Web Push حقيقي زي طلب المستر الحرفي: مفيش واتساب — إشعار براوزر (VAPID + Service Worker) بيظهر بره على شاشة موبايل ولي الأمر، وضغطة عليه بتفتح /#parent-login (لو مسجل → بورتال الإشعارات على طول) والإشعار الداخلي و87 شغال زي ما هو
+- التفعيل من بوب-أب ودود في بورتال ولي الأمر (PushPermissionBanner فوق كارت الإشعارات) → إذن البراوزر → اشتراك → تخزين في ParentPushSubscription (كل جهاز صف) + كارت حالة + إشعار تجريبي + إيقاف — مفيش اشتراكات = مفيش إشعار خارجي ومفيش أي تأثير على التسليم
+- الإنتاج صفر خطوات يدوية: الجدول بيتعمل من بصمة v2_w89 أو من ensureParentPushTable تلقائيًا على Turso — مفتاح VAPID ثابت جوه lib/push.ts (تغييره كله من مكان واحد)
+- Push: Sherif 99947c5..f2cf88c | tsc 30/30 baseline | 17 ملف (7 معدلة + 10 جديدة)
+
+---
+Task ID: 89-a
+Agent: general-purpose (Zicola 89-a)
+Task: نقل Web Push لولي الأمر (و89) من MG إلى Zicola-Math — استبدال واتساب و88 بإشعارات براوزر حقيقية (Service Worker + VAPID) + بانر تفعيل + sw.js — والإشعار الداخلي (و87) زي ما هو
+
+Work Log:
+- البيئة: /home/z/platforms/Zicola-Math مش موجود (الساندبوكس اترست) — استنسخت Zicola-Math من GitHub على f564525 (و88) بتوكن حساب Adam-Hawash + bun install + git identity محلي (Adam-Hawash noreply — درس منع الـ Vercel Blocked)
+- (A) bun add web-push (3.6.7) + bun add -d @types/web-push (3.6.4) — package.json/bun.lock بس
+- (B) سكيما: أضفت موديل ParentPushSubscription لآخر prisma/schema.prisma (نفس نص MG حرفيًا بنفس الكومنت) + أنشأت .env بمسار sqlite محلي مطلق (db/zicola.db — تعمّدت المطلق عشان فخ DATABASE_URL الموروث في الساندبوكس اللي بيخطف قاعدة MG) + mkdir db + `DATABASE_URL صريح bunx prisma db push` نجح والجدول اتعمل (اتأكدت بـ libsql: ParentPushSubscription موجود جنب parent_notifications)
+- (C) انسخ lib/push.ts من MG واستبدلت مفاتيح VAPID بمفاتيح Zicola المخصصة (Public BIE6J6fRy5AS1lV8sg8uVW3YWrygq5BnkU56J2zdHIbDukKqSiw2c1dY1erHr90zt8Frpun6a-Yey6YBUB7NTb0 / Private odySJC_hkCWJ-iemRSGbYJKTOIQUSTV6ZrXq7urpIq0 / Subject mailto:zicolainmath@platform.com) وكومنت البراندنج بقى «منصة Zicola In Math» — diff ضد MG بعدها = سطور المفاتيح والبراندنج بس (منطق ensureParentPushTable/save/delete/sendParentPush مع تنظيف 404/410 متطابق حرفيًا)
+- (D) انسخ مسارات API الأربعة حرفيًا (vapid/subscribe/unsubscribe متطابقة 1:1 — subscribe بيستخدم normalizeParentPhone من parent-notify الموجودة أصلاً) + في test/route.ts العنوان بقى «🔔 إشعار تجريبي من منصة Zicola In Math» (diff وحيد)
+- (E) انسخ حرفيًا (diff = صفر اختلاف): public/sw.js (push + notificationclick بيفتح /#parent-login ويركز النافذة مع postMessage) + public/push-icon.png + public/push-icon-96.png (cp) + src/lib/parent-push-client.ts + src/components/parent/PushPermissionBanner.tsx — وجملة البوب-أب المطلوبة متحرفيًا موجودة (grep = 1): «عشان تتابع درجات ابنك أو بنتك أول بأول على الموبايل بره وتوصلك كل التنبيهات المهمة، اضغط هنا ووافق على الإشعارات عشان المستر يقدر يبعت لك تقارير الدرجات أول بأول!»
+- (F) parent-notify.ts (Zicola): شيلت imports بتوع normalizeWaPhone/sendViaChannel + PARENT_WA_EXAM/HOMEWORK_TEMPLATE + buildParentWaMessage (آثار و88 — grep على buildParentWaMessage/PARENT_WA_ = صفر في المشروع كله) + ضفت import { sendParentPush } from '@/lib/push' + كومنت و89 في الهيدر (نفس نص MG) + قوالب PARENT_PUSH_EXAM/HOMEWORK_TITLE باسم «🔔/📝 متابعة من منصة Zicola In Math» + البوديز بتوع MG حرفيًا + buildParentPushPayload (url '/#parent-login' وicon '/push-icon.png') + استبدلت بلوك و88 (waLink/sendViaChannel) ببلوك و89 بتاع MG (Promise.all + sendParentPush لكل targets) — التوقيع siteUrl? فضل زي ما هو ومسارات submit ما اتلمستش خالص — diff الكلّي ضد MG بعد النقل = 6 أسطر براندنج بس
+- (G) page.tsx (Zicola): نفس إضافة MG حرفيًا — (1) هاندلر #parent-login الموجود من و88 اتعدل بشرط currentParent (مسجل → 'parent-portal' / غير مسجل → 'parent-login') (2) بلوك جديد: تسجيل /sw.js + listener لرسالة parent-notification-click بنفس التوجيه — diff المقطع (سطرا 93-127 MG مقابل 97-131 Zicola) = صفر اختلاف
+- (H) ParentPortal.tsx (Zicola): import PushPermissionBanner + عرضه فوق ParentNotificationsCard بنفس سطر الـ parentId ({currentParent && currentParent.id ? currentParent.id : ''}) — بنفس أسطر MG (33-35 و356-357)
+- (I) ensure-schema.ts (Zicola): أضفت CREATE TABLE IF NOT EXISTS ParentPushSubscription + CREATE INDEX idx_pps_parent في SCHEMA_TABLES (نفس نص MG) + SCHEMA_HASH_KEY من 'schema_heal_hash_v3_w71' (قيمة Zicola الحالية — ملحوظة: مختلفة عن MG اللي كانت v2_w88) إلى 'schema_heal_hash_v2_w89' عشان Turso تعمل الجدول لوحدها أول ريكوست بعد النشر
+- (J) bunx tsc --noEmit = **30 خطأ بالظبط** (baseline: ui/* radix + skills/* + examples/*) — صفر أخطاء في ملفاتي
+- (K) اختبار سكريبت مؤقت داخل المنصة (زي و88): buildParentPushPayload('exam','أحمد','امتحان تجريبي',8,10) → { title: '🔔 متابعة من منصة Zicola In Math', body: 'الطالب/ة أحمد سلّم امتحان «امتحان تجريبي» — الدرجة: 8 من 10 (80%)', url: '/#parent-login', icon: '/push-icon.png' } — PASS (العنوان فيه Zicola In Math + اللينك /#parent-login) — والسكريبت اتمسح
+- (L) git: fetch origin main (HEAD==origin/main==f564525 مفيش جديد) → stage ملفاتي الـ 17 بس (من غير tool-results ومن غير .env/db المحلية — gitignored أصلاً) → كومِت **2ba05a9** → push نجح **f564525..2ba05a9 main -> main**
+- ملاحظة صادقة: بنيت المنصة من استنساخ GitHub لأن مجلد platforms اتمسح مع الـ reset — المستودع كان محتوي آخر شغل متحقق منه (f564525 و88) فمفيش أي فقدان؛ وماشغّلتش dev server (التحقق tsc + سكريبت + db push بس زي التعليمات — MG اتحقق بالمتصفح بالكامل)
+
+Stage Summary:
+- Zicola بقى فيها Web Push حقيقي لولي الأمر: بعد دخول البورتال بوب-أب ودود بالكلام المطلوب حرفيًا → موافقة → Service Worker + PushManager → الاشتراك بيتخزن في ParentPushSubscription برقم موبايله المطبّع — ولما الطالب يسلّم امتحان/واجب إشعار براوزر يظهر على شاشة الموبايل بره (بدل الواتساب بتاع و88 تمامًا)، وضغطة عليه بتفتح /#parent-login (وشاشة البورتال لوولي الأمر مسجل) — والإشعار الداخلي (و87) شغال زي ما هو
+- مفيش اشتراكات = مفيش إشعار خارجي ومفيش أي كسر؛ الاشتراكات الميتة (404/410) بتنضف لوحدها؛ فشل الإرسال = لوج بس ومابيبوّظش التسليم
+- إنتاج صفر خطوات يدوية: جدول ParentPushSubscription هيتعمل على Turso من بصمة schema_heal_hash_v2_w89، والمفاتيح VAPID خاصة بـ Zicola In Math (مش مفاتيح MG)
+- tsc 30/30 baseline | Push: Zicola f564525..2ba05a9 | ملفات: 11 جديد (push.ts + 4 routes + sw.js + أيقونتان + parent-push-client + PushPermissionBanner) + 6 معدلة (package.json + bun.lock + schema.prisma + parent-notify.ts + page.tsx + ParentPortal.tsx + ensure-schema.ts)
+---
+Task ID: 89 (main orchestrator — Web Push لولي الأمر في المنصات الأربعة + التحديات إنجليزي في MG)
+Agent: main (Z.ai Code)
+Task: طلب المستر: (1) «الاشعار اللي هيجي لولي الامر بره مش هيجي على الواتساب — يجي زي برومبت البراوزر، ولما يضغط يخش على الاشعارات اللي جوه» → استبدال واتساب/SMS بتاع و88 بـ **Web Push حقيقي** (Service Worker + VAPID + web-push) في المنصات الأربعة، مع بوب-أب ترحيبي ودود بعد دخول ولي الأمر (مش برومبت البراوزر الخام). (2) «التحديات انا عاوزها كل التحديات بالانجليزي، دي منصة ماث، ما فيش ترجمة للعربي — رجعها للأولاني قبل التغيير ده» في MG فقط.
+
+Work Log:
+- MG — البنية: web-push 3.6.7 + @types/web-push، موديل Prisma ParentPushSubscription (endpoint unique — إعادة الاشتراك بتحدّث مش بتضاعف، parentId = رقم موبايل ولي الأمر مطبّع — نفس مفتاح parent_id في parent_notifications) + جدول في ensure-schema SCHEMA_TABLES مع idx_pps_parent + بَمب البصمة schema_heal_hash_v2_w89 (Turso بتعمل الجدول لوحدها أول ريكوست بعد النشر) + bunx prisma db push محليًا
+- MG — lib/push.ts: مفاتيح VAPID مولدة خاصة بكل منصة (4 أزواج مختلفة) + ensureParentPushTable (نمط الشفاء الذاتي) + save/delete subscription + sendParentPush بتنضيف الاشتراكات الميتة (404/410) بمهلة 10ث لكل إرسال
+- MG — مسارات API: GET /api/push/vapid (مفتاح عام للعميل) + POST subscribe (بيطابق رقم ولي الأمر من حسابه Parent→phone زي و87) + POST unsubscribe + POST test (إشعار تجريبي)
+- MG — public/sw.js: حدث push بيعرض {title, body, url, tag, icon} على شاشة النظام بره المنصة + notificationclick بيفتح /#parent-login — ولو في نافذة منصة مفتوحة بيركّزها ويبعت لها postMessage parent-notification-click
+- MG — parent-notify.ts: شيل واتساب و88 بالكامل (normalizeWaPhone/sendViaChannel/PARENT_WA_*/buildParentWaMessage) وضيف PARENT_PUSH_EXAM/HOMEWORK_TITLE/BODY (قوالب قابلة للتعديل — نفس نمط المتغيرات {student}{title}{score}{max}{percent}) + buildParentPushPayload (url '/#parent-login' ثابت + icon '/push-icon.png') + بلوك Promise.all→sendParentPush لكل أرقام الأولياء — الإشعار الداخلي و87 زي ما هو ومسارات submit ما اتلمستش (siteUrl? فضل في التوقيع)
+- MG — واجهة ولي الأمر: src/lib/parent-push-client.ts (إذن → تسجيل SW → اشتراك بـ applicationServerKey → حفظ → علم localStorage لكل ولي أمر) + PushPermissionBanner.tsx: مودال بتدرج ذهبي بالكلام المطلوب حرفيًا («عشان تتابع درجات ابنك أو بنتك أول بأول على الموبايل بره وتوصلك كل التنبيهات المهمة، اضغط هنا ووافق على الإشعارات عشان المستر يقدر يبعت لك تقارير الدرجات أول بأول!» + CTA «تفعيل الإشعارات الآن» + «لاحقًا» + ملاحظة آيفون Add to Home Screen) بيظهر تلقائيًا بعد الدخول (1.4ث) + كارت حالة دايم: مفعّلة ✓ مع زرار «جرّب إشعار تجريبي» و«إيقاف» / متقفلة من المتصفح / غير مدعوم — متركّب فوق ParentNotificationsCard
+- MG — page.tsx: تسجيل /sw.js في mount + listener parent-notification-click (مسجل → parent-portal / غير مسجل → parent-login) + هاندلر الهاش بقى portal لو currentParent موجود
+- MG — التحديات إنجليزي (و89): شيل زرار 🌐 الترجمة بالكامل من الفلاش كارد (state showArabic + import arabicFlashStem + بلوك الزرار — البادج والتصميم بتاع و88 سليمين) + حذف src/lib/flash-translate.ts نهائيًا + /api/arena/hint بقى يرجّع تلميح **بالإنجليزي** (Simple English, max 12 words, ممنوع الإجابة — زي ما هو) — أسئلة السباق والغرف أصلاً إنجليزي من المولد
+- اختبارات MG الحقيقية (curl + كروم headless بإذن notifications مزروع في Preferences البروفايل): subscribe حقيقي من متصفح → اشتراك FCM فعلي (fcm.googleapis.com/preprod/...) اتخزن برقم ولي الأمر المطبّع ✓ | /api/push/test → sent=1 (FCM قبل الإشعار) ✓ | reg.getNotifications() رجّعت الإشعار بعنوانه ونصه «🔔 إشعار تجريبي من منصة Math Genius» — ده اللي هيظهر على شاشة الموبايل ✓ | مناداة notificationclick بالإشعار الحقيقي جوه الـ SW → postMessage → الصفحة وَجّهت نفسها لشاشة «دخول ولي أمر» ✓ | re-subscribe بنفس endpoint = صف واحد بمفاتيح محدّثة ✓ | الفلاش كارد: translate=GONE + «Calculate: 7² = ?» إنجليزي + التلميح «💡 Remember what squaring a number means.» ✓ | شيبس الوقت (و88) سليمة ✓ | لقطات موبايل 390×844 وديسكتوب 1440×900 سليمة وصفر console errors ✓
+- ملاحظة تقنية للتشخيص مستقبلًا: Browser.grantPermissions عبر CDP رجّع «Failed to find browser context» على Chrome 143 dev — الحل اللي اشتغل: زرع profile.content_settings.exceptions.notifications = {setting:1} في Preferences البروفايل قبل التشغيل
+- نقل وكلاء متوازي (بنفس ملفات MG حرفيًا مع مفاتيح VAPID وبراندنج كل منصة): Zicola 2ba05a9 (f564525..2ba05a9) / Sherif f2cf88c (99947c5..f2cf88c) / Shaimaa 6ab5ca8 (537c2cc..6ab5ca8) — كل واحد tsc 30/30 + db push + اختبار buildParentPushPayload بهويته + worklog قسمه (89-a/89-b/89-c فوق)
+- تنظيف: طالب/ولي أمر الاختبار (01000000890) + صفوف parent_notifications وParentPushSubscription وغرف السباق التجريبية اتمسحوا (COUNT=0) — سكريبتات /tmp وبروفايلات كروم المؤقتة اتمسحت — أيقونات push-icon متتدفع جوه الريبو (مطلوبة للإشعارات)
+- Push: MG 84d1435..89a8a1c | Zicola f564525..2ba05a9 | Sherif 99947c5..f2cf88c | Shaimaa 537c2cc..6ab5ca8
+
+Stage Summary:
+- «الاتنين» زي ما طلب المستر بس بدون واتساب خالص: الإشعار الخارجي بقى **Web Push براوزر حقيقي** بيظهر على شاشة الموبايل بره المنصة (اتحقق منه فعليًا: FCM قبل الإشعار والـ SW استلمه وعرضه)، وضغطة عليه بتفتح شاشة تسجيل دخول ولي الأمر — ولو المنصة مفتوحة وهو مسجل بتوصل بورتال الإشعارات على طول — وبعد الدخول الإشعار موجود جوه المنصة في كارت «إشعاراتك» (و87)
+- الاشتراك opt-in من بوب-أب ودود بعد أول دخول لولي الأمر، ولكل جهاز صف لوحده — مفيش اشتراك = مفيش إشعار خارجي والإشعار الداخلي شغال زي ما هو، والتسليم عمرو ما بيتأثر
+- تعديل كلام الإشعارات (الداخلية والخارجية) من PARENT_*_TEMPLATE في lib/parent-notify.ts لكل منصة — ومفاتيح VAPID الخاصة بكل منصة في lib/push.ts
+- في MG: التحديات رجعت إنجليزي بالكامل (زرار الترجمة اتشال نهائيًا والتلميح الذكي بالإنجليزي) مع الحفاظ على تصميم و88 وشيبس الوقت
+- الإنتاج صفر خطوات يدوية: جدول ParentPushSubscription بيتعمل تلقائيًا من بصمة w89 على Turso أول ريكوست بعد النشر
+- tsc: 30/30 baseline ×4 منصات — صفر أخطاء جديدة. الطلاب ودرجاتهم والإشعار الداخلي ما اتلمسوش
+
+---
+Task ID: 90
+Agent: main (Z.ai Code)
+Task: شكاوى المستر بعد و89: (1) «ولي الأمر يعمل حسابه يقول له كلمة مرور ابنك غلط مع إنها صح» (2) «تفعيل الإشعارات بيقول حدث خطأ — فضلت أحاول مرتين والتالتة ظبطت — عايزها تظبط من أول مرة» (3) «الرسالة بتيجي على اللابتوب اللي الطالب شغال منه مش على موبايل ولي الأمر» (4) «تاب أولياء الأمور في صفحة الأدمن جنب الطلاب عشان أمسح فيهم» + تأكيد إن الإشعارات بتظهر على الموبايل.
+
+Work Log:
+- تشخيص (1): سكيما Student.phone @unique فالتكرار مستحيل — الأسباب الحقيقية: (أ) أرقام متخزنة بصيغة دولية 20xx من بيانات قديمة والتسجيل كان بيدوّر بالصيغة المطبّعة بس (ب) حروف عربية متشابهة (أ/ا، ى/ي، ة/ه، ؤ/و، ئ/ي) في الباسورد/الاسم من اختلاف الكيبوردات
+- إصلاح (1) src/app/api/parents/register/route.ts: بحث بكل صيغ الرقم (مطبّع + دولي + خام) بـ findMany على كل المرشحين + فحص (اسم+باسورد+رقم ولي الأمر) على كل مرشح + foldArabic() للتطبيع على الجانبين + رسائل خطأ مفصولة حسب السبب الحقيقي — نفس التطبيع في login/route.ts + بحث بكل صيغ الرقم
+- إصلاح (2) src/lib/parent-push-client.ts: ensureSWReady (poll لحد reg.active بمهلة 6ث بدل ثقة عمياء) + إعادة استخدام الاشتراك لو المفتاح مطابق (subscriptionKeyMatches) + retry ×3 للاشتراك و×2 للحفظ + إعادة محاولة كاملة تلقائية للتدفق مرة واحدة + PushPermissionBanner رسائل محددة لكل سبب (sw-failed/no-key/subscribe-failed/save-failed/dismissed)
+- إصلاح (3): PhoneQrSection في PushPermissionBanner (qrcode toDataURL لـ window.location.origin) في كارت الحالة المفعّلة وكارت الدعوة وكارت المرفوض — خطوات: امسح الكود بموبايلك ← سجل دخولك بنفس حسابك ← اضغط سماح بالتنبيهات + ملاحظة «الإشعارات لكل جهاز لوحده» + تنويه QR جوه بوب-أب الترحيب — Web Push بيوصل لكل أجهزة ولي الأمر (sendParentPush بيلف على كل صفوف ParentPushSubscription)
+- bun add @radix-ui/react-alert-dialog (كانت ناقصة — ui/alert-dialog.tsx كان ضمن أخطاء baseline الكاذبة والاستخدام الحقيقي بيكسر الكومبايل)
+- إصلاح (4): /api/admin/parents/route.ts جديد (GET قائمة بالأبناء الأساسيين والمدموجين + عدادات أجهزة الإشعارات والإشعارات / DELETE بحذف الحساب + ParentStudent + ParentNotification + ParentPushSubscription برقمه — auth بنمط isAdmin زي db-cleanup) + src/components/admin/ParentsManager.tsx جديد (بحث فوري بالاسم/الرقم/اسم الابن + حذف بـ AlertDialog + max-h scroll + badges) + تاب parents في AdminDashboard جنب الطلاب
+- اختبارات حقيقية: تسجيل ولي أمر بالبيانات الصح ✓ | دخول ✓ | طالب رقمه متخزن دولي 2015... وولي الأمر كتب 015... → نجح (كان بيفشل) ✓ | باسورد متسجل «احمد4422» ومكتوب «أحمد4422» → نجح ✓ | GET الأدمن رجّع 3 أولياء بأبناءهم ✓ | DELETE بدون adminId = 401 ✓ | حذف من الواجهة E2E: توست + القائمة اتحسنت والطالب فضل موجود في الداتابيز ✓ | متصفح: تاب Parents جنب Students بالقائمة والبحث والحذف + بورتال ولي الأمر بالبوب-أب وقسم الـ QR بكود حقيقي — موبايل 390×844 وديسكتوب 1440×900 — صفر console errors
+- تنظيف: طلاب وأولياء أمور الاختبار (01500000900/904/907 + w90_intl/w90_dupe1 + أرقام الأباء 901/908/909) ودرجاتهم وتذاكرهم اتمسحوا (LEFT=0/0) — سكريبتات tmp-w90-* ولقطات /tmp اتمسحت — الأدمن الافتراضي (self-create بنفس بيانات الإنتاج) فضل زي ما هو
+- ملاحظة: كومِت بيئة غريب (4b729fd «bc0769d3-…») كان فوق origin/main فيه tool-results — اتعمله reset --soft لـ origin/main والتقديم نضيف من غير الملفات دي
+
+Stage Summary:
+- «كلمة مرور ابنك غلط» رغم صحتها اتحلت: بحث بكل صيغ الرقم + مطابقة على كل الحسابات المرشحة + تطبيع الحروف العربية المتشابهة — ورسائل الخطأ بقت بتقول السبب الحقيقي
+- تفعيل الإشعارات بقى يظبط من أول ضغطة: انتظار فعلي للـ Service Worker + إعادة محاولة تلقائية (اشتراك/حفظ/التدفق كله) — ولو ظهر خطأ الرسالة بتقول السبب بالظبط
+- مشكلة «الإشعار بيجي على اللابتوب» اتحلت بالوضوح: كل جهاز بيتفعّل لوحده + كارت QR في كل حالات البورتال (مفعّلة/دعوة/مرفوضة) يفتح المنصة على موبايل ولي الأمر عشان يفعّلها هناك — وساعتها كل إشعار بيوصله على موبايله (مؤكد: الإرسال بيوصل لكل الأجهزة المشتركة، والإشعار بيظهر كتنبيه نظام على الموبايل — أندرويد كروم على طول، وآيفون بعد Add to Home Screen زي ما مكتوب في البوب-أب)
+- تاب «أولياء الأمور» في الأدمن جنب الطلاب: قائمة كاملة بالأبناء وعدادات الإشعارات + بحث + حذف نهائي بتأكيد ما بيلمسش الطلاب ودرجاتهم
+- tsc: 29/30 (أقل من baseline — خطأ الكاذب بتاع alert-dialog اتحل بالتسطيب) — صفر أخطاء جديدة
