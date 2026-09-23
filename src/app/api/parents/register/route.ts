@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
+import { ensureParentStudentTable, linkParentStudent } from '@/lib/parent-students'
 
 /* (2026-و38) شفاء ذاتي لجدول Parent — درس من الإنتاج: الجدول كان نازل
  * في SCHEMA_TABLES بس مش في CORE_TABLES فالترميم التلقائي اتخطاه
@@ -111,6 +112,76 @@ export async function POST(request: NextRequest) {
        الحل: بحث بكل صيغ الرقم على كل الحسابات المرشحة + فحص (اسم + باسورد
        + رقم ولي الأمر) على كل مرشح — أول واحد يطابق كلهم هو الحساب المعتمد. */
     try { await ensureParentTable() } catch (eDdl) {}
+
+    /* (و92) مطابِق موحّد — نفس قواعد التحقق للأول والأبناء الإضافيين
+       (زرار «إضافة طالب» في شاشة التسجيل): رقم بكل الصيغ + اسم مطابق
+       + باسورد صحيح + رقم ولي الأمر مسجل على حساب الطالب */
+    var matchStudent = async function (name: string, phone: string, password: string) {
+      var phoneNorm = normPhone(phone)
+      if (!phoneNorm) return { err: 'أرقام التليفون لازم تكون أرقام صحيحة', field: 'studentPhone' }
+      var digits = String(phone || '').replace(/[^0-9]/g, '')
+      var variants: string[] = []
+      var pushV = function (v: string) { if (v && variants.indexOf(v) === -1) variants.push(v) }
+      pushV(phoneNorm)
+      if (digits.length === 12 && digits.indexOf('20') === 0) pushV('0' + digits.slice(2))
+      if (phoneNorm.length === 11 && phoneNorm.indexOf('0') === 0) pushV('20' + phoneNorm.slice(1))
+      pushV(digits)
+      var cands: any[] = []
+      var load = function () { return db.student.findMany({ where: { phone: { in: variants } } }) }
+      try { cands = await safeWrite(load) } catch (e1) { try { cands = await load() } catch (e2) { cands = [] } }
+      if (!cands || !cands.length) return { err: 'مفيش طالب مسجل بالرقم ده في المنصة — اتأكد إنك كاتب رقم تليفون ابنك الصح (نفس الرقم اللي اتسجل بيه)', field: 'studentPhone' }
+      var typed = normName(name)
+      var nameHit = function (s: any): boolean {
+        var stored = normName(s.name)
+        return stored === typed || (typed.length >= 4 && stored.indexOf(typed) !== -1)
+      }
+      var nameHitButWrongPwd = false
+      var anyParentPhoneStored = false
+      for (var i = 0; i < cands.length; i++) {
+        var c = cands[i]
+        if (!nameHit(c)) continue
+        if (!password || normPwd(c.password) !== normPwd(password)) { nameHitButWrongPwd = true; continue }
+        var cPar = normPhone(String(c.parentPhone || ''))
+        if (!cPar) continue
+        anyParentPhoneStored = true
+        if (cPar !== parentPhoneNorm) continue
+        return { student: c }
+      }
+      var anyName = false
+      for (var j = 0; j < cands.length; j++) { if (nameHit(cands[j])) { anyName = true; break } }
+      if (!anyName) return { err: 'الاسم مش مطابق لحساب الطالب المسجل بالرقم ده — اكتب اسم ابنك زي ما هو متسجل في المنصة بالظبط', field: 'studentName' }
+      if (nameHitButWrongPwd) return { err: 'باسورد الطالب غلط — اكتب نفس الباسورد اللي ابنك بيدخل بيه في المنصة (اتأكد إنه هو نفسه اللي ابنك بيدخل بيه دلوقتي)', field: 'studentPassword' }
+      if (!anyParentPhoneStored) return { err: 'حساب ابنك مش مسجل عليه رقم ولي أمر — كلمني أظبطه الأول', field: 'parentPhone' }
+      return { err: 'رقمك الشخصي مش هو المسجل على حساب ابنك في المنصة — لازم نفس الرقم اللي اتسجل بيه وقت ما ابنك عمل حسابه', field: 'parentPhone' }
+    }
+
+    /* (و92) الأبناء الإضافيين من زرار «إضافة طالب» — بيتحققوا كلهم الأول
+       قبل إنشاء أي حاجة، ولو واحد فيهم فيه مشكلة الرسالة بتقول مين بالظبط */
+    var extraStudents: any[] = []
+    if (Array.isArray(body.extraStudents)) {
+      var extrasIn = body.extraStudents.slice(0, 5)
+      var seenPhones: string[] = [studentPhoneNorm]
+      for (var ex = 0; ex < extrasIn.length; ex++) {
+        var exName = String((extrasIn[ex] || {}).studentName || '').trim()
+        var exPhone = String((extrasIn[ex] || {}).studentPhone || '').trim()
+        var exPwd = String((extrasIn[ex] || {}).studentPassword || '')
+        var label = 'الطالب رقم ' + (ex + 2)
+        if (!exName || !exPhone || !exPwd) {
+          return NextResponse.json({ error: label + ': اكتب اسمه ورقم تليفونه وباسورده كاملين' }, { status: 400 })
+        }
+        var exNorm = normPhone(exPhone)
+        if (seenPhones.indexOf(exNorm) !== -1) {
+          return NextResponse.json({ error: label + ': الرقم ده مكتوب قبل كده في نفس الطلب — كل ابن له رقم مختلف' }, { status: 400 })
+        }
+        seenPhones.push(exNorm)
+        var matched = await matchStudent(exName, exPhone, exPwd)
+        if (matched.err) {
+          return NextResponse.json({ error: label + ': ' + matched.err }, { status: 400 })
+        }
+        extraStudents.push(matched.student)
+      }
+    }
+
     var digitsOnly = studentPhone.replace(/[^0-9]/g, '')
     var phoneVariants: string[] = []
     var pushVariant = function (v: string) { if (v && phoneVariants.indexOf(v) === -1) phoneVariants.push(v) }
@@ -227,6 +298,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'حصلت مشكلة في إنشاء الحساب — جرّب تاني بعد لحظات' }, { status: 500 })
     }
 
+    /* (و92) ربط الأبناء الإضافيين — نفس دمج «إضافة طالب» (ParentStudent)
+       عشان الحساب واحد يشوف كل الأبناء من أول ما يتفتح */
+    var linkedExtra = 0
+    try {
+      await ensureParentStudentTable()
+      for (var li = 0; li < extraStudents.length; li++) {
+        try {
+          await linkParentStudent(created.id, String(extraStudents[li].id))
+          linkedExtra++
+        } catch (eLink) {
+          console.error('Parent register extra link error (ignored):', eLink)
+        }
+      }
+    } catch (eT) {}
+
     return NextResponse.json({
       success: true,
       parent: {
@@ -236,6 +322,7 @@ export async function POST(request: NextRequest) {
         studentId: created.studentId,
         student: { id: student.id, name: student.name, grade: student.grade, status: student.status, isPaidAccess: !!student.isPaidAccess },
       },
+      linkedExtraStudents: linkedExtra,
     })
   } catch (err: any) {
     console.error('Parent register error:', err)
