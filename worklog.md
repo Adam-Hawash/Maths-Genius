@@ -3619,3 +3619,91 @@ Stage Summary:
 - الإنتاج مش محتاج أي خطوة يدوية: جدول parent_notifications هيتعمل لوحده أول ما أول إشعار يتبعت
 - tsc: 30/30 baseline ×4 — صفر أخطاء جديدة. الطلاب ودرجاتهم ما اتلمسوش خالص
 - Push: Zicola 63c936c..a3c5d86 | Sherif 8765a66..554fe40 | Shaimaa 3eaaee2..17b592b | MG: كومِت و87 ده
+
+---
+Task ID: 7-b
+Agent: general-purpose (Sherif 7-b)
+Task: نقل الإشعار الخارجي لولي الأمر (و88) من Maths-Genius إلى Mr-Sherif-ElSayed — واتساب/SMS بلينك /#parent-login يفتح صفحة تسجيل دخول ولي الأمر + الإشعار الداخلي زي ما هو
+
+Work Log:
+- قرأت آخر الـ worklog (و87 + نقلات 4-a/4-b/4-c) + ملفات MG المرجعية للـ و88: lib/wa-send.ts (كامل) + lib/parent-notify.ts (بلوك و88: imports + قوالب WA + buildParentWaMessage + siteUrl param + بلوك الإرسال الخارجي) + انكورز exams/submit وhomework/submit (requestOrigin capture) + هاندلر #parent-login في page.tsx
+- A) انسخ src/lib/wa-send.ts من MG حرفيًا 1:1 (diff = صفر اختلاف) — نفس قناة msg_channel (manual/sms/waapi + Twilio/Meta/generic) وأي فشل = لوج بس
+- B) lib/parent-notify.ts (Sherif): نفس تعديلات و88 زي MG — imports (normalizeWaPhone من parent-message + sendViaChannel من wa-send) + بلوك و88 في الهيدر + PARENT_WA_EXAM/HOMEWORK_TEMPLATE بس باسم شريف بتاعه من قوالبه الداخلية: «🔔/📝 إشعار من منصة مستر شريف السيد» + توقيع «Mr. Sherif ElSayed» (بنفس سطر «👈 ادخل على اللينك ده...» و{link}) + buildParentWaMessage + siteUrl?: string في notifyParentsOfResult + بلوك الإرسال الخارجي بعد لوب الإدراج الداخلي (واجهة /#parent-login بتتحط أوتوماتيك على اللينك لو مش موجودة)
+- C) انكورز التسليم مطابقة لـ MG بالظبط: exams/submit → requestOrigin capture + siteUrl جوه بلوك و87 في after() | homework/submit → بلوكين (فوري MCQ الصرف + بعد persistPartial في backgroundGrading) كل واحد بقى فيه requestOrigin/requestOriginBg + siteUrl — @ts-nocheck زي ما هي
+- D) page.tsx: هاندلر #parent-login في أول الـ mount effect (قراءة window.location.hash → setView('parent-login') → تنظيف الهاش بـ history.replaceState) — اتأكدت قبلها إن Sherif فيه view اسمه 'parent-login' في app-store وParentLoginView متعرّف في page.tsx — نفس اسم MG فمفيش تعديل
+- ملاحظة: console.error في homework/submit عند Sherif فيه تايبو قديم «w-submit]» من غير [h — سبقه و87 وسيبته زي ما هو (مش من ملفاتي) وMG مكتوب فيه صح [hw-submit]
+- E) bunx tsc --noEmit = **30 خطأ بالظبط** (baseline) — صفر زيادة
+- F) اختبار وحدة buildParentWaMessage('exam','طالب تجربة','امتحان تجربة',10,10,'https://sherif.example') طلع الرسالة سليمة: «🔔 إشعار من منصة مستر شريف السيد / الطالب/ة: طالب تجربة / سلّم امتحان «امتحان تجربة» / الدرجة: 10 من 10 — النسبة 100% / 👈 ادخل على اللينك ده... / https://sherif.example / Mr. Sherif ElSayed»
+- G) git fetch origin main (مفيش جديد — 554fe40 هو HEAD) → stage الملفات الخمسة بس → كومِت 99947c5 → push origin main نجح (554fe40..99947c5)
+
+Stage Summary:
+- منصة مستر شريف بقى فيها الجزء الخارجي لو88: بعد الإشعار الداخلي، نسخة واتساب/SMS بتتبعت لموبايل ولي الأمر بنفس قناة لوحة التحكم (msg_channel) فيها لينك المنصة + /#parent-login — أول ما ولي الأمر يفتحه بيدخل على شاشة تسجيل دخول ولي الأمر على طول ويسجل ويشوف الإشعار جوه المنصة («يعني الاتنين»)
+- لو مفيش مزود مفعّل (manual) أو فشل الإرسال → مفيش تأثير خالص: الإشعار الداخلي والتسليم شغالين زي ما هما
+- القوالب الخارجية باسم شريف نفسه (منصة مستر شريف السيد + Mr. Sherif ElSayed) وقابلة للتعديل من lib/parent-notify.ts زي MG
+- tsc 30/30 baseline + مفيش أي لمس لـ my-project غير الـ append بتاع الـ worklog ده
+
+---
+Task ID: 7-c
+Agent: general-purpose (Shaimaa 7-c)
+Task: نقل الإشعار الخارجي لولي الأمر (و88) من Maths-Genius إلى shaimaa-selim-science — واتساب/SMS بلينك /#parent-login يفتح صفحة تسجيل دخول ولي الأمر + الإشعار الداخلي زي ما هو
+
+Work Log:
+- قرأت آخر الـ worklog (و87 + نقلات 4-a/4-b/4-c + 7-b) + ملفات MG المرجعية للـ و88: lib/wa-send.ts (كامل) + lib/parent-notify.ts (البلوك و88: imports normalizeWaPhone/sendViaChannel + قوالب PARENT_WA_EXAM/HOMEWORK بـ{link} + buildParentWaMessage + siteUrl؟ في opts + بلوك الإرسال الخارجي آخر notifyParentsOfResult) + انكورز exams/submit وhomework/submit (requestOrigin + siteUrl) + هاندلر #parent-login في page.tsx
+- A) انسخ src/lib/wa-send.ts من MG حرفيًا 1:1 (diff = صفر اختلاف) — نفس قناة msg_channel (manual/sms/waapi + Twilio/Meta/generic) وأي فشل = لوج بس ومابيبوّظش التسليم
+- B) lib/parent-notify.ts (Shaimaa): نفس تعديلات و88 زي MG حرفيًا — imports + بلوك و88 في الهيدر + PARENT_WA_EXAM/HOMEWORK_TEMPLATE بس باسم شيماء بتاعها منسوخ من قوالبه الداخلية: «🔔/📝 إشعار من منصة د. شيماء ساينس للعلوم» + توقيع «Dr. Shaimaa» (بنفس سطر «👈 ادخل على اللينك ده وسجل دخول بحساب ولي الأمر...» و{link}) + buildParentWaMessage + siteUrl?: string في notifyParentsOfResult + بلوك الإرسال الخارجي بعد لوب الإدراج الداخلي (/#parent-login بتتحط أوتوماتيك على اللينك لو مش موجودة) — diff ضد MG طلع بس أسطر البراندنج الستة (فروق صفرية في الهيكل)
+- C) انكورز التسليم مطابقة لـ MG بالظبط: exams/submit → /* (و88) siteUrl */ + requestOrigin capture + siteUrl: requestOrigin جوه بلوك و87 في after() بعد persistExamGrades(true) | homework/submit → بلوكين: الفوري (بعد hasWriting بشرط inserted && !hasWriting) بقى فيه requestOrigin + siteUrl، والخلفي (بعد آخر persistPartial في backgroundGrading) بقى فيه requestOriginBg + siteUrl — @ts-nocheck زي ما هو
+- D) فحصت آلية الشاشة عند شيماء قبل الكتابة: نفس MG بالظبط — zustand useAppStore (setView في stores/app-store.ts:278) + view اسمه 'parent-login' وpage.tsx بيعرض <ParentLoginView /> من components/parent/ParentAuthPages.tsx على currentView === 'parent-login' — فطبّقت نفس هاندلر MG حرفيًا في أول الـ mount effect (window.location.hash === 'parent-login' → setView('parent-login') → history.replaceState لتنظيف الهاش) — مفيش أي تعديل/تكييف كان مطلوب
+- E) bunx tsc --noEmit = **30 خطأ بالظبط** (baseline) — وصفر أخطاء في ملفاتي (فلتر على parent-notify/wa-send/submit/page.tsx رجع فاضي)
+- F) اختبار وحدة buildParentWaMessage('exam','طالب تجربة','امتحان تجربة',10,10,'https://shaimaa.example') طلع الرسالة سليمة: «🔔 إشعار من منصة د. شيماء ساينس للعلوم / الطالب/ة: طالب تجربة / سلّم امتحان «امتحان تجربة» / الدرجة: 10 من 10 — النسبة 100% / 👈 ادخل على اللينك ده... / https://shaimaa.example / Dr. Shaimaa»
+- G) git fetch origin main (origin/main == HEAD == 17b592b مفيش جديد) → stage الملفات الخمسة بس → كومِت 537c2cc (5 files, 250 insertions) → push origin main نجح (17b592b..537c2cc)
+
+Stage Summary:
+- منصة د. شيماء بقى فيها الجزء الخارجي لو88: بعد الإشعار الداخلي (زي ما هو)، نسخة واتساب/SMS بتتبعت لموبايل ولي الأمر بنفس قناة لوحة التحكم (msg_channel) فيها لينك المنصة + /#parent-login — أول ما ولي الأمر يفتحه بيدخل على شاشة تسجيل دخول ولي الأمر على طول ويسجل ويشوف الإشعار جوه المنصة («يعني الاتنين»)
+- لو مفيش مزود مفعّل (manual) أو فشل الإرسال → مفيش تأثير خالص: الإشعار الداخلي والتسليم شغالين زي ما هما
+- القوالب الخارجية باسم شيماء نفسها (منصة د. شيماء ساينس للعلوم + Dr. Shaimaa) وقابلة للتعديل من lib/parent-notify.ts زي MG — وفتح /#parent-login بيشتغل من غير أي لمس لآلية i18n أو الشاشات
+- tsc 30/30 baseline + مفيش أي لمس لـ my-project غير الـ append بتاع الـ worklog ده
+
+---
+Task ID: 7-a
+Agent: general-purpose (Zicola 7-a)
+Task: نقل ميزة الإشعار الخارجي لولي الأمر (2026-و88) من Maths-Genius إلى Zicola-Math — واتساب/SMS على موبايل ولي الأمر بلينك /#parent-login بيفتح شاشة تسجيل دخول ولي الأمر، والإشعار الداخلي (و87) زي ما هو.
+
+Work Log:
+- قرأت آخر الـ worklog (و87 + سجل الوكيل 4-a) وملفات MG المرجعية كلها: lib/wa-send.ts + lib/parent-notify.ts بإضافات و88 (imports normalizeWaPhone/sendViaChannel + PARENT_WA_EXAM/HOMEWORK_TEMPLATE بـ{link} + buildParentWaMessage + siteUrl? في opts + البلوك الخارجي آخر notifyParentsOfResult سطور 212-232) + أنكورز exams/submit وhomework/submit (requestOrigin = new URL(request.url).origin) + هاندلر #parent-login في page.tsx
+- (A) نسخت src/lib/wa-send.ts حرفيًا 1:1 (md5 متطابق 15a099ad44f9e70fc1004bee0e9d9c66) — بيوصل على SiteConfig مفتاح msg_channel (اتأكدت إن موديل SiteConfig موجود في سكيما Zicola) — manual=سكوت، sms/waapi بـ Twilio أو Meta أو بوابات عامة، أي فشل = لوج بس ومابيبوّظش حاجة
+- (B) parent-notify.ts بتاع Zicola: نفس تعديلات و88 كلها — الهيدر + imports + قالبا الواتساب الجداد + buildParentWaMessage + siteUrl?: string في توقيع notifyParentsOfResult + البلوك الخارجي بعد لوب الإدراج الداخلي مباشرة. القوالب الجديدة ببراندنج Zicola المأخوذ من قوالبها الداخلية: «🔔 إشعار من منصة Zicola In Math» (امتحان) و«📝 إشعار من منصة Zicola In Math» (واجب) وتوقيع «Zicola In Math» — نفس نمط MG («🔔/📝 إشعار من منصة X» + سطر «👈 ادخل على اللينك ده وسجل دخول بحساب ولي الأمر عشان تشوف الإشعار والتفاصيل:» + {link}) — diff ضد MG بعد استبعاد أسطر البراندنج = **صفر فروق تانية** (نقل 1:1 عدا الاسم)
+- (C) exams/submit (Zicola): أنكور و87 مطابق لـ MG — أضفت كومنت (و88) + `var requestOrigin` + `siteUrl: requestOrigin` جوه if(exFin.length > 0) بنفس شكل MG | homework/submit (Zicola): الموقعين الاتنين — (أ) بعد `var hasWriting` بشرط inserted && !hasWriting (كومنت اتوسع بسطرا و88 + requestOrigin + siteUrl) و(ب) جوه backgroundGrading بعد آخر persistPartial (كومنت + requestOriginBg + siteUrl) — @ts-nocheck فوق الملفين زي ما هو، ولوجات Zicola الموجودة ('w-submit]...') ما اتلمستش — request متاح في السكوبين (after()/backgroundGrading جوه POST(request) — اتأكدت بالأسطر)
+- (D) page.tsx بتاع Zicola: بنية مطابقة لـ MG (var store = useAppStore() + useEffect نفسه + و39 comment زي ما هو) — أضفت هاندلر #parent-login بنفس كود MG حرفيًا وكومنت و88: قراءة window.location.hash → setView('parent-login') → history.replaceState لتنضيف الهاش. اتأكدت إن 'parent-login' هو اسم الشاشة الفعلي في Zicola: موجود في page.tsx ({currentView === 'parent-login'}) وفي ParentAuthPages.tsx وParentPortal.tsx بنداء setView('parent-login') + AppView في الستور فيه 'parent-login' — مفيش أي اختلاف عن MG
+- (E) bunx tsc --noEmit = **30 خطأ بالظبط** (baseline: ui/* radix + skills/*) — وفلتر على الملفات الخمسة بتاعتي رجع صفر أخطاء
+- (F) اختبار buildParentWaMessage: exam مباشرة (اللينك زي ما اتبعتله — إضافة /#parent-login مسؤولية notifyParentsOfResult زي MG بالظبط) + محاكاة المسار الكامل للـ homework (waLink بيزيد /#parent-login) — الرسالتين طلعوا بالبراندنج الصحيح والدرجة «10 من 10 — النسبة 100%» / «8 من 10 — النسبة 80%» واللينك
+- (G) git: fetch origin main (HEAD==origin/main = a3c5d86 — و87) → status أظهر ملفاتي الخمسة بس → staged الخمسة فقط → commit **f564525** → push **a3c5d86..f564525 main -> main** نجح
+- ملاحظة بيئية: زرع/اختبار قاعدة محلية ما كانش مطلوب هنا (مفيش سكيما جديدة — الجدول والإشعار الداخلي موجودين من و87) — وsendViaChannel بترجع mode='manual' لو مفيش مزود مفعّل فمفيش أي إرسال فعلي من غير إعداد لوحة التحكم
+
+Stage Summary:
+- Zicola بقى فيها «الاتنين» زي طلب المستر: الإشعار الداخلي في بورتال ولي الأمر (و87 زي ما هو) + نسخة واتساب/SMS خارجية بتوصله على موبايله فيها اسم ابنه ودرجته ولينك المنصة — يضغط عليه يلاقي صفحة تسجيل دخول ولي الأمر قدامه، يسجل دخول يشوف الإشعار جوه
+- الإرسال الخارجي على نفس قناة لوحة التحكم (msg_channel من و81): من غير مزود مفعّل = صمت تام والإشعار الداخلي شغال — ومفيش أي تغيير على التسليم أو الدرجات
+- تحويل اللينك: origin من request.url → /#parent-login تلقائي في notifyParentsOfResult، وفتح المنصة بالهاش بيفضّي الهاش من العنوان بعد التوجيه
+- Push: Zicola a3c5d86..f564525 | tsc 30/30 baseline | ملفات: wa-send.ts (جديد) + parent-notify.ts + exams/submit + homework/submit + page.tsx
+---
+Task ID: 88 (main orchestrator — الإشعار الخارجي لولي الأمر في المنصات الأربعة + تغييرات التحديات والفلاش كارد في MG)
+Agent: main (Z.ai Code)
+Task: طلب المستر: (1) «الإشعار بيظهر لولي الأمر على الموبايل بره — أول ما يضغط عليه يفتح التليفون ويدخله على صفحة تسجيل الدخول بتاعت المنصة، وهو يسجل دخوله ويشوف الاشعار جوه المنصة ذات نفسها — يعني الاتنين» → الجزء الخارجي (واتساب/SMS بلينك) في المنصات الأربعة فوق و87 الداخلي. (2) في MG: تحديات ولوبيات الأسئلة العامة (من غير فلاش كارد) — صاحب الغرفة يحدد «بوقت ولا من غير وقت» + يختار المدة. (3) في MG: الفلاش كاردز (التحديات العامة في الفلاش كاردز) تاخد شكل الصورة اللي بعتها.
+
+Work Log:
+- البيئة اترجعت لـ snapshot ومجلد المنصات اتمسح → re-clone للأربعة من GitHub بتوكن حساب Adam-Hawash (شغال على كل الريبويات) + bun install + هوية git + تحقق tsc 30/30 ×3
+- MG — الإشعار الخارجي: src/lib/wa-send.ts جديد (نفس قناة msg_channel بتاعة الأدمن من و81: manual/sms/waapi عبر Twilio أو Meta أو بوابة SMS عامة — manual = سكوت، أي فشل لوج بس) + parent-notify.ts: قوالب PARENT_WA_EXAM/HOMEWORK_TEMPLATE القابلة للتعديل بـ {link} + buildParentWaMessage + notifyParentsOfResult بياخد siteUrl وبيبعت الواتساب لكل أرقام الأولياء بعد كتابة الإشعارات الداخلية + exams/homework submit بيلتقطوا origin من request.url ويمرروه + page.tsx: هاندلر #parent-login بيفتح شاشة دخول ولي الأمر على طول من لينك الواتساب
+- MG — التوقيت: سكيما BattleRoom عمودا timed INTEGER DEFAULT 1 + qSeconds INTEGER DEFAULT 25 (CREATE TABLE + SCHEMA_COLUMNS + بَمب بصمة schema_heal_hash_v2_w88 عشان Turso تتعالج لوحدها أول ريكوست — درس و38/40/43/45/68/72/80) + rooms POST بيقرأ timed/qSeconds ويطبّع الأسئلة العامة بوقت المختار (5-180ث) + rooms/[code]: roomTimed/roomLimitMs — من غير وقت = مفيش تايم أوت في lazyTick ولا رفض 409 في الإجابة، والدرجة الصح 60 ثابتة (من غير بونص سرعة) والبونص بالستريك زي ما هو + GET بينشر timed/qSeconds وtimeLimitSec=0 للمن غير وقت + واجهة الإنشاء: شيبس «⏱ بوقت / ♾️ من غير وقت» + شيبس ثواني [10,15,20,25,30,45,60,90] (بيختفوا مع «من غير وقت») + اللوبي بيعرض وضع التوقيت + كارت اللعب العام بيخفي بار الوقت ويعرض «♾️ خد وقتك»
+- MG — الفلاش كاردز شكل الصورة: في السباق (mode=flash) + التاب المستقل: نقاط تقدم ملونة (صح أخضر/غلط أحمر/الحالي بنفسجي) + بادج «X نقطة» + بار بنفسجي→فوشيا h-3 بعداد ثواني text-2xl + كارت أبيض rounded-3xl سؤال في النص + اختيارات 2×2 rounded-xl min-h-[52px] في النص
+- MG — زرارين شكل الصورة: 🌐 ترجمة (lib/flash-translate.ts — ترجمة محلية فورية لصيغ المولّد الإنجليزي ~25 نمط، بيختفي لو مفيش نمط أو النص عربي أصلًا) + ✨ مساعدة ذكية (endpoint /api/arena/hint — ZAI بيرجّع تلميح مصري قصير من غير الإجابة، مهلة 15ث، مبيبعتش correctIndex للـ AI، فقاعة 💡 جوه الكارت بتتنضف مع كل بطاقة) — الزرار bottom-24 right-5 z-50 فوق زرار «مساعد ذكي» العالمي (بعد اكتشاف تداخل bottom-5 بالمتصفح)
+- اختبارات MG (curl + قاعدة محلية): غرفة بوقت qSeconds=15 ✓ | غرفة من غير وقت: إجابة صح بعد 30-40 ثانية مقبولة gained=60 بالظبط ✓ | غرفة بوقت qSeconds=5: بعد 12 ثانية → 409 ✓ | /api/arena/hint رجّع «لو فكرت بالطرح بالتفصيل هتلاقي النتيجة سهلة» ✓ | رسالة الواتساب باللينك والتنسيق كاملين ✓ | #parent-login بيفتح «دخول ولي أمر» مباشرة ✓
+- تحقق بصري agent-browser (390×844 + 1440×900): عناصر شكل الصورة 6/6 موجودين، الترجمة غيّرت السؤال لـ «احسب: 4 × 4 = ?»، التلميحات ظهرت 3/3 («لو بتضرب رقم في 2، هتزوده على نفسه»...)، شيبس التوقيت كلها شغالة و«من غير وقت» بيخفي شيبس الثواني — وصفر console errors
+- النقل للمنصات (وكلاء 7-a/7-b/7-c بأقسامهم تحت): Zicola f564525 (a3c5d86..f564525) / Sherif 99947c5 (554fe40..99947c5) / Shaimaa 537c2cc (17b592b..537c2cc) — كل واحد: wa-send.ts 1:1 + parent-notify بقوالب هويته (Zicola In Math / مستر شريف السيد+Mr. Sherif ElSayed / د. شيماء ساينس+Dr. Shaimaa) + نفس انكورز التسليم (مطابقة لـ MG حرفيًا) + هاندلر #parent-login (المكانية نفسها في التلاتة: zustand setView) + tsc 30/30 + رسالة واتساب متحقق منها لكل منصة
+- تنظيف بيانات الاختبار: غرف السباق التجريبية + طالب stu_w88 + صف parent_notifications التجريبي اتمسحوا (COUNT=0) — سكريبتات /tmp اتمسحت — طالب seed-mg1-test.ts (محلي بس) موجود زي ما هو من قبل
+- Push: MG 53d40c5..3314ec8 (شمل كومِت و87 المحجوز) | Zicola a3c5d86..f564525 | Sherif 554fe40..99947c5 | Shaimaa 17b592b..537c2cc
+
+Stage Summary:
+- الاتنين مع بعض زي ما طلب المستر: الإشعار بيوصل لولي الأمر **بره** على واتساب/رسالة فيها الدرجة ولينك المنصة، وأول ما يدوس عليه بيفتح **صفحة تسجيل دخول ولي الأمر** على طول (#parent-login)، وبعد الدخول بيلاقي الإشعار جوه المنصة في كارت «إشعاراتك» (و87)
+- الإرسال الخارجي بيستخدم نفس القناة اللي المستر ظبطها في لوحة التحكم (رسايل الأدمن) — لو مفعّلش مزود، الإشعار الداخلي شغال زي ما هو ومفيش أي كسر؛ تعديل كلام رسالة الواتساب من PARENT_WA_*_TEMPLATE في lib/parent-notify.ts لكل منصة
+- في MG: تحديات الأسئلة العامة بقى فيها بوقت/من غير وقت ومدة يختارها صاحب الغرفة (الدرجة في وضع من غير وقت 60 ثابتة + ستريك)، والفلاش كاردز (في السباق والتاب المستقل) بالتصميم الجديد زي الصورة مع زرار ترجمة فوري وزرار مساعدة ذكية AI
+- الإنتاج محتاج صفر خطوات يدوية: أعمدة BattleRoom الجديدة بتتعمل لوحدها من بصمة السكيما (v2_w88)، وجدول parent_notifications موجود من و87
+- tsc: 30/30 baseline ×4 منصات — صفر أخطاء جديدة. الطلاب ودرجاتهم والتحدي (24 ساعة) ما اتلمسوش
