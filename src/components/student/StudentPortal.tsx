@@ -18,6 +18,7 @@ import Image from 'next/image'
 import { toast } from 'sonner'
 import type { Video as VideoType, Homework, Exam, Announcement, Discussion, ExamResult } from '@/stores/app-store'
 import { MathKeyboard } from '@/components/student/MathKeyboard'
+import { GeniusLoader } from '@/components/GeniusLoader'
 import { SecurePlayerModal } from '@/components/student/SecurePlayerModal'
 import { StudentComplaints } from '@/components/student/StudentComplaints'
 import { BooksTab } from '@/components/student/BooksTab'
@@ -295,11 +296,8 @@ function StudentPortalInner() {
   // Dashboard overview before entering full portal
   if (!showFullPortal) {
     if (loading) {
-      return (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
-        </div>
-      )
+      /* (2026-و94) لودر «ناس جينيس» الموحد في بوابة الطالب */
+      return <GeniusLoader variant="inline" label="جاري تحميل بياناتك..." />
     }
 
     const initialData = dashboardData

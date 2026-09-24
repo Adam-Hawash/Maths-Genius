@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
-import { Loader2, Lock, Play } from 'lucide-react'
+import { Lock, Play } from 'lucide-react'
+import { GeniusLoader } from '@/components/GeniusLoader'
 import { useAppStore, gradesFromConfig } from '@/stores/app-store'
 
 interface VideoItem {
@@ -55,9 +56,8 @@ export function PublicVideosSection() {
   if (loading) {
     return (
       <section className="py-16 px-4">
-        <div className="max-w-6xl mx-auto text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-        </div>
+        {/* (2026-و94) لودر «ناس جينيس» الموحد */}
+        <GeniusLoader variant="inline" />
       </section>
     )
   }

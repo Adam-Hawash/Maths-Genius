@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Settings, Save, Upload, Loader2, Image as ImageIcon, Trash2, Link2, Type, Layout, GraduationCap, Compass, Lightbulb, BookOpen, Smartphone, Globe, CalendarClock, PlusCircle } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
+import { GeniusLoader } from '@/components/GeniusLoader'
 import type { SiteConfig } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
 /* (و78) المحتوى الديناميكي — نصائح ومميزات إضافية JSON آمن */
@@ -481,7 +482,7 @@ export function CMSPanel() {
     setPreviews(function(prev) { var n = Object.assign({}, prev); n[configKey] = url; return n })
   }
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+  if (loading) return <GeniusLoader variant="inline" label="جاري تحميل المحتوى..." />
 
   return (
     <div className="space-y-6">

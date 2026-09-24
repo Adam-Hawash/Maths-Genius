@@ -14,7 +14,7 @@
 //                                           (ParentPushSubscription).
 //   ⚠️ الحذف ما بيلمس الطالب ولا درجاته خالص.
 //
-// نفس نمط auth الأدمن في المشروع (adminId + isAdmin زي db-cleanup)
+// نفس نمط auth الأدمن في المشروع (adminId + isAdmin)
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'

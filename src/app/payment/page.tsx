@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/useAuth";
+import { GeniusLoader } from "@/components/GeniusLoader";
 import {
   CreditCard,
   Phone,
@@ -328,7 +329,7 @@ function PaymentContent() {
 
 export default function PaymentPage() {
   return (
-    <Suspense fallback={<div className="p-12 text-center text-slate-500 font-bold">جاري تحميل صفحة الدفع...</div>}>
+    <Suspense fallback={<GeniusLoader variant="inline" label="جاري تحميل صفحة الدفع..." />}>
       <PaymentContent />
     </Suspense>
   );
