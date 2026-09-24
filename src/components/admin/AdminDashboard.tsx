@@ -2,7 +2,6 @@
 
 import { useAppStore, GRADES, type Student, type Video, type Homework, type Exam, type Announcement, type ExamResult, type GalleryImage, type Stats, gradesFromConfig, type GradeItem } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
-import { GeniusLoader } from '@/components/GeniusLoader'
 import { QuestionsEditorDialog, EditQuestionsButton, RegradeButton, RegradeAllButton, OverrideButton } from '@/components/admin/QuestionsEditor'
 import { GradesSchedulePanel } from '@/components/admin/GradesSchedulePanel'
 import { Button } from '@/components/ui/button'
@@ -900,7 +899,7 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
   if (selectedStudentId && loadingProgress) {
     return (
       <Card>
-        <CardContent className="flex justify-center py-10"><GeniusLoader variant="compact" label="جاري تحميل بيانات الطالب..." /></CardContent>
+        <CardContent className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></CardContent>
       </Card>
     )
   }

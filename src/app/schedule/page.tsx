@@ -4,10 +4,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAppStore } from '@/stores/app-store'
 import { useEffect, useState } from 'react'
-import { CalendarClock, Clock, GraduationCap, ArrowRight, BookOpen } from 'lucide-react'
+import { CalendarClock, Clock, GraduationCap, ArrowRight, BookOpen, Loader2 } from 'lucide-react'
 /* (و64) زراير الثيم + اللغة الموحدة في كل المنصة */
 import { PlatformToggles } from '@/components/platform-toggles'
-import { GeniusLoader } from '@/components/GeniusLoader'
 /* (و72) ترجمة نصوص الصفحة حسب لغة الزائر */
 import { useLangStore, pickConfig } from '@/lib/i18n'
 import Link from 'next/link'
@@ -139,8 +138,7 @@ export default function SchedulePage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
-        {/* (2026-و94) لودر «ناس جينيس» الموحد */}
-        <GeniusLoader variant="inline" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }

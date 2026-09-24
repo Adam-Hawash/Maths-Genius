@@ -8,7 +8,7 @@ import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
 import { useEffect, useState, useRef } from 'react'
-import { GeniusLoader } from '@/components/GeniusLoader'
+import { GraduationCap, Loader2 } from 'lucide-react'
 
 const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
   loading: () => <div className="min-h-[70vh] bg-background" />,
@@ -176,9 +176,34 @@ export default function HomePage() {
   const showFooter = currentView === 'landing'
   const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
 
-  // Full-page loading screen — (2026-و94) هوية «ناس جينيس» الموحدة
+  // Full-page loading screen
   if (!appReady) {
-    return <GeniusLoader variant="full" />
+    return (
+      <div className="fixed inset-0 z-[9999] bg-background flex flex-col items-center justify-center gap-6">
+        <div className="relative">
+          <div className="absolute -inset-6 rounded-full bg-[#C49A38]/10 blur-xl" />
+          <div className="relative w-20 h-20 rounded-2xl bg-muted border border-[#C49A38]/30 flex items-center justify-center">
+            <GraduationCap className="h-10 w-10 text-[#8B6914] dark:text-[#E5BE5A]" />
+          </div>
+        </div>
+        <div className="text-center space-y-3">
+          <h1 className="text-2xl font-bold text-foreground tracking-wide">
+            <span className="text-[#8B6914] dark:text-[#E5BE5A]">Math</span> Genius
+          </h1>
+          {/* (2026-و75-C) إيموجيز الرياضيات بندوبة متدرجة فوق شاشة التحميل */}
+          <div className="flex items-end justify-center gap-3 text-3xl leading-none" dir="ltr">
+            <span className="animate-bounce">🧮</span>
+            <span className="animate-bounce [animation-delay:0.15s]">➗</span>
+            <span className="animate-bounce [animation-delay:0.3s]">✖️</span>
+            <span className="animate-bounce [animation-delay:0.45s]">📐</span>
+          </div>
+          <div className="flex items-center gap-3 justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-[#C49A38]" />
+            <p className="text-muted-foreground text-sm">جاري التحميل...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
