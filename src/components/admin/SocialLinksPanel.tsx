@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Facebook, MessageCircle, Instagram, Save, Loader2, Link2 } from 'lucide-react'
+import { GeniusLoader } from '@/components/GeniusLoader'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 
@@ -50,7 +51,7 @@ export function SocialLinksPanel() {
     setSaving(false)
   }
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+  if (loading) return <GeniusLoader variant="inline" label="جاري تحميل الروابط..." />
 
   return (
     <Card>
