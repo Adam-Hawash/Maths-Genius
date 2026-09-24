@@ -3948,3 +3948,80 @@ Stage Summary:
 - ولي الأمر يقدر يضيف أبناءه كلهم من شاشة التسجيل قبل الحساب (زرار «عندك ابن تاني؟») — كل ابن بيتحقق بنفس قواعد و90 (كل صيغ الرقم + تطبيع الحروف العربية) قبل إنشاء أي حاجة، وبعد الحساب بيتربط بـ ParentStudent فيظهر في البورتال فورًا مع توست بيعدّ «حسابات N طلاب»
 - ملفات: 6 (5 معدلة: ParentAuthPages/parents-register/exams-submit/StudentPortal/MathKeyboard + 1 جديد: useAntiCheat) — tsc 30/30 قبل=بعد (صفر جديد) — كومِت fcbe226 مرفوع على main
 - فروق مقصودة عن MG (موثقة): (أ) MathKeyboard شيماء مفيهوش كاميرا أصلًا فالإعفاء اتربط بزرار الرفع بس — (ب) homework/submit سيرفر زي MG بالظبط (بيتجاهل بيانات الغش) مع إرسال العميل cheatStrikes+penaltyPoints — (ج) زرار الامتحان بقى بينادي submitExamNow بدل الكود المكرر القديم (نفس توحيد MG في 25-b2) والنصوص الموجودة للمنصة ما اتلمست
+---
+Task ID: 92-max-b
+Agent: general-purpose (sub-agent 92-max-b)
+Task: نقل حد أقصى 6 طلاب (و92-ب) من MG إلى Mr-Sherif-ElSayed
+
+Work Log:
+- قريت آخر الـ worklog (و92 منقولة للمنصة بالفعل في كومِت 37fd257) — المنصة على main نضيفة ومتزامنة مع origin — bun install موجود — tsc baseline اتأكدت منه = 30 بالظبط
+- (1) src/app/api/parents/register/route.ts: جوه if (Array.isArray(body.extraStudents)) قبل var extrasIn — حارس `body.extraStudents.length > 5` يرجع 400 «الحد الأقصى 6 طلاب في الحساب الواحد» (الابن الأول + 5 إضافيين كحد أقصى)
+- (2) src/components/parent/ParentAuthPages.tsx تعديلين: (أ) أول سطور addExtraStudent حارس `1 + extraStudents.length >= 6` → toast.error «الحد الأقصى 6 طلاب في الحساب الواحد» + return — (ب) الزرار المتقطع «عندك ابن تاني؟» بقى ملفوف بشرط: عند وصول الحد يظهر <p> تنبيه «وصلت الحد الأقصى — 6 طلاب في الحساب الواحد» بدل الزرار (بنفس الشكل بتاع MG: border-dashed rounded-xl text-muted-foreground)
+- (3) src/app/api/parents/add-student/route.ts: بعد if (!parent) return 401 مباشرةً — عدّ الأبناء الحاليين بـ listParentStudents (مستوردة أصلًا من '@/lib/parent-students') جوه try/catch مع Math.max(1, list.length) ولو >= 6 يرجع 400 «وصلت الحد الأقصى — الحساب الواحد بيشيل 6 طلاب كحد أقصى»
+- (4) src/components/parent/ParentPortal.tsx: زرار «إضافة طالب» في كارت الطالب اتلف بشرط students.length >= 6 — عند الستة يظهر «الحد الأقصى<br />6 طلاب ✓» بدل الزرار
+- تحقق: bunx tsc --noEmit = 30/30 بالظبط (baseline — صفر أخطاء في الملفات الأربعة، كلها ui/skills/examples المعروفة) + grep «الحد الأقصى» = register 1 / ParentAuthPages 3 / add-student 1 / ParentPortal 2 (كلها >= 1) + diff ضد MG للملفات الأربعة بعد التعديل = صفر اختلاف (متطابقة حرفيًا)
+- git: fetch origin main قبل الدفع (مفيش جديد — main...origin/main متزامنين) → stage الملفات الأربعة بس (4 files changed, 34 insertions, 5 deletions) → كومِت **a6bc29f** → push origin main نجح (37fd257..a6bc29f)
+- ممنوعات محترمة: ما اتلمسش غير الملفات الأربعة في المنصة + worklog append — مفيش توكنات ولا ملفات مؤقتة (كل الفحص بـ diff/rg/جملة واحد)
+
+Stage Summary:
+- Mr-Sherif-ElSayed بقى فيها حد الـ 6 طلاب كامل زي MG: في شاشة تسجيل ولي الأمر زرار «عندك ابن تاني؟» بيختفي عند 1+5 إضافيين ويتبدل بتنبيه «وصلت الحد الأقصى — 6 طلاب في الحساب الواحد» + توست لمنع السادس، وAPI التسجيل بيرفض أي طلب فيه أكتر من 5 أبناء إضافيين بـ 400
+- من جوه البورتال برضه: زرار «إضافة طالب» بيتقفل بيظهر «الحد الأقصى 6 طلاب ✓» لما students.length توصل 6، وAPI add-student بيعدّ الأبناء الفعليين في الداتابيز (listParentStudents) ويرفض أي إضافة سادسة بـ 400 — يعني الحد متطبق كلاينت-سايد وسيرفر-سايد في المسارين (تسجيل + إضافة لاحقة)
+- tsc 30/30 (baseline — صفر زيادة) | 4 ملفات متطابقة حرفيًا مع MG | كومِت a6bc29f مرفوع على main (37fd257..a6bc29f)
+---
+Task ID: 92-max-a
+Agent: general-purpose (sub-agent 92-max-a)
+Task: نقل حد أقصى 6 طلاب (و92-ب) من MG إلى Zicola-Math
+
+Work Log:
+- قريت آخر 60 سطر من الـworklog (و92-b على Zicola = كومِت 6a18444، و92-ب على MG = كومِت 4bd88bd) — منصة Zicola-Math كانت نضيفة على main == origin/main == 6a18444 ومفيش جديد بعد fetch
+- قارنت ملفات MG الأربعة بنظيرها في Zicola سطر بسطر (هما متطابقين بنيويًا فعلاً) وطبّقت نفس الـhunks الأربعة بالظبط:
+- (1) api/parents/register/route.ts: جوه if (Array.isArray(body.extraStudents)) — قبل var extrasIn ضفت حارس length > 5 برفض 400 «الحد الأقصى 6 طلاب في الحساب الواحد» — بعد التعديل الملف بقى **متطابق حرفيًا مع MG (diff = صفر)**
+- (2) ParentAuthPages.tsx (تعديلين): (أ) أول سطور addExtraStudent فيها حارس 1 + extraStudents.length >= 6 → توست إيرور ورجوع، (ب) الزرار المتقطع «عندك ابن تاني؟...» اتلفّ بشرط نفسه — عند الوصل للحد الزرار بيتستبدل بـ <p> تنبيه «وصلت الحد الأقصى — 6 طلاب في الحساب الواحد» بنفس كلاسات MG — الملف بقى **متطابق حرفيًا مع MG (diff = صفر)**
+- (3) api/parents/add-student/route.ts: بعد if (!parent) return مباشرةً — عدّ الأبناء الحاليين بـ listParentStudents (مستوردة فعلًا من '@/lib/parent-students' من الأول) داخل try/catch مع Math.max(1, len) ورفض 400 لو currentCount >= 6 برسالة «وصلت الحد الأقصى — الحساب الواحد بيشيل 6 طلاب كحد أقصى»
+- (4) ParentPortal.tsx: زرار «إضافة طالب» في كارت الطالب اتلفّ بشرط students.length >= 6 → span «الحد الأقصى<br />6 طلاب ✓» بدل الزرار، والكومنت اتوسّع زي MG
+- تحقق: bunx tsc --noEmit = **30/30 baseline بالظبط** (قبل = بعد — صفر أخطاء جديدة وكلها ui/* + skills/* + examples/*) وصفر أخطاء في الملفات الأربعة (فلتر بالأسماء = 0) + grep -c 'الحد الأقصى' في الأربعة: register=1 / ParentAuthPages=3 / add-student=1 / ParentPortal=2 (كلهم >= 1) + مسحت ملف log مؤقت من /tmp
+- git: fetch origin main (مفيش جديد) → stage الملفات الأربعة بس → كومِت **0054cad** برسالة المطلوب حرفيًا → push origin main نجح (6a18444..0054cad) — الشجرة نضيفة بعد الـpush ومن غير أي dev server أو بيانات اختبار
+- لمس أية ملفات تانية: مفيش — غير الإضافة دي على worklog.md
+
+Stage Summary:
+- Zicola-Math بقى فيها و92-ب كامل زي MG: حد أقصى 6 طلاب لحساب ولي الأمر من 4 جهات متطابقة — في التسجيل: الكلاينت بيرفض الإضافة السادسة بتوست والزرار بيتشال ويظهر تنبيه عند الستة + السيرفر بيرفض extraStudents > 5 (400)، وفي البورتال: زرار إضافة طالب بيتقفل ويظهر «الحد الأقصى 6 طلاب ✓» عند الستة + API الإضافة من جوه بيرفض لو الحساب شايل 6 بالفعل — والعدّ في add-student بيحسب الأبناء المربوطين فعليًا (listParentStudents) مش الحقول
+- ملفات معدلة: 4 بس (register + ParentAuthPages + add-student + ParentPortal) — الاتنين المنسوخين حرفيًا diff=0 ضد MG | tsc 30/30 قبل=بعد | كومِت 0054cad مرفوع على main (6a18444..0054cad)
+---
+Task ID: 92-max-c
+Agent: general-purpose (sub-agent 92-max-c)
+Task: نقل حد أقصى 6 طلاب (و92-ب) من MG إلى shaimaa-selim-science
+
+Work Log:
+- قريت آخر 60 سطر من الـ worklog (و92-d شيماء متطابق مع MG في و92 الأساسي) — المنصة على main نضيفة (fcbe226 = و92-d) وfetch origin مفيش جديد
+- قارنت ملفات MG المرجعية (register/add-student/ParentAuthPages/ParentPortal) بنظيرها في شيماء سطر بسطر — متطابقين بنيويًا والأربع نقاط المراسي موجودة
+- (1) api/parents/register/route.ts: جوه if (Array.isArray(body.extraStudents)) — قبل var extrasIn حارس الحد (length > 5 → رفض 400 «الحد الأقصى 6 طلاب في الحساب الواحد») — بعد التعديل diff ضد MG = صفر
+- (2) ParentAuthPages.tsx (تعديلين): (أ) أول سطور addExtraStudent فيها الحارس 1+extraStudents.length >= 6 → toast.error + return — (ب) الزرار المتقطع «عندك ابن تاني؟» بقى ملفوف: 1+extras >= 6 ? تنبيه <p> متقطع «وصلت الحد الأقصى — 6 طلاب» : الزرار زي ما هو — بعد التعديل diff ضد MG = صفر
+- (3) api/parents/add-student/route.ts: بعد if (!parent) return 401 مباشرةً — عدّ currentCount = max(1, listParentStudents(parent).length) في try/catch ورفض 400 لو >= 6 — listParentStudents كانت مستوردة أصلًا من '@/lib/parent-students' (سطر 17) — بعد التعديل diff ضد MG = صفر
+- (4) ParentPortal.tsx: زرار «إضافة طالب» في كارت الطالب بقى ملفوف بشرط students.length >= 6 ? <span> «الحد الأقصى 6 طلاب ✓» : <Button> زي ما هو — diff ضد MG = 8 أسطر كلها فروق منصة مسبقة مقصودة (useLang/useT بدل useT — نظام i18n شيماء) مش من تعديلي
+- تحقق: bunx tsc --noEmit = 30/30 بالظبط (baseline — كلها ui/* radix معروفة) وصفر أخطاء في الملفات الأربعة (فلتر بالأسماء) + grep 'الحد الأقصى' = 1/3/1/2 في الأربعة (كلها >= 1) — من غير dev server
+- git: fetch origin main قبل الـ commit (مفيش جديد) → stage الملفات الأربعة بس → كومِت 5c25c41 بالرسالة المطلوبة → push origin main نجح (fcbe226..5c25c41) — مفيش توكنات ولا ملفات مؤقتة
+
+Stage Summary:
+- منصة د. شيماء بقى فيها الحد الأقصى 6 طلاب لحساب ولي الأمر (و92-ب) زي MG بالظبط: في التسجيل — العميل بيمنع إضافة السابع بتوست + الزرار المتقطع بيتبدل بتنبيه «وصلت الحد الأقصى» عند الستة، والسيرفر بيرفض extraStudents > 5 برسالة 400؛ وفي البورتال — زرار «إضافة طالب» بيتقفل وبيظهر «الحد الأقصى 6 طلاب ✓» لما students = 6، والسيرفر بتاع add-student بيعيد عدّ الأبناء الفعليين من ParentStudent قبل أي ربط/إنشاء وبيرفض عند >= 6 (حتى لو العميل اتلعب فيه)
+- الملفات الأربعة: register + add-student + ParentAuthPages متطابقة حرفيًا مع MG (diff=0)، وParentPortal متطابقة إلا فروق i18n المنصة المسبقة — tsc 30/30 baseline — كومِت 5c25c41 مرفوع على main (fcbe226..5c25c41)
+
+---
+Task ID: 92-ب (main orchestrator — الحد الأقصى 6 طلاب لحساب ولي الأمر في المنصات الأربعة)
+Agent: main (Z.ai Code)
+Task: طلب المستر (تكملة و92): «ولي الأمر يضيف طلاب — أقصى عدد 6 طلاب — من التسجيل ومن جوه برده — ولما يتربط يظهر له شريط بأسماء أولاده فوق يضغط على اسم يظهر له التحليلات بتاعته — ومتضفش حاجات زيادة»
+
+Work Log:
+- اكتشاف مهم: الجزء الأول من و92 (شكل الزرار المتقطع في التسجيل + مغادرة التاب بس hidden + التسليم التلقائي المضمون بعد 4 مغادرات) كان اتنفذ واتpush في الجزء الضايع من الجلسة — الكومِتات: MG 087b4f0 + المنصات (نقل) — فاللي ناقص فعلًا هو **حد الـ 6** بس
+- رجعت MG لآخر حالة ريوموت (reset --hard origin/main = abfdd8c) وبنيت عليها حد الستة: bun install عشان web-push (و89) + prisma db push عشان جداول الـ push
+- MG — 4 تعديلات: register API (رفض 400 «الحد الأقصى 6 طلاب في الحساب الواحد» لو extras > 5 بدل القطع الصامت) + ParentAuthPages (حارس في addExtraStudent + الزرار المتقطع بيختفي ويظهر «وصلت الحد الأقصى — 6 طلاب في الحساب الواحد» عند 1+extras>=6) + add-student API (عدّ فعلي بـ listParentStudents ورفض 400 عند >=6) + ParentPortal (زرار إضافة طالب بيتبدل بـ «الحد الأقصى 6 طلاب ✓» عند students>=6)
+- اختبارات MG E2E (curl + متصفح): تسجيل بـ5 إضافيين = success وlinkedExtra:5 ✓ | تسجيل بـ6 إضافيين = رفض «الحد الأقصى 6 طلاب» ✓ | add-student للسابع = رفض «وصلت الحد الأقصى — الحساب الواحد بيشيل 6 طلاب كحد أقصى» ✓ | البورتال: شريط الأسماء الستة شيبس والنشط متعلم + «الحد الأقصى 6 طلاب ✓» مكان الزرار ✓ | التبديل بين الأبناء بيغير التحليلات ✓
+- إعادة تحقق سريعة لأجزاء و92 القديمة بنفس الجلسة: blur لوحده مش بيتحسب ✓ | hidden = مخالفة + تحذير + بادج 1/4..4/4 ✓ | المغادرة الرابعة = تسليم تلقائي وصل للسيرفر (نتيجة 0/2 اتحفظت) ✓
+- تنظيف: 6 طلاب + ولي أمر + امتحان و92 التجريبي اتمسحوا من قاعدة MG (COUNT=0) + سكريبتات w92-* المؤقتة اتمسحت
+- النقل للمنصات (وكلاء متوازيين): Zicola 92-max-a كومِت 0054cad (6a18444..0054cad) | Sherif 92-max-b كومِت a6bc29f (37fd257..a6bc29f) | Shaimaa 92-max-c كومِت 5c25c41 (fcbe226..5c25c41) — كل واحد: نفس التعديلات الأربعة، diff ضد MG = صفر (عدا أسطر i18n مسبقة عند شيماء)، tsc 30/30 baseline
+- Push: MG abfdd8c..4bd88bd
+
+Stage Summary:
+- من النهاردة: حساب ولي الأمر بيشيل **6 طلاب كحد أقصى** — محروس في 4 أماكن: فورم التسجيل (كلاينت + API)، بورتال ولي الأمر (كلاينت + API) — والرسايل واضحة بالعربي
+- شريط أسماء الأولاد فوق في البورتال (من و79) هو اللي بيحقق «يدوس على اسم يظهر له التحليلات» — اتأكدت إنه شغال بعد التسجيل بأبناء متعددين
+- مفيش أي خطوة يدوية في الإنتاج — كل التعديلات كود جاهز ات_push على الأربعة
+- tsc: MG 29 (< baseline) + Zicola/Sherif/Shaimaa 30/30 — صفر أخطاء جديدة ×4
