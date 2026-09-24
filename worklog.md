@@ -4232,3 +4232,77 @@ Stage Summary:
 - كل تسليم (واجب/امتحان — اختياري/مقالي) بيولّد إشعار لولي الأمر **في أقل من ثانية** بدل دقيقتين-تلاتة — والواجب المقالي بياخد إشعارين: استلام فوري + درجة بعد التصحيح (tags مختلفة مبيستبدلوش بعض)
 - حتى لو تصحيح الـ AI اتقطع خالص — إشعار التسليم بيوصلك لأنه بيتبعت أول ما التسليم يتحفظ
 - شاشة تحميل دخول الطالب في Maths Genius بقت بهوية المنصة (قبعة + إيموجيز رياضيات ذهبي + «بنحمل البيانات بتاعتك») ومختلفة عن باقي المنصات زي ما المستر طلب
+
+---
+Task ID: 96-c
+Agent: general-purpose
+Task: نقل إصلاح الإشعارات الفورية (و96) من Zicola-Math إلى shaimaa-selim-science
+
+Work Log:
+- قريت آخر ~150 سطر من worklog (و94/و95/و96) + استخرجت الـ diff الذهبي من كومِت Zicola 57b1022 (نسخ الملفات الأربعة بعد الإصلاح وقارنتها بالحرف) — Shaimaa كانت نضيفة على main = b6ea815 (مطابقة لorigin بعد fetch) ومفيش أي جديد
+- (1) src/lib/parent-notify.ts: قوالب الاستلام الفوري PARENT_SUBMIT_EXAM/HOMEWORK_TEMPLATE بهوية Shaimaa («📥 تسليم جديد من منصة د. شيماء ساينس للعلوم» + سطر «التصحيح جاري دلوقتي — إشعار الدرجة هيوصلك في رسالة تانية حال ما يخلص.» + توقيع «Dr. Shaimaa» — الاسم والتوقيع منسوخين من PARENT_EXAM_TEMPLATE الحالي فيها) + PARENT_PUSH_SUBMIT_EXAM/HOMEWORK_TITLE («📥 تسليم جديد — د. شيماء ساينس») و_BODY + buildParentSubmitPushPayload (tag: parent-{kind}-sub) + buildParentSubmitMessage + tag إشعار الدرجة في buildParentPushPayload بقى ثابت 'parent-'+kind (بدل +Date.now() — مانع السبام و91 محفوظ والإشعارين يظهرمع بعض) + collectParentTargets وdispatchParentNotice المشتركين (نفس كود Zicola حرفيًا) + notifyParentsOfResult اتعادت هيكلتها عليهم + notifyParentsOfSubmission الجديدة
+- (2) src/lib/push.ts: حلقة الأجهزة المتسلسلة (for+await بمهلة 10s) بقت Promise.all(subs.map(...)) متوازية بمهلة 8000ms بالكومنت (2026-و96) — حرفيًا زي Zicola (مفاتيح VAPID الخاصة بالمنصة اترمت زي ما هي)
+- (3) src/app/api/exams/submit/route.ts: الاستيراد بقا notifyParentsOfResult, notifyParentsOfSubmission + بلوك و96 الكامل قبل كومنت «===== المرحلة 3» وقبل after() الرئيسي (examHasWriting96/examScoreNotified/examTitle96/examOrigin96 — اتأكدت الأول إن textWorkload/imageWorkload/score/maxScore/exam معرفين في النطاق: سطور 94/130/206/234/235) + في آخر after(): `if (exFin.length > 0)` بقت `if (exFin.length > 0 && !examScoreNotified)` مع تحديث الكومنت (2026-و96)
+- (4) src/app/api/homework/submit/route.ts: الاستيراد اتحدث + بلوك (inserted && !hasWriting) اتحول من await مباشر لـ fire-and-forget جوه after() (كان بيوقف رد التسليم نداء web-push) + بلوك جديد (inserted && hasWriting) → after(→notifyParentsOfSubmission) بالكومنتات — بادئة اللوج [hw-submit] الخاصة بالمنصة اتحافظت عليها (مختلفة عن w-submit بتاعة Zicola)
+- تحقق: diff ضد نسخ Zicola بعد الإصلاح = الفروقات الوحيدة نصوص الهوية (اسم المنصة والتوقيع) + VAPID الخاصة بالمنصة — الصفر في مناطق بلوكات و96 | bunx tsc --noEmit = 30 بالظبط (baseline: 27 ui/* radix + examples + skills) وصفر أخطاء في الملفات الأربعة | ملمس 4 ملفات بس — مفيش PlatformLoader ولا globals ولا أي منصة تانية
+- git: add للـ 4 ملفات بس → كومِت 1a63303 برسالة المطلوب → push origin main ناجح (b6ea815..1a63303) — مفيش أي توكن اتلمس أو اتخزن
+
+Stage Summary:
+- shaimaa-selim-science بقت عليها إصلاح و96 كامل مطابق لZicola حرفيًا بهويتها: أول ما الطالب يسلّم (واجب/امتحان — اختياري/مقالي) ولي الأمر ياخد «📥 تسليم جديد» في أقل من ثانية، وإشعار الدرجة بيوصله بعد اكتمال التصحيح بس عشان الدرجة تفضل مظبوطة (tags مختلفة parent-*-sub / parent-* فالإشعارين يظهروا مع بعض) — وحتى لو تصحيح الـ AI اتقطع خبر التسليم وصل خلاص
+- أجهزة الـ push بتبعت بالتوازي (Promise.all + مهلة 8s) — جهاز بطيء ما بيعطّلش باقي أجهزة ولي الأمر
+- tsc 30/30 baseline صفر زيادة — 4 ملفات (268+/111-) — كومِت 1a63303 ومرفوع على origin/main
+
+---
+Task ID: 97-b
+Agent: general-purpose
+Task: Mr-Sherif-ElSayed — نقل و96 (إشعارات فورية) + و97 (فافيكون الإشعارات + تنظيف المعرض)
+
+Work Log:
+- قريت آخر ~160 سطر من worklog (و93→و96) — Sherif نضيفة على main = aff2489 ومطابقة لorigin بعد fetch — استخرجت المراجع الذهبية من Zicola (5c15f10:parent-notify.ts + diff 57b1022 للثلاثية exams/homework/push + diff 5c15f10 للمعرض) وقريت ملفات Sherif الخمسة كلها قبل التعديل
+- (1) src/lib/parent-notify.ts: إعادة كتابة كاملة على نسخة Zicola 5c15f10 — قوالب Sherif الحالية اتلمست حرفيًا (🎓/📝 متابعة من منصة مستر شريف السيد + توقيع Mr. Sherif ElSayed + PARENT_PUSH_* بتاعة Sherif) + قوالب الاستلام الجديدة PARENT_SUBMIT_EXAM/HOMEWORK_TEMPLATE بهوية Sherif («📥 تسليم جديد من منصة مستر شريف السيد» + سطر «التصحيح جاري دلوقتي — إشعار الدرجة هيوصلك في رسالة تانية حال ما يخلص.» + توقيع Mr. Sherif ElSayed) + PARENT_PUSH_SUBMIT_* («📥 تسليم جديد — مستر شريف السيد») + البنية التقنية حرفيًا زي Zicola: buildParentPushPayload بقت async مع await resolveParentPushIcon (فافيكون من SiteConfig favicon_url → site_logo → /push-icon.png + isValidNotifIcon بيرفض SVG) + tag ثابت parent-{kind} بدل +Date.now() + buildParentSubmitPushPayload بـ tag parent-{kind}-sub + buildParentSubmitMessage + collectParentTargets/dispatchParentNotice المشتركين + notifyParentsOfResult اتعادت هيكلتها عليهم + notifyParentsOfSubmission الجديدة — diff ضد Zicola = نصوص الهوية بس
+- (2) src/lib/push.ts: حلقة الأجهزة المتسلسلة (for+await بمهلة 10s) بقت Promise.all(subs.map(...)) متوازية بمهلة 8000ms بالكومنت (2026-و96) — مفاتيح VAPID الخاصة بSherif اترمت زي ما هي
+- (3) src/app/api/exams/submit/route.ts: الاستيراد بقا notifyParentsOfResult, notifyParentsOfSubmission + بلوك و96 الكامل (examHasWriting96/examScoreNotified/examTitle96/examOrigin96) قبل «المرحلة 3» after() — اتأكدت الأول إن exam سطر 130/score-maxScore سطور 206-207/textWorkload-imageWorkload سطور 234-235 كلهم معرفين قبل البلوك + في آخر after(): `if (exFin.length > 0 && !examScoreNotified)` مع تحديث الكومنت (2026-و96) — الملف بقى مطابق لZicola 5c15f10 بالبايت
+- (4) src/app/api/homework/submit/route.ts: الاستيراد اتحدث + بلوك و87 (inserted && !hasWriting) اتحول من await مباشر لـ fire-and-forget جوه after() + بلوك و96 جديد (inserted && hasWriting) → after(→notifyParentsOfSubmission) — بنفس صيغة Zicola 5c15f10 حرفيًا (بادئة اللوج [hw-submit] زي النسخة الذهبية) — الملف بقى مطابق لZicola بالبايت
+- (5) src/components/landing/GallerySection.tsx: نفس حذف Zicola بالظبط — من كارت الصورة شيلت div التدرج السفلي + div العنوان (img.title || 'صورة N') + div بادج القلب (Heart + رقم padStart) — alt الصورة اترك زي ما هو + من كارت الفيديو شيلت التدرج والعنوان — بادج «فيديو» (Film) وزرار التشغيل والحذف اتركوا + Heart اتشالت من استيراد lucide + كومنتي (2026-و97) في مكان البلوكين — الملف بقى مطابق لZicola بالبايت
+- تحقق: bunx tsc --noEmit = **30 بالظبط** (baseline — كلها ui/* radix المعروفة) وصفر أخطاء في الملفات الخمسة | diff ضد Zicola 5c15f10: exams/homework/GallerySection = IDENTICAL بالبايت، parent-notify/push = نصوص الهوية ومفاتيح VAPID بس — من غير dev server ولا pkill ولا بيانات اختبار ولا لمس globals.css أو أي منصة تانية
+- git: fetch (مفيش جديد) → add للـ 5 ملفات بس → كومِت e8dac92 برسالة المطلوب حرفيًا (5 files changed, 315+/132-) → push origin main ناجح (aff2489..e8dac92) — مفيش أي توكن اتخزن في أي ملف
+
+Stage Summary:
+- Sherif بقت عليها إصلاح و96+و97 كامل مطابق لZicola حرفيًا بهويتها: أول ما الطالب يسلّم (واجب/امتحان — اختياري/مقالي) ولي الأمر ياخد «📥 تسليم جديد» في أقل من ثانية، وإشعار الدرجة بيوصله بعد اكتمال التصحيح بس (tags مختلفة parent-*-sub / parent-* فالإشعارين يظهروا مع بعض) — وحتى لو تصحيح الـ AI اتقطع خبر التسليم وصل خلاص
+- كل إشعار خارجي بقى بصورة فافيكون المنصة (favicon_url → site_logo → push-icon.png كاحتياطي) — وأجهزة الـ push بتبعت بالتوازي (Promise.all + مهلة 8s) فجهاز بطيء ما بيعطّلش الباقي
+- معرض الصور نضيف: الصور والفيديوهات من غير اسم ملف ومن غير علامة القلب — البادج «فيديو» وزرار الحذف والتشغيل زي ما هما
+- tsc 30/30 baseline صفر زيادة — 5 ملفات (315+/132-) — كومِت e8dac92 ومرفوع على origin/main
+
+---
+Task ID: 97-c
+Agent: general-purpose (توقف بعطل أدوات) + main (Z.ai Code) — إكمال
+Task: shaimaa-selim-science — و97: فافيكون الإشعارات + تنظيف المعرض
+
+Work Log:
+- وكيل 97-c اتقفل بسبب عطل أدوات sandbox قبل أي تعديل (المستودع فضل نضيف على 1a63303) — main اكمل المهمة بنفسه بنفس الخطة
+- parent-notify.ts: بلوك و97 (isValidNotifIcon + resolveParentPushIcon يقرا favicon_url→site_logo→/push-icon.png من SiteConfig) + buildParentSubmitPushPayload و buildParentPushPayload بقوا async بالأيقونة + await في موضعي الاستدعاء
+- GallerySection.tsx: شيل التدرج+اسم الملف+بادج القلب من كارت الصورة + التدرج+اسم الملف من كارت الفيديو + Heart من الاستيراد — كومنتات (2026-و97)
+- tsc = 30 بالظبط (baseline) — كومِت fe46482 مرفوع على main (1a63303..fe46482)
+
+Stage Summary:
+- كل إشعارات Shaimaa الخارجية بقت بصورة فافيكون المنصة + المعرض نضيف من أسماء الملفات والقلب
+
+---
+Task ID: 97 (main orchestrator)
+Agent: main (Z.ai Code)
+Task: طلب المستر (و97): «رجّع تحميل منصة مستر أحمد شعبان زي الأول — التغيير اللي قبل ده — من غير سطر مستر أحمد شعبان رياضيات، وما تلعبش في أي حاجة تانية + ماث جينيس: شاشة التحميل الأولانية بصورة الفافيكون بدل قبعة التخرج + كل المنصات: شيل اسم الملف وعلامة القلب من معرض الصور + الإشعارات في جميع المنصات وكل إشعار بصورة فافيكون المنصة»
+
+Work Log:
+- **Zicola-Math**: PlatformLoader.tsx رجع من كومِت و95 (a06b6e6) بكل تفاصيله (Σ أزرق + مدارات π √ ∞ ÷ × + + رموز عايمة + لمعة الاسم) — Wordmark بقى «Zicola In Math» بس من غير تاج «مع مستر أحمد شعبان — رياضيات» + StudentPortal رجع للودر الموحد inline «جاري تحميل بياناتك...» — المعرض: شيل اسم الملف (صور+فيديو) وبادج القلب والرقم — parent-notify.ts: resolveParentPushIcon + بيلدرز async بالأيقونة — تحقق بلقطة متصفح: الودر الراجع كامل من غير اسم المستر + tsc 30 = baseline — push 5c15f10
+- **Maths-Genius**: page.tsx شاشة البوت: صورة الفافيكون (siteConfig.favicon_url || /logo.svg — نفس مصدر أيقونة التاب) مكان GraduationCap في نفس المربع الذهبي، والإيموجيز والعنوان زي ما هم — المعرض نفس التنظيف — تحقق بلقطة متصفح: الفافيكون ظاهر والقبعة مختفية وصفر page errors + tsc 29 = baseline — push 287bd7f
+- **Mr-Sherif-ElSayed (وكيل 97-b)**: نقل و96 كامل (استلام فوري + درجة بعد التصحيح + tags مختلفة + أجهزة push متوازية 8s) + و97 (فافيكون الإشعارات + تنظيف المعرض) — مطابقة Zicola بايت-بايت بهوية Sherif — tsc 30 — وكيل متلغي سابق خلف تعديلات ناقصة اترجعت بـ git checkout قبل إعادة التشغيل — push e8dac92
+- **shaimaa-selim-science**: و97 فوق إصلاح و96 الموجود (1a63303) — فافيكون الإشعارات + تنظيف المعرض — tsc 30 — push fe46482
+- إشعارات MG أصلاً بتستخدم الفافيكون من و91 — اتأكدت إنها سليمة زي ما هي
+- تنظيف: كل الملفات المؤقتة اتمسحت (/tmp/v97 وسكربتات الفحص واللقطات ولوجات السيرفرات المؤقتة) — مفيش أي توكن في أي ملف — سيرفر MG على 3000 اترجع شغال
+
+Stage Summary:
+- تحميل Zicola رجع زي و95 بالظبط ومن غير اسم المستر
+- شاشة بوت MG بالفافيكون بدل القبعة — نفس مصدر أيقونة التاب
+- المعرض في الأربع منصات نضيف: مفيش اسم ملف ومفيش قلب/رقم
+- كل إشعارات الأربع منصات بتظهر بصورة فافيكون منصتها — وتسليم شريف بقى فوري زي الباقي
+- tsc: 29+30+30+30 = كلها baseline — صفر أخطاء جديدة
