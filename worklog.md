@@ -4122,3 +4122,93 @@ Stage Summary:
 - قسم «تنظيف قاعدة البيانات» اختفى من الأدمن نهائيًا (واجهة + راكة) — زي ما المستر عاوز بالظبط
 - كل المنصة بقت ليها هوية تحميل واحدة شيك من نوعها: Σ الدهبية والمدارات الرياضية — full/inline/compact على قد كل مكان
 - tsc 29 = baseline — صفر أخطاء جديدة
+
+---
+Task ID: 95-c
+Agent: general-purpose
+Task: shaimaa-selim-science — استبدال شاشات التحميل بلودر رموز العلوم الموحد + حذف قسم تنظيف قاعدة البيانات من صفحة الأدمن
+
+Work Log:
+- قريت آخر قسمين من الـworklog (و94 على MG + و93) — المنصة نضيفة على main = eeb0045 وPlatformLoader.tsx (المكون الجديد) موجود بالفعل untracked — اتلمسش خالص، وbun install اتعمل (مفيش حزم ناقصة)
+- (1) page.tsx: بلوك البوت الإيموجي 🧪🔬🧬 كله (24 سطر) اتبدل بـ return <PlatformLoader variant="full" /> بالكومنت (2026-و95) — وLoader2 اتشال من الاستيراد (كان مستخدم في البوت بس)
+- (2) schedule/page.tsx: حارس loading سايب الـwrapper div (min-h-screen bg-background dir=rtl) وجواه PlatformLoader inline بالكومنت — Loader2 اتشال من استيراد lucide (كان آخر استخدام)
+- (3) videos/[id]/page.tsx: «جاري تحميل الدرس...» بقت PlatformLoader inline بنفس الليبل — Loader2 اترك لأنه مستخدم في «جاري فتح المشغل الآمن» (سلاسل صغيرة جوه الزراير اتركت زي MG)
+- (4) payment/page.tsx: الـSuspense fallback بقت PlatformLoader inline «جاري تحميل صفحة الدفع...»
+- (5) StudentPortal.tsx: حارس التحميل قبل البورتال الكامل (الديف العايم) بقت PlatformLoader inline «جاري تحميل بياناتك...» بالكومنت — الاستيراد جنب MathKeyboard — Loader2 اترك (سلاسل داخلية كتير)
+- (6) PublicVideosSection.tsx: الـsection الخارجي اتساب واللودر جواه PlatformLoader inline بالكومنت — Loader2 اتشال من الاستيراد (آخر استخدام)
+- (7) LessonsSection.tsx: رجل التيرناري loading ? (الديف العايم py-12) بقت PlatformLoader inline بالكومنت
+- (8) StudentPaymentPendingView.tsx: تيرناري loading ? (الديف h-6 py-8) بقت PlatformLoader compact «جاري تحميل سجل المدفوعات...» — الاستيراد بعد استيراد app-store على طول
+- (9) CMSPanel.tsx: if(loading) بقت PlatformLoader inline «جاري تحميل المحتوى...» — الاستيراد جنب sonner — Loader2 اترك (saving/isUploading ه-4)
+- (10) SocialLinksPanel.tsx: نفس النمط — PlatformLoader inline «جاري تحميل الروابط...» — Loader2 اترك (saving)
+- (11) AdminDashboard.tsx: تفاصيل الطالب CardContent بقى py-10 جواه PlatformLoader compact «جاري تحميل بيانات الطالب...» — الاستيراد جنب chunkedUpload
+- (12) PaymentsPanel.tsx: تيرناري receiptLoading بقى PlatformLoader compact «جاري فتح صورة الإيصال...» — الاستيراد جنب sonner — Loader2 اترك (لوحات المدفوعات والطلاب)
+- حذف و81: src/components/admin/DatabaseCleanupCard.tsx (128 سطر) اتمسح + استيراده من AdminDashboard (سطر 32) + استخدامه (كومنت و81 + <DatabaseCleanupCard />) — الجدول المتروبجي بقى سليم من غير لفّة فاضية — وراكة /api/admin/db-cleanup/route.ts اتمسحت بالمجلد
+- تحقق: bunx tsc --noEmit = 30 بالظبط (baseline — 27 Cannot find module في ui/* radix المعروفة + examples/skills) وصفر أخطاء في الملفات الـ13 المعدلة | grep: PlatformLoader في 13 ملف (12 معدل + المكون) | db-cleanup/DatabaseCleanupCard = صفر | GeniusLoader = صفر | من غير dev server ولا test files ولا push
+Stage Summary:
+- كل شاشات تحميل shaimaa-selim-science بقت بلودر رموز العلوم الموحد (⚛ نواة تركواز + مدارات ⚗ µ Ω ∆ λ) — full للبوت، inline للصفحات والبوابات، compact للكروت والإيصالات
+- أداة «تنظيف قاعدة البيانات» اختفت من الأدمن نهائيًا (واجهة + راكة) — grep نظيف تمامًا
+- tsc 30/30 baseline — صفر أخطاء جديدة — 12 ملف معدل + مكون جديد + ملفين مسحوبين — كومِت b6ea815 على main (مش مرفوع)
+---
+Task ID: 95-a
+Agent: general-purpose
+Task: Zicola-Math — استبدال شاشات التحميل بلودر رموز الرياضيات الموحد + حذف قسم تنظيف قاعدة البيانات من صفحة الأدمن
+
+Work Log:
+- قريت آخر ~120 سطر من worklog (و93 + و94 + و92-ب) — Zicola-Math نضيفة على main = 6e73c8a (و93)، والمكوّن الجديد src/components/PlatformLoader.tsx موجود مسبقًا (Σ أزرق بمدارين برموز π √ ∞ ÷ × + — full/inline/compact وستايل ذاتي جوه المكون) واتسيب زي ما هو بدون أي لمسة
+- قرأت كل بلوك تحميل قبل التعديل — النصوص 12/12 مطابقة للمتوقع (بلوك و75 في page.tsx بالكحلي المتدرج موجود حرفيًا) وطبّقت 12 موضع: (1) page.tsx بوت المنصة → <PlatformLoader variant="full" /> بالكومنت (2026-و95) — الملف مكانش بيستورد lucide أصلًا فمفيش أيقونات تتشال | (2) schedule/page.tsx → نفس الـwrapper div + PlatformLoader inline + شيلت Loader2 من import lucide (بقت أونلاين) | (3) videos/[id]/page.tsx → inline بلابل «جاري تحميل الدرس...» — Loader2 اتساب في الاستيراد لأنه لسه مستخدم في سبينر اللودنج بتاع التذكرة | (4) payment/page.tsx → Suspense fallback بقت inline بلابل «جاري تحميل صفحة الدفع...» | (5) StudentPortal.tsx → inline «جاري تحميل بياناتك...» قرب MathKeyboard import — Loader2 متساب (بيتستخدم في عشرات الأماكن) | (6) PublicVideosSection → inner div بقت PlatformLoader inline جوه نفس الـsection — شيلت Loader2 من الاستيراد (بقت Lock, Play) | (7) LessonsSection → التيرناري loading بقت inline | (8) StudentPaymentPendingView → compact «جاري تحميل سجل المدفوعات...» والاستيراد بعد app-store | (9) CMSPanel → inline «جاري تحميل المحتوى...» قرب sonner — Loader2 متساب (spinners الحفظ والرفع) | (10) SocialLinksPanel → inline «جاري تحميل الروابط...» — Loader2 متساب (سبينر الحفظ) | (11) AdminDashboard → تفاصيل الطالب بقت compact py-10 «جاري تحميل بيانات الطالب...» قرب chunkedUpload | (12) PaymentsPanel → تيرناري الإيصال بقت compact «جاري فتح صورة الإيصال...» قرب sonner
+- PART 2 — حذف أداة تنظيف قاعدة البيانات (و81-c) من Zicola بالكامل: من AdminDashboard.tsx شيلت الستيت (dbCleanupBusy/dbCleanupResults/dbCleanupVacuum بالكومنت)، والدالتين runDbCleanup + runDbVacuum (كامل fetch /api/admin/db-cleanup وVACUUM والتوستات)، وكارت «تنظيف قاعدة البيانات» في إعدادات الأدمن (الوصف + جدول النتايج + زراير الفحص/الحذف/VACUUM)
+- أيقونات: Database/AlertTriangle مكانش مستوردين في AdminDashboard أصلًا (مفيش حاجة تتشال) — Search وTrash2 وSparkles وWrench اتأكدت إنهم لسه مستخدمين في أقسام تانية (بحث الطلاب/الحذف/استخراج AI/backfill) فاتسابوا — Loader2 برضه لسه مستخدم على نطاق واسع
+- مسحت الراكة src/app/api/admin/db-cleanup/route.ts (rm -f) ومجلدها (rmdir) — grep على src/ كله لـ «db-cleanup» وdbCleanup وrunDbCleanup وrunDbVacuum وvacuum = صفر نتايج خالص (حتى الكومنتات التاريخية نضيفة)
+- تحقق: bun install (257 installs، مفيش حاجة ناقصة) → bunx tsc --noEmit = 30/30 بالظبط (baseline: 27 في ui/* radix + examples/* + skills/* معروفة) — صفر أخطاء جديدة وصفر أخطاء في أي ملف معدل | grep: PlatformLoader موجود في الـ12 ملف المعدلة + المكوّن، GeniusLoader = صفر، db-cleanup = صفر، مفيش Loader2 يتيم اتساب في schedule/PublicVideosSection
+- git: stage 14 ملف (13 تعديل + PlatformLoader.tsx الجديد + حذف الراكة) → كومِت a06b6e6 (6e73c8a..a06b6e6) بدون push — من غير dev server ولا ملفات اختبار ولا أي لمسة لـ globals.css أو MG أو باقي المنصات
+
+Stage Summary:
+- Zicola-Math بقت على لودر رموز الرياضيات الموحد (Σ أزرق بمدارات π √ ∞ ÷ × + + اسم المنصة بلمعة زرقاء + تاج «مع مستر أحمد شعبان») في 12 موضع: بوت المنصة full، صفحات الدروس/المواعيد/الدفع/الفيديو، بوابة الطالب، الفيديوهات العامة، الدروس، سجل مدفوعات الطالب، CMS، الروابط، تفاصيل الطالب بالأدمن، الإيصالات — وكل سبينر Loader2 الصغير جوه الزراير اتساب زي ما هو
+- قسم «تنظيف قاعدة البيانات» اختفى نهائيًا من أدمن Zicola (ستيت + دوال + كارت + راكة /api/admin/db-cleanup) — grep نضيف 100%
+- tsc 30/30 baseline (صفر جديد) — 14 ملف متغيرة — كومِت a06b6e6 على main (مش مرفوع)
+---
+Task ID: 95-b
+Agent: general-purpose
+Task: Mr-Sherif-ElSayed — استبدال شاشات التحميل بلودر رموز الرياضيات الموحد + حذف قسم تنظيف قاعدة البيانات من صفحة الأدمن
+
+Work Log:
+- قريت آخر ~120 سطر من الـworklog (و93-b على Sherif + و94 على MG) — Sherif نضيفة على main = 1da5e56 ومفيش جديد على origin
+- المكون الجديد src/components/PlatformLoader.tsx (Σ برتقالي + مدارين π √ ∞ ÷ × + + لمعة على اسم المنصة + تاج «الرياضيات المتكاملة» — full/inline/compact وستايل ذاتي جواه) كان جاهز — اتأكدت من الـAPI واتساب زي ما هو من غير أي لمسة
+- (1) page.tsx: بوت المنصة (appReady) بقى PlatformLoader full — شيلت البلوك القديم (GraduationCap + shine-text + Loader2) وشيلت الاستيراد بتاعهم بالكامل من lucide لأنهم ما استخدموش تاني
+- (2) schedule/page.tsx: نفس الـwrapper (min-h-screen bg-background dir=rtl) والبلوك الداخلي بقى PlatformLoader inline + الكومنت — Loader2 اتمسح من الاستيراد (كان استخدامه الوحيد)
+- (3) videos/[id]/page.tsx: سطر جاري تحميل الدرس بقى PlatformLoader inline label=«جاري تحميل الدرس...» — Loader2 اتركم في الاستيراد لأنه لسه مستخدم في سطر الـspinner بتاع الـplayer (الـSecurePlayerModal)
+- (4) payment/page.tsx: Suspense fallback بقى PlatformLoader inline label=«جاري تحميل صفحة الدفع...» + استيراد
+- (5) StudentPortal.tsx: بلوك تحميل بوابة الطالب (الاستعراض المبدئي قبل دخول البورتال الكامل) بقى PlatformLoader inline label=«جاري تحميل بياناتك...» — الاستيراد جنب MathKeyboard — Loader2 اتركم (مستخدم في أماكن تانية كتير)
+- (6) PublicVideosSection.tsx: بلوك الـloading جوه section py-16 بقى PlatformLoader inline + الكومنت — Loader2 اتمسح من الاستيراد (Lock/Play اتركموا)
+- (7) LessonsSection.tsx: الطرف الأوسط في الـternary بقى PlatformLoader inline + الكومنت
+- (8) StudentPaymentPendingView.tsx: الطرف الأوسط بقى PlatformLoader compact label=«جاري تحميل سجل المدفوعات...» — الاستيراد بعد استيراد app-store
+- (9) CMSPanel.tsx: if (loading) بقى PlatformLoader inline label=«جاري تحميل المحتوى...» — الاستيراد جنب sonner — Loader2 اتركم (مستخدم في أزرار الحفظ والرفع)
+- (10) SocialLinksPanel.tsx: نفس النمط label=«جاري تحميل الروابط...» — Loader2 اتركم (زرار الحفظ)
+- (11) AdminDashboard.tsx: تفاصيل الطالب بقى CardContent py-10 + PlatformLoader compact label=«جاري تحميل بيانات الطالب...» — الاستيراد جنب chunkedUpload
+- (12) PaymentsPanel.tsx: تحميل صورة الإيصال في المودال بقى PlatformLoader compact label=«جاري فتح صورة الإيصال...» — الاستيراد جنب sonner
+- الجزء التاني — حذف أداة تنظيف قاعدة البيانات (و81) من AdminDashboard: الـ3 useStates (cleanupBusy/cleanupResults/cleanupSummary) + دالة runDbCleanup (fetch /api/admin/db-cleanup + vacuum) + كارت الواجهة كله (العنوان + الأزرار التلاتة + جدول النتايج) — وDatabase اتمسحت من استيراد lucide (كانت استخدامه الوحيد) بينما Search/Trash2/Loader2/MessageCircle اتركموا لأن ليهم استخدامات تانية (AlertTriangle مش مستوردة أصلًا)
+- مسحت الراكة نفسها: rm src/app/api/admin/db-cleanup/route.ts + rmdir الفولدر — grep على src كله: db-cleanup = صفر (حتى الكومنتات التاريخية ما فضلوش)
+- التحقق: bun install (مفيش حاجة ناقصة) → bunx tsc --noEmit = **30/30 بالظبط** (baseline — كلها ui/* radix المعروفة) وصفر أخطاء في الملفات المعدلة (فلتر بالأسماء = NONE) + rg PlatformLoader = 13 ملف (12 موقع + المكون نفسه) + rg GeniusLoader = صفر — من غير dev server ولا بيانات اختبار ولا push
+- git: fetch (مفيش جديد) → add -A → كومِت **aff2489** برسالة المطلوب حرفيًا (14 files changed: 232+/291-) — الشجرة نضيفة، مرفوع محليًا من غير push زي المطلوب
+
+Stage Summary:
+- Sherif بقت فيها لودر رموز الرياضيات الموحد (Σ البرتقالي بمدارات π √ ∞ ÷ × +) في 12 موضع: بوت المنصة full + 5 inline للصفحات والسيكشنز + 3 compact للكروت (تفاصيل الطالب/سجل المدفوعات/الإيصال) — نفس النظام اللي اتنقل لMG في و94 لكن بهوية Sherif البرتقالية
+- قسم «تنظيف قاعدة البيانات» اختفى من الأدمن نهائيًا مع الراكة /api/admin/db-cleanup — grep صفر في src كله
+- ملفات: 12 معدلة + 1 مكون جديد + 1 راكة محذوفة | tsc 30/30 baseline صفر زيادة | كومِت aff2489 على main (محلي — من غير push)
+
+---
+Task ID: 95 (main orchestrator — رجوع تحميل MG للقديم + لودر رموز المادة للمنصات + حذف تنظيف DB من كل المنصات)
+Agent: main (Z.ai Code)
+Task: طلب المستر (و95): «رجّع التحميل زي ما هو في ماث جينيس على الشكل القديم فورًا — وفي بقية المنصات خلي التحميل برموز رياضية أو رموز علوم حسب المادة — وشيل حذف قاعدة البيانات من صفحة الأدمن في كل المنصات»
+
+Work Log:
+- **MG (فورًا وبالأول)**: استرجاع 12 ملف تحميل من كومِت 37c00a0^ (git checkout) — بوت page.tsx القديم (القبعة + الإيموجيز 🧮➗✖️📐) رجع زي ما هو بالظبط + مسح GeniusLoader.tsx — مع الحفاظ على حذف قسم تنظيف قاعدة البيانات (اتأكدت بيه بالصورة قبل وبعد) — tsc 29 = baseline — push 65b43c8
+- **المنصات**: كتبت كومبوننت PlatformLoader.tsx بنفسي في كل منصة بنسخة مخصصة: Zicola (Σ أزرق #1E5FD6/#3B79E8 + π √ ∞ ÷ × + + «مع مستر أحمد شعبان») | Sherif (Σ برتقالي #F97316/#EA580C + نفس الرموز + «الرياضيات المتكاملة») | Shaimaa (⚛ تركواز #14B8A6/#0E9384 + رموز علوم ⚗ µ Ω ∆ λ + «علوم — مع د. شيماء سليم») — نفس تصميم النواة والمدارات المتقابلين بلمعة الاسم
+- **وكلاء متوازيون**: 95-a Zicola كومِت a06b6e6 | 95-b Sherif كومِت aff2489 | 95-c Shaimaa كومِت b6ea815 — كل واحد: 12 موضع تحميل (بوت full + 7 inline + 4 compact) + حذف أداة تنظيف قاعدة البيانات (Zicola/Sherif: جوه AdminDashboard — Shaimaa: DatabaseCleanupCard.tsx كلها) + مسح راكة /api/admin/db-cleanup — tsc 30/30/30 = baseline بالظبط وصفر أخطاء جديدة
+- **تحقق بصري بنفسي**: شغلت كل منصة على بورت مؤقت (3011/3012/3013) وأمسكت شاشة البوت بالـ agent-browser: التلاتة ظهروا اللودر المخصص (نواة + مدارات + اسم بلمعة + رموز عايمة) وصفر console errors — السيرفرات المؤقتة اتقفلت والملفات المؤقتة اتمسحت
+- **Push**: MG 37c00a0..65b43c8 | Zicola 6e73c8a..a06b6e6 | Sherif 1da5e56..aff2489 | Shaimaa eeb0045..b6ea815 (git fetch قبل كل push) — مفيش أي توكن متخلي في أي حتة
+
+Stage Summary:
+- ماث جينيس: تحميله القديم رجع 100% زي ما كان (زي ما المستر طلبه بحروفه: «أهم حاجة»)
+- المنصات التلاتة: لودر برموز مادتها بألوان براندنجها (رياضيات×2، علوم×1) — هوية موحدة الشكل مختلفة اللون والرموز
+- أداة تنظيف قاعدة البيانات اختفت من صفحة الأدمن في الأربع منصات (واجهة + راكة)
