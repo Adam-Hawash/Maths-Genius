@@ -8,7 +8,7 @@ import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
 import { useEffect, useState, useRef } from 'react'
-import { GraduationCap, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
   loading: () => <div className="min-h-[70vh] bg-background" />,
@@ -182,8 +182,10 @@ export default function HomePage() {
       <div className="fixed inset-0 z-[9999] bg-background flex flex-col items-center justify-center gap-6">
         <div className="relative">
           <div className="absolute -inset-6 rounded-full bg-[#C49A38]/10 blur-xl" />
-          <div className="relative w-20 h-20 rounded-2xl bg-muted border border-[#C49A38]/30 flex items-center justify-center">
-            <GraduationCap className="h-10 w-10 text-[#8B6914] dark:text-[#E5BE5A]" />
+          <div className="relative w-20 h-20 rounded-2xl bg-muted border border-[#C49A38]/30 flex items-center justify-center overflow-hidden">
+            {/* (2026-و97) صورة الفافيكون بتاعة المنصة بدل قبعة التخرج — طلب المستر */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={String(siteConfig.favicon_url || '/logo.svg')} alt="Math Genius" className="h-12 w-12 object-contain" />
           </div>
         </div>
         <div className="text-center space-y-3">
