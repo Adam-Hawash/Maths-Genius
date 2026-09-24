@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react'
 import { useAppStore, gradesFromConfig } from '@/stores/app-store'
 import { Badge } from '@/components/ui/badge'
 import { BookOpen, Lock, PlayCircle, ChevronLeft, ChevronRight } from 'lucide-react'
-import { GeniusLoader } from '@/components/GeniusLoader'
 import Image from 'next/image'
 
 function getYouTubeId(url: string) {
@@ -96,8 +95,9 @@ export default function LessonsSection() {
         </div>
 
         {loading ? (
-          /* (2026-و94) لودر «ناس جينيس» الموحد */
-          <GeniusLoader variant="inline" />
+          <div className="flex justify-center py-12">
+            <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+          </div>
         ) : videos.length === 0 ? (
           <div className="text-center py-16">
             <BookOpen className="h-12 w-12 text-muted-foreground/20 mx-auto mb-4" />

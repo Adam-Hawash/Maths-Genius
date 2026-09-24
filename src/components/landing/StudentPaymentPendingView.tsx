@@ -1,7 +1,6 @@
 'use client'
 
 import { useAppStore } from '@/stores/app-store'
-import { GeniusLoader } from '@/components/GeniusLoader'
 import { Clock, ArrowRight, CreditCard, CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -53,8 +52,9 @@ export function StudentPaymentPendingView() {
         </div>
 
         {loading ? (
-          /* (2026-و94) لودر «ناس جينيس» الموحد */
-          <GeniusLoader variant="compact" label="جاري تحميل سجل المدفوعات..." />
+          <div className="flex justify-center py-8">
+            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
+          </div>
         ) : payments.length > 0 ? (
           <div className="space-y-3">
             <h3 className="font-semibold text-sm">سجل المدفوعات</h3>
