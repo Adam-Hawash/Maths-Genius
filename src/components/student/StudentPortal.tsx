@@ -295,9 +295,32 @@ function StudentPortalInner() {
   // Dashboard overview before entering full portal
   if (!showFullPortal) {
     if (loading) {
+      /* (2026-و96) شاشة تحميل دخول الطالب بهوية Maths Genius — طلب المستر:
+         «لما الطالب يسجل دخول ويدخل صفحته تقوله بنحمل البيانات بتاعتك أو
+         أي إيموجي — بس تكون مختلفة بين المنصات» — نفس لغة شاشة البوت
+         (القبعة + إيموجيز الرياضيات النططة بالذهبي) مش اللودر العام */
       return (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+        <div className="flex flex-col items-center justify-center gap-5 py-20">
+          <div className="relative">
+            <div className="absolute -inset-5 rounded-full bg-[#C49A38]/10 blur-xl" />
+            <div className="relative w-16 h-16 rounded-2xl bg-muted border border-[#C49A38]/30 flex items-center justify-center">
+              <GraduationCap className="h-8 w-8 text-[#8B6914] dark:text-[#E5BE5A]" />
+            </div>
+          </div>
+          {/* (2026-و75-C) إيموجيز الرياضيات بندوبة متدرجة */}
+          <div className="flex items-end justify-center gap-3 text-2xl leading-none" dir="ltr">
+            <span className="animate-bounce">🧮</span>
+            <span className="animate-bounce [animation-delay:0.15s]">➗</span>
+            <span className="animate-bounce [animation-delay:0.3s]">✖️</span>
+            <span className="animate-bounce [animation-delay:0.45s]">📐</span>
+          </div>
+          <div className="text-center space-y-1">
+            <p className="font-bold text-foreground">بنحمل البيانات بتاعتك...</p>
+            <p className="text-sm text-muted-foreground flex items-center gap-2 justify-center">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#C49A38]" />
+              استنى ثانية
+            </p>
+          </div>
         </div>
       )
     }
