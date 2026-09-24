@@ -183,9 +183,11 @@ export default function HomePage() {
         <div className="relative">
           <div className="absolute -inset-6 rounded-full bg-[#C49A38]/10 blur-xl" />
           <div className="relative w-20 h-20 rounded-2xl bg-muted border border-[#C49A38]/30 flex items-center justify-center overflow-hidden">
-            {/* (2026-و97) صورة الفافيكون بتاعة المنصة بدل قبعة التخرج — طلب المستر */}
+            {/* (2026-و97) صورة الفافيكون بتاعة المنصة بدل قبعة التخرج — طلب المستر
+                (2026-و97-B) الفافيكون الحقيقي = صورة المستر (زي الإنتاج بالظبط)
+                — مش لوجو Z: الفالب هنا لازم يكون نفس صورة الإنتاج */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={String(siteConfig.favicon_url || '/logo.svg')} alt="Math Genius" className="h-12 w-12 object-contain" />
+            <img src={String(siteConfig.favicon_url || '/images/mr-wael-photo.webp')} alt="Math Genius" className="h-12 w-12 object-cover rounded-xl" />
           </div>
         </div>
         <div className="text-center space-y-3">

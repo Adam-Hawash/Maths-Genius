@@ -46,8 +46,8 @@ export default async function RootLayout({
     /* DB not available yet — client will fetch via /api/config */
   }
 
-  // Favicon: لوجو المنصة (الصورة الدهبية اتشالت بطلب المستر — ملهاش علاقة بـ Math Genius)
-  var faviconUrl = initialConfig.favicon_url || "/logo.svg";
+  // Favicon: نفس صورة الإنتاج (صورة المستر) — الفالب الزتون مش لوجو Z
+  var faviconUrl = initialConfig.favicon_url || "/images/mr-wael-photo.webp";
 
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
