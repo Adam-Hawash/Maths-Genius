@@ -4025,3 +4025,79 @@ Stage Summary:
 - شريط أسماء الأولاد فوق في البورتال (من و79) هو اللي بيحقق «يدوس على اسم يظهر له التحليلات» — اتأكدت إنه شغال بعد التسجيل بأبناء متعددين
 - مفيش أي خطوة يدوية في الإنتاج — كل التعديلات كود جاهز ات_push على الأربعة
 - tsc: MG 29 (< baseline) + Zicola/Sherif/Shaimaa 30/30 — صفر أخطاء جديدة ×4
+
+---
+Task ID: 93-c
+Agent: general-purpose (Shaimaa port)
+
+Work Log:
+- قريت آخر قسمين من الـworklog (و92-max-c على شيماء + و92-ب orchestrator) — المنصة على main نضيفة (5c25c41) وfetch origin مفيش جديد
+- فحص src/app/api/upload/chunk/route.ts: موجود فعلًا في شيماء (ما اتمسحش زي ما حصل في MG) — اتساب زي ما هو من غير أي لمسة
+- جبت الكود المرجعي بالظبط من MG (git show c2dc17e) وطبّقت 3 ملفات:
+- (1) api/files/[id]/route.ts: بوابة الفيديو بقت `contentType.startsWith('video/') && media.category !== 'gallery'` + الكومنت (و93) — فيديوهات المعرض عامة زي يوتيوب، وفيديوهات الكورسات فاضل عليها الحماية بالتوكن
+- (2) AdminDashboard.tsx (GalleryManager): state جديد بعد vidOrder (vidFileRef/vidUploading/vidProgress) + resetAll بيرجّعهم + دالتين captureVideoThumb (صورة مصغرة من أول فريم بالـcanvas مع fail-safe 8 ثواني) وhandleVidUpload (chunkedUpload(file,'gallery',onProgress,statusMsg) → thumb → POST /api/gallery بنوع video وtitle من اسم الملف من غير الامتداد) + بلوك رفع فيديو من الجهاز في الفورم (input مخفي accept=video/* + زرار متقطع + progress aria-live + فاصل «أو») قبل grid رابط الفيديو — البلوك متطابق حرفيًا مع MG (diff للمدى 2712-2805 ضد 2373-2466 = صفر اختلاف في المحتوى)
+- (3) GallerySection.tsx: ImageWithSkeleton خد `unoptimized` + الكومنت (و93) جوه <Image> (الصور توصل بالجودة الأصلية 100% من غير ضغط Next.js) + isDirectVideo بقت `(url.indexOf('/api/files/') === 0 || /\.(mp4|webm|mov|avi|ogg|m4v)(\?|$)/i.test(url))` + الكومنت — فيديوهات المعرض المرفوعة بتتشغل بالمشغل المباشر
+- تحقق: bunx tsc --noEmit = 30/30 بالظبط (baseline — كلها examples/skills/ui radix المعروفة) وصفر أخطاء في الملفات الثلاثة المعدلة (فلتر بالأسماء = 0) + grep: «رفع فيديو من الجهاز»=4 وcaptureVideoThumb=2 وhandleVidUpload=2 في AdminDashboard، unoptimized في ImageWithSkeleton + '/api/files/' في isDirectVideo، وmedia.category !== 'gallery' في route.ts — من غير dev server ولا بيانات اختبار
+- ملاحظة: شيماء فيها فروق i18n/و45 مسبقة في GalleryManager (getYtThumb/vidThumb) — ما اتلمسش، التعديلات اتحطت في نفس مراسي MG بالظبط
+- git: fetch قبل الـcommit (مفيش جديد) → stage الملفات الثلاثة بس (3 files changed, 128 insertions, 2 deletions) → كومِت **eeb0045** → push origin main نجح (5c25c41..eeb0045) — الشجرة نضيفة بعد الـpush
+
+Stage Summary:
+- شيماء بقى فيها و93 كامل زي MG: الأدمن بيرفع فيديو المعرض من الجهاز بالجودة الأصلية 100% (chunkedUpload بايت-ببايت، صفر ضغط) مع صورة مصغرة أوتوماتيك من أول فريم، والصور بتوصل للزوار بالجودة الأصلية (unoptimized — اتصلح «الجودة بتقل»)، وفيديوهات المعرض المرفوعة بتظهر للزوار من غير توكن (استثناء category='gallery' في بوابة الفيديو) وبتتعرّف في المودال على /api/files/<id> حتى من غير امتداد
+- /api/upload/chunk كان موجود أصلًا في شيماء (ما احتاجش استرجاع) | tsc 30/30 baseline صفر زيادة | كومِت eeb0045 مرفوع على main (5c25c41..eeb0045) — 3 ملفات بس اتلمست + worklog append
+
+---
+Task ID: 93-b
+Agent: general-purpose (Sherif port)
+
+Work Log:
+- قريت آخر قسمين من الـworklog (و92-max-a/92-max-c + و92-ب الرئيسي) وسياق و93 من MG (كومِت c2dc17e: 4 ملفات — chunk route مسترجع + files/[id] + AdminDashboard + GallerySection)
+- فحص منصة Sherif: الشجرة نضيفة على main = a6bc29f (و92-ب) — و**src/app/api/upload/chunk/route.ts موجود أصلًا** (7779 بايت) فمفيش استرجاع محتاج — تركته زي ما هو
+- استخرجت الكود المرجعي الحرفي من MG: git show c2dc17e للـ3 ملفات (diff كامل + sed على النطاقات المذكورة)
+- (1) src/app/api/files/[id]/route.ts: حماية الفيديو بقت `if (contentType.startsWith('video/') && media.category !== 'gallery')` + الكومنت الرباعي (و93) فوقها بالظبط زي MG — بعد التعديل **الملف متطابق حرفيًا مع MG (diff=0)**
+- (2) src/components/admin/AdminDashboard.tsx (GalleryManager): بعد `var [vidOrder, setVidOrder] = useState('0')` ضفت بلوك الحالة (كومنت و93 + vidFileRef useRef + vidUploading + vidProgress)، وفي resetAll ضفت `setVidUploading(false); setVidProgress('')`، وبين resetAll و handleImgUpload حطيت `captureVideoThumb` (thumbnail من أول فريم بـcanvas مع timeout 8s وrevokeObjectURL) و`handleVidUpload` (chunkedUpload(file,'gallery',onPct,onMsg) → captureVideoThumb → رفع الثمبنيل → POST /api/gallery بـtype:'video' + videoUrl + thumbnail + title=اسم الملف من غير الامتداد) — وفي فورم الفيديو قبل جريد «رابط الفيديو» حطيت بلوك «رفع فيديو من الجهاز (بالجودة الأصلية)» (input مخفي accept="video/*" + زرار متقطع + progress بـaria-live) + فاصل «أو» — **الثلاث بلوكات اتأكدت بالـdiff إنها متطابقة بايت-ببايت مع MG** (chunkedUpload مستوردة فعلًا سطر 4 وUpload/Loader2 مستخدمين في رفع الصور — مفيش imports جديدة)
+- (3) src/components/landing/GallerySection.tsx: `unoptimized` في Image بـImageWithSkeleton + الكومنت (و93)، و`isDirectVideo` بقت `!isYouTube && (url.indexOf('/api/files/') === 0 || /\.(mp4|webm|mov|avi|ogg|m4v)(\?|$)/i.test(url))` + الكومنت — زي MG حرفيًا
+- تحقق: bunx tsc --noEmit = **30/30 baseline بالظبط** (كلها examples/* + skills/* + ui/* radix معروفة) وصفر أخطاء في الملفات المعدلة (فلتر بالأسماء = NONE) + grep: رفع فيديو من الجهاز=4 وcaptureVideoThumb=2 وhandleVidUpload=2 في AdminDashboard + unoptimized سطر 28 و'/api/files/' في isDirectVideo سطر 337 في GallerySection + media.category !== 'gallery' سطر 47 في files/[id] — من غير dev server ولا بيانات اختبار
+- فرق GallerySection ضد MG بعد التعديل = أسطر و72 i18n مسبقة بس (useLangStore/pickConfig بدل القيم المباشرة) — مش من تعديلي؛ وفرق AdminDashboard = انحراف منصات قديم معروف (إضافات MG غير المنقولة) — هانكس الـ117 المضافة بتاعة و93 متطابقة 100%
+- git: fetch origin (مفيش جديد) → stage الملفات الثلاثة بس → كومِت **1da5e56** برسالة المطلوب حرفيًا → push origin HEAD نجح (a6bc29f..1da5e56) — الشجرة نضيفة بعد الـpush
+
+Stage Summary:
+- منصة Sherif بقت فيها و93 كامل زي MG: الأدمن يرفع فيديو المعرض من الجهاز بالجودة الأصلية 100% (chunkedUpload بايت-ببايت + thumbnail أوتوماتيك من أول فريم)، وصور المعرض بتوصل للزوار من غير ضغط Next.js (unoptimized)، وفيديوهات المعارف المرفوعة بقت عامة للزوار زي يوتيوب (استثناء category='gallery' من بوابة التوكن) وبتشتغل في المودال عبر /api/files/<id>
+- /api/upload/chunk كان موجود فعلًا في Sherif (ما احتاجش استرجاع) — 3 ملفات معدلة، منها files/[id] متطابق حرفيًا مع MG والبلوكات المضافة في الاثنين التانيين متطابقة بايت-ببايت — tsc 30/30 baseline وصفر أخطاء جديدة — كومِت 1da5e56 مرفوع على main (a6bc29f..1da5e56)
+---
+Task ID: 93-a
+Agent: general-purpose (Zicola port)
+
+Work Log:
+- قريت آخر سطرين من الـ worklog (و92-ب orchestrator) — منصة Zicola-Math كانت نضيفة على main == origin/main == 0054cad، و`src/app/api/upload/chunk/route.ts` **موجودة أصلًا** (ما اتمسحتش زي ما حصل في MG) — اتسيبت زي ما هي بدون استرجاع
+- جبت الكود المرجعي بالظبط من MG c2dc17e (diff + sed على نطاقات GalleryManager) وطبّقت 3 ملفات:
+- (1) src/components/admin/AdminDashboard.tsx (GalleryManager): بعد `var [vidOrder, setVidOrder] = useState('0')` ضفت vidFileRef/vidUploading/vidProgress بالكومنت، وفي resetAll سطر `setVidUploading(false); setVidProgress('')`، وبين resetAll وhandleImgUpload ضفت captureVideoThumb (canvas من أول فريم بـtoBlob jpeg 0.85 + timeout 8ث) وhandleVidUpload (chunkedUpload(file,'gallery') بالبروجريس → thumbnail → POST /api/gallery type:'video' + title من غير الامتداد)، وفي فورم «إضافة فيديو» قبل جريد رابط الفيديو ضفت بلوك «رفع فيديو من الجهاز (بالجودة الأصلية)» (input مخفي accept="video/*" + زرار متقطع Upload/Loader2 + بروجريس aria-live) وقايمة «أو» الفاصلة — **البلوكين اتحقّقوا بdiff ضد MG = صفر اختلاف حرفيًا**
+- (2) src/components/landing/GallerySection.tsx: ImageWithSkeleton زوّدت `unoptimized` بالكومنت (الجودة الأصلية 100% من غير ضغط Next.js)، وGalleryVideoModal: isDirectVideo بقت `!isYouTube && (url.indexOf('/api/files/') === 0 || /\.(mp4|webm|mov|avi|ogg|m4v)(\?|$)/i.test(url))` بالكومنت
+- (3) src/app/api/files/[id]/route.ts: بوابة الفيديو بقت `if (contentType.startsWith('video/') && media.category !== 'gallery')` بالكومنت الأربعة أسطر — استثناء فيديوهات المعرض العامة بس، فيديوهات الكورسات فاضل عليها الحماية بالتوكن (بلوك intro_video_url بتاع و84 المحلي اترك زي ما هو)
+- تحقق: `media.category` موجود في Prisma schema (String @default("general")) — bunx tsc --noEmit = **30/30 baseline بالظبط** وصفر أخطاء في الملفات الثلاثة (فلتر بالأسماء = مفيش) + grep: «رفع فيديو من الجهاز»×4 وcaptureVideoThumb×2 وhandleVidUpload×2 في الأدمن، unoptimized×3 و'/api/files/' في isDirectVideo بالجاليري، وmedia.category !== 'gallery' في files route
+- git: fetch origin (مفيش جديد) → stage الملفات الثلاثة بس (3 files changed, 128 insertions, 2 deletions) → كومِت **6e73c8a** → push origin main نجح (0054cad..6e73c8a) — من غير dev server أو بيانات اختبار
+- لمس MG أو منصات تانية: مفيش — غير الإضافة دي على worklog.md
+
+Stage Summary:
+- Zicola-Math بقى فيها و93 كامل زي MG: الأدمن بيرفع فيديوهات المعرض من الجهاز بالجودة الأصلية 100% (chunkedUpload بايت-ببايت + صورة مصغرة أوتوماتيك من أول فريم)، الصور بتوصل للزوار من غير ضغط Next.js، وفيديوهات المعار المرفوعة بتتخزن على /api/files/<id> وبتتعرف عليها في المودال وبتنعرض للزوار من غير توكن (زي يوتيوب) — فيديوهات الكورسات محمية زي ما هي
+- ملفات: 3 (AdminDashboard + GallerySection + files/[id]) — البلوكات المدموجة متطابقة حرفيًا مع MG (diff=0) — tsc 30/30 baseline — كومِت 6e73c8a مرفوع على main (0054cad..6e73c8a)
+- انحرافات: مفيش — /api/upload/chunk كانت موجودة أصلًا في Zicola (اتسيبت)، وبلوك intro_video_url (و84) المحلي في files route اترك زي ما هو بره نطاق النقل
+---
+Task ID: 93 (main orchestrator — قسم المعرض: رفع فيديو من الجهاز + الجودة الأصلية)
+Agent: main (Z.ai Code)
+Task: طلب المستر (و93): «في قسم المعرض — الفيديوهات أقدر أرفعها برده من على الجهاز وأحط اللينك زي الصور — والجودة بتاعتها بتقل مش عارف ليه، عاوزك تحافظ لي على الجودة»
+
+Work Log:
+- **تشخيص جذري مهم**: راجعت dev.log ولقيت `POST /api/upload/chunk 404` — راكة `/api/upload/chunk/route.ts` كانت اتمسحت بالغلط في كومِت التنظيف 6bcb701 (23 سبتمبر) → **كل رفع ملفات من الجهاز كان بايظ على MG من ساعتها** (صور المعرض/الكتب/الأسئلة/CMS) — عشان كده المستر بيحط الصور بلينك بس
+- استرجعت الراكة من الجيت (`git show 8531628:src/app/api/upload/chunk/route.ts` — نسخة و19 المصلحة: تجميع بايت-ببايت + إعادة محاولة) — المنصات التانية راكتها موجودة أصلاً
+- `/api/files/[id]`: فيديوهات المعرض (category='gallery') بقت عامة زي لينكات اليوتيوب — وحماية فيديوهات الكورسات بالتوكن زي ما هي (اتأكدت: 403 من غير توكن ✓)
+- الأدمن (GalleryManager): زرار «رفع فيديو من الجهاز (بالجودة الأصلية)» + شريط تقدم بالنسبة — الفيديو بيتخزن بايت-ببايت (chunkedUpload بيتحقق بالحجم) صفر ضغط + **صورة مصغرة أوتوماتيك من أول فريم** (canvas capture) عشان يبان بصورته زي يوتيوب + الخيار باللينك زي ما هو
+- المعرض العام: الصور بقت `unoptimized` → **توصل للزوار بالجودة الأصلية 100% من غير ضغط Next.js** (ده كان سبب «الجودة بتقل» — كان بيصغّر ويضغط q75) + مشغل الفيديو بيتعرف على روابط /api/files/<id> ويشغلها مباشر
+- اختبارات MG E2E: رفع صورة 27B ✓ | رفع فيديو 5MB مجزأ 3 أجزاء = 5,242,880 بايت بالظبط ✓ | فيديو المعرض عام 200 video/mp4 ✓ | فيديو كورس من غير توكن 403 ✓ | **رفع من واجهة الأدمن بنفسه: فيديو webm → توست نجاح + صورة مصغرة اتولدت من أول فريم ✓ + صورة jpg → توست نجاح ✓** | المعرض العام: الثمبنيل 720x1280 اتحملت ✓ | **دوسيت على الكارت → المشغل المباشر اتفتح والفيديو اشتغل فعلاً (currentTime بيتحرك)** ✓
+- التنظيف: 3 عناصر معرض تجريبية + 5 صفوف Media تجريبية + ملفات /tmp وpublic اتشالوا (COUNT المعرض = 0 زي ما كان)
+- النقل للمنصات (وكلاء متوازيين): Zicola 93-a كومِت 6e73c8a (0054cad..6e73c8a) | Sherif 93-b كومِت 1da5e56 (a6bc29f..1da5e56) | Shaimaa 93-c كومِت eeb0045 (5c25c41..eeb0045) — كل واحد: نفس 3 تعديلات، diff ضد MG = صفر
+- Push: MG 4da6f74..c2dc17e
+
+Stage Summary:
+- المعرض بقى زي ما المستر عاوز بالظبط: **الفيديوهات ليها رفع من الجهاز + لينك** (زي الصور كده)، والصور والفيديوهات بتنزل بالجودة الأصلية 100%
+- **إصلاح خفي مهم**: راكة الرفع الممسوحة اترجعت — كل رفع من الجهاز في المنصة رجع يشتغل (مش المعرض بس)
+- tsc: MG 29 + المنصات 30/30 — صفر أخطاء جديدة ×4
