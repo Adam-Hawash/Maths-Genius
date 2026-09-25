@@ -3728,3 +3728,21 @@ Stage Summary:
 - ترتيب أسماء الصفوف بقى بيتبع لغة الزائر في Zicola (المنصة الوحيدة اللي عليها البقعة)
 - صور المدرسين بتبدأ تتحمل من أول سطر HTML + شاشة التحميل — مش بعد الهيدريشن — في Zicola وSherif (MG وshaimaa سليمين)
 - commit: Zicola = ce4fc45 | Sherif = fbedc51 — Vercel هينشر تلقائي
+
+---
+Task ID: و99
+Agent: Zai Code (main)
+Task: لما يتبعت لينك منصة أحمد شعبان (Zicola) في واتساب تظهر صورة المنصة (صورة الفافيكون التعليمية) في المعاينة زي جينيس — بدل النص العادي من غير صورة
+
+Work Log:
+- اكتشفت إن واتساب بيقرا og:image (مش الفافيكون) ولازم الصورة ≥300px والمسار رابط مطلق — MG نفسه مالوش og tags أصلاً (فحصت الإنتاج لايف)
+- فافيكون Zicola (the-scholar-favicon.png) = 64×64 صغير فواتساب بيتجاهله — نفس الرسمة موجودة بحجم كامل في the-scholar-nav.png (512×512، صورة المستر على خلفية رياضيات زرقاء)
+- ملاحظة: /home/z/platforms كان اتمسح من البيئة — عملت re-clone لـ Zicola (ce4fc45 موجود على GitHub)
+- layout.tsx: metadataBase (سلسلة env: NEXT_PUBLIC_SITE_URL → VERCEL_PROJECT_PRODUCTION_URL → VERCEL_URL → فالب) + openGraph (title/description/siteName/image 512×512) + twitter card summary_large_image
+- تحقق محلي على 3100: og:image بيرندر برابط مطلق + كل التاجات موجودة ✅ + tsc نضيف
+- push: Zicola ce4fc45→13108cf + git fetch + قفل سيرفر التحقق وحذف اللوج المؤقت
+
+Stage Summary:
+- لينك Zicola في واتساب هيعرض معاينة بعنوان المنصة وصورة المستر التعليمية (نفس رسمة الفافيكون بحجم 512px)
+- الرابط المطلق لصورة og:image بيتحل تلقائيًا على Vercel من env دومين الإنتاج
+- ملاحظة للمستر: MG نفسه مالوش og tags — لو عايز نفس المعاينة بورتريه وائل خضير قولّي (commit واحد زي ده)
