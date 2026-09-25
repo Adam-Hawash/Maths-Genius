@@ -3707,3 +3707,24 @@ Stage Summary:
 - في MG: تحديات الأسئلة العامة بقى فيها بوقت/من غير وقت ومدة يختارها صاحب الغرفة (الدرجة في وضع من غير وقت 60 ثابتة + ستريك)، والفلاش كاردز (في السباق والتاب المستقل) بالتصميم الجديد زي الصورة مع زرار ترجمة فوري وزرار مساعدة ذكية AI
 - الإنتاج محتاج صفر خطوات يدوية: أعمدة BattleRoom الجديدة بتتعمل لوحدها من بصمة السكيما (v2_w88)، وجدول parent_notifications موجود من و87
 - tsc: 30/30 baseline ×4 منصات — صفر أخطاء جديدة. الطلاب ودرجاتهم والتحدي (24 ساعة) ما اتلمسوش
+
+---
+Task ID: و98
+Agent: Z.ai Code (main)
+Task: (1) ترتيب أسماء الصفوف الدراسية حسب لغة الزائر (إنجليزي أول في الإنجليزي / عربي أول في العربي — كان العربي ظاهر الأول في الحالتين) + (2) صور المدرسين بتظهر متأخرة ~5 ثواني (بالذات منصة مستر أحمد شعبان = Zicola-Math) — لازم تتحمل مع الحتة الأولى (شاشة التحميل)
+
+Work Log:
+- تحديد المنصة من السكرينشوت: subtitle «to reach the learning content» مش موجود في MG خالص → لقيتها في Zicola-Math (منصة مستر أحمد شعبان) api/config route — المنصات اتنفسحت من GitHub (كانت مجلد /home/z/platforms مش موجود في الجلسة دي)
+- فحص البقعة في المنصات الأربعة: MG (و72 مصلحة بالفعل ✅) + shaimaa (مصلحة mainName/subName ✅) + Sherif (مفيش نظام لغة في قسم الصفوف أصلاً — لا بقعة) + **Zicola = البقعة الوحيدة: grade.ar دايمًا الأول**
+- 【Zicola 1 — ترتيب الصفوف】GradesSection.tsx: useLangStore + h3 = lang==='en'? grade.en : grade.ar + p = العكس مع dir ديناميكي (نفس حل MG و72)
+- 【سبب تأخر الصورة】HeroSection داخل dynamic import — التحميل كان بيبدأ بعد: JS كامل → hydration → chunk الهيرو → رندر → عندها يبدأ تحميل الصورة الكبيرة (the-scholar-full.png) ≈ 5 ثواني
+- 【Zicola 2 — الصورة】layout.tsx: <link rel="preload" as="image" href={instructor_photo || the-scholar-full.png} fetchPriority="high"> في الـ head — التحميل يبدأ مع أول سطر HTML موازي للـ JS + page.tsx: preloadPhoto() جديد (Image() warming) بيشتغل فورًا من window.__INITIAL_CONFIG__ (instructor_photo + navbar_photo) + تاني بعد وصول /api/config لو الأدمن غيّر الصورة
+- 【Sherif — نفس بقع الصورة】layout.tsx: preload link لصورة الهيرو (لو القيمة موجودة) + page.tsx: نفس preloadPhoto بعد الكونفيج — shaimaa عليها preload من و48 أصلاً
+- تحقق حي: شغلت Zicola على بورت 3100 + agent-browser — إنجليزي: «Grade 4» رئيسي و«رابعة ابتدائي» تحته ✅ / عربي (mg_lang=ar): «رابعة ابتدائي» رئيسي و«Grade 4» تحته ✅ + link preload موجود في الـ head ✅ + الصورة PHOTO_LOADED ✅
+- tsc: Sherif = 30 (البازلين بالظبط، صفر أخطاء جديدة) + Zicola ملفاتي نضيفة — push: Zicola 5c15f10→ce4fc45 + Sherif e8dac92→fbedc51 + git fetch للاتنين
+- قفلت سيرفر التحقق 3100 + حذف /tmp/repopeek و/dev log المؤقت (قاعدة الأمان)
+
+Stage Summary:
+- ترتيب أسماء الصفوف بقى بيتبع لغة الزائر في Zicola (المنصة الوحيدة اللي عليها البقعة)
+- صور المدرسين بتبدأ تتحمل من أول سطر HTML + شاشة التحميل — مش بعد الهيدريشن — في Zicola وSherif (MG وshaimaa سليمين)
+- commit: Zicola = ce4fc45 | Sherif = fbedc51 — Vercel هينشر تلقائي
