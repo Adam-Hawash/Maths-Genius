@@ -3746,3 +3746,22 @@ Stage Summary:
 - لينك Zicola في واتساب هيعرض معاينة بعنوان المنصة وصورة المستر التعليمية (نفس رسمة الفافيكون بحجم 512px)
 - الرابط المطلق لصورة og:image بيتحل تلقائيًا على Vercel من env دومين الإنتاج
 - ملاحظة للمستر: MG نفسه مالوش og tags — لو عايز نفس المعاينة بورتريه وائل خضير قولّي (commit واحد زي ده)
+
+---
+Task ID: و99-B
+Agent: Z.ai Code (main)
+Task: المستر يقول «مافيش مشكلة اتحلت — لا الواتساب ولا الصورة» — تشخيص حي
+
+Work Log:
+- جبت دومين الإنتاج الحقيقي من GitHub Deployments API (target_url كشفت إن الفيرسل دمين math-genuis) → zicola-math.vercel.app بيعمل 307 → **zicola-in-math.com** (الدومين المخصص)
+- الـ vercel.app alias نفسه عليه SSO Deployment Protection (302 للوجين) — ده اللي كان هيخلي أي فحص عليه يبان كأن الإنتاج مش شغال
+- فحص حي على الدومين الحقيقي zicola-in-math.com:
+  - og:title + og:description + og:image = https://zicola-in-math.com/images/the-scholar-nav.png (رابط مطلق بالدومين الصحيح — VERCEL_PROJECT_PRODUCTION_URL اشتغل) ✅ كله راكب
+  - og:image بيرجع 200 ✅
+  - و98 موجود برضه: rel="preload" as="image" fetchPriority=high على صورة المعلم المخصصة (/api/files/...) بيرجع 200 + cache سنة immutable ✅
+- الخلاصة: التعديلات **شغالة ومركبة على الإنتاج** — المشكلة الوحيدة: **كاش واتساب** (بيكاشي معاينة اللينك القديم اللي اتبعت قبل النشر)
+
+Stage Summary:
+- مفيش أي كود محتاج تعديل — الإنتاج سليم 100% ومتحقق منه حي
+- حل واتساب للمستر: يبعت اللينك كده https://zicola-in-math.com/?v=2 (واتساب ياخده لينك جديد ويجيب المعاينة بالصورة) أو يستنى يومين الكاش ينجدد
+- مسحت /tmp/zicola و/tmp/ght (توكن مؤقت — قاعدة الأمان)
