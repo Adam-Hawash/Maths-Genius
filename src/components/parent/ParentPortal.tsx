@@ -31,6 +31,8 @@ import FractionText, { hasMathMarkup } from '@/components/FractionText'
 import BidiText from '@/components/BidiText'
 /* (2026-و87) كارت إشعارات ولي الأمر — بالاسم والدرجة لحظة التسليم */
 import ParentNotificationsCard from '@/components/parent/ParentNotificationsCard'
+/* (2026-و89) بوب-أب تفعيل إشعارات الموبايل (Web Push) — الإشعار الخارجي بيدوس عليه يفتح دخول ولي الأمر */
+import PushPermissionBanner from '@/components/parent/PushPermissionBanner'
 
 interface ResultRow {
   id: string
@@ -351,6 +353,9 @@ export function ParentPortal() {
           </Card>
         </div>
 
+        {/* (2026-و89) تفعيل إشعارات الموبايل (Web Push) — بوب-أب بعد الدخول + كارت حالة */}
+        <PushPermissionBanner parentId={currentParent && currentParent.id ? currentParent.id : ''} />
+
         {/* (2026-و87) إشعارات ولي الأمر — أول حاجة يشوفها بعد الهيدر */}
         <ParentNotificationsCard parentId={currentParent && currentParent.id ? currentParent.id : ''} />
 
@@ -393,11 +398,16 @@ export function ParentPortal() {
                   <p className="text-xs text-muted-foreground">{student.grade}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
-                  {/* (2026-و79) زرار إضافة طالب — طلب المستر: «يدوس إضافة طالب ويحط بيانات الطالب الثاني» */}
-                  <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={function () { setAddMode('link'); setAddOpen(true) }}>
-                    <UserPlus className="h-4 w-4" />
-                    {T('إضافة طالب', 'Add Student')}
-                  </Button>
+                  {/* (2026-و79) زرار إضافة طالب — طلب المستر: «يدوس إضافة طالب ويحط بيانات الطالب الثاني»
+                      (2026-و92) الحد الأقصى 6 طلاب — الزرار بيتقفل عند الستة */}
+                  {students.length >= 6 ? (
+                    <span className="text-[10px] text-muted-foreground leading-tight text-left">الحد الأقصى<br />6 طلاب ✓</span>
+                  ) : (
+                    <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={function () { setAddMode('link'); setAddOpen(true) }}>
+                      <UserPlus className="h-4 w-4" />
+                      {T('إضافة طالب', 'Add Student')}
+                    </Button>
+                  )}
                   {student.status === 'pending' && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 px-3 py-1 text-xs font-bold">
                       <AlertCircle className="h-3.5 w-3.5" /> حساب ابنك في انتظار موافقة المستر

@@ -3878,3 +3878,600 @@ Stage Summary:
 - المنصة اتسرعت على كل المحاور: الكونفيج والإحصائيات 5×أسرع، حفظ الأدمن بقى دفعات متوازية بدل دقائق انتظار، واللوجين عنده حارس مهلة سيرفر + مهلة متصفح 30s — ورسالة صريحة لو القاعدة بطيئة بدل «انتهت مهلة الاتصال» المبهمة
 - الفيديو التعريفي مُسح نهائيًا: من الكونفيج ومن جدول Media — القسم مخفي والأمان رجع زي ما هو (الملف بقى محمي تلقائيًا)
 - DELETE الملفات جاهز في الكود لأي تنظيف قادم من اللوحة (محمي بمعرّف الأدمن)
+Task ID: 89-c
+Agent: general-purpose (Shaimaa 89-c)
+Task: نقل Web Push لولي الأمر (و89) من MG إلى shaimaa-selim-science — استبدال واتساب و88 بإشعارات براوزر حقيقية + بانر تفعيل + sw.js
+
+Work Log:
+- البيئة: /home/z/platforms كان مفقود (الساندبوكس رجع snapshot) → re-clone shaimaa-selim-science من GitHub (Adam-Hawash) على آخر و88 (537c2cc) — HEAD مطابق لـ origin/main قبل الشغل
+- قرأت المرجع في MG كومِت 89a8a1c: lib/push.ts + مسارات /api/push/* الأربعة + public/sw.js + parent-push-client.ts + PushPermissionBanner.tsx + بلوك و89 في parent-notify.ts + page.tsx (سطور ~94-127) + ParentPortal (33-35/356-357) + ensure-schema (ParentPushSubscription + بصمة v2_w89) + موديل Prisma — وقرأت نظيراتها في شيماء قبل أي كتابة
+- (1) bun add web-push@^3.6.7 + bun add -d @types/web-push@^3.6.4 (package.json + bun.lock — مفيش churn تاني)
+- (2) prisma/schema.prisma: موديل ParentPushSubscription آخر السكيما بنفس نص MG حرفيًا (نفس الكومنت والحقول و@@index([parentId])) + mkdir db + DATABASE_URL="file:../db/custom.db" (تجاوزًا للـ DATABASE_URL الموروثة اللي بتشاور على قاعدة MG — نفس ملاحظة و4-c) bunx prisma db push → الجدول اتعمل واتأكدت منه (sqlite_master) + Prisma Client اتحرر
+- (3) src/lib/push.ts منسوخ 1:1 — التعديلات: مفاتيح VAPID بتاعة شيماء (Public BAWiULuK…1ixKc / Private cfuwAz8…7MEE / Subject mailto:shaimaascience@platform.com) + كومنت البراندنج «مولدة مرة واحدة لمنصة د. شيماء ساينس (Dr. Shaimaa)» — diff ضد MG = الأسطر الستة دي بس
+- (4) مسارات /api/push/vapid|subscribe|unsubscribe منسوخة حرفيًا (diff = صفر) + test/route.ts عنوانه بقى «🔔 إشعار تجريبي من منصة د. شيماء ساينس» (diff = السطر ده بس)
+- (5) public/sw.js + public/push-icon.png + public/push-icon-96.png (cp حرفي — md5 متطابقة) + src/lib/parent-push-client.ts + src/components/parent/PushPermissionBanner.tsx منسوخين حرفيًا (diff -q = صفر اختلاف) — جملة الشرح المطلوبة في البانر متحقق منها حرفيًا (grep = 1)
+- (6) src/lib/parent-notify.ts: شيلت imports normalizeWaPhone/sendViaChannel + بلوك و88 في الهيدر + PARENT_WA_EXAM/HOMEWORK_TEMPLATE + buildParentWaMessage — ضفت import { sendParentPush } from '@/lib/push' + بلوك و89 في الهيدر (نفس صياغة MG) + قوالب PARENT_PUSH_EXAM/HOMEWORK_TITLE «🔔/📝 متابعة من منصة د. شيماء ساينس» + BODY بنفس صياغة MG ({percent} بين أقواس) + buildParentPushPayload (نفس كود MG حرفيًا — url '/#parent-login' وicon '/push-icon.png') + بلوك الإرسال الخارجي بقى Promise.all(targets → sendParentPush) بنفس نص MG — siteUrl?: string في التوقيع فضلت زي ما هي ومسارات submit ما اتلمستش (البراميتر بيفضل بدون استخدام زي MG بالظبط)
+- (7) src/app/page.tsx: نفس إضافة MG بالظبط — هاندلر #parent-login بقى يشوف currentParent (مسجل → 'parent-portal' / غير مسجل → 'parent-login') + بلوك Service Worker جديد (register /sw.js + listener لرسالة parent-notification-click بيوجّه الصفحة بنفس المنطق) — متغيرات الهاندلر (par/h/d/st) مفيش تعارض في السكوب
+- (8) src/components/parent/ParentPortal.tsx: import PushPermissionBanner بعد ParentNotificationsCard (بنفس كومنت MG) + <PushPermissionBanner parentId={currentParent && currentParent.id ? currentParent.id : ''} /> فوق كارت الإشعارات بنفس سطر parentId بالظبط
+- (9) src/lib/ensure-schema.ts: CREATE TABLE IF NOT EXISTS ParentPushSubscription + idx_pps_parent آخر SCHEMA_TABLES (بنفس نص MG وكومنت و89) + SCHEMA_HASH_KEY اتغيرت من 'schema_heal_hash_v3_w73' (القيمة المحلية الحالية — MG كان عندها v2_w88) إلى 'schema_heal_hash_v2_w89' زي ما التعليمات طلبت — الجدول هيتعمل لوحده على Turso أول ريكوست بعد النشر
+- (10) bunx tsc --noEmit = **30 خطأ بالظبط** (baseline: ui/* radix + skills/* + examples/*) — صفر أخطاء في ملفاتي (كل الأخطاء الـ30 في الملفات الكاذبة المعروفة)
+- (11) اختبار بدون dev server: سكريبت مؤقت جوه المنصة استدعى buildParentPushPayload('exam','أحمد','امتحان تجريبي',8,10) → title «🔔 متابعة من منصة د. شيماء ساينس» + body «الطالب/ة أحمد سلّم امتحان «امتحان تجريبي» — الدرجة: 8 من 10 (80%)» + url '/#parent-login' + icon '/push-icon.png' ✓ — السكريبت اتمسح
+- فحص تسريب هوية: grep «Maths Genius/Math Genius/Mr.Wael/Khodair/mathsgenius» في كل الملفات الجديدة/المعدلة = صفر نتائج — وmg الاشتراكات/الإرسال بيستخدموا ParentPushSubscription وdb.parent الموجودين عند شيماء من و37
+- (12) git fetch origin main (مفيش جديد — origin/main == HEAD == 537c2cc) → stage الملفات الـ17 بس (bun.lock + package.json + schema.prisma + 4 معدلة + 11 جديدة — بدون tool-results وبدون db/ المتجاهلة) → كومِت 6ab5ca8 (17 files, +877/−58) → push origin main نجح (537c2cc..6ab5ca8)
+
+Stage Summary:
+- منصة د. شيماء بقى فيها Web Push حقيقي بدل الواتساب (و88 اتشال من مسار parent-notify): لما الطالب يسلّم امتحان/واجب → الإشعار الداخلي (و87) بيتكتب زي ما هو + إشعار براوزر حقيقي (VAPID + Service Worker) بيظهر على شاشة موبايل ولي الأمر بره المنصة لكل جهاز اشترك، وضغطة عليه بتفتح /#parent-login (بورتال لو مسجل / شاشة دخول لو لأ) والإشعار جوه المنصة زي ما هو
+- التفعيل: بوب-أب ودود في بورتال ولي الأمر (PushPermissionBanner) → برومبت البراوزر → حفظ الاشتراك في ParentPushSubscription (كل جهاز صف — نفس endpoint بيتحدث مش بيتضاعف) + كارت حالة + إشعار تجريبي + إيقاف — الاشتراكات الميتة (404/410) بتنضف تلقائيًا من sendParentPush
+- مفيش اشتراكات = مفيش إشعار خارجي والإشعار الداخلي شغال — والتسليم نفسه محمي بـ try/catch في كل الطبقات
+- مفاتيح VAPID مستقلة لشيماء (مش مفاتيح MG) — Public: BAWiULuK…1ixKc | Subject: mailto:shaimaascience@platform.com
+- الإنتاج صفر خطوات يدوية: جدول ParentPushSubscription هيتعمل لوحده من بصمة schema_heal_hash_v2_w89 أول ريكوست بعد النشر
+- tsc 30/30 baseline + buildParentPushPayload متحقق منها + ملفات: push.ts / parent-push-client.ts / PushPermissionBanner.tsx / sw.js / push-icon ×2 / api/push ×4 / parent-notify.ts / page.tsx / ParentPortal.tsx / ensure-schema.ts / prisma schema / package.json + bun.lock — كومِت **6ab5ca8** مرفوع على main
+
+---
+Task ID: 89-b
+Agent: general-purpose (Sherif 89-b)
+Task: نقل Web Push لولي الأمر (و89) من MG إلى Mr-Sherif-ElSayed — استبدال واتساب و88 بإشعارات براوزر حقيقية + بانر تفعيل + sw.js
+
+Work Log:
+- البيئة: /home/z/platforms كانت متمسحة (نفس درس و88) → re-clone من GitHub بتوكن Adam-Hawash (نفس التوكن المضمن في remote بتاع my-project) →clone على 99947c5 (و88) + bun install (234 باكج) + ضبط هوية git محليًا Adam-Hawash / 223343744+Adam-Hawash@users.noreply.github.com (كانت z@container على النسخة الجديدة — درس بلوك Vercel و21/و35)
+- قريت آخر الـ worklog (و87/و88 + سجل 7-b بتاعي) + ملفات MG المرجعية للـ و89: lib/push.ts + مسارات api/push الأربعة + public/sw.js + lib/parent-push-client.ts + PushPermissionBanner.tsx + parent-notify.ts (بلوك و89) + page.tsx (سطور 94-126) + ParentPortal (33-35/356-357) + ensure-schema (SCHEMA_TABLES + مفتاح v2_w89) + موديل ParentPushSubscription
+- A) bun add web-push (3.6.7) + bun add -d @types/web-push (3.6.4) — دخلوا dependencies صح
+- B) prisma/schema.prisma: موديل ParentPushSubscription بنص MG حرفيًا + نفس الكومنت في آخر الملف بعد ParentNotification → bunx prisma db push على sqlite محلي بمسار صريح (DATABASE_URL وراثة الساندبوكس بتشاور على قاعدة MG — اتعالج بـ env صريح file:/home/z/platforms/Mr-Sherif-ElSayed/db/custom.db) — الجدول اتعمل واتتحقق بـ sqlite_master وdb/ جوه .gitignore (db/custom.db*)
+- C) lib/push.ts منسوخ من MG مع: مفاتيح VAPID بتاعة شريف (Public BLO8PJ-... / Private LR38I_... / Subject mailto:sherifelsayed@platform.com) + كومنت البراندنج «مولدة مرة واحدة لمنصة مستر شريف السيد» — اتحققت إن الزوجين valid عبر web-push.setVapidDetails فعليًا (VAPID pair OK) — باقي الملف (ensureParentPushTable + save/delete + sendParentPush بتنضيف 404/410) متطابق حرفيًا
+- D) مسارات API الأربعة منسوخة حرفيًا (diff=0 ضد MG) وفي test/route.ts العنوان بقى «🔔 إشعار تجريبي من منصة مستر شريف السيد» — vapid/subscribe/unsubscribe زي ما هما (subscribe بيستخدم normalizeParentPhone من parent-notify الموجودة أصلًا)
+- E) public/sw.js + push-icon.png (14KB) + push-icon-96.png (6.4KB) + lib/parent-push-client.ts + components/parent/PushPermissionBanner.tsx منسوخين حرفيًا — diff=0 للكل (البانر بنصه العام وجملة الشرح المطلوبة حرفيًا: «عشان تتابع درجات ابنك أو بنتك أول بأول على الموبايل بره...»)
+- F) lib/parent-notify.ts: شيلت imports normalizeWaPhone/sendViaChannel + كتلة و88 في الهيدر اتبدلت بكتلة و89 (نفس نص MG) + import sendParentPush من '@/lib/push' + قوالب PARENT_PUSH_EXAM/HOMEWORK_TITLE باسم «منصة مستر شريف السيد» + BODYها زي MG حرفيًا + buildParentPushPayload (url '/#parent-login' + icon '/push-icon.png' + tag parent-{kind}-{ts}) + بلوك الإرسال الخارجي الجديد (Promise.all + sendParentPush لكل targets + لوج فشل متسامح) مكان بلوك الواتساب — diff ضد MG بعد الاستبعاد = 6 أسطر براندنج بس (قوالب و87 الداخلية بتاعة شريف زي ما هي) — توقيع siteUrl? فضل زي ما هو ومسارات submit ما اتلمستش — lib/wa-send.ts سايبة زي ما هي (بقت غير مستخدمة من parent-notify بس مفيش كسر — MG كمان سايبها)
+- G) page.tsx: نفس إضافة MG بالظبط — هاندلر #parent-login بقى شرطي (currentParent موجود → setView('parent-portal') / غير كده → 'parent-login') + كتلة تسجيل navigator.serviceWorker.register('/sw.js', {scope:'/'}) + listener لرسالة parent-notification-click بنفس التحويل — اتأكدت إن 'parent-portal' و'parent-login' وcurrentParent موجودين في app-store شريف والعرض في page.tsx سطر 240/248 زي ما هو
+- H) ParentPortal.tsx: import PushPermissionBanner + عرضه فوق ParentNotificationsCard بنفس سطر الـ parentId الحالي (سطر 356-357 — نفس مكانية MG)
+- I) ensure-schema.ts: سطر CREATE TABLE IF NOT EXISTS ParentPushSubscription + idx_pps_parent في آخر SCHEMA_TABLES (نفس نص MG) + كومنت (و89) خامس + SCHEMA_HASH_KEY من 'schema_heal_hash_v2_w45' → 'schema_heal_hash_v2_w89'
+- J) tsc: bunx tsc --noEmit = **30 خطأ بالظبط** (baseline ui/* + examples/* + skills/*) وفلتر على ملفاتي (lib/app/components/parent/page.tsx) = صفر أخطاء
+- K) سكريبت مؤقت جوه الريبو استدعى buildParentPushPayload('exam','أحمد','امتحان تجريبي',8,10) → «🔔 متابعة من منصة مستر شريف السيد» / «الطالب/ة أحمد سلّم امتحان «امتحان تجريبي» — الدرجة: 8 من 10 (80%)» / url '/#parent-login' / icon '/push-icon.png' ✓ (+homework 5/10=50%) — السكريبت اتمسح بعد التشغيل
+- L) git: fetch origin main (origin/main == HEAD == 99947c5 مفيش جديد) → staged ملفاتي الـ 17 بس (مفيش tool-results ولا mode changes ولا db/) → كومِت f2cf88c → push origin main نجح (99947c5..f2cf88c)
+
+Stage Summary:
+- منصة مستر شريف بقى فيها Web Push حقيقي زي طلب المستر الحرفي: مفيش واتساب — إشعار براوزر (VAPID + Service Worker) بيظهر بره على شاشة موبايل ولي الأمر، وضغطة عليه بتفتح /#parent-login (لو مسجل → بورتال الإشعارات على طول) والإشعار الداخلي و87 شغال زي ما هو
+- التفعيل من بوب-أب ودود في بورتال ولي الأمر (PushPermissionBanner فوق كارت الإشعارات) → إذن البراوزر → اشتراك → تخزين في ParentPushSubscription (كل جهاز صف) + كارت حالة + إشعار تجريبي + إيقاف — مفيش اشتراكات = مفيش إشعار خارجي ومفيش أي تأثير على التسليم
+- الإنتاج صفر خطوات يدوية: الجدول بيتعمل من بصمة v2_w89 أو من ensureParentPushTable تلقائيًا على Turso — مفتاح VAPID ثابت جوه lib/push.ts (تغييره كله من مكان واحد)
+- Push: Sherif 99947c5..f2cf88c | tsc 30/30 baseline | 17 ملف (7 معدلة + 10 جديدة)
+
+---
+Task ID: 89-a
+Agent: general-purpose (Zicola 89-a)
+Task: نقل Web Push لولي الأمر (و89) من MG إلى Zicola-Math — استبدال واتساب و88 بإشعارات براوزر حقيقية (Service Worker + VAPID) + بانر تفعيل + sw.js — والإشعار الداخلي (و87) زي ما هو
+
+Work Log:
+- البيئة: /home/z/platforms/Zicola-Math مش موجود (الساندبوكس اترست) — استنسخت Zicola-Math من GitHub على f564525 (و88) بتوكن حساب Adam-Hawash + bun install + git identity محلي (Adam-Hawash noreply — درس منع الـ Vercel Blocked)
+- (A) bun add web-push (3.6.7) + bun add -d @types/web-push (3.6.4) — package.json/bun.lock بس
+- (B) سكيما: أضفت موديل ParentPushSubscription لآخر prisma/schema.prisma (نفس نص MG حرفيًا بنفس الكومنت) + أنشأت .env بمسار sqlite محلي مطلق (db/zicola.db — تعمّدت المطلق عشان فخ DATABASE_URL الموروث في الساندبوكس اللي بيخطف قاعدة MG) + mkdir db + `DATABASE_URL صريح bunx prisma db push` نجح والجدول اتعمل (اتأكدت بـ libsql: ParentPushSubscription موجود جنب parent_notifications)
+- (C) انسخ lib/push.ts من MG واستبدلت مفاتيح VAPID بمفاتيح Zicola المخصصة (Public BIE6J6fRy5AS1lV8sg8uVW3YWrygq5BnkU56J2zdHIbDukKqSiw2c1dY1erHr90zt8Frpun6a-Yey6YBUB7NTb0 / Private odySJC_hkCWJ-iemRSGbYJKTOIQUSTV6ZrXq7urpIq0 / Subject mailto:zicolainmath@platform.com) وكومنت البراندنج بقى «منصة Zicola In Math» — diff ضد MG بعدها = سطور المفاتيح والبراندنج بس (منطق ensureParentPushTable/save/delete/sendParentPush مع تنظيف 404/410 متطابق حرفيًا)
+- (D) انسخ مسارات API الأربعة حرفيًا (vapid/subscribe/unsubscribe متطابقة 1:1 — subscribe بيستخدم normalizeParentPhone من parent-notify الموجودة أصلاً) + في test/route.ts العنوان بقى «🔔 إشعار تجريبي من منصة Zicola In Math» (diff وحيد)
+- (E) انسخ حرفيًا (diff = صفر اختلاف): public/sw.js (push + notificationclick بيفتح /#parent-login ويركز النافذة مع postMessage) + public/push-icon.png + public/push-icon-96.png (cp) + src/lib/parent-push-client.ts + src/components/parent/PushPermissionBanner.tsx — وجملة البوب-أب المطلوبة متحرفيًا موجودة (grep = 1): «عشان تتابع درجات ابنك أو بنتك أول بأول على الموبايل بره وتوصلك كل التنبيهات المهمة، اضغط هنا ووافق على الإشعارات عشان المستر يقدر يبعت لك تقارير الدرجات أول بأول!»
+- (F) parent-notify.ts (Zicola): شيلت imports بتوع normalizeWaPhone/sendViaChannel + PARENT_WA_EXAM/HOMEWORK_TEMPLATE + buildParentWaMessage (آثار و88 — grep على buildParentWaMessage/PARENT_WA_ = صفر في المشروع كله) + ضفت import { sendParentPush } from '@/lib/push' + كومنت و89 في الهيدر (نفس نص MG) + قوالب PARENT_PUSH_EXAM/HOMEWORK_TITLE باسم «🔔/📝 متابعة من منصة Zicola In Math» + البوديز بتوع MG حرفيًا + buildParentPushPayload (url '/#parent-login' وicon '/push-icon.png') + استبدلت بلوك و88 (waLink/sendViaChannel) ببلوك و89 بتاع MG (Promise.all + sendParentPush لكل targets) — التوقيع siteUrl? فضل زي ما هو ومسارات submit ما اتلمستش خالص — diff الكلّي ضد MG بعد النقل = 6 أسطر براندنج بس
+- (G) page.tsx (Zicola): نفس إضافة MG حرفيًا — (1) هاندلر #parent-login الموجود من و88 اتعدل بشرط currentParent (مسجل → 'parent-portal' / غير مسجل → 'parent-login') (2) بلوك جديد: تسجيل /sw.js + listener لرسالة parent-notification-click بنفس التوجيه — diff المقطع (سطرا 93-127 MG مقابل 97-131 Zicola) = صفر اختلاف
+- (H) ParentPortal.tsx (Zicola): import PushPermissionBanner + عرضه فوق ParentNotificationsCard بنفس سطر الـ parentId ({currentParent && currentParent.id ? currentParent.id : ''}) — بنفس أسطر MG (33-35 و356-357)
+- (I) ensure-schema.ts (Zicola): أضفت CREATE TABLE IF NOT EXISTS ParentPushSubscription + CREATE INDEX idx_pps_parent في SCHEMA_TABLES (نفس نص MG) + SCHEMA_HASH_KEY من 'schema_heal_hash_v3_w71' (قيمة Zicola الحالية — ملحوظة: مختلفة عن MG اللي كانت v2_w88) إلى 'schema_heal_hash_v2_w89' عشان Turso تعمل الجدول لوحدها أول ريكوست بعد النشر
+- (J) bunx tsc --noEmit = **30 خطأ بالظبط** (baseline: ui/* radix + skills/* + examples/*) — صفر أخطاء في ملفاتي
+- (K) اختبار سكريبت مؤقت داخل المنصة (زي و88): buildParentPushPayload('exam','أحمد','امتحان تجريبي',8,10) → { title: '🔔 متابعة من منصة Zicola In Math', body: 'الطالب/ة أحمد سلّم امتحان «امتحان تجريبي» — الدرجة: 8 من 10 (80%)', url: '/#parent-login', icon: '/push-icon.png' } — PASS (العنوان فيه Zicola In Math + اللينك /#parent-login) — والسكريبت اتمسح
+- (L) git: fetch origin main (HEAD==origin/main==f564525 مفيش جديد) → stage ملفاتي الـ 17 بس (من غير tool-results ومن غير .env/db المحلية — gitignored أصلاً) → كومِت **2ba05a9** → push نجح **f564525..2ba05a9 main -> main**
+- ملاحظة صادقة: بنيت المنصة من استنساخ GitHub لأن مجلد platforms اتمسح مع الـ reset — المستودع كان محتوي آخر شغل متحقق منه (f564525 و88) فمفيش أي فقدان؛ وماشغّلتش dev server (التحقق tsc + سكريبت + db push بس زي التعليمات — MG اتحقق بالمتصفح بالكامل)
+
+Stage Summary:
+- Zicola بقى فيها Web Push حقيقي لولي الأمر: بعد دخول البورتال بوب-أب ودود بالكلام المطلوب حرفيًا → موافقة → Service Worker + PushManager → الاشتراك بيتخزن في ParentPushSubscription برقم موبايله المطبّع — ولما الطالب يسلّم امتحان/واجب إشعار براوزر يظهر على شاشة الموبايل بره (بدل الواتساب بتاع و88 تمامًا)، وضغطة عليه بتفتح /#parent-login (وشاشة البورتال لوولي الأمر مسجل) — والإشعار الداخلي (و87) شغال زي ما هو
+- مفيش اشتراكات = مفيش إشعار خارجي ومفيش أي كسر؛ الاشتراكات الميتة (404/410) بتنضف لوحدها؛ فشل الإرسال = لوج بس ومابيبوّظش التسليم
+- إنتاج صفر خطوات يدوية: جدول ParentPushSubscription هيتعمل على Turso من بصمة schema_heal_hash_v2_w89، والمفاتيح VAPID خاصة بـ Zicola In Math (مش مفاتيح MG)
+- tsc 30/30 baseline | Push: Zicola f564525..2ba05a9 | ملفات: 11 جديد (push.ts + 4 routes + sw.js + أيقونتان + parent-push-client + PushPermissionBanner) + 6 معدلة (package.json + bun.lock + schema.prisma + parent-notify.ts + page.tsx + ParentPortal.tsx + ensure-schema.ts)
+---
+Task ID: 89 (main orchestrator — Web Push لولي الأمر في المنصات الأربعة + التحديات إنجليزي في MG)
+Agent: main (Z.ai Code)
+Task: طلب المستر: (1) «الاشعار اللي هيجي لولي الامر بره مش هيجي على الواتساب — يجي زي برومبت البراوزر، ولما يضغط يخش على الاشعارات اللي جوه» → استبدال واتساب/SMS بتاع و88 بـ **Web Push حقيقي** (Service Worker + VAPID + web-push) في المنصات الأربعة، مع بوب-أب ترحيبي ودود بعد دخول ولي الأمر (مش برومبت البراوزر الخام). (2) «التحديات انا عاوزها كل التحديات بالانجليزي، دي منصة ماث، ما فيش ترجمة للعربي — رجعها للأولاني قبل التغيير ده» في MG فقط.
+
+Work Log:
+- MG — البنية: web-push 3.6.7 + @types/web-push، موديل Prisma ParentPushSubscription (endpoint unique — إعادة الاشتراك بتحدّث مش بتضاعف، parentId = رقم موبايل ولي الأمر مطبّع — نفس مفتاح parent_id في parent_notifications) + جدول في ensure-schema SCHEMA_TABLES مع idx_pps_parent + بَمب البصمة schema_heal_hash_v2_w89 (Turso بتعمل الجدول لوحدها أول ريكوست بعد النشر) + bunx prisma db push محليًا
+- MG — lib/push.ts: مفاتيح VAPID مولدة خاصة بكل منصة (4 أزواج مختلفة) + ensureParentPushTable (نمط الشفاء الذاتي) + save/delete subscription + sendParentPush بتنضيف الاشتراكات الميتة (404/410) بمهلة 10ث لكل إرسال
+- MG — مسارات API: GET /api/push/vapid (مفتاح عام للعميل) + POST subscribe (بيطابق رقم ولي الأمر من حسابه Parent→phone زي و87) + POST unsubscribe + POST test (إشعار تجريبي)
+- MG — public/sw.js: حدث push بيعرض {title, body, url, tag, icon} على شاشة النظام بره المنصة + notificationclick بيفتح /#parent-login — ولو في نافذة منصة مفتوحة بيركّزها ويبعت لها postMessage parent-notification-click
+- MG — parent-notify.ts: شيل واتساب و88 بالكامل (normalizeWaPhone/sendViaChannel/PARENT_WA_*/buildParentWaMessage) وضيف PARENT_PUSH_EXAM/HOMEWORK_TITLE/BODY (قوالب قابلة للتعديل — نفس نمط المتغيرات {student}{title}{score}{max}{percent}) + buildParentPushPayload (url '/#parent-login' ثابت + icon '/push-icon.png') + بلوك Promise.all→sendParentPush لكل أرقام الأولياء — الإشعار الداخلي و87 زي ما هو ومسارات submit ما اتلمستش (siteUrl? فضل في التوقيع)
+- MG — واجهة ولي الأمر: src/lib/parent-push-client.ts (إذن → تسجيل SW → اشتراك بـ applicationServerKey → حفظ → علم localStorage لكل ولي أمر) + PushPermissionBanner.tsx: مودال بتدرج ذهبي بالكلام المطلوب حرفيًا («عشان تتابع درجات ابنك أو بنتك أول بأول على الموبايل بره وتوصلك كل التنبيهات المهمة، اضغط هنا ووافق على الإشعارات عشان المستر يقدر يبعت لك تقارير الدرجات أول بأول!» + CTA «تفعيل الإشعارات الآن» + «لاحقًا» + ملاحظة آيفون Add to Home Screen) بيظهر تلقائيًا بعد الدخول (1.4ث) + كارت حالة دايم: مفعّلة ✓ مع زرار «جرّب إشعار تجريبي» و«إيقاف» / متقفلة من المتصفح / غير مدعوم — متركّب فوق ParentNotificationsCard
+- MG — page.tsx: تسجيل /sw.js في mount + listener parent-notification-click (مسجل → parent-portal / غير مسجل → parent-login) + هاندلر الهاش بقى portal لو currentParent موجود
+- MG — التحديات إنجليزي (و89): شيل زرار 🌐 الترجمة بالكامل من الفلاش كارد (state showArabic + import arabicFlashStem + بلوك الزرار — البادج والتصميم بتاع و88 سليمين) + حذف src/lib/flash-translate.ts نهائيًا + /api/arena/hint بقى يرجّع تلميح **بالإنجليزي** (Simple English, max 12 words, ممنوع الإجابة — زي ما هو) — أسئلة السباق والغرف أصلاً إنجليزي من المولد
+- اختبارات MG الحقيقية (curl + كروم headless بإذن notifications مزروع في Preferences البروفايل): subscribe حقيقي من متصفح → اشتراك FCM فعلي (fcm.googleapis.com/preprod/...) اتخزن برقم ولي الأمر المطبّع ✓ | /api/push/test → sent=1 (FCM قبل الإشعار) ✓ | reg.getNotifications() رجّعت الإشعار بعنوانه ونصه «🔔 إشعار تجريبي من منصة Math Genius» — ده اللي هيظهر على شاشة الموبايل ✓ | مناداة notificationclick بالإشعار الحقيقي جوه الـ SW → postMessage → الصفحة وَجّهت نفسها لشاشة «دخول ولي أمر» ✓ | re-subscribe بنفس endpoint = صف واحد بمفاتيح محدّثة ✓ | الفلاش كارد: translate=GONE + «Calculate: 7² = ?» إنجليزي + التلميح «💡 Remember what squaring a number means.» ✓ | شيبس الوقت (و88) سليمة ✓ | لقطات موبايل 390×844 وديسكتوب 1440×900 سليمة وصفر console errors ✓
+- ملاحظة تقنية للتشخيص مستقبلًا: Browser.grantPermissions عبر CDP رجّع «Failed to find browser context» على Chrome 143 dev — الحل اللي اشتغل: زرع profile.content_settings.exceptions.notifications = {setting:1} في Preferences البروفايل قبل التشغيل
+- نقل وكلاء متوازي (بنفس ملفات MG حرفيًا مع مفاتيح VAPID وبراندنج كل منصة): Zicola 2ba05a9 (f564525..2ba05a9) / Sherif f2cf88c (99947c5..f2cf88c) / Shaimaa 6ab5ca8 (537c2cc..6ab5ca8) — كل واحد tsc 30/30 + db push + اختبار buildParentPushPayload بهويته + worklog قسمه (89-a/89-b/89-c فوق)
+- تنظيف: طالب/ولي أمر الاختبار (01000000890) + صفوف parent_notifications وParentPushSubscription وغرف السباق التجريبية اتمسحوا (COUNT=0) — سكريبتات /tmp وبروفايلات كروم المؤقتة اتمسحت — أيقونات push-icon متتدفع جوه الريبو (مطلوبة للإشعارات)
+- Push: MG 84d1435..89a8a1c | Zicola f564525..2ba05a9 | Sherif 99947c5..f2cf88c | Shaimaa 537c2cc..6ab5ca8
+
+Stage Summary:
+- «الاتنين» زي ما طلب المستر بس بدون واتساب خالص: الإشعار الخارجي بقى **Web Push براوزر حقيقي** بيظهر على شاشة الموبايل بره المنصة (اتحقق منه فعليًا: FCM قبل الإشعار والـ SW استلمه وعرضه)، وضغطة عليه بتفتح شاشة تسجيل دخول ولي الأمر — ولو المنصة مفتوحة وهو مسجل بتوصل بورتال الإشعارات على طول — وبعد الدخول الإشعار موجود جوه المنصة في كارت «إشعاراتك» (و87)
+- الاشتراك opt-in من بوب-أب ودود بعد أول دخول لولي الأمر، ولكل جهاز صف لوحده — مفيش اشتراك = مفيش إشعار خارجي والإشعار الداخلي شغال زي ما هو، والتسليم عمرو ما بيتأثر
+- تعديل كلام الإشعارات (الداخلية والخارجية) من PARENT_*_TEMPLATE في lib/parent-notify.ts لكل منصة — ومفاتيح VAPID الخاصة بكل منصة في lib/push.ts
+- في MG: التحديات رجعت إنجليزي بالكامل (زرار الترجمة اتشال نهائيًا والتلميح الذكي بالإنجليزي) مع الحفاظ على تصميم و88 وشيبس الوقت
+- الإنتاج صفر خطوات يدوية: جدول ParentPushSubscription بيتعمل تلقائيًا من بصمة w89 على Turso أول ريكوست بعد النشر
+- tsc: 30/30 baseline ×4 منصات — صفر أخطاء جديدة. الطلاب ودرجاتهم والإشعار الداخلي ما اتلمسوش
+
+---
+Task ID: 90
+Agent: main (Z.ai Code)
+Task: شكاوى المستر بعد و89: (1) «ولي الأمر يعمل حسابه يقول له كلمة مرور ابنك غلط مع إنها صح» (2) «تفعيل الإشعارات بيقول حدث خطأ — فضلت أحاول مرتين والتالتة ظبطت — عايزها تظبط من أول مرة» (3) «الرسالة بتيجي على اللابتوب اللي الطالب شغال منه مش على موبايل ولي الأمر» (4) «تاب أولياء الأمور في صفحة الأدمن جنب الطلاب عشان أمسح فيهم» + تأكيد إن الإشعارات بتظهر على الموبايل.
+
+Work Log:
+- تشخيص (1): سكيما Student.phone @unique فالتكرار مستحيل — الأسباب الحقيقية: (أ) أرقام متخزنة بصيغة دولية 20xx من بيانات قديمة والتسجيل كان بيدوّر بالصيغة المطبّعة بس (ب) حروف عربية متشابهة (أ/ا، ى/ي، ة/ه، ؤ/و، ئ/ي) في الباسورد/الاسم من اختلاف الكيبوردات
+- إصلاح (1) src/app/api/parents/register/route.ts: بحث بكل صيغ الرقم (مطبّع + دولي + خام) بـ findMany على كل المرشحين + فحص (اسم+باسورد+رقم ولي الأمر) على كل مرشح + foldArabic() للتطبيع على الجانبين + رسائل خطأ مفصولة حسب السبب الحقيقي — نفس التطبيع في login/route.ts + بحث بكل صيغ الرقم
+- إصلاح (2) src/lib/parent-push-client.ts: ensureSWReady (poll لحد reg.active بمهلة 6ث بدل ثقة عمياء) + إعادة استخدام الاشتراك لو المفتاح مطابق (subscriptionKeyMatches) + retry ×3 للاشتراك و×2 للحفظ + إعادة محاولة كاملة تلقائية للتدفق مرة واحدة + PushPermissionBanner رسائل محددة لكل سبب (sw-failed/no-key/subscribe-failed/save-failed/dismissed)
+- إصلاح (3): PhoneQrSection في PushPermissionBanner (qrcode toDataURL لـ window.location.origin) في كارت الحالة المفعّلة وكارت الدعوة وكارت المرفوض — خطوات: امسح الكود بموبايلك ← سجل دخولك بنفس حسابك ← اضغط سماح بالتنبيهات + ملاحظة «الإشعارات لكل جهاز لوحده» + تنويه QR جوه بوب-أب الترحيب — Web Push بيوصل لكل أجهزة ولي الأمر (sendParentPush بيلف على كل صفوف ParentPushSubscription)
+- bun add @radix-ui/react-alert-dialog (كانت ناقصة — ui/alert-dialog.tsx كان ضمن أخطاء baseline الكاذبة والاستخدام الحقيقي بيكسر الكومبايل)
+- إصلاح (4): /api/admin/parents/route.ts جديد (GET قائمة بالأبناء الأساسيين والمدموجين + عدادات أجهزة الإشعارات والإشعارات / DELETE بحذف الحساب + ParentStudent + ParentNotification + ParentPushSubscription برقمه — auth بنمط isAdmin زي db-cleanup) + src/components/admin/ParentsManager.tsx جديد (بحث فوري بالاسم/الرقم/اسم الابن + حذف بـ AlertDialog + max-h scroll + badges) + تاب parents في AdminDashboard جنب الطلاب
+- اختبارات حقيقية: تسجيل ولي أمر بالبيانات الصح ✓ | دخول ✓ | طالب رقمه متخزن دولي 2015... وولي الأمر كتب 015... → نجح (كان بيفشل) ✓ | باسورد متسجل «احمد4422» ومكتوب «أحمد4422» → نجح ✓ | GET الأدمن رجّع 3 أولياء بأبناءهم ✓ | DELETE بدون adminId = 401 ✓ | حذف من الواجهة E2E: توست + القائمة اتحسنت والطالب فضل موجود في الداتابيز ✓ | متصفح: تاب Parents جنب Students بالقائمة والبحث والحذف + بورتال ولي الأمر بالبوب-أب وقسم الـ QR بكود حقيقي — موبايل 390×844 وديسكتوب 1440×900 — صفر console errors
+- تنظيف: طلاب وأولياء أمور الاختبار (01500000900/904/907 + w90_intl/w90_dupe1 + أرقام الأباء 901/908/909) ودرجاتهم وتذاكرهم اتمسحوا (LEFT=0/0) — سكريبتات tmp-w90-* ولقطات /tmp اتمسحت — الأدمن الافتراضي (self-create بنفس بيانات الإنتاج) فضل زي ما هو
+- ملاحظة: كومِت بيئة غريب (4b729fd «bc0769d3-…») كان فوق origin/main فيه tool-results — اتعمله reset --soft لـ origin/main والتقديم نضيف من غير الملفات دي
+
+Stage Summary:
+- «كلمة مرور ابنك غلط» رغم صحتها اتحلت: بحث بكل صيغ الرقم + مطابقة على كل الحسابات المرشحة + تطبيع الحروف العربية المتشابهة — ورسائل الخطأ بقت بتقول السبب الحقيقي
+- تفعيل الإشعارات بقى يظبط من أول ضغطة: انتظار فعلي للـ Service Worker + إعادة محاولة تلقائية (اشتراك/حفظ/التدفق كله) — ولو ظهر خطأ الرسالة بتقول السبب بالظبط
+- مشكلة «الإشعار بيجي على اللابتوب» اتحلت بالوضوح: كل جهاز بيتفعّل لوحده + كارت QR في كل حالات البورتال (مفعّلة/دعوة/مرفوضة) يفتح المنصة على موبايل ولي الأمر عشان يفعّلها هناك — وساعتها كل إشعار بيوصله على موبايله (مؤكد: الإرسال بيوصل لكل الأجهزة المشتركة، والإشعار بيظهر كتنبيه نظام على الموبايل — أندرويد كروم على طول، وآيفون بعد Add to Home Screen زي ما مكتوب في البوب-أب)
+- تاب «أولياء الأمور» في الأدمن جنب الطلاب: قائمة كاملة بالأبناء وعدادات الإشعارات + بحث + حذف نهائي بتأكيد ما بيلمسش الطلاب ودرجاتهم
+- tsc: 29/30 (أقل من baseline — خطأ الكاذب بتاع alert-dialog اتحل بالتسطيب) — صفر أخطاء جديدة
+
+---
+Task ID: 91
+Agent: Z.ai Code (main)
+Task: طلبات المستر على نظام إشعارات أولياء الأمور — (أ) شيل كود الـ QR خالص («مش مظبوط») مع إبقاء قسم الإشعارات مظبوط، (ب) تنبيه نصي واضح يخلّي ولي الأمر يفهم إن التفعيل لازم يكون من موبايله هو (الجهاز الأساسي اللي هيجي له منه الإشارات)، (ج) الإشعار الخارجي يطلع بصورة المنصة/الفافيكون (صورة المستر) بدل الجرس الأصفر، (د) منع شكل «السبام» — الإشعار يظهر كرسالة معتادة مش مزعجة طالما ولي الأمر وافق من المنصة.
+
+Work Log:
+- PushPermissionBanner.tsx: حذف مكوّن PhoneQrSection بالكامل + استيرادات qrcode/QrCode — قسم الـ QR مش موجود في أي حالة (مفعّلة/مرفوضة/دعوة/بوب-أب)
+- إضافة DeviceHintNote (نصي بس) بالكلام المطلوب: «الإشعارات بتوصل على الجهاز اللي بتفعّل منها لوحده… افتح المنصة من كروم على موبايلك الشخصي، سجّل دخولك، واضغط سماح بالتنبيهات هناك — وده الجهاز الأساسي» + نصيحة «اضغط على الإشعار لما يوصلك عشان يفضل يظهر عادي مش مزعج» — بثلاث تدرجات لون (primary/amber/emerald) في الكروت الثلاثة + نسخة داخل البوب-أب
+- parent-notify.ts: resolveParentPushIcon() — بتقرا favicon_url من SiteConfig وقت الإرسال (صورة المستر /images/mr-wael-photo.webp في الإنتاج) وترجع للـ site_logo ثم push-icon.png، مع رفض الـ SVG (مش بيتعرض في إشعارات النظام) وكاش لكل process — buildParentPushPayload بقت async وبتستخدمها
+- منع السبام: tag بقى ثابت لكل نوع (parent-exam/parent-homework/parent-test) بدل Date.now() — الإشعارات المتتالية بتستبدل بعضها بدل التكدس + حذف renotify من sw.js (إعادة التنبيه على الاستبدال بتحسب من كروم سلوك عدواني) — الإشعار بيفضل عادي (صوت/اهتزاز) لأن الميجنت وافق من المنصة
+- api/push/test: نفس الأيقونة الديناميكية + tag ثابت
+- تحقق: tsc 29 (< 30 baseline) | متصفح موبايل 390×844: دخول ولي أمر → البوب-أب بالنص المصري الحرفي + التنبيه الجديد من غير QR → الكارت الافتراضي بالتنبيه النصي → حالة المفعّلة متعارف إنها بنفس المكون (الإذن النظامي default في الهيدلس) → ديسكتوب 1440×900 سليم → API التجريبي ok:true → صفر console errors
+- تنظيف: بيانات اختبار و91 (طالب/ولي أمر) اتمسحت من المحلي — لقطات /tmp اتمسحت
+
+Stage Summary:
+- الـ QR اتشال خالص وح محلّه تنبيه نصي واضح يوصّل المعلومة للمستر نفسه: التفعيل من موبايل ولي الأمر هو اللي بيوصّل الإشعارات لموبايله (قيد تقني ثابت في Web Push لكل جهاز لوحده)
+- الإشعار الخارجي بقى بصورة الفافيكون (صورة المستر) — أي تغيير للوجو من CMS بيتطبق تلقائيًا في الإشعارات الجاية
+- سلوك السبام اتحسّن من جوه الكود (tag ثابت + بدون renotify) — وباقي العوامل خارجية من كروم (تفاعل ولي الأمر مع الإشعارات) وغطّيناها بنصيحة الضغط على الإشعار في التنبيه
+
+---
+Task ID: 92-a (MG part of 92)
+Agent: Z.ai Code (main)
+Task: طلب المستر — (1) زرار «إضافة طالب» في تسجيل ولي الأمر قبل إنشاء الحساب + موجود في البورتال، (2) محاولة الخروج تتحسب لما يخرج من المنصة لتاب تاني بس (مش ضغط X على إشعار ولا الكاميرا)، (3) التسليم التلقائي بعد الأربع مغادرات يشتغل فعلًا («عشان هم ما بيتسلموش»).
+
+Work Log:
+- useAntiCheat.tsx: شيلت مراقبة window blur خالص — الخروج الحقيقي الوحيد = visibilitychange hidden (تاب/تطبيق تاني). ضغط X على إشعار النظام وبرومبت أذونات الكاميرا كانوا بيعملوا blur والصفحة ظاهرة وكانوا بيتحسبوا مغادرة غلط. إعفاء الكاميرا/رفع الصور (و73/74) فضل زي ما هو
+- StudentPortal.tsx — إصلاح صمت التسليم التلقائي: (أ) الامتحان: examPhotoBusyRef + submitExamNow في المسار التلقائي بتستنى رفع صورة ورقة الحل يخلص (فحص كل 1.5ث حتى 3 دقايق) قبل التسليم بدل ما ترجع بصمت؛ (ب) الواجب: onGiveUp بقى فيه إعادة محاولة كل ثانيتين (حتى 40 محاولة) لو الزرار مش جاهز أو data-photo-busy؛ (ج) رسالة نجاح مخصصة: «⛔ عدّيت حد المغادرات — تم تسليم الامتحان تلقائيًا»
+- ParentAuthPages.tsx: زرار «عندك ابن تاني؟ اضغط إضافة طالب» في شاشة التسجيل تحت بيانات الابن الأول + فورم مصغر (اسم/رقم/باسورد) + شرائح الأبناء المضافين مع حذف + الإرسال في extraStudents — والبورتال كان فيه زرار إضافة طالب (و79) زي ما هو («خليه في الاثنين»)
+- api/parents/register: استقبال extraStudents (حتى 5) — مطابِق موحد matchStudent بنفس قواعد و90 (كل صيغ الرقم + الاسم + الباسورد + رقم ولي الأمر على حساب الطالب) — فحص كل الأبناء قبل إنشاء أي حاجة ورسالة الخطأ بتقول «الطالب رقم N: السبب» — منع تكرار الأرقام — بعد إنشاء الحساب ربط كل ابن بـ linkParentStudent (دمج ParentStudent) وlinkedExtraStudents في الرد
+- E2E متصفح: تسجيل ولي أمر بابنين (أحمد+محمود) → توست «متابعة حسابات 2 طلاب» والبورتال بيعرض الاتنين ✓ | دخول طالب → بدء امتحان → 4 مغادرات بتاب تاني → مودال التحذير في كل مرة → **الامتحان اتسلم تلقائيًا** والنتيجة في الداتابيز autoSubmitted=1 cheatStrikes=4 penaltyPoints=10 ✓
+- tsc: 29 (< 30 baseline) | dev.log نضيف | كل بيانات الاختبار اتمسحت (طالبين/ولي أمر/امتحان/نتيجة/روابط)
+
+Stage Summary:
+- المحاولة بقت عادلة: المغادرة الوحيدة المحسوبة = خروج فعلي لتاب/تطبيق تاني — الإشعارات والكاميرا مبقتش بتتحسب
+- التسليم التلقائي بقى مضمون: مفيش أي حالة بيرجع فيها بصمت — الصور المعلقة بتستنى وتبعتهم
+- ولي الأمر يقدر يضيف أبناءه كلهم من شاشة التسجيل قبل الحساب ومن البورتال بعد كده
+---
+Task ID: 92-c
+Agent: Z.ai Code (general-purpose sub agent)
+Task: نقل و92 لمنصة Mr-Sherif-ElSayed (إضافة طالب في تسجيل ولي الأمر + نظام مكافحة الغش/التسليم التلقائي)
+
+Work Log:
+- المنصة كانت على f2cf88c (و89) وركاب نظيفين — baseline tsc = 30 (ui/* radix + skills/* + examples/*) ومفيش نظام anti-cheat خالص فيها
+- (أ) useAntiCheat.tsx: اتنسخ من MG حرفيًا (byte-identical — نسخة و92 اللي بتحسب visibilitychange→hidden بس من غير window blur) — الملف self-contained (react/sonner/Button/framer-motion كلهم موجودين في المنصة)
+- (ب) ParentAuthPages.tsx: بقى IDENTICAL لملف MG حرفيًا — extraStudents state + addExtraStudent (منع تكرار الرقم ضد الابن الأول وباقي الشيبس) + شيبس زمردية بزرار X + فورم مصغر (اسم/رقم/باسورد) ورا زرار «عندك ابن تاني؟ اضغط إضافة طالب وحُط بياناته هنا» + extraStudents في POST + توست «حسابات N طلاب» من linkedExtraStudents — كل النصوص والستايلات المصرية زي MG بالظبط (UserPlus + X + min-h-[44px])
+- (ج) api/parents/register: اتنقل من MG كما هو — وطلعت مفاجأة: نسخة المنصة كانت MG **قبل و90** (findFirst برقم واحد + من غير foldArabic) مش قبل و92 بس — فنقلت النسخة الحالية كاملة (و90+و92): مطابِق matchStudent الموحد (كل صيغ الرقم + الاسم المطوي عربيًا + الباسورد + رقم ولي الأمر على حساب الطالب) للأبناء الإضافيين حتى 5 مع بادئة «الطالب رقم N:» ومنع تكرار الأرقام جوه الطلب، والفحص الأساسي بقى بنفس قواعد و90 (variants + foldArabic) — فالقاعدة واحدة للأول والإضافيين زي المطلوب — والربط بعد الإنشاء بـ linkParentStudent جوه try/catch بعد ensureParentStudentTable + linkedExtraStudents في الرد (المكتبة parent-students.ts كانت موجودة زي ما هو — ما اتلمستش)
+- (د) StudentPortal.tsx — الامتحان: import useAntiCheat/AntiCheatModal/AntiCheatBadge + examPhotoBusyRef (مرآة examPhotoBusy) + doSubmitExamRef بقى {auto?, cheat?} + useAntiCheat بـ active: !!takingExam && !examSubmitted و onGiveUp → doSubmitExamRef({auto:true, cheat:true}) و onStrike → antiCheatStrikesRef + submitExamNow: انتظار رفع الصورة في المسار التلقائي (1.5ث × حتى 3 دقايق قبل guard التسليم) + بادى التسليم فيه cheatStrikes/autoSubmitted/penaltyPoints (max(0,strikes-2)*5) + توست «⛔ عدّيت حد المغادرات — تم تسليم الامتحان تلقائيًا» + تصفير في handleStartExam + AntiCheatBadge جنب زرار رجوع في هيدر الحل + AntiCheatModal بعد زرار التسليم
+- (هـ) StudentPortal.tsx — الواجب: hwAntiCheat (kind:'hw' + active: !!expandedHw) + hwCheatStrikesRef/hwActiveRef + onGiveUp بإعادة المحاولة (getElementById('hw-submit-'+id) + data-photo-busy، 40 محاولة × 2ث) + زرار التسليم بقى فيه id='hw-submit-'+hw.id و data-photo-busy من hwPhotoBusy + cheatStrikes في بادى التسليم + تصفير عند فتح واجب + AntiCheatModal kindLabel=الواجب آخر التاب
+- (و) MathKeyboard.tsx: notifyPickerOpen عند كليك زرار رفع الصورة — ملاحظة صادقة: MathKeyboard المنصة **مفيهاش مودال كاميرا خالص** (738 سطر vs 962 في MG — مفيش openCamera/closeCamera/cameraInputRef) فنقطة notifyPickerClose مالهاش مقابل موجود — الاتنين نقطة الرفع وحيدة والشبكة الأمان document click على input[type=file] جاية من useAntiCheat نفسه
+- (ز) api/exams/submit: أعمدة cheatStrikes/autoSubmitted/penaltyPoints بـ ALTER TABLE ADD COLUMN self-healing + clamping (strikes≤20/penalty≤100) + الخصم score = max(0, score - penaltyPoints) لما penaltyPoints>0 && score>0 + الأعمدة التلاتة في INSERT — api/homework/submit: **ما اتلمسش** زي MG بالظبط (MG بيبعت cheatStrikes من العميل بس والسيرفر عندَه بيتجاهلها — اتأكدت بجري على ملف MG: صفر matches لـ cheat/strike/penalty)
+- تحقق: bunx tsc --noEmit = 30/30 (نفس baseline — صفر أخطاء جديدة وكلها ui/skills/examples المعروفة) + 22 فحص boolean بنود على كل النقاط المرحّلة (marker strings) كلها PASS — بدون dev server زي التعليمات
+- git: fetch origin (مفيش جديد) → stage الـ 6 ملفات بس → كومِت **37fd257** → push نجح f2cf88c..37fd257 main -> main — MG ما اتلمستش غير worklog.md ده
+
+Stage Summary:
+- Mr-Sherif-ElSayed بقى فيها و92 كامل: مغادرة الامتحان بتتحسب لما الطالب يخرج لتاب/تطبيق تاني بس (visibilitychange hidden — إشعارات/كاميرا/رفع صور معفاة)، بعد 4 مغادرات الامتحان أو الواجب بيتسلم تلقائيًا ومضمون (التسليم التلقائي بيستنى رفع صورة ورقة الحل يخلص — الامتحان بلوب 1.5ث حتى 3 دقايق والواجب بإعادة محاولة على زرار التسليم 40×2ث)، والخصم −5 لكل مغادرة بعد التانية بيتطبق في السيرفر على درجة الامتحان (autoSubmitted=1 + cheatStrikes + penaltyPoints متخزنين في ExamResult) — أما الواجب فزي MG: strikes بتتبعت بس ما بتتخزنش على السيرفر
+- زرار «إضافة طالب» في تسجيل ولي الأمر شغال من أول ما يتفتح الحساب: حتى 5 أبناء بيتحققوا كلهم بنفس قواعد الابن الأول قبل إنشاء أي حاجة وبيرتبطوا بالحساب بعد إنشائه — والبورتال بتاع و79 بيعرضهم زي ما هو
+- tsc 30/30 (baseline — صفر زيادة) | Sherif push f2cf88c..37fd257 | ملفات: 1 جديد (useAntiCheat.tsx) + 5 معدلة (StudentPortal + MathKeyboard + ParentAuthPages + parents/register + exams/submit)
+---
+Task ID: 92-b
+Agent: general-purpose (sub-agent 92-b)
+Task: نقل و92 لمنصة Zicola-Math (إضافة طالب في تسجيل ولي الأمر + نظام مكافحة الغش/التسليم التلقائي)
+
+Work Log:
+- البيئة: Zicola-Math على main نظيف (2ba05a9 = و89) — fetch origin مفيش جديد + node_modules موجودة — قريت و91 و92-a من الـworklog — tsc baseline = 30 بالظبط (ui/* + skills/* + examples/*)
+- دراسة مراجع MG (ParentAuthPages + api/parents/register + useAntiCheat + StudentPortal wiring امتحان/واجب + MathKeyboard + مساري submit) وقارنتها بنظيرها في Zicola سطر بسطر
+- (A) src/components/student/useAntiCheat.tsx منسوخ حرفيًا (diff = 0) — نسخة و92 (مراقبة visibilitychange hidden بس — مفيش أي window blur listener)
+- (B) api/parents/register/route.ts منسوخ حرفيًا (diff = 0). مفاجأة: نسخة Zicola كانت pre-و90 (findFirst بالرقم المطبّع بس وبدون foldArabic) مش pre-و92 زي المتوقع — نقلت ملف MG الكامل post-و92 (و90+و92 مع بعض) عشان قاعدة «التحقق بنفس قواعد الطالب الأساسي» تتحقق حرفيًا: بحث بكل صيغ الرقم + foldArabic + مطابِق matchStudent موحد لكل ابن إضافي (حتى 5) + منع تكرار الأرقام داخل الطلب + رسايل «الطالب رقم N: …» قبل إنشاء أي حاجة + بعد إنشاء الحساب ensureParentStudentTable ثم linkParentStudent(created.id, student.id) في try/catch لكل ابن + linkedExtraStudents في الرد
+- (C) ParentAuthPages.tsx: نفس diff و92 بتاع MG بالظبط — استيراد UserPlus/X + extraStudents state + addExtraStudent مع ديدوب أرقام كلاينت-سايد («الرقم ده مكتوب قبل كده») + الفورم المصغر (اسم/رقم/باسورد) + شرائح زمردي بحذف X + extraStudents في بودي التسجيل + توست النجاح بيقول «حسابات N طلاب» لما Extras تتربط — الملف بقى متطابق حرفيًا مع MG (diff = 0) — بورتال ولي الأمر كان فيه زرار إضافة طالب (و79) زي ما هو («خليه في الاثنين» زي MG)
+- (D) StudentPortal.tsx: امتحان = antiCheatStrikesRef + useAntiCheat(active: !!takingExam && !examSubmitted) + onGiveUp ← doSubmitExamRef.current?.({auto:true, cheat:true}) + examPhotoBusyRef (مرآة useEffect لحالة examPhotoBusy الموجودة) + wait-loop جوه submitExamNow في المسار التلقائي (فحص كل 1.5ث حتى 3 دقايق قبل التسليم) + التوقيع بقى {auto?, cheat?} + توست «⛔ عدّيت حد المغادرات — تم تسليم الامتحان تلقائيًا» + بودي التسليم فيه cheatStrikes + autoSubmitted (fromCheat?1:0) + penaltyPoints (max(0,strikes-2)*5 زي MG) + تصفير antiCheatStrikesRef/antiCheat.reset() في handleStartExam + AntiCheatBadge في هيدر شاشة الحل جنب زرار الرجوع + AntiCheatModal في آخر شاشة الحل — واجب = hwAntiCheat(kind:'hw') + hwActiveRef/hwCheatStrikesRef + onGiveUp retry loop (getElementById للزرار + فحص data-photo-busy، 40 محاولة × 2ث) + زرار تسليم الواجب خد id + data-photo-busy + cheatStrikes في البودي + AntiCheatModal kindLabel=«الواجب» آخر التاب
+- (E) MathKeyboard.tsx: import notifyPickerOpen + مناداته عند كليك زرار «رفع صورة ورقة الحل» قبل fileInputRef.click() — ملحوظة: MathKeyboard بتاع Zicola مفيهوش كاميرا/مودال كاميرا أصلًا (ميزة و73/و74 الكاملة مش منقولة للمنصة دي) فنقاط الكاميرا مالهاش مقابل هنا — وقا click على input[type=file] في useAntiCheat بيغطي أي فتح نافذة رفع كشبكة أمان
+- (F) api/exams/submit/route.ts: نفس hunks بتاعة MG حرفيًا (diff ضد MG = 0 بعد التعديل) — ALTER TABLE ذاتي لأعمدة ExamResult cheatStrikes/autoSubmitted/penaltyPoints + clamping (strikes≤20، penalty≤100) + autoSubmittedCheat من body.autoSubmitted + score = max(0, score - penaltyPoints) لما penaltyPoints>0 && score>0 + الأعمدة الـ11 في INSERT — api/homework/submit اتسيب زي ما هو (متطابق مع MG أصلًا: cheatStrikes بيتبعت من الكلاينت بس والسيرفر بيتجاهله — وفرق الملف الوحيد المسبق بريفيكس لوج قديم اتسيب زي ما هو)
+- تحقق: tsc = 30/30 (baseline قبل = بعد — صفر أخطاء جديدة وكلها ui/* + skills/* + examples/*) + 23 فحص محتوى boolean بـnode (indexOf) على الملفات الستة كلها PASS + الملفات المنسوخة حرفيًا diff=0 ضد MG
+- git: fetch origin قبل الدفع (origin/main == HEAD == 2ba05a9) → stage ملفاتي الستة بس → كومِت 6a18444 → push origin main نجح (2ba05a9..6a18444) — من غير dev server ولا بيانات اختبار زي تعليمات المنصة
+
+Stage Summary:
+- Zicola-Math بقى فيها و92 كامل زي MG: (1) زرار «عندك ابن تاني؟ اضغط إضافة طالب وحُط بياناته هنا» في شاشة تسجيل ولي الأمر — فورم مصغر + شرائح زمردي بحذف + كل الأبناء بيتحققوا قبل إنشاء الحساب برسايل مفصولة «الطالب رقم N: …» وبيتربطوا كلهم بالحساب أول ما يتفتح (توست «حسابات N طلاب»)
+- (2) المغادرة المحسوبة = خروج فعلي لتاب/تطبيق تاني بس (visibilitychange hidden) — إشعارات النظام وبرومبتات الأذونات والنافذة الظاهرة مبقتش بتتحسب، ورفع الصور/الكاميرا معفّي زي و73/74
+- (3) التسليم التلقائي بعد 4 مغادرات مضمون من غير أي صمت: الامتحان بيستنى رفع صورة ورقة الحل يخلص (حتى 3 دقايق)، والواجب بيعيد المحاولة على زراره كل ثانيتين (حتى 40 مرة) — ولو الصورة اترفعت بعد التفعيل بتتبعت هي كمان
+- (4) الخصم شغال في السيرفر: كل مغادرة بعد التانية = −5 درجات (score = max(0, score - penaltyPoints)) وautoSubmitted/cheatStrikes/penaltyPoints متسجلين في ExamResult — الأعمدة بتتعمل ذاتيًا أول ريكوست بعد النشر
+- ملفات: 6 (useAntiCheat.tsx جديد + StudentPortal + MathKeyboard + ParentAuthPages + parents/register + exams/submit) — homework/submit ما اتلمسش (متطابق مع MG) | tsc 30/30 قبل وبعد | كومِت 6a18444 مرفوع على main (2ba05a9..6a18444)
+- انحرافات موثقة عن MG: (أ) register اتقال كامل post-و92 لأن نسخة Zicola كانت pre-و90 — بدون كده قاعدة «نفس قواعد الطالب الأساسي» للإضافيين كانت هتتكسر؛ (ب) MathKeyboard من غير نقاط الكاميرا لأن Zicola مفيهاش مودال كاميرا أصلًا؛ (ج) بودي تسليم الواجب فيه cheatStrikes بس (متطابق مع MG حرفيًا — penaltyPoints للامتحانات بس)
+
+---
+Task ID: 92-d
+Agent: general-purpose (Shaimaa 92-d)
+Task: نقل و92 لمنصة shaimaa-selim-science (إضافة طالب في تسجيل ولي الأمر + نظام مكافحة الغش/التسليم التلقائي)
+
+Work Log:
+- قريت آخر الـ worklog (و91 + و92-a) وملفات MG المرجعية كلها (ParentAuthPages + parents/register + useAntiCheat + StudentPortal + MathKeyboard + exams/submit + homework/submit) وملفات شيماء المقابلة قبل أي تعديل — والشجرة كانت نضيفة على main (6ab5ca8/و89) بعد fetch
+- (1) زرار «إضافة طالب» في تسجيل ولي الأمر: ParentAuthPages.tsx اتعدل بنفس إضافة MG حرفيًا — extraStudents state + mini-form (اسم/رقم/باسورد) بيتفتح بزرار متقطع «عندك ابن تاني؟ اضغط إضافة طالب وحُط بياناته هنا» + شرائح زمرده مع X للحذف + منع تكرار الأرقام على العميل + extraStudents في POST body + توست نجاح بيعدّ الحسابات (linkedExtraStudents) — وdiff الملف بعد التعديل ضد MG = **صفر اختلاف** (UserPlus/X icons + min-h-[44px] زي MG)
+- (2) parents/register/route.ts: انسخ من MG 1:1 (اتأكدت بdiff = صفر) — مفيش أي براندنج MG في الملف أصلًا — الراوت عند شيماء كان pre-و90 (findFirst من غير صيغ رقم/من غير foldArabic) فالنسخة الجاية بتجيب و90+و92 مع بعض: مطابِق matchStudent موحد (كل صيغ الرقم + foldArabic للاسم والباسورد + باسورد + رقم ولي الأمر على حساب الطالب) للأول والأبناء الإضافيين، extraStudents حتى 5 بفحصهم كلهم قبل إنشاء أي حاجة ورسايل «الطالب رقم N: …»، ومنع تكرار الأرقام جوه الطلب، وبعد إنشاء الحساب linkParentStudent(created.id, student.id) جوه try/catch بعد ensureParentStudentTable + linkedExtraStudents في الرد
+- (3) useAntiCheat.tsx انسخ حرفيًا (node compare = IDENTICAL true) — نسخة و92 اللي بتعد المغادرة على visibilitychange hidden بس (مفيش window blur) — والايفنتات PICKER_OPEN/CLOSE وnotifyPickerOpen/Close موجودة زي MG
+- (4) StudentPortal.tsx (شيماء — 3569 سطر قبل التعديل): نفس ربط MG بالظبط — الامتحان: examPhotoBusyRef مرآة لـexamPhotoBusy + doSubmitExamRef بقى { auto?, cheat? } + useAntiCheat(active: !!takingExam && !examSubmitted, onGiveUp → doSubmitExamRef.current?.({auto:true, cheat:true}), onStrike → antiCheatStrikesRef) + submitExamNow بقى بيستنى الرفع في المسار التلقائي (1.5ث × حتى 3 دقايق) وبيبعت cheatStrikes/autoSubmitted/penaltyPoints (معادلة MG: max(0, strikes-2)*5) + توست «⛔ عدّيت حد المغادرات — تم تسليم الامتحان تلقائيًا» + تصفير strikes وantiCheat.reset() في handleStartExam + AntiCheatBadge جنب عنوان الامتحان في هيدر شاشة الحل + AntiCheatModal آخر شاشة الحل — الواجب: hwAntiCheat(kind:'hw') + hwActiveRef/hwCheatStrikesRef + onGiveUp بحلقة إعادة المحاولة (getElementById('hw-submit-'+id) + data-photo-busy، 40×2ث) + id/data-photo-busy على زرار تسليم الواجب + cheatStrikes/penaltyPoints في payload + AntiCheatModal(kindLabel=الواجب) آخر HomeworkTab
+- (5) MathKeyboard.tsx شيماء نسخة أقدم من MG (مفيش زرار كاميرا ولا مودال كاميرا خالص) — النقاط المكافئة الوحيدة: زرار رفع صورة ورقة الحل بقى بينادي notifyPickerOpen() قبل fileInputRef.current?.click() + import من useAntiCheat — مفيش openCamera/closeCamera/«كاميرا الجهاز» أصلاً فمفيش notifyPickerClose (اتسجلت كفرق مقصود)
+- (6) exams/submit/route.ts شيماء: نفس بلوكات MG و66 بالظبط — 3 ALTERs (cheatStrikes/autoSubmitted/penaltyPoints على ExamResult) في ensureTable + قراءة body مع clamping (20/1/100) + خصم الخصم قبل الحفظ (score = max(0, score - penaltyPoints) لما penaltyPoints>0 && score>0) + الأعمدة التلاتة في INSERT الأساسي (الـ retry fallback القديم زي ما هو)
+- (7) homework/submit/route.ts شيماء: اتلمس **صفر** — فحصت MG بالـgrep والسطر بسطر: راوت الواجب في MG نفسه مفيهوش أي معالجة cheatStrikes على السيرفر (العميل بيبعتها والسيرفر بيتجاهلها — من غير ALTER ولا خصم) — ف«mirror MG» هنا = مفيش تغيير سيرفر، والعميل بيبعت cheatStrikes + penaltyPoints زي ما التعليمات طلبت صراحة
+- (8) زرار تسليم الامتحان في شيماء كان فيه منطق تسليم inline مكرر (نسخة قديمة من submitExamNow من غير cheatStrikes) — استبدلته بـ onClick={function() { submitExamNow() }} زي MG بالظبط (و25-b2 في MG وحّد المسارين) عشان التسليم اليدوي يبعت cheatStrikes/penaltyPoints كمان — النصوص الموجودة زي ما هي («من المس» كتبت من submitExamNow بتاع المنصة نفسه)
+- فحوصات: bunx tsc --noEmit = **30/30 baseline بالظبط** (قبل وبعد) وصفر أخطاء في الملفات الملموسة (الـ30 كلها ui/* radix + skills/* + examples/*) + node boolean checks لكل الجمل المفتاحية (بما إن العارض بيأكل «[h» في العرض — الملفات سليمة واتأكدت بالأرقام) + diff حرفي لكل ملف منسوخ + grep براندنج = صفر في الملفات الجديدة
+- git: fetch origin (مفيش جديد) → stage الـ6 ملفات بس → كومِت **fcbe226** برسالة «و92: مغادرة الامتحان = تاب تاني فقط + تسليم تلقائي مضمون بعد 4 مغادرات + زرار إضافة طالب في تسجيل ولي أمر (نقل من MG)» → push origin main نجح (6ab5ca8..fcbe226) — من غير dev server ولا بيانات اختبار (التعليمات: code + tsc + push بس)
+- لمس أية منصات تانية أو my-project: مفيش غير الإضافة دي على worklog.md
+
+Stage Summary:
+- منصة د. شيماء بقى فيها نظام و92 كامل زي MG: المغادرة المحسوبة = خروج فعلي لتاب/تطبيق تاني بس (visibilitychange hidden — ضغط X على الإشعارات/برومبتات الأذونات/رفع الصور مش بتحسب)، تحذيرين لطيفين → خصم −5 لكل مغادرة بعد التانية → **تسليم تلقائي مضمون عند الرابعة** (بيستنى رفع صورة ورقة الحل يخلص في الامتحان، وبيضغط زرار الواجب بنفسه مع إعادة محاولة 40×2ث) وبيبعت cheatStrikes/autoSubmitted/penaltyPoints وبيتخزنوا في ExamResult مع خصم الدرجة فعليًا في السيرفر + توست «⛔ عدّيت حد المغادرات…»
+- ولي الأمر يقدر يضيف أبناءه كلهم من شاشة التسجيل قبل الحساب (زرار «عندك ابن تاني؟») — كل ابن بيتحقق بنفس قواعد و90 (كل صيغ الرقم + تطبيع الحروف العربية) قبل إنشاء أي حاجة، وبعد الحساب بيتربط بـ ParentStudent فيظهر في البورتال فورًا مع توست بيعدّ «حسابات N طلاب»
+- ملفات: 6 (5 معدلة: ParentAuthPages/parents-register/exams-submit/StudentPortal/MathKeyboard + 1 جديد: useAntiCheat) — tsc 30/30 قبل=بعد (صفر جديد) — كومِت fcbe226 مرفوع على main
+- فروق مقصودة عن MG (موثقة): (أ) MathKeyboard شيماء مفيهوش كاميرا أصلًا فالإعفاء اتربط بزرار الرفع بس — (ب) homework/submit سيرفر زي MG بالظبط (بيتجاهل بيانات الغش) مع إرسال العميل cheatStrikes+penaltyPoints — (ج) زرار الامتحان بقى بينادي submitExamNow بدل الكود المكرر القديم (نفس توحيد MG في 25-b2) والنصوص الموجودة للمنصة ما اتلمست
+---
+Task ID: 92-max-b
+Agent: general-purpose (sub-agent 92-max-b)
+Task: نقل حد أقصى 6 طلاب (و92-ب) من MG إلى Mr-Sherif-ElSayed
+
+Work Log:
+- قريت آخر الـ worklog (و92 منقولة للمنصة بالفعل في كومِت 37fd257) — المنصة على main نضيفة ومتزامنة مع origin — bun install موجود — tsc baseline اتأكدت منه = 30 بالظبط
+- (1) src/app/api/parents/register/route.ts: جوه if (Array.isArray(body.extraStudents)) قبل var extrasIn — حارس `body.extraStudents.length > 5` يرجع 400 «الحد الأقصى 6 طلاب في الحساب الواحد» (الابن الأول + 5 إضافيين كحد أقصى)
+- (2) src/components/parent/ParentAuthPages.tsx تعديلين: (أ) أول سطور addExtraStudent حارس `1 + extraStudents.length >= 6` → toast.error «الحد الأقصى 6 طلاب في الحساب الواحد» + return — (ب) الزرار المتقطع «عندك ابن تاني؟» بقى ملفوف بشرط: عند وصول الحد يظهر <p> تنبيه «وصلت الحد الأقصى — 6 طلاب في الحساب الواحد» بدل الزرار (بنفس الشكل بتاع MG: border-dashed rounded-xl text-muted-foreground)
+- (3) src/app/api/parents/add-student/route.ts: بعد if (!parent) return 401 مباشرةً — عدّ الأبناء الحاليين بـ listParentStudents (مستوردة أصلًا من '@/lib/parent-students') جوه try/catch مع Math.max(1, list.length) ولو >= 6 يرجع 400 «وصلت الحد الأقصى — الحساب الواحد بيشيل 6 طلاب كحد أقصى»
+- (4) src/components/parent/ParentPortal.tsx: زرار «إضافة طالب» في كارت الطالب اتلف بشرط students.length >= 6 — عند الستة يظهر «الحد الأقصى<br />6 طلاب ✓» بدل الزرار
+- تحقق: bunx tsc --noEmit = 30/30 بالظبط (baseline — صفر أخطاء في الملفات الأربعة، كلها ui/skills/examples المعروفة) + grep «الحد الأقصى» = register 1 / ParentAuthPages 3 / add-student 1 / ParentPortal 2 (كلها >= 1) + diff ضد MG للملفات الأربعة بعد التعديل = صفر اختلاف (متطابقة حرفيًا)
+- git: fetch origin main قبل الدفع (مفيش جديد — main...origin/main متزامنين) → stage الملفات الأربعة بس (4 files changed, 34 insertions, 5 deletions) → كومِت **a6bc29f** → push origin main نجح (37fd257..a6bc29f)
+- ممنوعات محترمة: ما اتلمسش غير الملفات الأربعة في المنصة + worklog append — مفيش توكنات ولا ملفات مؤقتة (كل الفحص بـ diff/rg/جملة واحد)
+
+Stage Summary:
+- Mr-Sherif-ElSayed بقى فيها حد الـ 6 طلاب كامل زي MG: في شاشة تسجيل ولي الأمر زرار «عندك ابن تاني؟» بيختفي عند 1+5 إضافيين ويتبدل بتنبيه «وصلت الحد الأقصى — 6 طلاب في الحساب الواحد» + توست لمنع السادس، وAPI التسجيل بيرفض أي طلب فيه أكتر من 5 أبناء إضافيين بـ 400
+- من جوه البورتال برضه: زرار «إضافة طالب» بيتقفل بيظهر «الحد الأقصى 6 طلاب ✓» لما students.length توصل 6، وAPI add-student بيعدّ الأبناء الفعليين في الداتابيز (listParentStudents) ويرفض أي إضافة سادسة بـ 400 — يعني الحد متطبق كلاينت-سايد وسيرفر-سايد في المسارين (تسجيل + إضافة لاحقة)
+- tsc 30/30 (baseline — صفر زيادة) | 4 ملفات متطابقة حرفيًا مع MG | كومِت a6bc29f مرفوع على main (37fd257..a6bc29f)
+---
+Task ID: 92-max-a
+Agent: general-purpose (sub-agent 92-max-a)
+Task: نقل حد أقصى 6 طلاب (و92-ب) من MG إلى Zicola-Math
+
+Work Log:
+- قريت آخر 60 سطر من الـworklog (و92-b على Zicola = كومِت 6a18444، و92-ب على MG = كومِت 4bd88bd) — منصة Zicola-Math كانت نضيفة على main == origin/main == 6a18444 ومفيش جديد بعد fetch
+- قارنت ملفات MG الأربعة بنظيرها في Zicola سطر بسطر (هما متطابقين بنيويًا فعلاً) وطبّقت نفس الـhunks الأربعة بالظبط:
+- (1) api/parents/register/route.ts: جوه if (Array.isArray(body.extraStudents)) — قبل var extrasIn ضفت حارس length > 5 برفض 400 «الحد الأقصى 6 طلاب في الحساب الواحد» — بعد التعديل الملف بقى **متطابق حرفيًا مع MG (diff = صفر)**
+- (2) ParentAuthPages.tsx (تعديلين): (أ) أول سطور addExtraStudent فيها حارس 1 + extraStudents.length >= 6 → توست إيرور ورجوع، (ب) الزرار المتقطع «عندك ابن تاني؟...» اتلفّ بشرط نفسه — عند الوصل للحد الزرار بيتستبدل بـ <p> تنبيه «وصلت الحد الأقصى — 6 طلاب في الحساب الواحد» بنفس كلاسات MG — الملف بقى **متطابق حرفيًا مع MG (diff = صفر)**
+- (3) api/parents/add-student/route.ts: بعد if (!parent) return مباشرةً — عدّ الأبناء الحاليين بـ listParentStudents (مستوردة فعلًا من '@/lib/parent-students' من الأول) داخل try/catch مع Math.max(1, len) ورفض 400 لو currentCount >= 6 برسالة «وصلت الحد الأقصى — الحساب الواحد بيشيل 6 طلاب كحد أقصى»
+- (4) ParentPortal.tsx: زرار «إضافة طالب» في كارت الطالب اتلفّ بشرط students.length >= 6 → span «الحد الأقصى<br />6 طلاب ✓» بدل الزرار، والكومنت اتوسّع زي MG
+- تحقق: bunx tsc --noEmit = **30/30 baseline بالظبط** (قبل = بعد — صفر أخطاء جديدة وكلها ui/* + skills/* + examples/*) وصفر أخطاء في الملفات الأربعة (فلتر بالأسماء = 0) + grep -c 'الحد الأقصى' في الأربعة: register=1 / ParentAuthPages=3 / add-student=1 / ParentPortal=2 (كلهم >= 1) + مسحت ملف log مؤقت من /tmp
+- git: fetch origin main (مفيش جديد) → stage الملفات الأربعة بس → كومِت **0054cad** برسالة المطلوب حرفيًا → push origin main نجح (6a18444..0054cad) — الشجرة نضيفة بعد الـpush ومن غير أي dev server أو بيانات اختبار
+- لمس أية ملفات تانية: مفيش — غير الإضافة دي على worklog.md
+
+Stage Summary:
+- Zicola-Math بقى فيها و92-ب كامل زي MG: حد أقصى 6 طلاب لحساب ولي الأمر من 4 جهات متطابقة — في التسجيل: الكلاينت بيرفض الإضافة السادسة بتوست والزرار بيتشال ويظهر تنبيه عند الستة + السيرفر بيرفض extraStudents > 5 (400)، وفي البورتال: زرار إضافة طالب بيتقفل ويظهر «الحد الأقصى 6 طلاب ✓» عند الستة + API الإضافة من جوه بيرفض لو الحساب شايل 6 بالفعل — والعدّ في add-student بيحسب الأبناء المربوطين فعليًا (listParentStudents) مش الحقول
+- ملفات معدلة: 4 بس (register + ParentAuthPages + add-student + ParentPortal) — الاتنين المنسوخين حرفيًا diff=0 ضد MG | tsc 30/30 قبل=بعد | كومِت 0054cad مرفوع على main (6a18444..0054cad)
+---
+Task ID: 92-max-c
+Agent: general-purpose (sub-agent 92-max-c)
+Task: نقل حد أقصى 6 طلاب (و92-ب) من MG إلى shaimaa-selim-science
+
+Work Log:
+- قريت آخر 60 سطر من الـ worklog (و92-d شيماء متطابق مع MG في و92 الأساسي) — المنصة على main نضيفة (fcbe226 = و92-d) وfetch origin مفيش جديد
+- قارنت ملفات MG المرجعية (register/add-student/ParentAuthPages/ParentPortal) بنظيرها في شيماء سطر بسطر — متطابقين بنيويًا والأربع نقاط المراسي موجودة
+- (1) api/parents/register/route.ts: جوه if (Array.isArray(body.extraStudents)) — قبل var extrasIn حارس الحد (length > 5 → رفض 400 «الحد الأقصى 6 طلاب في الحساب الواحد») — بعد التعديل diff ضد MG = صفر
+- (2) ParentAuthPages.tsx (تعديلين): (أ) أول سطور addExtraStudent فيها الحارس 1+extraStudents.length >= 6 → toast.error + return — (ب) الزرار المتقطع «عندك ابن تاني؟» بقى ملفوف: 1+extras >= 6 ? تنبيه <p> متقطع «وصلت الحد الأقصى — 6 طلاب» : الزرار زي ما هو — بعد التعديل diff ضد MG = صفر
+- (3) api/parents/add-student/route.ts: بعد if (!parent) return 401 مباشرةً — عدّ currentCount = max(1, listParentStudents(parent).length) في try/catch ورفض 400 لو >= 6 — listParentStudents كانت مستوردة أصلًا من '@/lib/parent-students' (سطر 17) — بعد التعديل diff ضد MG = صفر
+- (4) ParentPortal.tsx: زرار «إضافة طالب» في كارت الطالب بقى ملفوف بشرط students.length >= 6 ? <span> «الحد الأقصى 6 طلاب ✓» : <Button> زي ما هو — diff ضد MG = 8 أسطر كلها فروق منصة مسبقة مقصودة (useLang/useT بدل useT — نظام i18n شيماء) مش من تعديلي
+- تحقق: bunx tsc --noEmit = 30/30 بالظبط (baseline — كلها ui/* radix معروفة) وصفر أخطاء في الملفات الأربعة (فلتر بالأسماء) + grep 'الحد الأقصى' = 1/3/1/2 في الأربعة (كلها >= 1) — من غير dev server
+- git: fetch origin main قبل الـ commit (مفيش جديد) → stage الملفات الأربعة بس → كومِت 5c25c41 بالرسالة المطلوبة → push origin main نجح (fcbe226..5c25c41) — مفيش توكنات ولا ملفات مؤقتة
+
+Stage Summary:
+- منصة د. شيماء بقى فيها الحد الأقصى 6 طلاب لحساب ولي الأمر (و92-ب) زي MG بالظبط: في التسجيل — العميل بيمنع إضافة السابع بتوست + الزرار المتقطع بيتبدل بتنبيه «وصلت الحد الأقصى» عند الستة، والسيرفر بيرفض extraStudents > 5 برسالة 400؛ وفي البورتال — زرار «إضافة طالب» بيتقفل وبيظهر «الحد الأقصى 6 طلاب ✓» لما students = 6، والسيرفر بتاع add-student بيعيد عدّ الأبناء الفعليين من ParentStudent قبل أي ربط/إنشاء وبيرفض عند >= 6 (حتى لو العميل اتلعب فيه)
+- الملفات الأربعة: register + add-student + ParentAuthPages متطابقة حرفيًا مع MG (diff=0)، وParentPortal متطابقة إلا فروق i18n المنصة المسبقة — tsc 30/30 baseline — كومِت 5c25c41 مرفوع على main (fcbe226..5c25c41)
+
+---
+Task ID: 92-ب (main orchestrator — الحد الأقصى 6 طلاب لحساب ولي الأمر في المنصات الأربعة)
+Agent: main (Z.ai Code)
+Task: طلب المستر (تكملة و92): «ولي الأمر يضيف طلاب — أقصى عدد 6 طلاب — من التسجيل ومن جوه برده — ولما يتربط يظهر له شريط بأسماء أولاده فوق يضغط على اسم يظهر له التحليلات بتاعته — ومتضفش حاجات زيادة»
+
+Work Log:
+- اكتشاف مهم: الجزء الأول من و92 (شكل الزرار المتقطع في التسجيل + مغادرة التاب بس hidden + التسليم التلقائي المضمون بعد 4 مغادرات) كان اتنفذ واتpush في الجزء الضايع من الجلسة — الكومِتات: MG 087b4f0 + المنصات (نقل) — فاللي ناقص فعلًا هو **حد الـ 6** بس
+- رجعت MG لآخر حالة ريوموت (reset --hard origin/main = abfdd8c) وبنيت عليها حد الستة: bun install عشان web-push (و89) + prisma db push عشان جداول الـ push
+- MG — 4 تعديلات: register API (رفض 400 «الحد الأقصى 6 طلاب في الحساب الواحد» لو extras > 5 بدل القطع الصامت) + ParentAuthPages (حارس في addExtraStudent + الزرار المتقطع بيختفي ويظهر «وصلت الحد الأقصى — 6 طلاب في الحساب الواحد» عند 1+extras>=6) + add-student API (عدّ فعلي بـ listParentStudents ورفض 400 عند >=6) + ParentPortal (زرار إضافة طالب بيتبدل بـ «الحد الأقصى 6 طلاب ✓» عند students>=6)
+- اختبارات MG E2E (curl + متصفح): تسجيل بـ5 إضافيين = success وlinkedExtra:5 ✓ | تسجيل بـ6 إضافيين = رفض «الحد الأقصى 6 طلاب» ✓ | add-student للسابع = رفض «وصلت الحد الأقصى — الحساب الواحد بيشيل 6 طلاب كحد أقصى» ✓ | البورتال: شريط الأسماء الستة شيبس والنشط متعلم + «الحد الأقصى 6 طلاب ✓» مكان الزرار ✓ | التبديل بين الأبناء بيغير التحليلات ✓
+- إعادة تحقق سريعة لأجزاء و92 القديمة بنفس الجلسة: blur لوحده مش بيتحسب ✓ | hidden = مخالفة + تحذير + بادج 1/4..4/4 ✓ | المغادرة الرابعة = تسليم تلقائي وصل للسيرفر (نتيجة 0/2 اتحفظت) ✓
+- تنظيف: 6 طلاب + ولي أمر + امتحان و92 التجريبي اتمسحوا من قاعدة MG (COUNT=0) + سكريبتات w92-* المؤقتة اتمسحت
+- النقل للمنصات (وكلاء متوازيين): Zicola 92-max-a كومِت 0054cad (6a18444..0054cad) | Sherif 92-max-b كومِت a6bc29f (37fd257..a6bc29f) | Shaimaa 92-max-c كومِت 5c25c41 (fcbe226..5c25c41) — كل واحد: نفس التعديلات الأربعة، diff ضد MG = صفر (عدا أسطر i18n مسبقة عند شيماء)، tsc 30/30 baseline
+- Push: MG abfdd8c..4bd88bd
+
+Stage Summary:
+- من النهاردة: حساب ولي الأمر بيشيل **6 طلاب كحد أقصى** — محروس في 4 أماكن: فورم التسجيل (كلاينت + API)، بورتال ولي الأمر (كلاينت + API) — والرسايل واضحة بالعربي
+- شريط أسماء الأولاد فوق في البورتال (من و79) هو اللي بيحقق «يدوس على اسم يظهر له التحليلات» — اتأكدت إنه شغال بعد التسجيل بأبناء متعددين
+- مفيش أي خطوة يدوية في الإنتاج — كل التعديلات كود جاهز ات_push على الأربعة
+- tsc: MG 29 (< baseline) + Zicola/Sherif/Shaimaa 30/30 — صفر أخطاء جديدة ×4
+
+---
+Task ID: 93-c
+Agent: general-purpose (Shaimaa port)
+
+Work Log:
+- قريت آخر قسمين من الـworklog (و92-max-c على شيماء + و92-ب orchestrator) — المنصة على main نضيفة (5c25c41) وfetch origin مفيش جديد
+- فحص src/app/api/upload/chunk/route.ts: موجود فعلًا في شيماء (ما اتمسحش زي ما حصل في MG) — اتساب زي ما هو من غير أي لمسة
+- جبت الكود المرجعي بالظبط من MG (git show c2dc17e) وطبّقت 3 ملفات:
+- (1) api/files/[id]/route.ts: بوابة الفيديو بقت `contentType.startsWith('video/') && media.category !== 'gallery'` + الكومنت (و93) — فيديوهات المعرض عامة زي يوتيوب، وفيديوهات الكورسات فاضل عليها الحماية بالتوكن
+- (2) AdminDashboard.tsx (GalleryManager): state جديد بعد vidOrder (vidFileRef/vidUploading/vidProgress) + resetAll بيرجّعهم + دالتين captureVideoThumb (صورة مصغرة من أول فريم بالـcanvas مع fail-safe 8 ثواني) وhandleVidUpload (chunkedUpload(file,'gallery',onProgress,statusMsg) → thumb → POST /api/gallery بنوع video وtitle من اسم الملف من غير الامتداد) + بلوك رفع فيديو من الجهاز في الفورم (input مخفي accept=video/* + زرار متقطع + progress aria-live + فاصل «أو») قبل grid رابط الفيديو — البلوك متطابق حرفيًا مع MG (diff للمدى 2712-2805 ضد 2373-2466 = صفر اختلاف في المحتوى)
+- (3) GallerySection.tsx: ImageWithSkeleton خد `unoptimized` + الكومنت (و93) جوه <Image> (الصور توصل بالجودة الأصلية 100% من غير ضغط Next.js) + isDirectVideo بقت `(url.indexOf('/api/files/') === 0 || /\.(mp4|webm|mov|avi|ogg|m4v)(\?|$)/i.test(url))` + الكومنت — فيديوهات المعرض المرفوعة بتتشغل بالمشغل المباشر
+- تحقق: bunx tsc --noEmit = 30/30 بالظبط (baseline — كلها examples/skills/ui radix المعروفة) وصفر أخطاء في الملفات الثلاثة المعدلة (فلتر بالأسماء = 0) + grep: «رفع فيديو من الجهاز»=4 وcaptureVideoThumb=2 وhandleVidUpload=2 في AdminDashboard، unoptimized في ImageWithSkeleton + '/api/files/' في isDirectVideo، وmedia.category !== 'gallery' في route.ts — من غير dev server ولا بيانات اختبار
+- ملاحظة: شيماء فيها فروق i18n/و45 مسبقة في GalleryManager (getYtThumb/vidThumb) — ما اتلمسش، التعديلات اتحطت في نفس مراسي MG بالظبط
+- git: fetch قبل الـcommit (مفيش جديد) → stage الملفات الثلاثة بس (3 files changed, 128 insertions, 2 deletions) → كومِت **eeb0045** → push origin main نجح (5c25c41..eeb0045) — الشجرة نضيفة بعد الـpush
+
+Stage Summary:
+- شيماء بقى فيها و93 كامل زي MG: الأدمن بيرفع فيديو المعرض من الجهاز بالجودة الأصلية 100% (chunkedUpload بايت-ببايت، صفر ضغط) مع صورة مصغرة أوتوماتيك من أول فريم، والصور بتوصل للزوار بالجودة الأصلية (unoptimized — اتصلح «الجودة بتقل»)، وفيديوهات المعرض المرفوعة بتظهر للزوار من غير توكن (استثناء category='gallery' في بوابة الفيديو) وبتتعرّف في المودال على /api/files/<id> حتى من غير امتداد
+- /api/upload/chunk كان موجود أصلًا في شيماء (ما احتاجش استرجاع) | tsc 30/30 baseline صفر زيادة | كومِت eeb0045 مرفوع على main (5c25c41..eeb0045) — 3 ملفات بس اتلمست + worklog append
+
+---
+Task ID: 93-b
+Agent: general-purpose (Sherif port)
+
+Work Log:
+- قريت آخر قسمين من الـworklog (و92-max-a/92-max-c + و92-ب الرئيسي) وسياق و93 من MG (كومِت c2dc17e: 4 ملفات — chunk route مسترجع + files/[id] + AdminDashboard + GallerySection)
+- فحص منصة Sherif: الشجرة نضيفة على main = a6bc29f (و92-ب) — و**src/app/api/upload/chunk/route.ts موجود أصلًا** (7779 بايت) فمفيش استرجاع محتاج — تركته زي ما هو
+- استخرجت الكود المرجعي الحرفي من MG: git show c2dc17e للـ3 ملفات (diff كامل + sed على النطاقات المذكورة)
+- (1) src/app/api/files/[id]/route.ts: حماية الفيديو بقت `if (contentType.startsWith('video/') && media.category !== 'gallery')` + الكومنت الرباعي (و93) فوقها بالظبط زي MG — بعد التعديل **الملف متطابق حرفيًا مع MG (diff=0)**
+- (2) src/components/admin/AdminDashboard.tsx (GalleryManager): بعد `var [vidOrder, setVidOrder] = useState('0')` ضفت بلوك الحالة (كومنت و93 + vidFileRef useRef + vidUploading + vidProgress)، وفي resetAll ضفت `setVidUploading(false); setVidProgress('')`، وبين resetAll و handleImgUpload حطيت `captureVideoThumb` (thumbnail من أول فريم بـcanvas مع timeout 8s وrevokeObjectURL) و`handleVidUpload` (chunkedUpload(file,'gallery',onPct,onMsg) → captureVideoThumb → رفع الثمبنيل → POST /api/gallery بـtype:'video' + videoUrl + thumbnail + title=اسم الملف من غير الامتداد) — وفي فورم الفيديو قبل جريد «رابط الفيديو» حطيت بلوك «رفع فيديو من الجهاز (بالجودة الأصلية)» (input مخفي accept="video/*" + زرار متقطع + progress بـaria-live) + فاصل «أو» — **الثلاث بلوكات اتأكدت بالـdiff إنها متطابقة بايت-ببايت مع MG** (chunkedUpload مستوردة فعلًا سطر 4 وUpload/Loader2 مستخدمين في رفع الصور — مفيش imports جديدة)
+- (3) src/components/landing/GallerySection.tsx: `unoptimized` في Image بـImageWithSkeleton + الكومنت (و93)، و`isDirectVideo` بقت `!isYouTube && (url.indexOf('/api/files/') === 0 || /\.(mp4|webm|mov|avi|ogg|m4v)(\?|$)/i.test(url))` + الكومنت — زي MG حرفيًا
+- تحقق: bunx tsc --noEmit = **30/30 baseline بالظبط** (كلها examples/* + skills/* + ui/* radix معروفة) وصفر أخطاء في الملفات المعدلة (فلتر بالأسماء = NONE) + grep: رفع فيديو من الجهاز=4 وcaptureVideoThumb=2 وhandleVidUpload=2 في AdminDashboard + unoptimized سطر 28 و'/api/files/' في isDirectVideo سطر 337 في GallerySection + media.category !== 'gallery' سطر 47 في files/[id] — من غير dev server ولا بيانات اختبار
+- فرق GallerySection ضد MG بعد التعديل = أسطر و72 i18n مسبقة بس (useLangStore/pickConfig بدل القيم المباشرة) — مش من تعديلي؛ وفرق AdminDashboard = انحراف منصات قديم معروف (إضافات MG غير المنقولة) — هانكس الـ117 المضافة بتاعة و93 متطابقة 100%
+- git: fetch origin (مفيش جديد) → stage الملفات الثلاثة بس → كومِت **1da5e56** برسالة المطلوب حرفيًا → push origin HEAD نجح (a6bc29f..1da5e56) — الشجرة نضيفة بعد الـpush
+
+Stage Summary:
+- منصة Sherif بقت فيها و93 كامل زي MG: الأدمن يرفع فيديو المعرض من الجهاز بالجودة الأصلية 100% (chunkedUpload بايت-ببايت + thumbnail أوتوماتيك من أول فريم)، وصور المعرض بتوصل للزوار من غير ضغط Next.js (unoptimized)، وفيديوهات المعارف المرفوعة بقت عامة للزوار زي يوتيوب (استثناء category='gallery' من بوابة التوكن) وبتشتغل في المودال عبر /api/files/<id>
+- /api/upload/chunk كان موجود فعلًا في Sherif (ما احتاجش استرجاع) — 3 ملفات معدلة، منها files/[id] متطابق حرفيًا مع MG والبلوكات المضافة في الاثنين التانيين متطابقة بايت-ببايت — tsc 30/30 baseline وصفر أخطاء جديدة — كومِت 1da5e56 مرفوع على main (a6bc29f..1da5e56)
+---
+Task ID: 93-a
+Agent: general-purpose (Zicola port)
+
+Work Log:
+- قريت آخر سطرين من الـ worklog (و92-ب orchestrator) — منصة Zicola-Math كانت نضيفة على main == origin/main == 0054cad، و`src/app/api/upload/chunk/route.ts` **موجودة أصلًا** (ما اتمسحتش زي ما حصل في MG) — اتسيبت زي ما هي بدون استرجاع
+- جبت الكود المرجعي بالظبط من MG c2dc17e (diff + sed على نطاقات GalleryManager) وطبّقت 3 ملفات:
+- (1) src/components/admin/AdminDashboard.tsx (GalleryManager): بعد `var [vidOrder, setVidOrder] = useState('0')` ضفت vidFileRef/vidUploading/vidProgress بالكومنت، وفي resetAll سطر `setVidUploading(false); setVidProgress('')`، وبين resetAll وhandleImgUpload ضفت captureVideoThumb (canvas من أول فريم بـtoBlob jpeg 0.85 + timeout 8ث) وhandleVidUpload (chunkedUpload(file,'gallery') بالبروجريس → thumbnail → POST /api/gallery type:'video' + title من غير الامتداد)، وفي فورم «إضافة فيديو» قبل جريد رابط الفيديو ضفت بلوك «رفع فيديو من الجهاز (بالجودة الأصلية)» (input مخفي accept="video/*" + زرار متقطع Upload/Loader2 + بروجريس aria-live) وقايمة «أو» الفاصلة — **البلوكين اتحقّقوا بdiff ضد MG = صفر اختلاف حرفيًا**
+- (2) src/components/landing/GallerySection.tsx: ImageWithSkeleton زوّدت `unoptimized` بالكومنت (الجودة الأصلية 100% من غير ضغط Next.js)، وGalleryVideoModal: isDirectVideo بقت `!isYouTube && (url.indexOf('/api/files/') === 0 || /\.(mp4|webm|mov|avi|ogg|m4v)(\?|$)/i.test(url))` بالكومنت
+- (3) src/app/api/files/[id]/route.ts: بوابة الفيديو بقت `if (contentType.startsWith('video/') && media.category !== 'gallery')` بالكومنت الأربعة أسطر — استثناء فيديوهات المعرض العامة بس، فيديوهات الكورسات فاضل عليها الحماية بالتوكن (بلوك intro_video_url بتاع و84 المحلي اترك زي ما هو)
+- تحقق: `media.category` موجود في Prisma schema (String @default("general")) — bunx tsc --noEmit = **30/30 baseline بالظبط** وصفر أخطاء في الملفات الثلاثة (فلتر بالأسماء = مفيش) + grep: «رفع فيديو من الجهاز»×4 وcaptureVideoThumb×2 وhandleVidUpload×2 في الأدمن، unoptimized×3 و'/api/files/' في isDirectVideo بالجاليري، وmedia.category !== 'gallery' في files route
+- git: fetch origin (مفيش جديد) → stage الملفات الثلاثة بس (3 files changed, 128 insertions, 2 deletions) → كومِت **6e73c8a** → push origin main نجح (0054cad..6e73c8a) — من غير dev server أو بيانات اختبار
+- لمس MG أو منصات تانية: مفيش — غير الإضافة دي على worklog.md
+
+Stage Summary:
+- Zicola-Math بقى فيها و93 كامل زي MG: الأدمن بيرفع فيديوهات المعرض من الجهاز بالجودة الأصلية 100% (chunkedUpload بايت-ببايت + صورة مصغرة أوتوماتيك من أول فريم)، الصور بتوصل للزوار من غير ضغط Next.js، وفيديوهات المعار المرفوعة بتتخزن على /api/files/<id> وبتتعرف عليها في المودال وبتنعرض للزوار من غير توكن (زي يوتيوب) — فيديوهات الكورسات محمية زي ما هي
+- ملفات: 3 (AdminDashboard + GallerySection + files/[id]) — البلوكات المدموجة متطابقة حرفيًا مع MG (diff=0) — tsc 30/30 baseline — كومِت 6e73c8a مرفوع على main (0054cad..6e73c8a)
+- انحرافات: مفيش — /api/upload/chunk كانت موجودة أصلًا في Zicola (اتسيبت)، وبلوك intro_video_url (و84) المحلي في files route اترك زي ما هو بره نطاق النقل
+---
+Task ID: 93 (main orchestrator — قسم المعرض: رفع فيديو من الجهاز + الجودة الأصلية)
+Agent: main (Z.ai Code)
+Task: طلب المستر (و93): «في قسم المعرض — الفيديوهات أقدر أرفعها برده من على الجهاز وأحط اللينك زي الصور — والجودة بتاعتها بتقل مش عارف ليه، عاوزك تحافظ لي على الجودة»
+
+Work Log:
+- **تشخيص جذري مهم**: راجعت dev.log ولقيت `POST /api/upload/chunk 404` — راكة `/api/upload/chunk/route.ts` كانت اتمسحت بالغلط في كومِت التنظيف 6bcb701 (23 سبتمبر) → **كل رفع ملفات من الجهاز كان بايظ على MG من ساعتها** (صور المعرض/الكتب/الأسئلة/CMS) — عشان كده المستر بيحط الصور بلينك بس
+- استرجعت الراكة من الجيت (`git show 8531628:src/app/api/upload/chunk/route.ts` — نسخة و19 المصلحة: تجميع بايت-ببايت + إعادة محاولة) — المنصات التانية راكتها موجودة أصلاً
+- `/api/files/[id]`: فيديوهات المعرض (category='gallery') بقت عامة زي لينكات اليوتيوب — وحماية فيديوهات الكورسات بالتوكن زي ما هي (اتأكدت: 403 من غير توكن ✓)
+- الأدمن (GalleryManager): زرار «رفع فيديو من الجهاز (بالجودة الأصلية)» + شريط تقدم بالنسبة — الفيديو بيتخزن بايت-ببايت (chunkedUpload بيتحقق بالحجم) صفر ضغط + **صورة مصغرة أوتوماتيك من أول فريم** (canvas capture) عشان يبان بصورته زي يوتيوب + الخيار باللينك زي ما هو
+- المعرض العام: الصور بقت `unoptimized` → **توصل للزوار بالجودة الأصلية 100% من غير ضغط Next.js** (ده كان سبب «الجودة بتقل» — كان بيصغّر ويضغط q75) + مشغل الفيديو بيتعرف على روابط /api/files/<id> ويشغلها مباشر
+- اختبارات MG E2E: رفع صورة 27B ✓ | رفع فيديو 5MB مجزأ 3 أجزاء = 5,242,880 بايت بالظبط ✓ | فيديو المعرض عام 200 video/mp4 ✓ | فيديو كورس من غير توكن 403 ✓ | **رفع من واجهة الأدمن بنفسه: فيديو webm → توست نجاح + صورة مصغرة اتولدت من أول فريم ✓ + صورة jpg → توست نجاح ✓** | المعرض العام: الثمبنيل 720x1280 اتحملت ✓ | **دوسيت على الكارت → المشغل المباشر اتفتح والفيديو اشتغل فعلاً (currentTime بيتحرك)** ✓
+- التنظيف: 3 عناصر معرض تجريبية + 5 صفوف Media تجريبية + ملفات /tmp وpublic اتشالوا (COUNT المعرض = 0 زي ما كان)
+- النقل للمنصات (وكلاء متوازيين): Zicola 93-a كومِت 6e73c8a (0054cad..6e73c8a) | Sherif 93-b كومِت 1da5e56 (a6bc29f..1da5e56) | Shaimaa 93-c كومِت eeb0045 (5c25c41..eeb0045) — كل واحد: نفس 3 تعديلات، diff ضد MG = صفر
+- Push: MG 4da6f74..c2dc17e
+
+Stage Summary:
+- المعرض بقى زي ما المستر عاوز بالظبط: **الفيديوهات ليها رفع من الجهاز + لينك** (زي الصور كده)، والصور والفيديوهات بتنزل بالجودة الأصلية 100%
+- **إصلاح خفي مهم**: راكة الرفع الممسوحة اترجعت — كل رفع من الجهاز في المنصة رجع يشتغل (مش المعرض بس)
+- tsc: MG 29 + المنصات 30/30 — صفر أخطاء جديدة ×4
+
+---
+Task ID: 94 (main orchestrator — حذف تنظيف قاعدة البيانات من الأدمن + لودر «ناس جينيس» الموحد)
+Agent: main (Z.ai Code)
+Task: طلب المستر (و94): «امسح الحتة بتاعت تنظيف قاعدة البيانات من صفحة الأدمن — مش عاوز أعرف إنضفها من المنصة + خلي شكل التحميل بتاع كل المنصة لايق بمادة المنصة، بتاع ناس جينيس حلو»
+
+Work Log:
+- **(أ) حذف قسم تنظيف قاعدة البيانات بالكامل**:
+  - PlayerSettingsPanel.tsx: شيلت الكارت (هـ) «تنظيف قاعدة البيانات» + كل الستيت والدوال (adminId/cleaning/cleanupResults/cleanupWasDryRun/runDbCleanup/deleteOrphans/vacuumDb) + استيرادات بقت فاضية (Database/AlertTriangle/Loader2/useAppStore) — أيقونات MonitorPlay/Trash2 فضلت لأنها بتتستخدم في أقسام تانية
+  - مسحت الراكة نفسها من السيرفر: src/app/api/admin/db-cleanup/route.ts — مفيش أي إشارة برمجية فاضلة (grep = صفر، إلا كومنت تاريخي اتعدل)
+- **(ب) لودر «ناس جينيس» الموحد — مكون جديد src/components/GeniusLoader.tsx**:
+  - هوية المنصة الذهبية: نواة Σ بتدرج ذهبي (#F2D57E→#C49A38→#8B6914) بنبع نور + مدارين متقطعين بيلفوا في اتجاهين opposite برموز رياضية (π √ ∞ ÷ × +) والرموز واقفة صح دايمًا (تقنية animation:inherit + direction:reverse)
+  - اسم المنصة «Math Genius» بلمعة ذهبية بتعدّي عليه (mg-shine) + تاج «ناس جينيس — بنصنع العباقرة» + 3 نقط نطاطة + رموز رياضية عايمة في خلفية الشاشة الكاملة
+  - 3 أنماط: full (شاشة كاملة fixed للبوت) / inline (بلوك جوه السيكشنز 130px) / compact (سطر صغير 48px للكروت) — الستايل ذاتي جوه المكون (مفيش تعديل globals.css) + prefers-reduced-motion مدعوم
+- **(ج) استبدال شاشات التحميل البارزة (12 موضع)**: page.tsx (بوت المنصة → full) | schedule/page.tsx | videos/[id] | payment/page.tsx (Suspense) | StudentPortal.tsx (بوابة الطالب) | PublicVideosSection | LessonsSection | StudentPaymentPendingView | CMSPanel | SocialLinksPanel | AdminDashboard (تفاصيل الطالب → compact) | PaymentsPanel (الإيصال → compact) — السلاسلات الصغيرة جوه الزراير (Loader2 h-4) اتركت زي ما هي لأنها مكانها مظبوط
+- **التحقق**: tsc 29 (< 30 baseline) | متصفح: بوت المنصة باللودر الجديد ديسكتوب وموبايل 390×844 (حجزت /api/config+/api/gallery+/api/stats عشان أمسك الشاشة) — شكل نظيف ذهبي متوسّط ✓ | الأنماط inline/compact اتحققوا بصفحة اختبار مؤقتة (اتمسحت) ✓ | استرجعت الـ APIs وأعدت التحميل: المنصة اتحملت عادي وصفر console errors وdev.log نضيف ✓ | ملفات /tmp المؤقتة اتمسحت كلها
+
+Stage Summary:
+- قسم «تنظيف قاعدة البيانات» اختفى من الأدمن نهائيًا (واجهة + راكة) — زي ما المستر عاوز بالظبط
+- كل المنصة بقت ليها هوية تحميل واحدة شيك من نوعها: Σ الدهبية والمدارات الرياضية — full/inline/compact على قد كل مكان
+- tsc 29 = baseline — صفر أخطاء جديدة
+
+---
+Task ID: 95-c
+Agent: general-purpose
+Task: shaimaa-selim-science — استبدال شاشات التحميل بلودر رموز العلوم الموحد + حذف قسم تنظيف قاعدة البيانات من صفحة الأدمن
+
+Work Log:
+- قريت آخر قسمين من الـworklog (و94 على MG + و93) — المنصة نضيفة على main = eeb0045 وPlatformLoader.tsx (المكون الجديد) موجود بالفعل untracked — اتلمسش خالص، وbun install اتعمل (مفيش حزم ناقصة)
+- (1) page.tsx: بلوك البوت الإيموجي 🧪🔬🧬 كله (24 سطر) اتبدل بـ return <PlatformLoader variant="full" /> بالكومنت (2026-و95) — وLoader2 اتشال من الاستيراد (كان مستخدم في البوت بس)
+- (2) schedule/page.tsx: حارس loading سايب الـwrapper div (min-h-screen bg-background dir=rtl) وجواه PlatformLoader inline بالكومنت — Loader2 اتشال من استيراد lucide (كان آخر استخدام)
+- (3) videos/[id]/page.tsx: «جاري تحميل الدرس...» بقت PlatformLoader inline بنفس الليبل — Loader2 اترك لأنه مستخدم في «جاري فتح المشغل الآمن» (سلاسل صغيرة جوه الزراير اتركت زي MG)
+- (4) payment/page.tsx: الـSuspense fallback بقت PlatformLoader inline «جاري تحميل صفحة الدفع...»
+- (5) StudentPortal.tsx: حارس التحميل قبل البورتال الكامل (الديف العايم) بقت PlatformLoader inline «جاري تحميل بياناتك...» بالكومنت — الاستيراد جنب MathKeyboard — Loader2 اترك (سلاسل داخلية كتير)
+- (6) PublicVideosSection.tsx: الـsection الخارجي اتساب واللودر جواه PlatformLoader inline بالكومنت — Loader2 اتشال من الاستيراد (آخر استخدام)
+- (7) LessonsSection.tsx: رجل التيرناري loading ? (الديف العايم py-12) بقت PlatformLoader inline بالكومنت
+- (8) StudentPaymentPendingView.tsx: تيرناري loading ? (الديف h-6 py-8) بقت PlatformLoader compact «جاري تحميل سجل المدفوعات...» — الاستيراد بعد استيراد app-store على طول
+- (9) CMSPanel.tsx: if(loading) بقت PlatformLoader inline «جاري تحميل المحتوى...» — الاستيراد جنب sonner — Loader2 اترك (saving/isUploading ه-4)
+- (10) SocialLinksPanel.tsx: نفس النمط — PlatformLoader inline «جاري تحميل الروابط...» — Loader2 اترك (saving)
+- (11) AdminDashboard.tsx: تفاصيل الطالب CardContent بقى py-10 جواه PlatformLoader compact «جاري تحميل بيانات الطالب...» — الاستيراد جنب chunkedUpload
+- (12) PaymentsPanel.tsx: تيرناري receiptLoading بقى PlatformLoader compact «جاري فتح صورة الإيصال...» — الاستيراد جنب sonner — Loader2 اترك (لوحات المدفوعات والطلاب)
+- حذف و81: src/components/admin/DatabaseCleanupCard.tsx (128 سطر) اتمسح + استيراده من AdminDashboard (سطر 32) + استخدامه (كومنت و81 + <DatabaseCleanupCard />) — الجدول المتروبجي بقى سليم من غير لفّة فاضية — وراكة /api/admin/db-cleanup/route.ts اتمسحت بالمجلد
+- تحقق: bunx tsc --noEmit = 30 بالظبط (baseline — 27 Cannot find module في ui/* radix المعروفة + examples/skills) وصفر أخطاء في الملفات الـ13 المعدلة | grep: PlatformLoader في 13 ملف (12 معدل + المكون) | db-cleanup/DatabaseCleanupCard = صفر | GeniusLoader = صفر | من غير dev server ولا test files ولا push
+Stage Summary:
+- كل شاشات تحميل shaimaa-selim-science بقت بلودر رموز العلوم الموحد (⚛ نواة تركواز + مدارات ⚗ µ Ω ∆ λ) — full للبوت، inline للصفحات والبوابات، compact للكروت والإيصالات
+- أداة «تنظيف قاعدة البيانات» اختفت من الأدمن نهائيًا (واجهة + راكة) — grep نظيف تمامًا
+- tsc 30/30 baseline — صفر أخطاء جديدة — 12 ملف معدل + مكون جديد + ملفين مسحوبين — كومِت b6ea815 على main (مش مرفوع)
+---
+Task ID: 95-a
+Agent: general-purpose
+Task: Zicola-Math — استبدال شاشات التحميل بلودر رموز الرياضيات الموحد + حذف قسم تنظيف قاعدة البيانات من صفحة الأدمن
+
+Work Log:
+- قريت آخر ~120 سطر من worklog (و93 + و94 + و92-ب) — Zicola-Math نضيفة على main = 6e73c8a (و93)، والمكوّن الجديد src/components/PlatformLoader.tsx موجود مسبقًا (Σ أزرق بمدارين برموز π √ ∞ ÷ × + — full/inline/compact وستايل ذاتي جوه المكون) واتسيب زي ما هو بدون أي لمسة
+- قرأت كل بلوك تحميل قبل التعديل — النصوص 12/12 مطابقة للمتوقع (بلوك و75 في page.tsx بالكحلي المتدرج موجود حرفيًا) وطبّقت 12 موضع: (1) page.tsx بوت المنصة → <PlatformLoader variant="full" /> بالكومنت (2026-و95) — الملف مكانش بيستورد lucide أصلًا فمفيش أيقونات تتشال | (2) schedule/page.tsx → نفس الـwrapper div + PlatformLoader inline + شيلت Loader2 من import lucide (بقت أونلاين) | (3) videos/[id]/page.tsx → inline بلابل «جاري تحميل الدرس...» — Loader2 اتساب في الاستيراد لأنه لسه مستخدم في سبينر اللودنج بتاع التذكرة | (4) payment/page.tsx → Suspense fallback بقت inline بلابل «جاري تحميل صفحة الدفع...» | (5) StudentPortal.tsx → inline «جاري تحميل بياناتك...» قرب MathKeyboard import — Loader2 متساب (بيتستخدم في عشرات الأماكن) | (6) PublicVideosSection → inner div بقت PlatformLoader inline جوه نفس الـsection — شيلت Loader2 من الاستيراد (بقت Lock, Play) | (7) LessonsSection → التيرناري loading بقت inline | (8) StudentPaymentPendingView → compact «جاري تحميل سجل المدفوعات...» والاستيراد بعد app-store | (9) CMSPanel → inline «جاري تحميل المحتوى...» قرب sonner — Loader2 متساب (spinners الحفظ والرفع) | (10) SocialLinksPanel → inline «جاري تحميل الروابط...» — Loader2 متساب (سبينر الحفظ) | (11) AdminDashboard → تفاصيل الطالب بقت compact py-10 «جاري تحميل بيانات الطالب...» قرب chunkedUpload | (12) PaymentsPanel → تيرناري الإيصال بقت compact «جاري فتح صورة الإيصال...» قرب sonner
+- PART 2 — حذف أداة تنظيف قاعدة البيانات (و81-c) من Zicola بالكامل: من AdminDashboard.tsx شيلت الستيت (dbCleanupBusy/dbCleanupResults/dbCleanupVacuum بالكومنت)، والدالتين runDbCleanup + runDbVacuum (كامل fetch /api/admin/db-cleanup وVACUUM والتوستات)، وكارت «تنظيف قاعدة البيانات» في إعدادات الأدمن (الوصف + جدول النتايج + زراير الفحص/الحذف/VACUUM)
+- أيقونات: Database/AlertTriangle مكانش مستوردين في AdminDashboard أصلًا (مفيش حاجة تتشال) — Search وTrash2 وSparkles وWrench اتأكدت إنهم لسه مستخدمين في أقسام تانية (بحث الطلاب/الحذف/استخراج AI/backfill) فاتسابوا — Loader2 برضه لسه مستخدم على نطاق واسع
+- مسحت الراكة src/app/api/admin/db-cleanup/route.ts (rm -f) ومجلدها (rmdir) — grep على src/ كله لـ «db-cleanup» وdbCleanup وrunDbCleanup وrunDbVacuum وvacuum = صفر نتايج خالص (حتى الكومنتات التاريخية نضيفة)
+- تحقق: bun install (257 installs، مفيش حاجة ناقصة) → bunx tsc --noEmit = 30/30 بالظبط (baseline: 27 في ui/* radix + examples/* + skills/* معروفة) — صفر أخطاء جديدة وصفر أخطاء في أي ملف معدل | grep: PlatformLoader موجود في الـ12 ملف المعدلة + المكوّن، GeniusLoader = صفر، db-cleanup = صفر، مفيش Loader2 يتيم اتساب في schedule/PublicVideosSection
+- git: stage 14 ملف (13 تعديل + PlatformLoader.tsx الجديد + حذف الراكة) → كومِت a06b6e6 (6e73c8a..a06b6e6) بدون push — من غير dev server ولا ملفات اختبار ولا أي لمسة لـ globals.css أو MG أو باقي المنصات
+
+Stage Summary:
+- Zicola-Math بقت على لودر رموز الرياضيات الموحد (Σ أزرق بمدارات π √ ∞ ÷ × + + اسم المنصة بلمعة زرقاء + تاج «مع مستر أحمد شعبان») في 12 موضع: بوت المنصة full، صفحات الدروس/المواعيد/الدفع/الفيديو، بوابة الطالب، الفيديوهات العامة، الدروس، سجل مدفوعات الطالب، CMS، الروابط، تفاصيل الطالب بالأدمن، الإيصالات — وكل سبينر Loader2 الصغير جوه الزراير اتساب زي ما هو
+- قسم «تنظيف قاعدة البيانات» اختفى نهائيًا من أدمن Zicola (ستيت + دوال + كارت + راكة /api/admin/db-cleanup) — grep نضيف 100%
+- tsc 30/30 baseline (صفر جديد) — 14 ملف متغيرة — كومِت a06b6e6 على main (مش مرفوع)
+---
+Task ID: 95-b
+Agent: general-purpose
+Task: Mr-Sherif-ElSayed — استبدال شاشات التحميل بلودر رموز الرياضيات الموحد + حذف قسم تنظيف قاعدة البيانات من صفحة الأدمن
+
+Work Log:
+- قريت آخر ~120 سطر من الـworklog (و93-b على Sherif + و94 على MG) — Sherif نضيفة على main = 1da5e56 ومفيش جديد على origin
+- المكون الجديد src/components/PlatformLoader.tsx (Σ برتقالي + مدارين π √ ∞ ÷ × + + لمعة على اسم المنصة + تاج «الرياضيات المتكاملة» — full/inline/compact وستايل ذاتي جواه) كان جاهز — اتأكدت من الـAPI واتساب زي ما هو من غير أي لمسة
+- (1) page.tsx: بوت المنصة (appReady) بقى PlatformLoader full — شيلت البلوك القديم (GraduationCap + shine-text + Loader2) وشيلت الاستيراد بتاعهم بالكامل من lucide لأنهم ما استخدموش تاني
+- (2) schedule/page.tsx: نفس الـwrapper (min-h-screen bg-background dir=rtl) والبلوك الداخلي بقى PlatformLoader inline + الكومنت — Loader2 اتمسح من الاستيراد (كان استخدامه الوحيد)
+- (3) videos/[id]/page.tsx: سطر جاري تحميل الدرس بقى PlatformLoader inline label=«جاري تحميل الدرس...» — Loader2 اتركم في الاستيراد لأنه لسه مستخدم في سطر الـspinner بتاع الـplayer (الـSecurePlayerModal)
+- (4) payment/page.tsx: Suspense fallback بقى PlatformLoader inline label=«جاري تحميل صفحة الدفع...» + استيراد
+- (5) StudentPortal.tsx: بلوك تحميل بوابة الطالب (الاستعراض المبدئي قبل دخول البورتال الكامل) بقى PlatformLoader inline label=«جاري تحميل بياناتك...» — الاستيراد جنب MathKeyboard — Loader2 اتركم (مستخدم في أماكن تانية كتير)
+- (6) PublicVideosSection.tsx: بلوك الـloading جوه section py-16 بقى PlatformLoader inline + الكومنت — Loader2 اتمسح من الاستيراد (Lock/Play اتركموا)
+- (7) LessonsSection.tsx: الطرف الأوسط في الـternary بقى PlatformLoader inline + الكومنت
+- (8) StudentPaymentPendingView.tsx: الطرف الأوسط بقى PlatformLoader compact label=«جاري تحميل سجل المدفوعات...» — الاستيراد بعد استيراد app-store
+- (9) CMSPanel.tsx: if (loading) بقى PlatformLoader inline label=«جاري تحميل المحتوى...» — الاستيراد جنب sonner — Loader2 اتركم (مستخدم في أزرار الحفظ والرفع)
+- (10) SocialLinksPanel.tsx: نفس النمط label=«جاري تحميل الروابط...» — Loader2 اتركم (زرار الحفظ)
+- (11) AdminDashboard.tsx: تفاصيل الطالب بقى CardContent py-10 + PlatformLoader compact label=«جاري تحميل بيانات الطالب...» — الاستيراد جنب chunkedUpload
+- (12) PaymentsPanel.tsx: تحميل صورة الإيصال في المودال بقى PlatformLoader compact label=«جاري فتح صورة الإيصال...» — الاستيراد جنب sonner
+- الجزء التاني — حذف أداة تنظيف قاعدة البيانات (و81) من AdminDashboard: الـ3 useStates (cleanupBusy/cleanupResults/cleanupSummary) + دالة runDbCleanup (fetch /api/admin/db-cleanup + vacuum) + كارت الواجهة كله (العنوان + الأزرار التلاتة + جدول النتايج) — وDatabase اتمسحت من استيراد lucide (كانت استخدامه الوحيد) بينما Search/Trash2/Loader2/MessageCircle اتركموا لأن ليهم استخدامات تانية (AlertTriangle مش مستوردة أصلًا)
+- مسحت الراكة نفسها: rm src/app/api/admin/db-cleanup/route.ts + rmdir الفولدر — grep على src كله: db-cleanup = صفر (حتى الكومنتات التاريخية ما فضلوش)
+- التحقق: bun install (مفيش حاجة ناقصة) → bunx tsc --noEmit = **30/30 بالظبط** (baseline — كلها ui/* radix المعروفة) وصفر أخطاء في الملفات المعدلة (فلتر بالأسماء = NONE) + rg PlatformLoader = 13 ملف (12 موقع + المكون نفسه) + rg GeniusLoader = صفر — من غير dev server ولا بيانات اختبار ولا push
+- git: fetch (مفيش جديد) → add -A → كومِت **aff2489** برسالة المطلوب حرفيًا (14 files changed: 232+/291-) — الشجرة نضيفة، مرفوع محليًا من غير push زي المطلوب
+
+Stage Summary:
+- Sherif بقت فيها لودر رموز الرياضيات الموحد (Σ البرتقالي بمدارات π √ ∞ ÷ × +) في 12 موضع: بوت المنصة full + 5 inline للصفحات والسيكشنز + 3 compact للكروت (تفاصيل الطالب/سجل المدفوعات/الإيصال) — نفس النظام اللي اتنقل لMG في و94 لكن بهوية Sherif البرتقالية
+- قسم «تنظيف قاعدة البيانات» اختفى من الأدمن نهائيًا مع الراكة /api/admin/db-cleanup — grep صفر في src كله
+- ملفات: 12 معدلة + 1 مكون جديد + 1 راكة محذوفة | tsc 30/30 baseline صفر زيادة | كومِت aff2489 على main (محلي — من غير push)
+
+---
+Task ID: 95 (main orchestrator — رجوع تحميل MG للقديم + لودر رموز المادة للمنصات + حذف تنظيف DB من كل المنصات)
+Agent: main (Z.ai Code)
+Task: طلب المستر (و95): «رجّع التحميل زي ما هو في ماث جينيس على الشكل القديم فورًا — وفي بقية المنصات خلي التحميل برموز رياضية أو رموز علوم حسب المادة — وشيل حذف قاعدة البيانات من صفحة الأدمن في كل المنصات»
+
+Work Log:
+- **MG (فورًا وبالأول)**: استرجاع 12 ملف تحميل من كومِت 37c00a0^ (git checkout) — بوت page.tsx القديم (القبعة + الإيموجيز 🧮➗✖️📐) رجع زي ما هو بالظبط + مسح GeniusLoader.tsx — مع الحفاظ على حذف قسم تنظيف قاعدة البيانات (اتأكدت بيه بالصورة قبل وبعد) — tsc 29 = baseline — push 65b43c8
+- **المنصات**: كتبت كومبوننت PlatformLoader.tsx بنفسي في كل منصة بنسخة مخصصة: Zicola (Σ أزرق #1E5FD6/#3B79E8 + π √ ∞ ÷ × + + «مع مستر أحمد شعبان») | Sherif (Σ برتقالي #F97316/#EA580C + نفس الرموز + «الرياضيات المتكاملة») | Shaimaa (⚛ تركواز #14B8A6/#0E9384 + رموز علوم ⚗ µ Ω ∆ λ + «علوم — مع د. شيماء سليم») — نفس تصميم النواة والمدارات المتقابلين بلمعة الاسم
+- **وكلاء متوازيون**: 95-a Zicola كومِت a06b6e6 | 95-b Sherif كومِت aff2489 | 95-c Shaimaa كومِت b6ea815 — كل واحد: 12 موضع تحميل (بوت full + 7 inline + 4 compact) + حذف أداة تنظيف قاعدة البيانات (Zicola/Sherif: جوه AdminDashboard — Shaimaa: DatabaseCleanupCard.tsx كلها) + مسح راكة /api/admin/db-cleanup — tsc 30/30/30 = baseline بالظبط وصفر أخطاء جديدة
+- **تحقق بصري بنفسي**: شغلت كل منصة على بورت مؤقت (3011/3012/3013) وأمسكت شاشة البوت بالـ agent-browser: التلاتة ظهروا اللودر المخصص (نواة + مدارات + اسم بلمعة + رموز عايمة) وصفر console errors — السيرفرات المؤقتة اتقفلت والملفات المؤقتة اتمسحت
+- **Push**: MG 37c00a0..65b43c8 | Zicola 6e73c8a..a06b6e6 | Sherif 1da5e56..aff2489 | Shaimaa eeb0045..b6ea815 (git fetch قبل كل push) — مفيش أي توكن متخلي في أي حتة
+
+Stage Summary:
+- ماث جينيس: تحميله القديم رجع 100% زي ما كان (زي ما المستر طلبه بحروفه: «أهم حاجة»)
+- المنصات التلاتة: لودر برموز مادتها بألوان براندنجها (رياضيات×2، علوم×1) — هوية موحدة الشكل مختلفة اللون والرموز
+- أداة تنظيف قاعدة البيانات اختفت من صفحة الأدمن في الأربع منصات (واجهة + راكة)
+
+---
+Task ID: 96
+Agent: main (Z.ai Code)
+Task: طلب المستر (و96) مشكلتين: (1) «أحل واجب وبعديها على طول أحل الامتحان — بتجي رسالة واحدة بس بتاعت الواجب وكمان بتتأخر دقيقتين تلاتة — عاوز كل ما الطالب بيعمل حاجة تجيه رسالة على طول في ثانية، بكل حاجة» (2) «لما الطالب يسجل دخول ويدخل صفحته تقوله بنحمل البيانات بتاعتك أو أي إيموجي — بس تكون مختلفة بين المنصات»
+
+Work Log:
+- **تشخيص جذر التأخير**: الإشعار كان بيتبعت بس بعد اكتمال تصحيح الـ AI للمقالي في after() (كل سؤال ~35 ثانية) — لو فيه مقالي: دقايق انتظار، ولو التصحيح اتقطع: الإشعار مبيوصلش خالص (ده اللي حصل للامتحان). وكمان الامتحان كان بيعتمد كليًا على نهاية after() حتى للاختياري الصافي
+- **parent-notify.ts**: قوالب استلام جديدة PARENT_SUBMIT_EXAM/HOMEWORK_TEMPLATE («📥 تسليم جديد — سلّم كذا للتو — التصحيح جاري وإشعار الدرجة هيوصلك») + buildParentSubmitMessage + buildParentSubmitPushPayload بـ tag مختلف (parent-exam-sub / parent-homework-sub عشان الاستلام والدرجة يظهرمع بعض مبيستبدلوش بعض — و91 للسبام محفوظة) + دالة notifyParentsOfSubmission الجديدة + استخراج collectParentTargets و dispatchParentNotice مشتركين بدل التكرار
+- **exams/submit**: بعد حفظ النتيجة مباشرة — اختياري صافي → إشعار الدرجة فورًا في after() (fire-and-forget) مع examScoreNotified يمنع تكراره في نهاية after() | فيه مقالي → إشعار استلام فوري في after() والإشعار بالدرجة زي ما هو بعد التصحيح. كده حتى لو التصحيح الخلفي اتقطع — ولي الأمر خد خبر التسليم
+- **homework/submit**: اختياري صافي → إشعار الدرجة بقى fire-and-forget في after() (كان await بيعطّل رد التسليم نداء web-push) | فيه مقالي → إشعار استلام فوري جديد + الدرجة بعد التصحيح زي ما هي
+- **push.ts**: أجهزة ولي الأمر بقت متوازية Promise.all (كانت ورا بعض — أول جهاز يعطل 10 ثواني كان بياخد التاني معاه) + timeout 10s→8s
+- **StudentPortal.tsx (MG)**: حارس تحميل دخول الطالب بقى بهوية Maths Genius — القبعة الذهبية في مربع بحواف #C49A38 + هالة blur + إيموجيز الرياضيات النططة 🧮➗✖️📐 (نفس لغة شاشة البوت القديمة) + «بنحمل البيانات بتاعتك...» + «استنى ثانية» مع سبنر ذهبي — مختلفة عن المنصات التانية (Zicola Σ أزرق / Sherif Σ برتقالي / Shaimaa ⚛ تركواز من و95)
+- **تحقق بالمتصفح (agent-browser)**: طالب اختبار مؤقت (اتعمل بالـ SQL واتمسح بعدها) — شاشة التحميل الجديدة ظهرت بالقبعة والإيموجيز والكلام المطلوب، وبعد التحميل البورتال كامل شغال وصفر console errors
+- **تحقق قياس فعلي للتوقيت**: واجب اختياري → إشعار الدرجة في **0.72s** | واجب مقالي → إشعار الاستلام في **0.18s** وإشعار الدرجة وصل بعد التصحيح | امتحان → إشعار في **0.25s** وصف واحد بالظبط (حارس examScoreNotified شغال) — 4 صفوف بالتسلسل الصحيح في parent_notifications
+- **تنظيف**: كل بيانات الاختبار اتمسحت (طالب + واجبين + امتحان + نتايج + إشعارات + أنشطة) — مسح شامل لكل الجداول بطالب الاختبار = صفر بقايا | tsc 29/29 = baseline بالظبط وصفر أخطاء في الملفات الخمسة المعدلة
+Stage Summary:
+- كل تسليم (واجب/امتحان — اختياري/مقالي) بيولّد إشعار لولي الأمر **في أقل من ثانية** بدل دقيقتين-تلاتة — والواجب المقالي بياخد إشعارين: استلام فوري + درجة بعد التصحيح (tags مختلفة مبيستبدلوش بعض)
+- حتى لو تصحيح الـ AI اتقطع خالص — إشعار التسليم بيوصلك لأنه بيتبعت أول ما التسليم يتحفظ
+- شاشة تحميل دخول الطالب في Maths Genius بقت بهوية المنصة (قبعة + إيموجيز رياضيات ذهبي + «بنحمل البيانات بتاعتك») ومختلفة عن باقي المنصات زي ما المستر طلب
+
+---
+Task ID: 96-c
+Agent: general-purpose
+Task: نقل إصلاح الإشعارات الفورية (و96) من Zicola-Math إلى shaimaa-selim-science
+
+Work Log:
+- قريت آخر ~150 سطر من worklog (و94/و95/و96) + استخرجت الـ diff الذهبي من كومِت Zicola 57b1022 (نسخ الملفات الأربعة بعد الإصلاح وقارنتها بالحرف) — Shaimaa كانت نضيفة على main = b6ea815 (مطابقة لorigin بعد fetch) ومفيش أي جديد
+- (1) src/lib/parent-notify.ts: قوالب الاستلام الفوري PARENT_SUBMIT_EXAM/HOMEWORK_TEMPLATE بهوية Shaimaa («📥 تسليم جديد من منصة د. شيماء ساينس للعلوم» + سطر «التصحيح جاري دلوقتي — إشعار الدرجة هيوصلك في رسالة تانية حال ما يخلص.» + توقيع «Dr. Shaimaa» — الاسم والتوقيع منسوخين من PARENT_EXAM_TEMPLATE الحالي فيها) + PARENT_PUSH_SUBMIT_EXAM/HOMEWORK_TITLE («📥 تسليم جديد — د. شيماء ساينس») و_BODY + buildParentSubmitPushPayload (tag: parent-{kind}-sub) + buildParentSubmitMessage + tag إشعار الدرجة في buildParentPushPayload بقى ثابت 'parent-'+kind (بدل +Date.now() — مانع السبام و91 محفوظ والإشعارين يظهرمع بعض) + collectParentTargets وdispatchParentNotice المشتركين (نفس كود Zicola حرفيًا) + notifyParentsOfResult اتعادت هيكلتها عليهم + notifyParentsOfSubmission الجديدة
+- (2) src/lib/push.ts: حلقة الأجهزة المتسلسلة (for+await بمهلة 10s) بقت Promise.all(subs.map(...)) متوازية بمهلة 8000ms بالكومنت (2026-و96) — حرفيًا زي Zicola (مفاتيح VAPID الخاصة بالمنصة اترمت زي ما هي)
+- (3) src/app/api/exams/submit/route.ts: الاستيراد بقا notifyParentsOfResult, notifyParentsOfSubmission + بلوك و96 الكامل قبل كومنت «===== المرحلة 3» وقبل after() الرئيسي (examHasWriting96/examScoreNotified/examTitle96/examOrigin96 — اتأكدت الأول إن textWorkload/imageWorkload/score/maxScore/exam معرفين في النطاق: سطور 94/130/206/234/235) + في آخر after(): `if (exFin.length > 0)` بقت `if (exFin.length > 0 && !examScoreNotified)` مع تحديث الكومنت (2026-و96)
+- (4) src/app/api/homework/submit/route.ts: الاستيراد اتحدث + بلوك (inserted && !hasWriting) اتحول من await مباشر لـ fire-and-forget جوه after() (كان بيوقف رد التسليم نداء web-push) + بلوك جديد (inserted && hasWriting) → after(→notifyParentsOfSubmission) بالكومنتات — بادئة اللوج [hw-submit] الخاصة بالمنصة اتحافظت عليها (مختلفة عن w-submit بتاعة Zicola)
+- تحقق: diff ضد نسخ Zicola بعد الإصلاح = الفروقات الوحيدة نصوص الهوية (اسم المنصة والتوقيع) + VAPID الخاصة بالمنصة — الصفر في مناطق بلوكات و96 | bunx tsc --noEmit = 30 بالظبط (baseline: 27 ui/* radix + examples + skills) وصفر أخطاء في الملفات الأربعة | ملمس 4 ملفات بس — مفيش PlatformLoader ولا globals ولا أي منصة تانية
+- git: add للـ 4 ملفات بس → كومِت 1a63303 برسالة المطلوب → push origin main ناجح (b6ea815..1a63303) — مفيش أي توكن اتلمس أو اتخزن
+
+Stage Summary:
+- shaimaa-selim-science بقت عليها إصلاح و96 كامل مطابق لZicola حرفيًا بهويتها: أول ما الطالب يسلّم (واجب/امتحان — اختياري/مقالي) ولي الأمر ياخد «📥 تسليم جديد» في أقل من ثانية، وإشعار الدرجة بيوصله بعد اكتمال التصحيح بس عشان الدرجة تفضل مظبوطة (tags مختلفة parent-*-sub / parent-* فالإشعارين يظهروا مع بعض) — وحتى لو تصحيح الـ AI اتقطع خبر التسليم وصل خلاص
+- أجهزة الـ push بتبعت بالتوازي (Promise.all + مهلة 8s) — جهاز بطيء ما بيعطّلش باقي أجهزة ولي الأمر
+- tsc 30/30 baseline صفر زيادة — 4 ملفات (268+/111-) — كومِت 1a63303 ومرفوع على origin/main
+
+---
+Task ID: 97-b
+Agent: general-purpose
+Task: Mr-Sherif-ElSayed — نقل و96 (إشعارات فورية) + و97 (فافيكون الإشعارات + تنظيف المعرض)
+
+Work Log:
+- قريت آخر ~160 سطر من worklog (و93→و96) — Sherif نضيفة على main = aff2489 ومطابقة لorigin بعد fetch — استخرجت المراجع الذهبية من Zicola (5c15f10:parent-notify.ts + diff 57b1022 للثلاثية exams/homework/push + diff 5c15f10 للمعرض) وقريت ملفات Sherif الخمسة كلها قبل التعديل
+- (1) src/lib/parent-notify.ts: إعادة كتابة كاملة على نسخة Zicola 5c15f10 — قوالب Sherif الحالية اتلمست حرفيًا (🎓/📝 متابعة من منصة مستر شريف السيد + توقيع Mr. Sherif ElSayed + PARENT_PUSH_* بتاعة Sherif) + قوالب الاستلام الجديدة PARENT_SUBMIT_EXAM/HOMEWORK_TEMPLATE بهوية Sherif («📥 تسليم جديد من منصة مستر شريف السيد» + سطر «التصحيح جاري دلوقتي — إشعار الدرجة هيوصلك في رسالة تانية حال ما يخلص.» + توقيع Mr. Sherif ElSayed) + PARENT_PUSH_SUBMIT_* («📥 تسليم جديد — مستر شريف السيد») + البنية التقنية حرفيًا زي Zicola: buildParentPushPayload بقت async مع await resolveParentPushIcon (فافيكون من SiteConfig favicon_url → site_logo → /push-icon.png + isValidNotifIcon بيرفض SVG) + tag ثابت parent-{kind} بدل +Date.now() + buildParentSubmitPushPayload بـ tag parent-{kind}-sub + buildParentSubmitMessage + collectParentTargets/dispatchParentNotice المشتركين + notifyParentsOfResult اتعادت هيكلتها عليهم + notifyParentsOfSubmission الجديدة — diff ضد Zicola = نصوص الهوية بس
+- (2) src/lib/push.ts: حلقة الأجهزة المتسلسلة (for+await بمهلة 10s) بقت Promise.all(subs.map(...)) متوازية بمهلة 8000ms بالكومنت (2026-و96) — مفاتيح VAPID الخاصة بSherif اترمت زي ما هي
+- (3) src/app/api/exams/submit/route.ts: الاستيراد بقا notifyParentsOfResult, notifyParentsOfSubmission + بلوك و96 الكامل (examHasWriting96/examScoreNotified/examTitle96/examOrigin96) قبل «المرحلة 3» after() — اتأكدت الأول إن exam سطر 130/score-maxScore سطور 206-207/textWorkload-imageWorkload سطور 234-235 كلهم معرفين قبل البلوك + في آخر after(): `if (exFin.length > 0 && !examScoreNotified)` مع تحديث الكومنت (2026-و96) — الملف بقى مطابق لZicola 5c15f10 بالبايت
+- (4) src/app/api/homework/submit/route.ts: الاستيراد اتحدث + بلوك و87 (inserted && !hasWriting) اتحول من await مباشر لـ fire-and-forget جوه after() + بلوك و96 جديد (inserted && hasWriting) → after(→notifyParentsOfSubmission) — بنفس صيغة Zicola 5c15f10 حرفيًا (بادئة اللوج [hw-submit] زي النسخة الذهبية) — الملف بقى مطابق لZicola بالبايت
+- (5) src/components/landing/GallerySection.tsx: نفس حذف Zicola بالظبط — من كارت الصورة شيلت div التدرج السفلي + div العنوان (img.title || 'صورة N') + div بادج القلب (Heart + رقم padStart) — alt الصورة اترك زي ما هو + من كارت الفيديو شيلت التدرج والعنوان — بادج «فيديو» (Film) وزرار التشغيل والحذف اتركوا + Heart اتشالت من استيراد lucide + كومنتي (2026-و97) في مكان البلوكين — الملف بقى مطابق لZicola بالبايت
+- تحقق: bunx tsc --noEmit = **30 بالظبط** (baseline — كلها ui/* radix المعروفة) وصفر أخطاء في الملفات الخمسة | diff ضد Zicola 5c15f10: exams/homework/GallerySection = IDENTICAL بالبايت، parent-notify/push = نصوص الهوية ومفاتيح VAPID بس — من غير dev server ولا pkill ولا بيانات اختبار ولا لمس globals.css أو أي منصة تانية
+- git: fetch (مفيش جديد) → add للـ 5 ملفات بس → كومِت e8dac92 برسالة المطلوب حرفيًا (5 files changed, 315+/132-) → push origin main ناجح (aff2489..e8dac92) — مفيش أي توكن اتخزن في أي ملف
+
+Stage Summary:
+- Sherif بقت عليها إصلاح و96+و97 كامل مطابق لZicola حرفيًا بهويتها: أول ما الطالب يسلّم (واجب/امتحان — اختياري/مقالي) ولي الأمر ياخد «📥 تسليم جديد» في أقل من ثانية، وإشعار الدرجة بيوصله بعد اكتمال التصحيح بس (tags مختلفة parent-*-sub / parent-* فالإشعارين يظهروا مع بعض) — وحتى لو تصحيح الـ AI اتقطع خبر التسليم وصل خلاص
+- كل إشعار خارجي بقى بصورة فافيكون المنصة (favicon_url → site_logo → push-icon.png كاحتياطي) — وأجهزة الـ push بتبعت بالتوازي (Promise.all + مهلة 8s) فجهاز بطيء ما بيعطّلش الباقي
+- معرض الصور نضيف: الصور والفيديوهات من غير اسم ملف ومن غير علامة القلب — البادج «فيديو» وزرار الحذف والتشغيل زي ما هما
+- tsc 30/30 baseline صفر زيادة — 5 ملفات (315+/132-) — كومِت e8dac92 ومرفوع على origin/main
+
+---
+Task ID: 97-c
+Agent: general-purpose (توقف بعطل أدوات) + main (Z.ai Code) — إكمال
+Task: shaimaa-selim-science — و97: فافيكون الإشعارات + تنظيف المعرض
+
+Work Log:
+- وكيل 97-c اتقفل بسبب عطل أدوات sandbox قبل أي تعديل (المستودع فضل نضيف على 1a63303) — main اكمل المهمة بنفسه بنفس الخطة
+- parent-notify.ts: بلوك و97 (isValidNotifIcon + resolveParentPushIcon يقرا favicon_url→site_logo→/push-icon.png من SiteConfig) + buildParentSubmitPushPayload و buildParentPushPayload بقوا async بالأيقونة + await في موضعي الاستدعاء
+- GallerySection.tsx: شيل التدرج+اسم الملف+بادج القلب من كارت الصورة + التدرج+اسم الملف من كارت الفيديو + Heart من الاستيراد — كومنتات (2026-و97)
+- tsc = 30 بالظبط (baseline) — كومِت fe46482 مرفوع على main (1a63303..fe46482)
+
+Stage Summary:
+- كل إشعارات Shaimaa الخارجية بقت بصورة فافيكون المنصة + المعرض نضيف من أسماء الملفات والقلب
+
+---
+Task ID: 97 (main orchestrator)
+Agent: main (Z.ai Code)
+Task: طلب المستر (و97): «رجّع تحميل منصة مستر أحمد شعبان زي الأول — التغيير اللي قبل ده — من غير سطر مستر أحمد شعبان رياضيات، وما تلعبش في أي حاجة تانية + ماث جينيس: شاشة التحميل الأولانية بصورة الفافيكون بدل قبعة التخرج + كل المنصات: شيل اسم الملف وعلامة القلب من معرض الصور + الإشعارات في جميع المنصات وكل إشعار بصورة فافيكون المنصة»
+
+Work Log:
+- **Zicola-Math**: PlatformLoader.tsx رجع من كومِت و95 (a06b6e6) بكل تفاصيله (Σ أزرق + مدارات π √ ∞ ÷ × + + رموز عايمة + لمعة الاسم) — Wordmark بقى «Zicola In Math» بس من غير تاج «مع مستر أحمد شعبان — رياضيات» + StudentPortal رجع للودر الموحد inline «جاري تحميل بياناتك...» — المعرض: شيل اسم الملف (صور+فيديو) وبادج القلب والرقم — parent-notify.ts: resolveParentPushIcon + بيلدرز async بالأيقونة — تحقق بلقطة متصفح: الودر الراجع كامل من غير اسم المستر + tsc 30 = baseline — push 5c15f10
+- **Maths-Genius**: page.tsx شاشة البوت: صورة الفافيكون (siteConfig.favicon_url || /logo.svg — نفس مصدر أيقونة التاب) مكان GraduationCap في نفس المربع الذهبي، والإيموجيز والعنوان زي ما هم — المعرض نفس التنظيف — تحقق بلقطة متصفح: الفافيكون ظاهر والقبعة مختفية وصفر page errors + tsc 29 = baseline — push 287bd7f
+- **Mr-Sherif-ElSayed (وكيل 97-b)**: نقل و96 كامل (استلام فوري + درجة بعد التصحيح + tags مختلفة + أجهزة push متوازية 8s) + و97 (فافيكون الإشعارات + تنظيف المعرض) — مطابقة Zicola بايت-بايت بهوية Sherif — tsc 30 — وكيل متلغي سابق خلف تعديلات ناقصة اترجعت بـ git checkout قبل إعادة التشغيل — push e8dac92
+- **shaimaa-selim-science**: و97 فوق إصلاح و96 الموجود (1a63303) — فافيكون الإشعارات + تنظيف المعرض — tsc 30 — push fe46482
+- إشعارات MG أصلاً بتستخدم الفافيكون من و91 — اتأكدت إنها سليمة زي ما هي
+- تنظيف: كل الملفات المؤقتة اتمسحت (/tmp/v97 وسكربتات الفحص واللقطات ولوجات السيرفرات المؤقتة) — مفيش أي توكن في أي ملف — سيرفر MG على 3000 اترجع شغال
+
+Stage Summary:
+- تحميل Zicola رجع زي و95 بالظبط ومن غير اسم المستر
+- شاشة بوت MG بالفافيكون بدل القبعة — نفس مصدر أيقونة التاب
+- المعرض في الأربع منصات نضيف: مفيش اسم ملف ومفيش قلب/رقم
+- كل إشعارات الأربع منصات بتظهر بصورة فافيكون منصتها — وتسليم شريف بقى فوري زي الباقي
+- tsc: 29+30+30+30 = كلها baseline — صفر أخطاء جديدة

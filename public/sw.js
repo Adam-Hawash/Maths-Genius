@@ -1,21 +1,19 @@
-// ============================================================
-// (2026-و106) Maths Genius PWA — Service Worker بسيط وآمن
-// الهدف: المنصة تتنصّب كتطبيق على شاشة الموبايل وتفتح كتطبيق
-// (شاشة كاملة من غير بار المتصفح) — مش تخزين محتوى ديناميكي.
-// المبدأ: كل الطلبات شبكة أولاً — الفشل فقط للتنقل (navigation)
-// يرجع صفحة بسيطة "مفيش اتصال". مفيش كاش لمحتوى المنصة (البيانات
-// حية وطلبات الطلاب لازم تفضل فورية ومحدثة دايمًا).
-// ============================================================
-var CACHE_NAME = 'mg-pwa-v1'
+/* ============================================================
+   sw.js — Service Worker موحد (دمج و89 + و106)
+   (و89) إشعارات أولياء الأمور — push + notificationclick
+   (و106) PWA — تثبيت المنصة كتطبيق + صفحة أوفلاين للتنقلات
+   ============================================================ */
+
+var PWA_CACHE = 'mg-pwa-v1'
 var OFFLINE_URL = '/offline.html'
 
 self.addEventListener('install', function (event) {
+  /* (و89) skipWaiting الأصلي */
+  self.skipWaiting()
   event.waitUntil(
-    caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll([OFFLINE_URL, '/pwa-icon-192.png', '/pwa-icon-512.png'])
-    }).then(function () {
-      return self.skipWaiting()
-    })
+    caches.open(PWA_CACHE).then(function (cache) {
+      return cache.addAll([OFFLINE_URL])
+    }).catch(function () {})
   )
 })
 
@@ -23,7 +21,7 @@ self.addEventListener('activate', function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
       return Promise.all(
-        keys.filter(function (k) { return k !== CACHE_NAME }).map(function (k) { return caches.delete(k) })
+        keys.filter(function (k) { return k !== PWA_CACHE }).map(function (k) { return caches.delete(k) })
       )
     }).then(function () {
       return self.clients.claim()
@@ -31,18 +29,67 @@ self.addEventListener('activate', function (event) {
   )
 })
 
+/* ===== (و106) PWA — التنقلات: شبكة أولاً وصفحة أوفلاين كاحتياط ===== */
 self.addEventListener('fetch', function (event) {
   var req = event.request
-  // التنقلات (فتح الصفحة) — شبكة أولاً مع صفحة أوفلاين كاحتياط
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req).catch(function () {
-        return caches.match(OFFLINE_URL)
+        return caches.match(OFFLINE_URL).then(function (hit) {
+          return hit || fetch(req)
+        })
       })
     )
-    return
   }
-  // الطلبات الأخرى — تمرير عادي (ممنوع نكاش أي API — البيانات حية)
+  /* غير التنقلات (API/ملفات) — تمرير عادي. ممنوع كاش أي API (بيانات حية) */
+})
+
+/* ===== (و89) إشعارات أولياء الأمور — زي ما هي حرفيًا ===== */
+self.addEventListener('push', function (event) {
+  var data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch (err) {
+    data = { title: '🔔 إشعار جديد', body: event.data ? event.data.text() : '' }
+  }
+  var title = String(data.title || '🔔 إشعار جديد')
+  var options = {
+    body: String(data.body || ''),
+    icon: String(data.icon || '/push-icon.png'),
+    badge: String(data.badge || '/push-icon.png'),
+    /* (و91) tag ثابت — بدل tag بيتغير كل مرة — عشان الإشعارات المتتالية
+       بتستبدل بعضها في شريط الموبايل بدل ما تتكدس، وكروم مايعتبرهاش
+       إشعارات مزعجة (سبام) وما يحولهاش صامتة */
+    tag: String(data.tag || 'parent-notification'),
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
+    data: { url: String(data.url || '/#parent-login') },
+  }
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close()
+  var raw = (event.notification.data && event.notification.data.url) ? String(event.notification.data.url) : '/#parent-login'
+  event.waitUntil(
+    (async function () {
+      var base = new URL(self.registration.scope)
+      var target
+      try { target = new URL(raw, base).href } catch (e) { target = base.origin + '/#parent-login' }
+      var pathOnly = target.split('#')[0]
+
+      var clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      for (var i = 0; i < clientList.length; i++) {
+        var c = clientList[i]
+        if (c.url && c.url.split('#')[0] === pathOnly) {
+          try { await c.focus() } catch (eFocus) {}
+          try { c.postMessage({ type: 'parent-notification-click', url: raw }) } catch (eMsg) {}
+          return
+        }
+      }
+      return self.clients.openWindow(target)
+    })()
+  )
 })
 
 self.addEventListener('message', function (event) {

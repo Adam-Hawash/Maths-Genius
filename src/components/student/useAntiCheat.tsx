@@ -5,9 +5,10 @@
 // PURPOSE: (2026-و66) نظام منع الغش والتشتت الذكي — طلب المستر:
 //   «يحسس لما الطالب يقلب على الجوال أو يسيب الامتحان ويودّع تحذير»
 // المنطق:
-//   • مراقبة مغادرة الصفحة: document.visibilitychange (تبويب/تصغير)
-//     + window blur (ضغط بره النافذة/سويتش تطبيقات) — بعدّاد واحد
-//     مشترك مع حارس 800ms عشان التبويب والـ blur ما يحسبوش مرتين
+//   • مراقبة مغادرة الصفحة: (2026-و92) document.visibilitychange بس —
+//     التاب/التطبيق التاني هو الخروج الحقيقي الوحيد. الـ blur اتشال
+//     (إشعارات النظام/برومبتات الأذونات كانت بتتحسب غلط)
+//   • إعفاء كامل أثناء رفع الصور/الكاميرا (تعليق العدّاد و73/74)
 //   • المغادرة 1 و 2 → تحذير لطيف («رايح فين يا بطل؟ كمل امتحانك 😅»)
 //   • المغادرة 3 وأكتر → خصم نقاط (بيتطبق عند التسليم في السيرفر)
 //   • المغادرة 4 → تسليم الامتحان تلقائيًا (onGiveUp مرة واحدة)
@@ -112,22 +113,20 @@ export function useAntiCheat(opts: AntiCheatOptions) {
     }
   }, [])
 
-  /* المراقبة — visibilitychange + blur */
+  /* المراقبة — (2026-و92) طلب المستر الحرفي: «محاولة الخروج تتحسب لما يخرج
+     من المنصة، لما يدخل تاب ثانية» — يعني visibilitychange hidden بس.
+     مراقبة window blur اتشالت خالص: ضغطة X على إشعار النظام، برومبت
+     إذن الكاميرا/الميك، وقوائم المتصفح كانت بتعمل blur والصفحة لسه
+     ظاهرة وكانت بتتحسب مغادرة غلط وتوصل الطالب للتسليم التلقائي بالغلط.
+     التاب/التطبيق التاني (hidden) = الخروج الحقيقي الوحيد المُحسوب. */
   useEffect(function () {
     if (!active) return
     var onVis = function () {
       if (document.visibilityState === 'hidden') registerDeparture()
     }
-    var onBlur = function () {
-      /* blur مع الصفحة لسه ظاهرة = سويتش تطبيق/ضغط بره النافذة */
-      if (document.visibilityState === 'visible') registerDeparture()
-      /* لو hidden → onVis هيسجلها */
-    }
     document.addEventListener('visibilitychange', onVis)
-    window.addEventListener('blur', onBlur)
     return function () {
       document.removeEventListener('visibilitychange', onVis)
-      window.removeEventListener('blur', onBlur)
     }
   }, [active, registerDeparture])
 

@@ -295,9 +295,32 @@ function StudentPortalInner() {
   // Dashboard overview before entering full portal
   if (!showFullPortal) {
     if (loading) {
+      /* (2026-و96) شاشة تحميل دخول الطالب بهوية Maths Genius — طلب المستر:
+         «لما الطالب يسجل دخول ويدخل صفحته تقوله بنحمل البيانات بتاعتك أو
+         أي إيموجي — بس تكون مختلفة بين المنصات» — نفس لغة شاشة البوت
+         (القبعة + إيموجيز الرياضيات النططة بالذهبي) مش اللودر العام */
       return (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+        <div className="flex flex-col items-center justify-center gap-5 py-20">
+          <div className="relative">
+            <div className="absolute -inset-5 rounded-full bg-[#C49A38]/10 blur-xl" />
+            <div className="relative w-16 h-16 rounded-2xl bg-muted border border-[#C49A38]/30 flex items-center justify-center">
+              <GraduationCap className="h-8 w-8 text-[#8B6914] dark:text-[#E5BE5A]" />
+            </div>
+          </div>
+          {/* (2026-و75-C) إيموجيز الرياضيات بندوبة متدرجة */}
+          <div className="flex items-end justify-center gap-3 text-2xl leading-none" dir="ltr">
+            <span className="animate-bounce">🧮</span>
+            <span className="animate-bounce [animation-delay:0.15s]">➗</span>
+            <span className="animate-bounce [animation-delay:0.3s]">✖️</span>
+            <span className="animate-bounce [animation-delay:0.45s]">📐</span>
+          </div>
+          <div className="text-center space-y-1">
+            <p className="font-bold text-foreground">بنحمل البيانات بتاعتك...</p>
+            <p className="text-sm text-muted-foreground flex items-center gap-2 justify-center">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#C49A38]" />
+              استنى ثانية
+            </p>
+          </div>
         </div>
       )
     }
@@ -1154,16 +1177,24 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     kind: 'hw',
     onGiveUp: function () {
       try { toast.error('⛔ عدّيت الحد المسموح من المغادرات — الواجب هيتسلم تلقائيًا', { duration: 8000 }) } catch (e) {}
-      try {
-        var hwId = hwActiveRef.current
-        if (!hwId) return
-        var btn = document.getElementById('hw-submit-' + hwId) as HTMLButtonElement | null
-        if (!btn) return
-        /* صورة ورقة الحل لسه بتترفع — ممنوع التسليم قبل ما توصل كاملة (2026-و20) */
-        if (btn.getAttribute('data-photo-busy') === '1') return
-        if (btn.disabled) btn.disabled = false
-        btn.click()
-      } catch (e) {}
+      /* (2026-و92) إعادة محاولة بدل الصمت: لو صورة ورقة الحل لسه بتترفع
+         أو الزرار مش جاهز — نفحص كل ثانيتين (حتى 40 محاولة ≈ دقيقة و20 ثانية)
+         وبنسلّم أول ما تجهز — التسليم التلقائي ممنوع يضيع */
+      var tries = 0
+      var attempt = function () {
+        try {
+          var hwId = hwActiveRef.current
+          if (!hwId) return
+          var btn = document.getElementById('hw-submit-' + hwId) as HTMLButtonElement | null
+          if (!btn || btn.getAttribute('data-photo-busy') === '1') {
+            if (++tries <= 40) setTimeout(attempt, 2000)
+            return
+          }
+          if (btn.disabled) btn.disabled = false
+          btn.click()
+        } catch (e) {}
+      }
+      attempt()
     },
     onStrike: function (s: number) { hwCheatStrikesRef.current = s },
   })
@@ -2616,6 +2647,10 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   const [submitting, setSubmitting] = useState(false)
   /* 2026-و20 — ممنوع تسليم الامتحان لحد ما صور ورقة الحل توصل كاملة */
   const [examPhotoBusy, setExamPhotoBusy] = useState(false)
+  /* (2026-و92) مرآة متزامنة لحالة رفع الصورة — التسليم التلقائي (انتهاء وقت/
+     حد المغادرات) بيستناها تخلص قبل ما يسلّم بدل ما يضيع صامت */
+  const examPhotoBusyRef = useRef(false)
+  useEffect(function () { examPhotoBusyRef.current = examPhotoBusy }, [examPhotoBusy])
   const [examQuestions, setExamQuestions] = useState<any[]>([])
   const [examShuffleMap, setExamShuffleMap] = useState<number[]>([])
   const [examSubmitted, setExamSubmitted] = useState(false)
@@ -2844,6 +2879,17 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
     var auto = !!(opts && opts.auto)
     var fromCheat = !!(opts && opts.cheat)
     var examIdLocal = takingExam
+    /* (2026-و92) التسليم التلقائي ممنوع يضيع صامت — درس من شكوى المستر:
+       «أول ما يخلص الأربعة بتاعته يتسلم تلقائي عشان هو ما بيتسلمش».
+       لو صورة ورقة الحل لسه بتترفع لحظة التفعيل (حد المغادرات/انتهاء الوقت)
+       بنستنى تخلص (فحص كل ثانية ونص — حتى 3 دقايق) وبعدين نسلّم فورًا */
+    if (auto) {
+      var waitedMs = 0
+      while (examPhotoBusyRef.current && waitedMs < 180000 && !examSubmitInFlightRef.current) {
+        await new Promise(function (r) { setTimeout(r, 1500) })
+        waitedMs += 1500
+      }
+    }
     if (!examIdLocal || submitting || examPhotoBusy) return
     /* guard مزامن: التسليم مبيحصلش مرتين ولا من العداد ولا من الزرار */
     if (examSubmitInFlightRef.current) return
@@ -2902,8 +2948,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         if (data.showResult === true) setExamSubmitResult(data)
         else setExamSubmitResult(null)
         if (auto) {
-          /* (25-b2) التسليم حصل تلقائيًا بسبب انتهاء الوقت */
-          toast.warning('انتهى وقت الامتحان — تم تسليم إجاباتك')
+          /* (25-b2) التسليم حصل تلقائيًا — برسالة تناسب السبب (وقت/مغادرات) */
+          if (fromCheat) toast.warning('⛔ عدّيت حد المغادرات — تم تسليم الامتحان تلقائيًا')
+          else toast.warning('انتهى وقت الامتحان — تم تسليم إجاباتك')
           setExamTimeUpAuto(true)
         } else {
           /* (2026-و15) نص المستر: تم بنجاح + انتظر النتيجة من المستر —

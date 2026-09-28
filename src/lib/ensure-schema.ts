@@ -58,6 +58,10 @@ export var SCHEMA_TABLES = [
      اللي احنا بنحطها» — الأمام سؤال والظهر إجابة (بالإنجليزي) والطالب
      بيتحدي عليها بنفس مؤقت الفلاش كاردز ولوحة الشرف */
   'CREATE TABLE IF NOT EXISTS FlashcardCard (id TEXT PRIMARY KEY, fileName TEXT DEFAULT \'\', front TEXT NOT NULL, back TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  /* (2026-و89) اشتراكات Web Push لولي الأمر — الإشعار الخارجي بقى إشعار براوزر حقيقي
+     (مش واتساب — طلب المستر) — كل صف = جهاز مشترك لرقم ولي أمر مطبّع */
+  'CREATE TABLE IF NOT EXISTS ParentPushSubscription (id TEXT PRIMARY KEY, parentId TEXT NOT NULL DEFAULT \'\', endpoint TEXT NOT NULL UNIQUE, p256dh TEXT NOT NULL DEFAULT \'\', auth TEXT NOT NULL DEFAULT \'\', userAgent TEXT NOT NULL DEFAULT \'\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+  'CREATE INDEX IF NOT EXISTS idx_pps_parent ON ParentPushSubscription(parentId)',
 ]
 
 var SCHEMA_COLUMNS = [
@@ -268,7 +272,11 @@ export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homew
  * (2) عمود Book.usage كان ناقص خالص من SCHEMA_COLUMNS. تغيير المفتاح بيضمن إن أول
  * ريكوست بعد النشر يعمل الفحص الكامل وينشئ الجدول والعمود على Turso (الدرس الموثق
  * و38/و40/و43/و45/و68/و72). */
-var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w88'
+/* (و89) مفتاح البصمة اتبدّل تامن — جدول ParentPushSubscription (اشتراكات
+ * إشعارات Web Push لولي الأمر) دخل SCHEMA_TABLES — نفس الدرس الموثق
+ * و38/و40/و43/و45/و68/و72/و80: من غير تغيير المفتاح الجدول مش هيتعمل على
+ * قواعد Turso الموجودة أول ريكوست بعد النشر. */
+var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w89'
 
 /* ============================================================
  * 2026-و23 — **إصلاح بطء المنصة** (طلب المستر: «المنصة بطيئة، تسجيل
