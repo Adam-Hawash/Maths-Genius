@@ -102,6 +102,11 @@ model Video {
   thumbnail   String   @default("")
   grade       String
   price       Float    @default(0)
+  /* (2026-و106) الدرس فيه أكتر من فيديو — نفس نمط Zicola (و104):
+     groupKey متطابق = أجزاء نفس الدرس، orderIndex = ترتيب الجزء داخل الدرس.
+     فاضي "" = فيديو مستقل عادي (السلوك القديم زي ما هو). */
+  groupKey    String   @default("")
+  orderIndex  Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
