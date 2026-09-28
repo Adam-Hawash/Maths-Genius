@@ -6,6 +6,7 @@ import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AIAssistant } from "@/components/student/AIAssistant";
 import { RecordingGuard } from "@/components/RecordingGuard";
+import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { LangBoot } from "@/lib/i18n";
 
 const geistSans = Geist({
@@ -112,6 +113,9 @@ export default async function RootLayout({
         <LangBoot />
         {/* (و47) المساعد الذكي رجع زي ما كان — المستر طلب رجوعه بنفس المميزات (شيرين بس هي اللي اتشالت) */}
         <AIAssistant />
+        {/* (2026-و107) إشعار تثبيت المنصة كتطبيق — في كل الصفحات: الرئيسية + الطالب + الأدمن —
+            أول زيارة يجيله إشعار باسم المنصة — طلب المستر الحرفي */}
+        <PwaInstallBanner appName="Maths Genius" />
         {/* حماية عامة من التسجيل/التصوير + أدوات المطوّر في كل الصفحات */}
         <RecordingGuard />
         <Toaster />
