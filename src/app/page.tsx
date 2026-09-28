@@ -8,7 +8,7 @@ import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
 import dynamic from 'next/dynamic'
 import { useEffect, useState, useRef } from 'react'
-import { GraduationCap, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
   loading: () => <div className="min-h-[70vh] bg-background" />,
@@ -95,14 +95,35 @@ export default function HomePage() {
     /* (2026-و88) لينك إشعار ولي الأمر الخارجي (واتساب/SMS) بييجي بالشكل
        /#parent-login — أول ما الصفحة تفتح بننتقل على طول لشاشة تسجيل
        دخول ولي الأمر (نفس تدفق المستر: «يدوس على الإشعار من بره → يفتحه
-       على صفحة تسجيل الدخول → يسجل دخول → يشوف الإشعار جوه المنصة») */
+       على صفحة تسجيل الدخول → يسجل دخول → يشوف الإشعار جوه المنصة»)
+       (2026-و89) لوولي الأمر لسه مسجل جوه الجلسة → ندخله بورتاله على طول */
     try {
       var h = String(window.location.hash || '').replace('#', '')
       if (h === 'parent-login') {
-        (store as any).setView && (store as any).setView('parent-login')
+        var par = (store as any).currentParent
+        ;(store as any).setView && (store as any).setView(par && par.id ? 'parent-portal' : 'parent-login')
         if (window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname)
       }
     } catch (eHash) {}
+
+    /* (2026-و89) Service Worker إشعارات ولي الأمر — تسجيل + استقبال ضغطة
+       الإشعار الخارجي (بره على شاشة الموبايل): لو المنصة مفتوحة بالفعل
+       والـ SW ركّز النافذة، بنوجّه الصفحة: مسجل دخول → بورتال الإشعارات،
+       غير كده → شاشة تسجيل دخول ولي الأمر (نفس تدفق المستر) */
+    try {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {})
+        navigator.serviceWorker.addEventListener('message', function (ev: MessageEvent) {
+          var d: any = ev && ev.data ? ev.data : null
+          if (!d || d.type !== 'parent-notification-click') return
+          try {
+            var st = (store as any)
+            if (st.currentParent && st.currentParent.id) st.setView && st.setView('parent-portal')
+            else st.setView && st.setView('parent-login')
+          } catch (eSwp) {}
+        })
+      }
+    } catch (eSw) {}
 
     var dataReady = false
     var minTimerDone = false
@@ -161,8 +182,12 @@ export default function HomePage() {
       <div className="fixed inset-0 z-[9999] bg-background flex flex-col items-center justify-center gap-6">
         <div className="relative">
           <div className="absolute -inset-6 rounded-full bg-[#C49A38]/10 blur-xl" />
-          <div className="relative w-20 h-20 rounded-2xl bg-muted border border-[#C49A38]/30 flex items-center justify-center">
-            <GraduationCap className="h-10 w-10 text-[#8B6914] dark:text-[#E5BE5A]" />
+          <div className="relative w-20 h-20 rounded-2xl bg-muted border border-[#C49A38]/30 flex items-center justify-center overflow-hidden">
+            {/* (2026-و97) صورة الفافيكون بتاعة المنصة بدل قبعة التخرج — طلب المستر
+                (2026-و97-B) الفافيكون الحقيقي = صورة المستر (زي الإنتاج بالظبط)
+                — مش لوجو Z: الفالب هنا لازم يكون نفس صورة الإنتاج */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={String(siteConfig.favicon_url || '/images/mr-wael-photo.webp')} alt="Math Genius" className="h-12 w-12 object-cover rounded-xl" />
           </div>
         </div>
         <div className="text-center space-y-3">

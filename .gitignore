@@ -10,3 +10,4 @@ dev-3300.log
 seed-test.cjs
 dev.log
 *.log
+tool-results/

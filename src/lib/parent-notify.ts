@@ -16,14 +16,20 @@
 //   (2026-و88) الجزء الخارجي — طلب المستر: «الإشعار بيظهر لولي الأمر على
 //   الموبايل بره، أول ما يضغط عليه يفتح التليفون ويدخله على صفحة تسجيل
 //   الدخول بتاعت المنصة، وهو يسجل دخوله ويشوف الإشعار جوه المنصة —
-//   يعني الاتنين»: بعد كتابة الإشعار الداخلي بنبعت نسخة واتساب/SMS على
-//   موبايل ولي الأمر فيها لينك المنصة ({link}) — القوالب تحت
-//   PARENT_WA_EXAM_TEMPLATE / PARENT_WA_HOMEWORK_TEMPLATE — نفس قناة
-//   الإرسال المفعّلة في لوحة التحكم (lib/wa-send.ts)
+//   يعني الاتنين»
+//
+//   (2026-و89) تحديث الجزء الخارجي بطلب المستر الحرفي: «الاشعار اللي هيجي
+//   لولي الأمر بره مش هيجي على الواتساب — يجي زي برومبت البراوزر، ولما
+//   يدوس عليه يخش على الاشعارات اللي جوه المنصة»:
+//     → **Web Push حقيقي** (Service Worker + VAPID): نبعت إشعار براوزر
+//       لكل جهاز اشترك لرقم ولي الأمر (ParentPushSubscription) — بيظهر
+//       على شاشة الموبايل بره المنصة، وضغطة عليه بتفتح /#parent-login
+//     → الاشتراك بيتم من بوب-أب «تفعيل الإشعارات» في بورتال ولي الأمر
+//       (PushPermissionBanner + lib/push.ts + public/sw.js)
+//     → مفيش اشتراكات = مفيش إشعار خارجي، والإشعار الداخلي شغال زي ما هو
 // ============================================================
 import { db } from '@/lib/db'
-import { normalizeWaPhone } from '@/lib/parent-message'
-import { sendViaChannel } from '@/lib/wa-send'
+import { sendParentPush } from '@/lib/push'
 
 /* ============================================================
    ✏️✏️ قوالب رسائل ولي الأمر — عدّل الكلام من هنا براحتك ✏️✏️
@@ -57,46 +63,138 @@ export const PARENT_HOMEWORK_TEMPLATE = [
 ].join('\n')
 
 /* ============================================================
-   ✏️✏️ قوالب الرسالة اللي بتوصل **بره على موبايل ولي الأمر**
-   (واتساب/SMS — و88) — عدّل الكلام من هنا براحتك
-   نفس متغيرات القوالب الداخلية + {link} = لينك المنصة اللي بيفتح
-   صفحة تسجيل دخول ولي الأمر على طول
+   ✏️✏️ قوالب الإشعار اللي بيظهر **بره على شاشة موبايل ولي الأمر**
+   (Web Push — و89) — عدّل الكلام من هنا براحتك
+   نفس متغيرات القوالب الداخلية — العنوان والنص اللي بيظهروا على
+   شاشة القفل/النوتيفيكيشن بار، وضغطة عليهم بتفتح شاشة دخول ولي الأمر
    ============================================================ */
-export const PARENT_WA_EXAM_TEMPLATE = [
-  '🔔 إشعار من منصة Maths Genius',
+export const PARENT_PUSH_EXAM_TITLE = '🔔 متابعة من منصة Math Genius'
+export const PARENT_PUSH_HOMEWORK_TITLE = '📝 متابعة من منصة Math Genius'
+export const PARENT_PUSH_EXAM_BODY = 'الطالب/ة {student} سلّم امتحان «{title}» — الدرجة: {score} من {max} ({percent}%)'
+export const PARENT_PUSH_HOMEWORK_BODY = 'الطالب/ة {student} سلّم واجب «{title}» — الدرجة: {score} من {max} ({percent}%)'
+
+/* ============================================================
+   (2026-و96) قوالب **إشعار الاستلام الفوري** — طلب المستر الحرفي:
+   «كل ما الطالب بيعمل حاجة تجيه رسالة على طول في ثانية — بكل حاجة».
+   المشكلة كانت: الإشعار كان بيستنى اكتمال تصحيح الـ AI للمقالي
+   (دقايق) فبيوصل متأخر — أو لو التصحيح اتقطع مابيوصلش خالص.
+   الحل: أول ما التسليم يوصل بنبعت إشعار استلام فوري بالاسم والنوع،
+   وبعدين إشعار الدرجة بيوصله لما التصحيح يخلص (إشعارين مختلفين
+   الـ tag — مبيستبدلوش بعض). الواجب اللي من غير مقالي درجته
+   بتعرف فورًا فبيتبعت إشعار الدرجة نفسه على طول من غير استلام.
+   ============================================================ */
+export const PARENT_SUBMIT_EXAM_TEMPLATE = [
+  '📥 تسليم جديد من منصة Maths Genius',
   'الطالب/ة: {student}',
-  'سلّم امتحان «{title}»',
-  'الدرجة: {score} من {max} — النسبة {percent}%',
+  'سلّم امتحان «{title}» للتو',
   '',
-  '👈 ادخل على اللينك ده وسجل دخول بحساب ولي الأمر عشان تشوف الإشعار والتفاصيل:',
-  '{link}',
+  'التصحيح جاري دلوقتي — إشعار الدرجة هيوصلك في رسالة تانية حال ما يخلص.',
   'Mr.Wael Khodair',
 ].join('\n')
 
-export const PARENT_WA_HOMEWORK_TEMPLATE = [
-  '📝 إشعار من منصة Maths Genius',
+export const PARENT_SUBMIT_HOMEWORK_TEMPLATE = [
+  '📥 تسليم جديد من منصة Maths Genius',
   'الطالب/ة: {student}',
-  'سلّم واجب «{title}»',
-  'الدرجة: {score} من {max} — النسبة {percent}%',
+  'سلّم واجب «{title}» للتو',
   '',
-  '👈 ادخل على اللينك ده وسجل دخول بحساب ولي الأمر عشان تشوف الإشعار والتفاصيل:',
-  '{link}',
+  'التصحيح جاري دلوقتي — إشعار الدرجة هيوصلك في رسالة تانية حال ما يخلص.',
   'Mr.Wael Khodair',
 ].join('\n')
 
-/* ملامة قالب الواتساب بالقيم الحقيقية + اللينك */
-export function buildParentWaMessage(kind: 'exam' | 'homework', studentName: string, title: string, score: number, maxScore: number, siteUrl: string): string {
+export const PARENT_PUSH_SUBMIT_EXAM_TITLE = '📥 تسليم جديد — Math Genius'
+export const PARENT_PUSH_SUBMIT_HOMEWORK_TITLE = '📥 تسليم جديد — Math Genius'
+export const PARENT_PUSH_SUBMIT_EXAM_BODY = 'الطالب/ة {student} سلّم امتحان «{title}» — التصحيح جاري وإشعار الدرجة جاي'
+export const PARENT_PUSH_SUBMIT_HOMEWORK_BODY = 'الطالب/ة {student} سلّم واجب «{title}» — التصحيح جاري وإشعار الدرجة جاي'
+
+/* ============================================================
+   (2026-و91) أيقونة الإشعار الخارجي بطلب المستر: «الاشعار يكون
+   بالصورة بتاعة المنصة — صورة الفافيكون بتاعة المستر» — بدل الجرس
+   الأصفر. بنقرا favicon_url من إعدادات المنصة (نفس الصورة اللي جنب
+   لينك الموقع) — ولو مش متاحة أو SVG (متعتمش في إشعارات النظام)
+   بنرجّع للأيقونة الافتراضية. الكاش لكل process — إعدادات المنصة
+   مابتتغيرش كتير، وأي تعديل لوجو بيتطبق بعد أول إرسال جديد.
+   ============================================================ */
+function isValidNotifIcon(p: string): boolean {
+  if (!p) return false
+  if (/\.svg(\?.*)?$/i.test(p)) return false /* الـ SVG مش بيتعرض في إشعارات الموبايل */
+  return /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(p)
+}
+
+var _pushIcon = ''
+export async function resolveParentPushIcon(): Promise<string> {
+  if (_pushIcon) return _pushIcon
+  try {
+    var rows: any = await db.$queryRawUnsafe("SELECT key, value FROM SiteConfig WHERE key IN ('favicon_url','site_logo')")
+    rows = rows || []
+    var v = ''
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i] && rows[i].key) === 'favicon_url') { v = String((rows[i] && rows[i].value) || ''); break }
+    }
+    if (!isValidNotifIcon(v)) {
+      v = ''
+      for (var j = 0; j < rows.length; j++) {
+        if (String(rows[j] && rows[j].key) === 'site_logo') { v = String((rows[j] && rows[j].value) || ''); break }
+      }
+    }
+    if (isValidNotifIcon(v)) _pushIcon = v
+  } catch (e) {}
+  if (!_pushIcon) _pushIcon = '/push-icon.png'
+  return _pushIcon
+}
+
+/* ملامة قالب الإشعار الخارجي (Push payload) بالقيم الحقيقية.
+   (و91) tag ثابت لكل نوع — بدل Date.now() — عشان الإشعارات المتتالية
+   بتستبدل بعضها في شريط الموبايل بدل ما تتكدس، وكروم مايعتبرهاش
+   إشعارات مزعجة (سبام) ومانحطهاش صامتة */
+/* (2026-و96) ملامة قالب إشعار الاستلام الفوري — tag مختلف
+   (parent-exam-sub / parent-homework-sub) عشان إشعار الاستلام
+   وإشعار الدرجة يظهرمع بعض في شريط الموبايل مبيستبدلوش بعض */
+export async function buildParentSubmitPushPayload(kind: 'exam' | 'homework', studentName: string, title: string): Promise<{ title: string; body: string; url: string; tag: string; icon: string }> {
+  var t = kind === 'exam' ? PARENT_PUSH_SUBMIT_EXAM_TITLE : PARENT_PUSH_SUBMIT_HOMEWORK_TITLE
+  var b = kind === 'exam' ? PARENT_PUSH_SUBMIT_EXAM_BODY : PARENT_PUSH_SUBMIT_HOMEWORK_BODY
+  var body = String(b)
+    .split('{student}').join(String(studentName || 'الطالب'))
+    .split('{title}').join(String(title || ''))
+  var icon = '/push-icon.png'
+  try { icon = await resolveParentPushIcon() } catch (e) {}
+  return {
+    title: String(t),
+    body: body,
+    url: '/#parent-login',
+    tag: 'parent-' + kind + '-sub',
+    icon: icon,
+  }
+}
+
+export async function buildParentPushPayload(kind: 'exam' | 'homework', studentName: string, title: string, score: number, maxScore: number): Promise<{ title: string; body: string; url: string; tag: string; icon: string }> {
   var s = Number(score) || 0
   var m = Number(maxScore) || 0
   var pct = m > 0 ? Math.round((s / m) * 100) : 0
-  var tpl = kind === 'exam' ? PARENT_WA_EXAM_TEMPLATE : PARENT_WA_HOMEWORK_TEMPLATE
-  return String(tpl)
+  var t = kind === 'exam' ? PARENT_PUSH_EXAM_TITLE : PARENT_PUSH_HOMEWORK_TITLE
+  var b = kind === 'exam' ? PARENT_PUSH_EXAM_BODY : PARENT_PUSH_HOMEWORK_BODY
+  var body = String(b)
     .split('{student}').join(String(studentName || 'الطالب'))
     .split('{title}').join(String(title || ''))
     .split('{score}').join(String(s))
     .split('{max}').join(String(m))
     .split('{percent}').join(String(pct))
-    .split('{link}').join(String(siteUrl || ''))
+  var icon = '/push-icon.png'
+  try { icon = await resolveParentPushIcon() } catch (e) {}
+  return {
+    title: String(t),
+    body: body,
+    url: '/#parent-login', /* ضغطة الإشعار بتفتح شاشة دخول ولي الأمر */
+    tag: 'parent-' + kind,
+    icon: icon,
+  }
+}
+
+/* (2026-و96) ملامة قالب رسالة الاستلام الداخلية بالقيم الحقيقية */
+export function buildParentSubmitMessage(kind: 'exam' | 'homework', studentName: string, title: string): string {
+  var tpl = kind === 'exam' ? PARENT_SUBMIT_EXAM_TEMPLATE : PARENT_SUBMIT_HOMEWORK_TEMPLATE
+  return String(tpl)
+    .split('{student}').join(String(studentName || 'الطالب'))
+    .split('{title}').join(String(title || ''))
 }
 
 /* ملامة القالب بالقيم الحقيقية */
@@ -142,6 +240,82 @@ export async function ensureParentNotificationsTable(force?: boolean): Promise<v
   }
 }
 
+/* (2026-و96) كل أرقام أولياء الأمور المربوطة بالطالب — بدون تكرار.
+   نفس منطق و37 + و79 (حساب مباشر + حسابات مدموجة) — مشترك بين
+   إشعار الدرجة وإشعار الاستلام الفوري بدل التكرار */
+async function collectParentTargets(studentId: string, parentPhone: string): Promise<string[]> {
+  var targets: string[] = []
+  var pushTarget = function (raw: any) {
+    var n = normalizeParentPhone(String(raw || ''))
+    if (n && targets.indexOf(n) === -1) targets.push(n)
+  }
+  pushTarget(parentPhone)
+  /* حسابات Parent المربوطة مباشرة (و37) */
+  try {
+    var p1: any = await db.$queryRawUnsafe('SELECT phone FROM Parent WHERE studentId = ?', String(studentId))
+    p1 = p1 || []
+    for (var i = 0; i < p1.length; i++) pushTarget(p1[i] && p1[i].phone)
+  } catch (e1) {}
+  /* حسابات Parent المدموجة عبر ParentStudent (و79 — ولي أمر بعدة أبناء) */
+  try {
+    var links: any = await db.$queryRawUnsafe('SELECT parentId FROM ParentStudent WHERE studentId = ?', String(studentId))
+    links = links || []
+    for (var j = 0; j < links.length; j++) {
+      var pid = links[j] && links[j].parentId ? String(links[j].parentId) : ''
+      if (!pid) continue
+      try {
+        var pr: any = await db.$queryRawUnsafe('SELECT phone FROM Parent WHERE id = ? LIMIT 1', pid)
+        pr = pr || []
+        if (pr.length) pushTarget(pr[0] && pr[0].phone)
+      } catch (e2) {}
+    }
+  } catch (e3) {}
+  return targets
+}
+
+/* كتابة الصفوف الداخلية + إرسال الـ Push لكل الأهداف — مشتركة.
+   الإدخال متسامح: أول فشل (جدول ناقص) نعمل CREATE TABLE ونعدّي مرة */
+async function dispatchParentNotice(targets: string[], studentName: string, message: string, payload: { title: string; body: string; url: string; tag: string; icon: string }): Promise<void> {
+  for (var k = 0; k < targets.length; k++) {
+    try {
+      await db.$executeRawUnsafe(
+        'INSERT INTO parent_notifications (parent_id, student_name, message, is_read, created_at) VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)',
+        targets[k], studentName.slice(0, 120), message
+      )
+    } catch (eIns) {
+      /* المحاولة الأولى فشلت — غالبًا الجدول ناقص (نشر جديد): نعمله ونعدّي مرة */
+      try {
+        await ensureParentNotificationsTable(true)
+        await db.$executeRawUnsafe(
+          'INSERT INTO parent_notifications (parent_id, student_name, message, is_read, created_at) VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)',
+          targets[k], studentName.slice(0, 120), message
+        )
+      } catch (eIns2) {
+        console.error('[parent-notify] insert failed (ignored):', eIns2)
+      }
+    }
+  }
+
+  /* (2026-و89) الجزء الخارجي بقى **Web Push حقيقي** بطلب المستر:
+     «مش واتساب — إشعار براوزر يظهر على شاشة الموبايل بره، وضغطة عليه
+     تفتح شاشة دخول ولي الأمر وبعد الدخول يشوف الإشعار جوه المنصة».
+     بنبعت لكل جهاز اشترك لرقم ولي الأمر (ParentPushSubscription).
+     مفيش اشتراكات = مفيش إشعار خارجي — الإشعار الداخلي شغال زي ما هو. */
+  try {
+    var pushOut = await Promise.all(targets.map(function (t: string) {
+      return sendParentPush(t, payload).catch(function () { return { sent: 0, failed: 0 } })
+    }))
+    for (var w = 0; w < pushOut.length; w++) {
+      var pr = pushOut[w] as any
+      if (pr && pr.failed > 0) {
+        console.error('[parent-notify] push failed for some devices (ignored): sent=' + pr.sent + ' failed=' + pr.failed)
+      }
+    }
+  } catch (ePush) {
+    console.error('[parent-notify] push send error (ignored):', ePush)
+  }
+}
+
 /**
  * إنشاء إشعارات ولي الأمر بعد تسليم امتحان/واجب — بيتنادى من مسارات
  * التسليم (exams/submit بعد الدرجة النهائية + homework/submit).
@@ -158,79 +332,42 @@ export async function notifyParentsOfResult(opts: { studentId: string; kind: 'ex
     if (!stu.length) return
     var studentName = String(stu[0].name || '')
 
-    /* كل أرقام أولياء الأمور المربوطة بالطالب — بدون تكرار */
-    var targets: string[] = []
-    var pushTarget = function (raw: any) {
-      var n = normalizeParentPhone(String(raw || ''))
-      if (n && targets.indexOf(n) === -1) targets.push(n)
-    }
-    pushTarget(stu[0].parentPhone)
-    /* حسابات Parent المربوطة مباشرة (و37) */
-    try {
-      var p1: any = await db.$queryRawUnsafe('SELECT phone FROM Parent WHERE studentId = ?', String(opts.studentId))
-      p1 = p1 || []
-      for (var i = 0; i < p1.length; i++) pushTarget(p1[i] && p1[i].phone)
-    } catch (e1) {}
-    /* حسابات Parent المدموجة عبر ParentStudent (و79 — ولي أمر بعدة أبناء) */
-    try {
-      var links: any = await db.$queryRawUnsafe('SELECT parentId FROM ParentStudent WHERE studentId = ?', String(opts.studentId))
-      links = links || []
-      for (var j = 0; j < links.length; j++) {
-        var pid = links[j] && links[j].parentId ? String(links[j].parentId) : ''
-        if (!pid) continue
-        try {
-          var pr: any = await db.$queryRawUnsafe('SELECT phone FROM Parent WHERE id = ? LIMIT 1', pid)
-          pr = pr || []
-          if (pr.length) pushTarget(pr[0] && pr[0].phone)
-        } catch (e2) {}
-      }
-    } catch (e3) {}
-
+    var targets = await collectParentTargets(String(opts.studentId), String(stu[0].parentPhone || ''))
     if (!targets.length) return /* مفيش رقم ولي أمر مسجل — مفيش إشعار (مش مشكلة) */
 
     var message = buildParentMessage(opts.kind, studentName, opts.title, opts.score, opts.maxScore)
-    for (var k = 0; k < targets.length; k++) {
-      try {
-        await db.$executeRawUnsafe(
-          'INSERT INTO parent_notifications (parent_id, student_name, message, is_read, created_at) VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)',
-          targets[k], studentName.slice(0, 120), message
-        )
-      } catch (eIns) {
-        /* المحاولة الأولى فشلت — غالبًا الجدول ناقص (نشر جديد): نعمله ونعدّي مرة */
-        try {
-          await ensureParentNotificationsTable(true)
-          await db.$executeRawUnsafe(
-            'INSERT INTO parent_notifications (parent_id, student_name, message, is_read, created_at) VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)',
-            targets[k], studentName.slice(0, 120), message
-          )
-        } catch (eIns2) {
-          console.error('[parent-notify] insert failed (ignored):', eIns2)
-        }
-      }
-    }
-
-    /* (2026-و88) الجزء الخارجي — رسالة واتساب/SMS على موبايل ولي الأمر
-       فيها لينك المنصة (بيفتح صفحة تسجيل دخول ولي الأمر على طول).
-       بتتبعت بنفس القناة المفعّلة في لوحة التحكم (msg_channel) — لو
-       مفيش مزود مفعّل بنسكته بهدوء والإشعار الداخلي شغال زي ما هو. */
-    var waLink = String(opts.siteUrl || '').trim()
-    if (waLink) {
-      if (waLink.indexOf('#parent-login') === -1) waLink = waLink.replace(/\/#*$/, '') + '/#parent-login'
-      var waMsg = buildParentWaMessage(opts.kind, studentName, opts.title, opts.score, opts.maxScore, waLink)
-      for (var w = 0; w < targets.length; w++) {
-        var waPhone = normalizeWaPhone(targets[w])
-        if (!waPhone) continue
-        try {
-          var out = await sendViaChannel(waPhone, waMsg)
-          if (!out.sent && out.mode !== 'manual') {
-            console.error('[parent-notify] external send failed (ignored): mode=' + out.mode + ' err=' + String(out.error || ''))
-          }
-        } catch (eWa) {
-          console.error('[parent-notify] external send error (ignored):', eWa)
-        }
-      }
-    }
+    var payload = await buildParentPushPayload(opts.kind, studentName, opts.title, opts.score, opts.maxScore)
+    await dispatchParentNotice(targets, studentName, message, payload)
   } catch (e) {
     console.error('[parent-notify] failed (ignored):', e)
+  }
+}
+
+/* ============================================================
+   (2026-و96) إشعار الاستلام الفوري — طلب المستر الحرفي:
+   «كل ما الطالب بيعمل حاجة تجيه رسالة على طول في ثانية، بكل حاجة».
+   بيتنادى من مسارات التسليم **أول ما التسليم يتحفظ** (fire-and-forget
+   جوه after() — مش بيستنى تصحيح المقالي خالص) — فولي الأمر بيشوف
+   «سلّم كذا للتو» في ثواني، وإشعار الدرجة بيوصله بعدها لما التصحيح
+   يخلص (tags مختلفة فمبيستبدلوش بعض).
+   ============================================================ */
+export async function notifyParentsOfSubmission(opts: { studentId: string; kind: 'exam' | 'homework'; title: string; siteUrl?: string }): Promise<void> {
+  try {
+    if (!opts || !opts.studentId) return
+    await ensureParentNotificationsTable()
+
+    var stu: any = await db.$queryRawUnsafe('SELECT name, parentPhone FROM Student WHERE id = ? LIMIT 1', String(opts.studentId))
+    stu = stu || []
+    if (!stu.length) return
+    var studentName = String(stu[0].name || '')
+
+    var targets = await collectParentTargets(String(opts.studentId), String(stu[0].parentPhone || ''))
+    if (!targets.length) return
+
+    var message = buildParentSubmitMessage(opts.kind, studentName, opts.title)
+    var payload = await buildParentSubmitPushPayload(opts.kind, studentName, opts.title)
+    await dispatchParentNotice(targets, studentName, message, payload)
+  } catch (e) {
+    console.error('[parent-notify] submission notify failed (ignored):', e)
   }
 }
