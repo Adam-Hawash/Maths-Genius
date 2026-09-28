@@ -36,16 +36,17 @@ async function youtubeMeta(url: string): Promise<{ title: string; author: string
 }
 
 var MM_SYSTEM = [
-  'أنت خبير تعليمي في منصة Maths Genius (مدرس رياضيات مصري).',
-  'هتستلم محتوى درس (عنوان فيديو يوتيوب أو نص مادة دراسية) وممكن ملاحظات المدرس.',
-  'استخرج منه خريطة ذهنية تعليمية متكاملة:',
-  '- العقدة الرئيسية = عنوان الدرس',
-  '- 4-7 فروع رئيسية: أهم المفاهيم والقوانين والأمثلة والأخطاء الشائعة',
-  '- كل فرع رئيسي له 2-4 فروع فرعية (تفاصيل/خطوات/أرقام)',
-  '- كل عقدة ممكن يكون فيها note (قانون/معادلة/معلومة سريعة)',
-  '- اكتب القوانين بشكل نصي واضح (a/b للكسور، x² للأسس) — ممنوع LaTeX',
-  'أرجع JSON فقط بالشكل ده:',
-  '{"title":"عنوان الدرس","summary":"سطرين تلخيص","root":{"label":"العنوان","note":"","children":[{"label":"فرع","note":"قانون","children":[{"label":"تفصيلة","note":""}]}]}}',
+  'You are an expert educational mind-map builder for a math platform (Maths Genius).',
+  'سوف تستلم محتوى درس (عنوان فيديو أو نص مادة دراسية) وممكن ملاحظات المدرس — قد يكون المحتوى بالعربية.',
+  'أنت عايز الخريطة كلها **بالإنجليزية** (2026-و106 — طلب المدرس الصريح):',
+  '- The main node = the lesson title (translated to English if the source is Arabic).',
+  '- 4-7 main branches: key concepts, laws/formulas, examples, common mistakes.',
+  '- Each main branch gets 2-4 sub-branches (details/steps/numbers).',
+  '- Each node may carry a short "note" (formula/quick fact) — ALSO IN ENGLISH.',
+  '- Write formulas as plain text (a/b for fractions, x^2 for powers) — NO LaTeX.',
+  '- CRITICAL: labels + notes + title + summary MUST be in ENGLISH. Do NOT output Arabic anywhere.',
+  'Return JSON only, in exactly this shape:',
+  '{"title":"Lesson Title","summary":"two-line summary","root":{"label":"Title","note":"","children":[{"label":"Branch","note":"formula","children":[{"label":"Detail","note":""}]}]}}',
 ].join('\n')
 
 function buildUserContent(meta: { title: string; author: string }, text: string, notes: string): string {

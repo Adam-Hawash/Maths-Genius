@@ -22,6 +22,17 @@ export var metadata: Metadata = {
   title: "Math Genius - Mr.Wael Khodair",
   description:
     "منصة Math Genius - مستر وائل خضير. تبسيط الرياضيات، واجبات أسبوعية، امتحانات منتظمة، ومتابعة مستمرة للتقدم.",
+  /* (2026-و106) PWA — المنصة تتنصّب كتطبيق من كروم على الموبايل */
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Maths Genius",
+  },
+  icons: {
+    icon: "/logo.svg",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default async function RootLayout({
@@ -78,6 +89,11 @@ export default async function RootLayout({
         {/* Favicon — user's custom image, NO Z logo */}
         <link rel="icon" href={faviconUrl} />
 
+        {/* (2026-و106) PWA — manifest + ثيم الموبايل + أيقونة الشاشة الرئيسية */}
+        <meta name="theme-color" content="#2D2D2D" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
         {/* Inject config server-side for instant client access */}
         <script
           dangerouslySetInnerHTML={{
@@ -101,6 +117,13 @@ export default async function RootLayout({
         <Toaster />
         {/* Toaster بتاع sonner — كل رسائل التنبيه في المنصة بتستخدمه (toast من sonner) */}
         <SonnerToaster position="top-center" richColors closeButton expand={false} />
+        {/* (2026-و106) تسجيل Service Worker الخاص بالتثبيت كتطبيق (PWA) */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}}catch(e){}",
+          }}
+        />
       </body>
     </html>
   );
