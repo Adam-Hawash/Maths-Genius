@@ -166,6 +166,8 @@ export function Navbar() {
             </a>
             {/* (و43) مواعيد السنتر اتشالت من النافبار الديسك توب بطلب المستر —
                بتفضل في قايمة الموبايل وصفحة /schedule شغالة زي ما هي */}
+            {/* (2026-و110) زرار «التطبيق» في الرئيسية — ظاهر دايمًا في الديسكتوب لكل الحالات */}
+            <InstallPwaButton variant="outline" size="sm" className="min-h-[44px] rounded-xl" />
             {currentStudent ? (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">
