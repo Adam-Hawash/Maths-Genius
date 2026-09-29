@@ -20,6 +20,7 @@ import type { Video as VideoType, Homework, Exam, Announcement, Discussion, Exam
 import { MathKeyboard } from '@/components/student/MathKeyboard'
 import { SecurePlayerModal } from '@/components/student/SecurePlayerModal'
 import { StudentComplaints } from '@/components/student/StudentComplaints'
+import { InstallPwaButton } from '@/components/InstallPwaButton'
 import { BooksTab } from '@/components/student/BooksTab'
 /* (2026-و66) نظام منع الغش والتشتت الذكي — مراقبة مغادرة الامتحان */
 import { useAntiCheat, AntiCheatModal, AntiCheatBadge } from '@/components/student/useAntiCheat'
@@ -372,6 +373,7 @@ function StudentPortalInner() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <InstallPwaButton variant="outline" size="sm" className="gap-1.5 h-11 sm:h-8 shrink-0" />
                   <Button variant="outline" size="sm" onClick={() => setShowGuide(true)} className="gap-1.5 h-11 sm:h-8">
                     <HelpCircle className="h-4 w-4" />
                     <span className="hidden sm:inline">{T('دليل التعامل', 'Guide')}</span>
