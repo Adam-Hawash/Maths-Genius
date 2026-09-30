@@ -561,7 +561,7 @@ export function PlayerSettingsPanel() {
           <div className="flex gap-2 flex-wrap">
             <Button className="gap-1.5" onClick={saveChannel} disabled={savingCh}><Save className="h-4 w-4" />{savingCh ? 'بيحفظ…' : 'حفظ إعدادات الإرسال'}</Button>
             <Button variant="outline" className="gap-1.5" onClick={testSend} disabled={testing}><Send className="h-4 w-4" />{testing ? 'بيبعت…' : 'تجربة إرسال'}</Button>
-            <span className="text-xs text-muted-foreground self-center">التجربة بتتبعت على موبايل الأدمن (11111111111)</span>
+            <span className="text-xs text-muted-foreground self-center">التجربة بتتبعت على موبايل الأدمن (موبايل الأدمن المسجل)</span>
           </div>
           <p className="text-xs text-muted-foreground">المفاتيح السرية بتتخزن في السيرفر بس وبتتقنّع في الشاشة — مش بتترجع كاملة لأي متصفح.</p>
         </CardContent>
