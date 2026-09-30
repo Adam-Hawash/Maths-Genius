@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AIAssistant } from "@/components/student/AIAssistant";
 import { RecordingGuard } from "@/components/RecordingGuard";
 import { FloatingInstallButton } from "@/components/InstallPwaButton";
+import { DeviceMessages } from "@/components/DeviceMessages";
 import { LangBoot } from "@/lib/i18n";
 
 const geistSans = Geist({
@@ -31,7 +32,9 @@ export var metadata: Metadata = {
     title: "Maths Genius",
   },
   icons: {
-    icon: "/logo.svg",
+    /* (2026-و112) مفيش لوجو Z — أيقونة المنصة الرسمية (صورة المستر باسم Math Genius) —
+       دي اللي بتظهر في نافذة حفظ كلمات السر في كروم (طلب المستر) */
+    icon: "/pwa-icon-192.png",
     apple: "/apple-touch-icon.png",
   },
 };
@@ -58,8 +61,14 @@ export default async function RootLayout({
     /* DB not available yet — client will fetch via /api/config */
   }
 
-  // Favicon: نفس صورة الإنتاج (صورة المستر) — الفالب الزتون مش لوجو Z
-  var faviconUrl = initialConfig.favicon_url || "/images/mr-wael-photo.webp";
+  // Favicon: أيقونة المنصة الرسمية (صورة المستر باسم Math Genius) —
+  /* (2026-و112) أي favicon_url قديمة فيها لوجو Z = الأيقونة الرسمية
+     (نفس ترميم Zicola و73) — عشان نافذة كلمات السر في كروم تعرض
+     أيقونة كل منصة بتاعتها مش لوجو Z المشترك (طلب المستر) */
+  var faviconUrl = initialConfig.favicon_url || "/pwa-icon-192.png";
+  if (typeof faviconUrl !== "string" || faviconUrl === "" || faviconUrl.indexOf("logo.svg") !== -1) {
+    faviconUrl = "/pwa-icon-192.png";
+  }
 
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
@@ -125,6 +134,9 @@ export default async function RootLayout({
         {/* (2026-و109) طلب المستر: الزرار الثابت — زر عايم مثبت على الشاشة في كل الصفحات
             (الرئيسية + الطالب + الأدمن) بيختفي بس بعد التثبيت الفعلي */}
         <FloatingInstallButton />
+        {/* (2026-و111) رسايل حل الشكاوى للجهاز — أول ما الطالب يفتح المنصة
+            من الجهاز اللي بعت منه الشكوى تظهرله رسالة الأدمن بالحل */}
+        <DeviceMessages />
         {/* حماية عامة من التسجيل/التصوير + أدوات المطوّر في كل الصفحات */}
         <RecordingGuard />
         <Toaster />
