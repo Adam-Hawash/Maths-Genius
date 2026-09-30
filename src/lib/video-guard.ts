@@ -179,14 +179,25 @@ export async function computePlayback(videoId: string, studentId: string | null 
 }
 
 // ============================================================
-// التسلسل في المشاهدة (طلب المستر): لو فيه أكتر من فيديو على المنصة،
-// الفيديو اللي بعده ميقعش يتفتح غير لما الفيديو اللي قبله يتشاف كامل
-// — نسبة المشاهدة توصل 100% (أو 99% هامش أمان للتفاوت في مدة اليوتيوب).
-// الترتيب: من الأقدم للأحدث (ترتيب نزول الدروس نفسه).
+// التسلسل في المشاهدة (طلب المستر): الفيديو ميفتحش غير لما اللي قبله
+// يتشاف كامل — بس بقواعد تحمي الطلبة من الأقفال الكاذبة لما المستر
+// ينزل فيديو جديد في نص القايمة أو يعيد الترتيب:
+//   1) الترتيب هنا = نفس ترتيب العرض عند الطالب بالظبط: الترتيب اليدوي
+//      للمستر (sortIndex) أولًا، وبعدين ترتيب الأجزاء جوه الدرس
+//      (orderIndex)، وبعدين الأقدم — مفيش اختلاف ترتيب مع البوابة.
+//   2) اللي الطالب شافه أو بدأه قبل كده عمره ما يتقفل تاني — حتى لو
+//      نزل فيديو جديد قبله في الترتيب (ده اللي كان بيحصل قبل كده
+//      وفيديوهات متشافة بتتقفل لوحدها).
+//   3) الفيديو الجديد بيتفتح لوحده للطالب اللي كان خلص كل اللي قبله —
+//      «شاف كل الفيديوهات فاضل ده بس» ⇒ كله يتفتح.
+//   4) رسالة القفل بتقول باسم أول فيديو لازم يتشاف — وده فيديو مفتوح
+//      مضمون (أول واحد مخلصش في السلسلة) — مفيش قفل دائري أبدًا.
+// نسبة «خلص»: 97%+ بتتحسب 100% (نفس تسنية /api/video-progress اللي
+// البوابة بتعرضها للطالب) — عشان السيرفر والبوابة يحكموا نفس الحكم.
 // الفيديوهات اللي مينفعش نتتبع نسبتها (لينك خارجي بس) بتتخطى عشان
 // التسلسل ميقلعش على فيديو مش قابل للقياس.
 // ============================================================
-export const SEQ_UNLOCK_RATIO = 0.99
+export const SEQ_UNLOCK_RATIO = 0.97
 
 export async function checkSequentialUnlock(
   videoId: string,
@@ -197,10 +208,11 @@ export async function checkSequentialUnlock(
   try {
     const video = await db.video.findUnique({ where: { id: videoId } })
     if (!video) return { ok: true }
+    // ترتيب العرض نفسه اللي الطالب شايفه في بوابته (زي orderedVideos في الكلاينت)
     const gradeVideos = await db.video.findMany({
       where: { grade: video.grade },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, url: true, filePath: true, fileType: true },
+      orderBy: [{ sortIndex: 'asc' }, { orderIndex: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, title: true, url: true, filePath: true, fileType: true },
     })
     /* (2026-و67) فيديوهات المجموعات: الفيديو الموجّه لمجموعات والطالب مش منهم
        (أو لسه موعده مجاه) **مش ظاهر عنده أصلاً** في قايمته — فممنوع يكون شرط
@@ -236,30 +248,63 @@ export async function checkSequentialUnlock(
       }
       return false // مجموعته مش مستهدفة في الفيديو ده
     }
+    /* الجدولة القديمة (VideoSchedule): فيديو متخفي صراحةً من الطالب ده
+       (hiddenStudentIds) مش ظاهر عنده في قايمته — فممنوع يكون حلقة في السلسلة */
+    var hiddenBySchedule: Record<string, boolean> = {}
+    try {
+      var vsRows: any[] = await db.$queryRawUnsafe('SELECT videoId, hiddenStudentIds FROM VideoSchedule')
+      for (var vi = 0; vi < (vsRows || []).length; vi++) {
+        var vRow = vsRows[vi]
+        var hiddenIds: string[] = []
+        try { hiddenIds = JSON.parse(String(vRow.hiddenStudentIds || '[]')) } catch (e) {}
+        if (hiddenIds.indexOf(String(studentId)) !== -1) hiddenBySchedule[String(vRow.videoId || '')] = true
+      }
+    } catch (e) { /* جدول ناقص — من غير جدولة قديمة */ }
+    var visibleToStudent = function (vid: string): boolean {
+      if (hiddenBySchedule[vid]) return false
+      return groupVisible(vid)
+    }
+    // كل نسب مشاهدة الطالب في طلبة واحدة (بدل استعلام لكل فيديو)
+    var ratioOf: Record<string, number> = {}
+    try {
+      var progRows = await db.videoProgress.findMany({
+        where: { studentId: String(studentId) },
+        select: { videoId: true, watchedSeconds: true, totalSeconds: true },
+      })
+      for (var pIdx = 0; pIdx < progRows.length; pIdx++) {
+        var pRow = progRows[pIdx]
+        ratioOf[pRow.videoId] = pRow.totalSeconds > 0 ? pRow.watchedSeconds / pRow.totalSeconds : 0
+      }
+    } catch (e) { /* جدول ناحص — مفيش نسب مسجلة، السلسلة هتطلب المشاهدة عادي */ }
     const idx = gradeVideos.findIndex((v) => v.id === videoId)
     // أول فيديو في الترتيب دايمًا مفتوح
     if (idx <= 0) return { ok: true }
-    // ندوّر على أقرب فيديو قبله قابل لتتبع النسبة (يوتيوب أو ملف مرفوع)
-    for (let i = idx - 1; i >= 0; i--) {
+    /* القاعدة الأهم: اللي الطالب شافه أو بدأه قبل كده عمره ما يتقفل تاني.
+       بدأ مشاهدة الفيديو ده (أي نسبة > 0) ⇒ يكمّل عادي حتى لو المستر نزل
+       فيديو جديد قبله في الترتيب — دي الحماية من «فيديوهات متشافة اتقفلت». */
+    if ((ratioOf[videoId] || 0) > 0) return { ok: true }
+    // ندوّر على **أول** فيديو قبله لسه مخلصش (ده «الحاجز» — ومفتوح مضمون
+    // لأن كل اللي قبله في الترتيب مخلص، فمفيش قفل دائري ولا رسالة كاذبة)
+    var blockerTitle = ''
+    for (let i = 0; i < idx; i++) {
       const v = gradeVideos[i]
-      if (!groupVisible(v.id)) continue // (2026-و67) مش ظاهر للطالب أصلاً — نتخطاه
+      if (!visibleToStudent(v.id)) continue // مش ظاهر للطالب أصلاً — نتخطاه
       const isYT = Boolean(getYouTubeId(v.url || ''))
       const isFile = Boolean(v.filePath || v.fileType)
       if (!isYT && !isFile) continue // لينك خارجي — مش قابل للتتبع، نتخطاه
-      const prog = await db.videoProgress.findUnique({
-        where: { studentId_videoId: { studentId, videoId: v.id } },
-      }).catch(() => null)
-      const ratio = prog && prog.totalSeconds > 0 ? prog.watchedSeconds / prog.totalSeconds : 0
-      if (ratio < SEQ_UNLOCK_RATIO) {
-        return {
-          ok: false,
-          code: 423,
-          reason: 'الفيديو ده هيتفتح أول ما تشوف الفيديو اللي قبله كامل (100%) — كمّل مشاهدة الفيديو اللي قبله الأول',
-        }
+      if ((ratioOf[v.id] || 0) < SEQ_UNLOCK_RATIO) {
+        blockerTitle = v.title || ''
+        break
       }
-      break // أقرب فيديو قبله قابل للتتبع خلص → الفيديو ده مفتوح
     }
-    return { ok: true }
+    // كله اللي قبله مخلص → الفيديو ده مفتوح (ومنهم فيديو جديد نزل في نص القايمة:
+    // الطالب اللي كان خلص كل اللي قبله بيشوفه فورًا من غير ما يعيد أي حاجة)
+    if (!blockerTitle) return { ok: true }
+    return {
+      ok: false,
+      code: 423,
+      reason: 'الفيديو ده هيتفتح أول ما تشوف فيديو «' + blockerTitle + '» كامل (100%) — الفيديو ده مفتوح عندك دلوقتي، كمّله الأول',
+    }
   } catch (e) {
     // أي خطأ داخلي → ممنوع نمنع طالب بريء من المشاهدة بسبب عطل تقني
     return { ok: true }
