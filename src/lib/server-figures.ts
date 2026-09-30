@@ -115,7 +115,8 @@ function refineByContent(canvas: any, sx: number, sy: number, sw: number, sh: nu
       for (var x = 0; x < sw; x += step) {
         var i = base + x * 4
         var lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
-        if (lum < 236) { rowHas[y] = 1; colHas[x] = 1 }
+        /* (2026-و109) 236 بتقص خطوط الرصاصي الفاتح — 244 بتغطي كل درجات الرسمة */
+        if (lum < 244) { rowHas[y] = 1; colHas[x] = 1 }
       }
     }
     var top = -1, bottom = -1, left = -1, right = -1
@@ -295,7 +296,9 @@ async function cropOne(
     var { createCanvas } = await import('@napi-rs/canvas')
     /* (و52) padding حوالين bbox — رسمة السؤال هامش أكبر، رسومات الاختيارات
        أقل (العناوين جنب بعض عشان ماحضنش رسمة الاختيار اللي جنبه) */
-    var padFrac = tgt.kind === 'q' ? 0.025 : 0.012
+    /* (2026-و109) 5% بدل 2.5% — لو bbox الـ AI أصغر من الرسمة الحقيقية،
+       الجزء الزيادة يلاقيه التنقيط بدل ما يتقص */
+    var padFrac = tgt.kind === 'q' ? 0.05 : 0.02
     var pW = pageCanvas.width, pH = pageCanvas.height
     var sx = Math.max(0, Math.floor((bbox.x - padFrac) * pW))
     var sy = Math.max(0, Math.floor((bbox.y - padFrac) * pH))

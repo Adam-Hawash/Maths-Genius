@@ -4,7 +4,11 @@ const nextConfig: NextConfig = {
   typescript: { ignoreBuildErrors: true },
   reactStrictMode: false,
   poweredByHeader: false,
-  allowedDevOrigins: ['localhost', '127.0.0.1'],
+  /* (2026-و109) الإصلاح الحقيقي لخطأ «Unexpected token <» في محرر قص الرسمات:
+     البريفيو بيفتح من دومين space-z.ai — Next.js كان بيمنع تحميل الـ JS chunks
+     من الدومين ده → الصفحة بتفضل بنسخة قديمة/ناقصة وأي عملية حفظ بتقرا HTML
+     بدل JSON. اسمحنا بكل نطاقات البريفيو هنا. */
+  allowedDevOrigins: ['localhost', '127.0.0.1', '**.space-z.ai', '*.space-z.ai', 'space-z.ai'],
   serverExternalPackages: [
     '@libsql/client',
     '@prisma/adapter-libsql',

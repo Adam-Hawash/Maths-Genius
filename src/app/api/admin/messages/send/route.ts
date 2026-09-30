@@ -5,7 +5,7 @@
 // بتترجع للعميل. الطلب:
 //   POST { phone, message, kind?: 'test' }
 // سلوك:
-//   1) kind='test' → الرقم بيتجبر على موبايل الأدمن (موبايل الأدمن المسجل)
+//   1) kind='test' → الرقم بيتجبر على موبايل الأدمن (11111111111 → 201111111111)
 //   2) القناة manual أو مفيش إعدادات → { mode:'manual', waLink, message }
 //      والواجهة بتفتح لينك wa.me زي الإرسال اليدوي بالظبط.
 //   3) القناة sms:
@@ -29,7 +29,7 @@ import { normalizeWaPhone } from '@/lib/parent-message'
 export const dynamic = 'force-dynamic'
 
 var KEY = 'msg_channel'
-var ADMIN_PHONE_EGYPT = '' /* موبايل الأدمن بعد التطبيع */
+var ADMIN_PHONE_EGYPT = '201111111111' /* 11111111111 بعد التطبيع */
 
 async function readChannel() {
   try {
