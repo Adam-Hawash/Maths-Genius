@@ -571,3 +571,23 @@ model ParentPushSubscription {
 
   @@index([parentId])
 }
+
+// ============================================================
+// (2026-و108) أجزاء الرفع المجزأ — /api/upload/chunk
+//   كل جزء يتخزن هنا لحد ما كل الأجزاء توصل، ساعتها بتتجمّع في صف
+//   Media واحد وبتتمسح من هنا. التخزين في قاعدة البيانات (مش الذاكرة)
+//   عشان التجميع يشتغل صح حتى لو الأجزاء وصلت لسيرفرات مختلفة.
+// ============================================================
+model UploadChunk {
+  id          String   @id @default(cuid())
+  uploadId    String
+  chunkIndex  Int
+  totalChunks Int      @default(0)
+  data        String   @default("")
+  fileName    String   @default("")
+  category    String   @default("general")
+  createdAt   DateTime @default(now())
+
+  @@unique([uploadId, chunkIndex])
+  @@index([uploadId])
+}

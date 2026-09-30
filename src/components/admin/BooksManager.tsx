@@ -7,8 +7,10 @@
 // وبعدها يتسجل صف Book عبر /api/admin/books — والطالب يشوفه في تاب
 // «الكتب والملازم» في البورتال (BooksTab).
 // الرفع بنفس نظام chunkedUpload بتاع المنصة (أجزاء 2MB + تحقق بايت-ببايت).
-// (و43) وضعين: 📁 رفع ملف (≤60MB — بيتخزن في Media) أو 🔗 لينك خارجي
-// (الكتب الكبيرة 200MB+ مش بتتخزن في قاعدة البيانات خالص — sourceUrl بس).
+// (و43) وضعين: 📁 رفع ملف (≤100MB — بيتخزن في Media) أو 🔗 لينك خارجي
+// (الكتب الأكبر 200MB+ مش بتتخزن في قاعدة البيانات خالص — sourceUrl بس).
+// (2026-و108) الراوت /api/upload/chunk اتعمل (كان ناقص خالص وكل الرفع
+// كان بيفشل بـ «Unexpected token <») + الرفع بقى متوازي ×3 بأجزاء 3MB.
 // ============================================================
 
 import { useAppStore, GRADES } from '@/stores/app-store'
@@ -24,8 +26,8 @@ import {
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 
-var MAX_BOOK_MB = 60
-var CONFIRM_BOOK_MB = 40
+var MAX_BOOK_MB = 100
+var CONFIRM_BOOK_MB = 50
 
 function formatBookSize(bytes: number): string {
   var mb = (bytes || 0) / 1024 / 1024
@@ -187,7 +189,7 @@ export function BooksManager() {
             onClick={function () { setAddMode('file') }}
             className={"flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-all " + (addMode === 'file' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
           >
-            📁 رفع ملف (للملفات الصغيرة ≤ 60MB)
+            📁 رفع ملف (للملفات حتى 100MB)
           </button>
           <button
             type="button"
@@ -232,7 +234,7 @@ export function BooksManager() {
           <div className="flex items-center gap-2">
             <input ref={fileRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={function (e) { setFile(e.target.files?.[0] || null) }} />
             <Button type="button" variant="outline" onClick={function () { fileRef.current?.click() }} className="flex-1 border-sky-400/40 text-sky-700 dark:text-sky-400">
-              <Upload className="h-4 w-4 ml-2" />{file ? file.name : 'اختر ملف الكتاب (PDF) — أقصى حجم 60 ميجا'}
+              <Upload className="h-4 w-4 ml-2" />{file ? file.name : 'اختر ملف الكتاب (PDF) — أقصى حجم 100 ميجا'}
             </Button>
           </div>
           {file && <p className="text-xs text-muted-foreground text-center">{(file.size / 1024 / 1024).toFixed(1)} MB</p>}
