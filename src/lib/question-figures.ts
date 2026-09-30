@@ -123,7 +123,9 @@ function refineByContentDom(canvas: HTMLCanvasElement, sx: number, sy: number, s
       for (var x = 0; x < sw; x += step) {
         var i = base + x * 4
         var lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
-        if (lum < 236) { rowHas[y] = 1; colHas[x] = 1 }
+        /* (2026-و109) 236 كانت بتتعامل مع خطوط الرصاصي الفاتح كأنها أبيض
+           → أجزاء من الرسمة بتتقص. رفعناها لـ 244 عشان كل درجات الرسمة تتعد */
+        if (lum < 244) { rowHas[y] = 1; colHas[x] = 1 }
       }
     }
     var top = -1, bottom = -1, left = -1, right = -1
@@ -250,9 +252,10 @@ export async function ensureFigureUrls(
       var pageCanvas = await getPageCanvas(page)
       if (!pageCanvas) { done++; if (onProgress) onProgress(done, total); continue }
 
-      /* (و52) padding حوالين bbox — رسمة السؤال هامش أكبر، رسومات الاختيارات أقل
-         (عشان ماحضنش رسمة الاختيار اللي جنبه في الشبكة) */
-      var padFrac = tgt.kind === 'q' ? 0.025 : 0.012
+      /* (و52) padding حوالين bbox — (2026-و109) كبرناه: 2.5% كان صغير — لو الـ AI
+         حدد الرسمة أصغر من حقيقتها، الجزء الزيادة ماكانش بيرجع خالص (الرسمة بتتقص).
+         5% بيدّي مساحة للتنقيط يلاقي الأطراف الناقصة ويرصّ عليها */
+      var padFrac = tgt.kind === 'q' ? 0.05 : 0.02
       var sx0 = Math.max(0, Math.floor((bbox.x - padFrac) * pageCanvas.width))
       var sy0 = Math.max(0, Math.floor((bbox.y - padFrac) * pageCanvas.height))
       var ex0 = Math.min(pageCanvas.width, Math.ceil((bbox.x + bbox.w + padFrac) * pageCanvas.width))

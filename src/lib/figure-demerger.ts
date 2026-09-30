@@ -45,14 +45,17 @@ export function splitMergedRegion(grab: DemergeGrab, reg: DemergeReg, orig: Deme
         for (var b = 0; b < crossLen; b++) {
           var i = (axis === 'x' ? (b * w + a) : (a * w + b)) * 4
           var lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
-          if (lum < 236) c++
+          /* (2026-و109) 244 — نفس تعديل التنقيط: الخطوط الفاتحة محتوى مش خلفية */
+          if (lum < 244) c++
         }
         cnt[a] = c
       }
 
-      /* كتل المحتوى المتفصلة بفواصل نضيفة */
-      var gapMin = Math.max(4, Math.round(mainLen * 0.008))
-      var segMin = Math.max(12, Math.round(mainLen * 0.18))
+      /* كتل المحتوى المتفصلة بفواصل نضيفة — (2026-و109) الفاصل كان 0.8% بس
+         → فراغ أبيض جوا الرسمة الواحدة كان بيتفتكر فاصل بين رسمتين
+         → الرسمة بتتقص نص! 2% بيضمن إن الفاصل حقيقي (ج gutter بين رسمتين) */
+      var gapMin = Math.max(8, Math.round(mainLen * 0.02))
+      var segMin = Math.max(16, Math.round(mainLen * 0.25))
       var segs: { a: number; b: number }[] = []
       var s = -1, gapRun = 0
       for (var a2 = 0; a2 < mainLen; a2++) {
@@ -115,7 +118,7 @@ export function splitMergedRegion(grab: DemergeGrab, reg: DemergeReg, orig: Deme
         for (var a3 = kA; a3 < kB; a3++) {
           var i2 = (axis === 'x' ? (c2 * w + a3) : (a3 * w + c2)) * 4
           var lum2 = 0.299 * d[i2] + 0.587 * d[i2 + 1] + 0.114 * d[i2 + 2]
-          if (lum2 < 236) cc++
+          if (lum2 < 244) cc++
         }
         if (cc > noiseCross) { if (c0 < 0) c0 = c2; c1 = c2 }
       }
@@ -133,9 +136,13 @@ export function splitMergedRegion(grab: DemergeGrab, reg: DemergeReg, orig: Deme
       return { x: r.x + cA, y: r.y + kA, w: nw2, h: nh2 }
     }
 
-    /* أفقي الأول (رسمتين جنب بعض — الشكوى الأساسية) ثم رأسي (فوق بعض) */
+    /* (2026-و109) إصلاح «الرسمة بتتقص أجزاء»:
+       1) لغينا القص الرأسي ('y') خالص — الرسمة المركّبة (رسمة + عنوان/ليبل
+          تحتها) فيها فراغ أبيض طبيعي — كان بيتفتكرها رسمتين ويقص الجزء التاني.
+          الفصل الأفقي (رسمتين جنب بعض — شكوى و53) فضل شغال زي ما هو.
+       2) الفصل الأفقي بقى أصرم: فاصل 2% وكتل ≥ 25% — عشان مايقصّعش رسمة سليمة.
+       أي حالة ناقصة بتتظبط من «✂️ عدّل القص» اللي بقي شغال بعد إصلاح allowedDevOrigins. */
     var out = onePass(reg, 'x')
-    out = onePass(out, 'y')
     return out
   } catch (eS) {
     return reg
