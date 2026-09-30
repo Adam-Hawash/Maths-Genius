@@ -752,52 +752,59 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
     return items
   }, [orderedVideos, hiddenVideoIds])
 
-  // قفل التسلسل (طلب المستر): الفيديو ميفتحش غير لما اللي قبله يتشاف كامل 100%
-  // (2026-و106) واعي بالدروس المتعددة: أجزاء الدرس بتكمل السلسلة فيما بينها
-  const lockedMap = useMemo(function () {
-    var map: Record<string, boolean> = {}
-    var prevTrackable: string | null = null
+  /* القفل التسلسلي — قواعد المستر المحدّثة (مع الترتيب اليدوي ▲▼):
+     1) الفيديو بيتقفل بس لو فيه فيديو **قبله في الترتيب** لسه مخلصش
+        (أول واحد مخلصش في السلسلة = «الحاجز»)
+     2) اللي الطالب شافه أو بدأه قبل كده (أي نسبة > 0) عمره ما يتقفل تاني —
+        حتى لو المستر نزل فيديو جديد في نص القايمة
+     3) الفيديو الجديد بيتفتح لوحده للطالب اللي كان خلص كل اللي قبله
+        — «شاف كل الفيديوهات فاضل ده بس» ⇒ كله يتفتح
+     4) نفس القواعد بالظبط مطبقة على السيرفر (video-guard) بنفس الترتيب —
+        فمفيش قفل دائري ولا رسالة عن فيديو نفسه مقفول
+     الرسالة بتقول باسم الحاجز نفسه — وده فيديو مفتوح مضمون */
+  const seqInfoMap = useMemo(function () {
+    var chain: { id: string; title: string }[] = []
     lessons.forEach(function (item) {
       var arr: VideoType[] = item.type === 'group' ? item.parts : [item.video]
       arr.forEach(function (v) {
         var k = videoKindOf(v)
-        var trackable = k === 'youtube' || k === 'file'
-        if (trackable && prevTrackable) {
-          var pct = mergedProgress[prevTrackable] || 0
-          map[v.id] = pct < 99
-        } else {
-          map[v.id] = false
-        }
-        if (trackable) prevTrackable = v.id
+        if (k === 'youtube' || k === 'file') chain.push({ id: v.id, title: v.title })
       })
     })
+    var completedOf = function (id: string) { return (mergedProgress[id] || 0) >= 99 }
+    var touchedOf = function (id: string) { return (mergedProgress[id] || 0) > 0 }
+    var map: Record<string, { blockerTitle: string; blockerPct: number }> = {}
+    for (var i = 0; i < chain.length; i++) {
+      var node = chain[i]
+      if (touchedOf(node.id)) continue // شافه أو بدأه قبل كده → عمره ما يتقفل
+      var blockerIdx = -1
+      for (var j = 0; j < i; j++) {
+        if (!completedOf(chain[j].id)) { blockerIdx = j; break }
+      }
+      if (blockerIdx >= 0) {
+        map[node.id] = {
+          blockerTitle: chain[blockerIdx].title,
+          blockerPct: Math.min(100, Math.round(mergedProgress[chain[blockerIdx].id] || 0)),
+        }
+      }
+    }
     return map
   }, [lessons, mergedProgress])
 
-  // الفيديو اللي قبل كل فيديو (عشان نعرض نسبته على كارت المقفول)
-  // (2026-و106) واعي بالدروس المتعددة — داخل الدرس: الجزء اللي قبله
-  const prevVideoMap = useMemo(function () {
-    var map: Record<string, string> = {}
-    var prevTrackable: string | null = null
-    lessons.forEach(function (item) {
-      var arr: VideoType[] = item.type === 'group' ? item.parts : [item.video]
-      arr.forEach(function (v) {
-        var k = videoKindOf(v)
-        var trackable = k === 'youtube' || k === 'file'
-        if (trackable && prevTrackable) map[v.id] = prevTrackable
-        if (trackable) prevTrackable = v.id
-      })
-    })
+  const lockedMap = useMemo(function () {
+    var map: Record<string, boolean> = {}
+    Object.keys(seqInfoMap).forEach(function (k) { map[k] = true })
     return map
-  }, [lessons])
+  }, [seqInfoMap])
 
   // فتح أي درس (يوتيوب أو ملف مرفوع): بنطلب تذكرة تشغيل واحدة الاستخدام
   // من /api/video-ticket — مفيش أي YouTube ID أو رابط ملف بيرجع للصفحة.
   // المشغل نفسه بيتفتح من /api/player/[ticket] على السيرفر.
   const openPlayModal = (video: VideoType) => {
-    // قفل التسلسل: اللي قبله لسه متشافش كامل → منع + رسالة (طلب المستر)
-    if (lockedMap[video.id]) {
-      toast.error('الفيديو ده هيتفتح أول ما تشوف الفيديو اللي قبله كامل (100%) — كمّل مشاهدة الفيديو اللي قبله الأول', { duration: 6000 })
+    // قفل التسلسل: فيه فيديو قبله في الترتيب لسه مخلصش → منع + رسالة باسم الفيديو المطلوب
+    var seqInfo = seqInfoMap[video.id]
+    if (seqInfo) {
+      toast.error('الفيديو ده هيتفتح أول ما تشوف فيديو «' + seqInfo.blockerTitle + '» كامل (100%) — الفيديو ده مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 })
       return
     }
     fetch('/api/video-ticket?videoId=' + video.id + '&studentId=' + encodeURIComponent(studentId || ''))
@@ -829,10 +836,9 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         // until this specific video has an approved payment/access record.
         const needsPay = hasPrice && !hasApprovedPayment
         const progress = mergedProgress[video.id] || 0
-        // مقفول بالتسلسل؟ الفيديو اللي قبله لسه نسبته أقل من 99%
+        // مقفول بالتسلسل؟ فيه فيديو قبله في الترتيب لسه مخلصش — والرسالة بتقول اسمه
         const isSeqLocked = lockedMap[video.id] === true
-        const prevVideoId = prevVideoMap[video.id]
-        const prevPct = prevVideoId ? (mergedProgress[prevVideoId] || 0) : 0
+        const seqInfo = seqInfoMap[video.id]
         const scheduleInfo = isVideoLocked(video.id)
 
         // If video is scheduled and locked, show countdown instead (الجدولة القديمة)
@@ -889,12 +895,12 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                   </div>
                 </div>
               ) : isSeqLocked ? (
-                // مقفول بالتسلسل — قفل + رسالة (طلب المستر: هيتفتح أول ما تشوف اللي قبله كامل)
+                // مقفول بالتسلسل — قفل + رسالة باسم أول فيديو لازم يتشاف (مفتوح مضمون)
                 <div
                   className="w-full h-full relative cursor-not-allowed select-none"
-                  onClick={function () { toast.error('الفيديو ده هيتفتح أول ما تشوف الفيديو اللي قبله كامل (100%) — كمّل مشاهدة الفيديو اللي قبله الأول', { duration: 6000 }) }}
+                  onClick={function () { toast.error('الفيديو ده هيتفتح أول ما تشوف فيديو «' + (seqInfo ? seqInfo.blockerTitle : 'اللي قبله') + '» كامل (100%) — الفيديو ده مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 }) }}
                   role="button"
-                  aria-label="الفيديو مقفول — هيتفتح أول ما تشوف الفيديو اللي قبله كامل"
+                  aria-label="الفيديو مقفول — شوف الفيديو المطلوب الأول"
                 >
                   {thumbSrc ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -907,10 +913,10 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                       <Lock className="h-6 w-6 text-red-400" />
                     </div>
                     <p className="text-white text-xs sm:text-sm font-bold leading-relaxed">
-                      الفيديو ده هيتفتح أول ما تشوف الفيديو اللي قبله كامل
+                      مقفول — لازم تشوف فيديو «{seqInfo ? seqInfo.blockerTitle : 'اللي قبله'}» الأول
                     </p>
-                    {prevPct > 0 && (
-                      <p className="text-white/60 text-[10px]">نسبة الفيديو اللي قبله دلوقتي: {prevPct}%</p>
+                    {seqInfo && seqInfo.blockerPct > 0 && (
+                      <p className="text-white/60 text-[10px]">نسبة «{seqInfo.blockerTitle}» دلوقتي: {seqInfo.blockerPct}%</p>
                     )}
                   </div>
                 </div>
@@ -1125,11 +1131,10 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
               {activeLessonGroup.parts.map(function (p, i) {
                 const pctP = mergedProgress[p.id] || 0
                 const seqLockedP = lockedMap[p.id] === true
+                const seqInfoP = seqInfoMap[p.id]
                 const payLockedP = (p.price || 0) > 0 && !approvedVideoIds.has(p.id)
                 const watchedP = localWatched.has(p.id)
                 const thumbP = p.thumbnail || (p as any).thumb || null
-                const prevIdP = prevVideoMap[p.id]
-                const prevPctP = prevIdP ? (mergedProgress[prevIdP] || 0) : 0
                 return (
                   <div key={p.id} className="rounded-xl border overflow-hidden bg-card">
                     <div className="flex items-center gap-3 p-2.5">
@@ -1150,7 +1155,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           {watchedP && <Badge variant="secondary" className="text-[10px] text-emerald-600">تمت المشاهدة</Badge>}
                           {pctP > 0 && !watchedP && <span className="text-[10px] font-bold text-muted-foreground">{pctP}%</span>}
-                          {seqLockedP && <Badge variant="outline" className="text-[10px] text-red-500">مقفول — كمّل الجزء اللي قبله ({prevPctP}%)</Badge>}
+                          {seqLockedP && <Badge variant="outline" className="text-[10px] text-red-500">مقفول — شوف «{seqInfoP ? seqInfoP.blockerTitle : 'اللي قبله'}» الأول{seqInfoP && seqInfoP.blockerPct > 0 ? ' (' + seqInfoP.blockerPct + '%)' : ''}</Badge>}
                           {!seqLockedP && payLockedP && <Badge variant="outline" className="text-[10px] text-amber-600">محتاج تسديد {p.price} ج.م</Badge>}
                           {!seqLockedP && !payLockedP && !watchedP && <Badge variant="outline" className="text-[10px] text-emerald-600">جاهز للمشاهدة</Badge>}
                         </div>
