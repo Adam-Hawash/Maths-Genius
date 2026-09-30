@@ -107,6 +107,10 @@ model Video {
      فاضي "" = فيديو مستقل عادي (السلوك القديم زي ما هو). */
   groupKey    String   @default("")
   orderIndex  Int      @default(0)
+  /* (2026-د) مدة الفيديو بالثواني — بتمتلئ أول ما الفيديو يتفتح (تقرير
+     المشغل) أو من سجلات المشاهدة — عشان بادج ⏱ على كروت الفيديوهات.
+     0 = لسه معناش المدة. */
+  durationSec Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
