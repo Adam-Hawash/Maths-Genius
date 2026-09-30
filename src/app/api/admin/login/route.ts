@@ -4,8 +4,8 @@ import { db, safeWrite } from '@/lib/db'
 
 export var maxDuration = 10
 
-var DEFAULT_EMAIL = 'math genius'
-var DEFAULT_PASSWORD = 'wael2026#'
+var DEFAULT_EMAIL = ''
+var DEFAULT_PASSWORD = ''
 var ADMIN_NAME = 'Mr.Wael Khodair'
 
 export async function POST(request) {
@@ -24,7 +24,7 @@ export async function POST(request) {
   }
 
   // squash = strip ALL whitespace from both sides before comparing — the DB
-  // may hold values like "sherif math@2026" / "mr sherif2026#" and the admin
+  // may hold values with different spacing/case and the admin
   // may type them without (or with different) spaces. Never fail on spaces.
   var squash = function (v: any) { return String(v || '').replace(/\s+/g, '').toLowerCase() }
   var cleanEmail = squash(email)

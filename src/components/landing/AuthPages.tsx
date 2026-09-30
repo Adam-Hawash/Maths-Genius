@@ -46,9 +46,9 @@ function ComplaintsLink() {
   )
 }
 
-// Hidden admin entry: phone 11111111111 + this password redirects to admin login
-var ADMIN_PHONE = '11111111111'
-var ADMIN_PASSWORD = 'wael2026#'
+// Hidden admin entry: phone + password redirect to admin login (القيم بتتبعت من عند المستر — مش متخزنة هنا)
+var ADMIN_PHONE = ''
+var ADMIN_PASSWORD = ''
 
 // لافتة تحذير الجهاز الواحد — فوق صفحتين الدخول والتسجيل.
 // (دي تلاتة تنبيه جديد بطلب المستر: الحساب مربوط بجهاز واحد بس —

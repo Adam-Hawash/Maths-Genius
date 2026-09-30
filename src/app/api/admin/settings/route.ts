@@ -2,8 +2,8 @@
 import { NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 
-var DEFAULT_EMAIL = 'math genius'
-var DEFAULT_PASSWORD = 'wael2026#'
+var DEFAULT_EMAIL = ''
+var DEFAULT_PASSWORD = ''
 var DEFAULT_NAME = 'Mr.Wael Khodair'
 
 export async function GET() {
