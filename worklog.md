@@ -4983,3 +4983,51 @@ Stage Summary:
 - الكتب بقت مكتبة مُدارة بالكامل من الشاشة نفسها: فتح/معاينة/حذف/أسئلة الموثقة/اختيار للواجب — ومتتحقق منها بالمتصفح حي
 - المساعد الذكي بقى له قاعدة صارمة في كل شاشات الحل: تحذير أول مرة → −5 تاني مرة → −10 وتسليم تلقائي تالت مرة — والخصم محسوب على السيرفر من سجل AssistantUse (مش كلام كلينت بس)
 - ⚠️ للنشر: بعد push على origin/main المستر يعمل deploy وCtrl+Shift+R مرة واحدة
+---
+Task ID: NB-3
+Agent: frontend-styling-expert
+Task: بناء صفحة الهبوط المزخرفة لمنصة "مستر محمد صبري — اللغة العربية" (Next.js 16 + Tailwind v4، عربية RTL) في /home/mr-mohamed-sabry: page.tsx + مكونات landing (ornaments/navbar/hero) + Reveal، بهوية الزمرد الملكي/الذهب، دون لمس layout.tsx أو globals.css أو admin أو API.
+
+Work Log:
+- قرأت worklog المشترك (لا توجد سجلات NB سابقة — أول مهمة NB تُسجَّل هنا) + globals.css (توكنز gold/royal + كلاسات gold-text/pattern-star/hero-dot/reveal) + layout.tsx (ar/rtl وخطوط Amiri/Ruqaa/Cairo جاهزة) + package.json (framer-motion وlucide-react متاحان) + قائمة ui المتاحة (button/input/label/card/badge/skeleton فقط — لم أحتج أيًّا منها)
+- أنشأت src/components/landing/ornaments.tsx (بدون "use client"): FlourishDivider (خطان ذهبيان + خاتم ثماني مركزي)، CornerOrnament (زاوية L أرابيسك بمعين داخلي)، StarMedallion (خاتم نجمة ثمانية — مربعان متداخلان + دائرة ونقطة، props: size/className)، OrnateDivider (فاصل أقسام كبير: ماسة + خطوط + نقاط) — كلها SVG بـ currentColor وقابلة للتلوين بـ text-gold-*
+- أنشأت src/components/reveal.tsx ("use client"): غلاف IntersectionObserver (threshold 0.15، مرة واحدة) يضيف .reveal ثم .revealed، مع fallback يكشف المحتوى فورًا إن غاب الـ API (SSR آمن، delay اختياري كـ transitionDelay)
+- أنشأت src/components/landing/navbar.tsx ("use client"): header ثابت z-50 بشفافية bg-royal-900/80 + backdrop-blur-md + حد سفلي ذهبي؛ يمين RTL: StarMedallion صغير + "محمد صبري" font-ruqaa؛ يسار: روابط (#home/#features/#about/#contact) + زر "دخول المشرفين" → /admin بإطار ذهبي مدمج؛ همبرغر موبايل (Menu/X مع aria-label فتح/إغلاق وaria-expanded) بقائمة منسدلة bg-royal-900/95 تُغلق عند النقر؛ ظل shadow-lg shadow-black/20 عند scrollY>8 عبر مستمع passive
+- أنشأت src/components/landing/hero.tsx ("use client"): section#home بـ min-h-[100svh] وoverflow-hidden؛ طبقات الخلفية بالترتيب: next/image /images/hero-bg.png (fill, priority, sizes=100vw, opacity-60) → تدرج from-royal-950/80 via-royal-900/60 to-background → pattern-star opacity-40 → 8 نقاط hero-dot ذهبية موزعة بأنماط inline (6-14px + boxShadow ذهبي، aria-hidden)؛ عمود النص: FlourishDivider ثم شارة "منصة تعليمية للغة العربية" ثم اللوحة الملكية (زاويتا CornerOrnament معكوستتان تحيطان بعمود: "مُعلِّم اللغة العربية" فوق "مستر محمد صبري" font-ruqaa text-5xl→8xl بـ gold-text-animated text-glow وإطار سفلي border-b-2 ذهبي بمعين مركزي مبني بـ div) ثم h1 "أهلاً بك في رحاب لغة الضاد" font-amiri ثم فقرة التعريف ثم زرّا CTA (ذهبي متدرج + محدد) ثم 3 شرائح — كلها بتتابع animate-fade-up (0.05s→0.55s)؛ بطاقة البورتريه كعمود ثانٍ lg:grid-cols-[1fr_auto]: إطار بقوس إسلامي rounded-t-[999px] وحدود ذهبية مزدوجة (border-2 + ring-1 بفاصل p-2) + gold-glow-strong + animate-float-slow، بداخلها /images/teacher-art.png (aspect-[3/4]) ولوحة تعريف سفلية زجاجية، وزاويتا CornerOrnament أعلاها، وخلفها نجمة خاتم 420px تدور بـ animate-spin-slower (text-gold-500/10)
+- أنشأت src/app/page.tsx (Server Component) بغلاف min-h-screen flex flex-col + Navbar + main.flex-1 + footer.mt-auto؛ الأقسام داخل main كلها ملفوفة بـ Reveal: المميزات #features (OrnateDivider + عنوان gold-text + 4 كروت BookOpen/PenLine/ClipboardCheck/TrendingUp بميدالية أيقونة دائرية ورفع hover)، شريط بيت أحمد شوقي (pattern-star-dense + bg-royal-800/40 + علامة اقتباس SVG مبنية يدويًا + FlourishDivider)، عن المستر #about (نص + 4 شرائح مهارات + لوحة زخرفية: StarMedallion 260px بداخلها "ض" text-[120px] بـ gold-text وتحتها "لغة الضاد" font-ruqaa وأربعة CornerOrnament بالأركان) وCTA #contact بزر ذهبي، وفوتر: StarMedallion + الاسم font-ruqaa، روابط التنقل، رابط "دخول المشرفين" → /admin، سطر © بسنة ديناميكية، وpaddingBottom: max(1.5rem, env(safe-area-inset-bottom))
+- فحوصات الجودة: bun run lint فشل لأن eslint غير مثبت في البيئة (devDependencies فارغة) → نفذت البديل المعتمد ./node_modules/.bin/tsc --noEmit -p tsconfig.json = نجاح كامل صفر أخطاء؛ فحص إضافي: لا أزرق/بنفسجي إطلاقًا (grep) ولا إيموجي (فحص نطاقات يونيكود) — الزخارف كلها SVG/ديف
+
+Stage Summary:
+- صفحة الهبوط كاملة ومتكاملة RTL عربية بهوية الزمرد الملكي/الذهب: Hero بلوحة اسم مزخرفة + بطاقة لوحة بقوس إسلامي، مميزات، بيت شوقي، عن المستر مع ميدالية "ض"، CTA، وفوتر لاصق بالأسفل
+- الملفات المكتوبة (5 فقط): src/app/page.tsx + src/components/landing/{ornaments,navbar,hero}.tsx + src/components/reveal.tsx — لم يُلمس layout.tsx ولا globals.css ولا admin ولا أي API
+- tsc --noEmit نظيف (0 أخطاء)؛ eslint غير متوفر في البيئة (غير مثبت) — يُنصح بتثبيته لاحقًا
+- الصور /images/hero-bg.png و/images/teacher-art.png مُشار إليها بـ next/image فقط، ومجلد public/images موجود وفارغ — إنشاؤها من مسؤولية مهمة أخرى (كما هو محدد)
+- الوصولية: معالم دلالية header/nav/main/section/footer، aria للقائمة والزخارف، أهداف لمس ≥44px للروابط والأزرار (زر المشرفين المدمج في سطح المكتب استثناء مقصود بحسب المواصفة)، وprefers-reduced-motion محترم تلقائيًا من globals.css
+
+---
+Task ID: NB-1, NB-2, NB-4, NB-5, NB-6, NB-7
+Agent: Z.ai Code (main)
+Task: مشروع جديد كامل — منصة "مستر محمد صبري للغة العربية" في /home/z/mr-mohamed-sabry (+ NB-3 للصفحة عبر frontend-styling-expert)
+
+Work Log:
+- قراءة إعدادات my-project كمرجع (package.json, tsconfig, postcss, eslint, ui components)
+- إنشاء /home/z/mr-mohamed-sabry: نسخ configs + مكونات ui الأساسية + lib/utils
+- كتابة package.json مستقل + next.config.ts + .gitignore + README.md عربي (من غير أي بيانات دخول)
+- globals.css: ثيم ملكي (زمرد #0A1F19 + ذهبي #D4A843) + خطوط Amiri/Aref Ruqaa/Cairo + زخارف وأنيميشن (gold-text, gold-text-animated, pattern-star, hero-dots, reveal)
+- layout.tsx: RTL + Google Fonts عبر link + metadata عربي + icon.svg (نجمة ثمانية + حرف ض)
+- توليد صورتين AI في public/images: hero-bg.png (1344x768 نجوم ثمانية ذهبية) + teacher-art.png (864x1152 — طلعت فيها كلمة "محمد" بخط عربي مذهّب داخل ميداليا)
+- ملاحظات توليد الصور: الفيلتر رفض برومبتات فيها كلمات دينية (استخدمنا صياغة محايدة)، والمقاس لازم يكون من قائمة الـCLI ومضاعف 32 (1440x720 بيفشل — استخدمنا 1344x768 و864x1152)
+- NB-3 (frontend-styling-expert): page.tsx + landing (navbar/hero/ornaments) + reveal.tsx — tsc --noEmit نظيف، من غير أزرق/بنفسجي ومن غير إيموجي
+- الأدمن: login-form.tsx + dashboard-client.tsx + APIs (login/session/logout) بجلسة HttpOnly cookie (sha256 token)
+- بيانات الدخول كما حددها الاستاذ: identifier يقبل "55555" و"محمدصبري26#" — والباسورد يقبل "55555" و"محمدصبري#" (تطبيع إزالة المسافات)
+- مشكلة بيئة 1: symlink لـ node_modules → turbopack رفضه ("points out of the filesystem root") → bun install فعلي (نجح في 1.4 ثانية)
+- مشكلة بيئة 2: سيرفر الـdev بيتقتل بين أوامر الـbash حتى مع setsid → الحل الناجح: subshell double-fork: ( setsid bun run dev > dev.log 2>&1 < /dev/null & ) — العملية بتتبع PID1 وتعيش
+- تحقق متصفح كامل (agent-browser): ديسكتوب 1440 + موبايل 375 (مفيش overflow) + قائمة همبرجر + سكرول حقيقي بين الأقسام + لوجين غلط → رسالة خطأ عربي + اللوجين الصح بالكومبوين → داشبورد + خروج + حماية /admin/dashboard (redirect) + فوتر لاصق مظبوط
+- إصلاح بسيط: data-scroll-behavior="smooth" على html لسكتة Next notice
+- git init -b main + أول commit كامل (31 ملف) — مفيش GitHub token في البيئة وgh غير مسجل → الرفع محتاج توكن أو رابط ريبو من الاستاذ
+
+Stage Summary:
+- منصة مستر محمد صبري شغالة على بورت 3000 في البريفيو (بديل مؤقت للجينيس — كل ملفات الجينيس محفوظة في /home/z/my-project وترجع بالتشغيل مرة واحدة)
+- المشروع مستقل وجاهز للرفع على GitHub بمجرد توكن/رابط من الاستاذ
+- صورة المستر: public/images/teacher-art.png — يبدلها بصورته الشخصية بنفس الاسم وهي بتتحدث تلقائيًا
+- درس تشغيلي مهم: أي سيرفر خلفي جديد لازم يتشغل بـ subshell double-fork وإلا بيتقتل بين الأوامر
