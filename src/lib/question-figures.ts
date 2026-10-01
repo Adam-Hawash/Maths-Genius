@@ -15,7 +15,7 @@
 // (الواجهة بتعرض placeholder محايد) — وبنكمل باقي الرسومات.
 // ============================================================
 
-import { openPdf, renderPageToJpeg } from '@/lib/pdf-pages'
+import { openPdf, renderPageToPng } from '@/lib/pdf-pages'
 import { chunkedUpload } from '@/lib/chunked-upload'
 import { splitMergedRegion } from '@/lib/figure-demerger'
 
@@ -216,9 +216,9 @@ export async function ensureFigureUrls(
       try {
         var numPages = Number(pdfDoc.numPages) || 0
         if (page >= 1 && (numPages <= 0 || page <= numPages)) {
-          /* (و52) رندر أعلى — (2026-و110) 2300/0.92 بدل 2000/0.9 — طلب المستر:
-             «الجودة ضعيفة» — القص الأوتوماتيكي بقى بييجي من مصدر أعلى دقة */
-          var dataUrl = await renderPageToJpeg(pdfDoc, page, 2300, 0.92)
+          /* (2026-G-1) رندر PNG Lossless 3000px بدل JPEG 0.92 — طلب المستر:
+             «الجودة ضعيفة — عايزها زي ما هي» — مفيش JPEG وسيط بيضيّع الرسمة */
+          var dataUrl = await renderPageToPng(pdfDoc, page, 3000)
           canvas = await sourceToCanvas({ kind: 'dataurl', dataUrl: dataUrl })
         }
       } catch (e) { canvas = null }
@@ -228,7 +228,7 @@ export async function ensureFigureUrls(
       }
       if (!canvas && fallbackDoc) {
         try {
-          var dataUrl2 = await renderPageToJpeg(fallbackDoc, page, 2300, 0.92)
+          var dataUrl2 = await renderPageToPng(fallbackDoc, page, 3000)
           canvas = await sourceToCanvas({ kind: 'dataurl', dataUrl: dataUrl2 })
         } catch (eFb2) { canvas = null }
       }
@@ -279,9 +279,8 @@ export async function ensureFigureUrls(
       var sw = regD.w, sh = regD.h, sx = regD.x, sy = regD.y
       if (sw < 8 || sh < 8) { done++; if (onProgress) onProgress(done, total); continue }
 
-      /* (2026-و110) سقف التصغير بقى 2000 بدل 1600 — الرسمة بتتحفظ بدقتها الحقيقية
-         من غير تلاعب في الجودة (طلب المستر: «زي ما هي») */
-      var scale = Math.min(1, 2000 / Math.max(sw, sh))
+      /* (2026-G-1) مفيش تصغير للقص: الدقة الطبيعية من المصدر — سقف 4000px حماية فقط */
+      var scale = Math.min(1, 4000 / Math.max(sw, sh))
       var outW = Math.max(8, Math.round(sw * scale))
       var outH = Math.max(8, Math.round(sh * scale))
       var out = document.createElement('canvas')
@@ -294,13 +293,21 @@ export async function ensureFigureUrls(
       octx.imageSmoothingQuality = 'high'
       octx.drawImage(pageCanvas, sx, sy, sw, sh, 0, 0, outW, outH)
 
+      /* (2026-G-1) حفظ بدون فقدان: PNG — لو ضخم جدًا (فوق 12MB) JPEG 100% */
       var blob = await new Promise<Blob | null>(function (resolve) {
-        /* (2026-و110) JPEG 95% — خطوط وحروف الرسمة بتفضل حادة */
-        out.toBlob(function (b: Blob | null) { resolve(b) }, 'image/jpeg', 0.95)
+        out.toBlob(function (b: Blob | null) { resolve(b) }, 'image/png')
       })
+      var outType = 'image/png'
+      var outExt = '.png'
       if (!blob) { done++; if (onProgress) onProgress(done, total); continue }
+      if (blob.size > 12 * 1024 * 1024) {
+        var jblob = await new Promise<Blob | null>(function (resolve) {
+          out.toBlob(function (b: Blob | null) { resolve(b) }, 'image/jpeg', 1.0)
+        })
+        if (jblob && jblob.size < blob.size) { blob = jblob; outType = 'image/jpeg'; outExt = '.jpg' }
+      }
 
-      var asFile = new File([blob], 'figure_q' + (i + 1) + '.jpg', { type: 'image/jpeg' })
+      var asFile = new File([blob], 'figure_q' + (i + 1) + outExt, { type: outType })
       var up = await chunkedUpload(asFile, 'exam-figures')
       if (up && up.filePath && /^\/api\/files\//.test(up.filePath)) {
         if (tgt.kind === 'q') {
