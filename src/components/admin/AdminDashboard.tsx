@@ -4689,6 +4689,12 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
   const [showSavedBooks, setShowSavedBooks] = useState(false)
   /* (2026-و106) فلتر المرحلة في وضع الكتاب — «أختار المرحلة تظهر لي كتبها» */
   const [bookGradeFilter, setBookGradeFilter] = useState('')
+  /* (2026-و110) إدارة الكتب المحفوظة — طلب المستر: «أقدر أمسحه وأشوفه وأشوف
+     الأسئلة اللي جواه وأدوس على الكتاب ده هو ده اللي أطلع منه الواجب» */
+  const [activeBookId, setActiveBookId] = useState('')
+  const [previewBook, setPreviewBook] = useState<any | null>(null)
+  const [bookQsBook, setBookQsBook] = useState<any | null>(null)
+  const [bookDeleting, setBookDeleting] = useState('')
   var filteredSavedBooks = useMemo(function () {
     if (!bookGradeFilter) return savedBooks
     var needle = bookGradeFilter.replace(/\s+/g, '')
@@ -5362,9 +5368,11 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
     return m ? m[1] : null
   }
 
-  /* ===== (2026-و40) وضع الكتاب ===== */
+  /* ===== (2026-و110) وضع الكتاب ===== */
   var handleBookFile = async function(f: File | null) {
     setBookFile(f); bookDocRef.current = null; setBookNumPages(0); setBookPagesText('')
+    /* ملف جديد مختار يدويًا → مش مرتبط بكتاب محفوظ */
+    setActiveBookId('')
     if (!f) return
     setBookPdfLoading(true)
     try {
@@ -5387,7 +5395,9 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
     if (!link || bookLinkLoading) return
     if (!/^https?:\/\//i.test(link)) { toast.error('الرابط لازم يبدأ بـ http أو https'); return }
     if (bookFile) { toast.error('فيه ملف محلي مختار — الملف بياخد الأسبقية. امسحه الأول لو عايز تفتح الرابط'); return }
+    setBookFile(null)
     setBookLinkLoading(true)
+    setActiveBookId('')
     try {
       var res = await fetch('/api/books/proxy?url=' + encodeURIComponent(link), { cache: 'no-store' })
       if (!res.ok) {
@@ -5416,14 +5426,41 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
   var loadSavedBooks = async function () {
     setSavedBooksLoading(true)
     try {
-      var r = await fetch('/api/books', { cache: 'no-store' })
+      /* (2026-و110) الراوت الإداري — بيرجع كل الحقول زي questionsJson (أسئلة الكتاب) */
+      var r = await fetch('/api/admin/books' + (adminId ? '?adminId=' + encodeURIComponent(adminId) : ''), { cache: 'no-store' })
       var j = await r.json()
-      setSavedBooks(j.books || [])
+      if (r.ok && j.books) setSavedBooks(j.books || [])
     } catch (e) { /* صامت */ }
     setSavedBooksLoading(false)
   }
+  /* (2026-و110) حذف كتاب محفوظ من القايمة نفسها — طلب المستر: «أقدر أمسحه» */
+  var deleteSavedBook = async function (b: any) {
+    if (!adminId) { toast.error('مفيش جلسة أدمن — سجل دخول تاني'); return }
+    if (!window.confirm('حذف «' + (b.title || '') + '» نهائيًا؟ الطالب مش هيشوفه تاني.')) return
+    setBookDeleting(String(b.id || ''))
+    try {
+      var res = await fetch('/api/admin/books?adminId=' + encodeURIComponent(adminId) + '&id=' + encodeURIComponent(b.id), { method: 'DELETE' })
+      var d = await res.json().catch(function () { return null })
+      if (!res.ok) throw new Error((d && d.error) || 'خطأ في الحذف')
+      toast.success('اتحذف «' + (b.title || 'الكتاب') + '» من المكتبة')
+      if (activeBookId === String(b.id || '')) setActiveBookId('')
+      await loadSavedBooks()
+    } catch (e: any) {
+      toast.error(e && e.message ? e.message : 'خطأ في الحذف')
+    }
+    setBookDeleting('')
+  }
+
+  /* (2026-و110) مسار معاينة الكتاب: ملف متخزن → مساره مباشرة، لينك خارجي → من خلال البروكسي */
+  var bookPreviewSrc = function (b: any): string {
+    if (b && b.sourceUrl) return '/api/books/proxy?url=' + encodeURIComponent(b.sourceUrl)
+    if (b && b.filePath) return b.filePath
+    return ''
+  }
+
   var openSavedBook = async function (b: any) {
     if (bookPdfLoading) return
+    setActiveBookId(String(b.id || ''))
     setBookPdfLoading(true)
     try {
       var blob: Blob | null = null
@@ -5582,6 +5619,18 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
       setStatusMsg('')
       /* (2026-و40-w) قص الرسومات من مستند الكتاب المفتوح + دمج أكتر من ملف */
       await finishExtraction(collected, { doc: doc, file: bookFile })
+      /* (2026-و110) توثيق الأسئلة المستخرجة على الكتاب المحفوظ نفسه —
+         عشان «أشوف الأسئلة اللي جواه» تفضل شغالة بعد أي وقت */
+      if (activeBookId && adminId) {
+        try {
+          var resSnap = await fetch('/api/admin/books?adminId=' + encodeURIComponent(adminId), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: activeBookId, questions: collected }),
+          })
+          if (resSnap.ok) { await loadSavedBooks(); toast.success('الأسئلة اتحفظت على الكتاب نفسه — تلاقيها في «الأسئلة (N)» جنب الكتاب', { duration: 6000 }) }
+        } catch (eSnap) { /* صامت — التوثيق إضافي مش شرط للاستخراج */ }
+      }
       var okMsg = (appendingFile ? 'تمت إضافة ' : 'تم استخراج ') + collected.length + (appendingFile ? ' سؤال من الملف الجديد!' : (' سؤال من ' + total + ' صفحة من الكتاب!'))
       if (skippedChunks > 0) okMsg += ' (فشلت ' + skippedChunks + ' دفعة صفحات — جرب صفحاتها تاني)'
       toast.success(okMsg)
@@ -5839,11 +5888,32 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
                     <p className="text-xs text-muted-foreground text-center py-4 px-3">{bookGradeFilter ? 'مفيش كتب محفوظة للمرحلة دي — غير الفلتر أو ضيف كتب من تاب «الكتب والملازم»' : 'مفيش كتب محفوظة — ضيف الكتب من تاب «الكتب والملازم» بالملف أو باللينك وهتلاقيها هنا ثابتة'}</p>
                   ) : filteredSavedBooks.map(function (b: any) {
                     var srcLabel = b.sourceUrl ? '🔗 لينك خارجي' : (b.filePath ? '📄 ملف محفوظ' : '')
+                    /* (2026-و110) عدد الأسئلة الموثقة على الكتاب */
+                    var bookQsCount = 0
+                    try { var parsedQs = JSON.parse(b.questionsJson || '[]'); if (Array.isArray(parsedQs)) bookQsCount = parsedQs.length } catch (eQ) {}
                     return (
-                      <button key={b.id} type="button" onClick={function () { openSavedBook(b) }} className="w-full text-right px-3 py-2 border-b border-border/50 last:border-0 hover:bg-muted/60 transition-colors cursor-pointer">
-                        <p className="text-xs font-bold truncate">📕 {b.title}</p>
-                        <p className="text-[10px] text-muted-foreground">{srcLabel}{b.grade ? ' — ' + b.grade : ''}</p>
-                      </button>
+                      <div key={b.id} className={'flex items-center gap-1 border-b border-border/50 last:border-0 hover:bg-muted/60 transition-colors' + (activeBookId === String(b.id || '') ? ' bg-primary/5' : '')}>
+                        {/* الضغط على الكتاب نفسه = فتحه ك مصدر للاستخراج — طلب المستر: «أدوس الكتاب ده هو ده اللي أطلع منه الواجب» */}
+                        <button type="button" onClick={function () { openSavedBook(b) }} className="flex-1 min-w-0 text-right px-3 py-2 cursor-pointer">
+                          <p className="text-xs font-bold truncate">📕 {b.title}{activeBookId === String(b.id || '') ? ' ✓' : ''}</p>
+                          <p className="text-[10px] text-muted-foreground">{srcLabel}{b.grade ? ' — ' + b.grade : ''}</p>
+                        </button>
+                        <div className="flex items-center gap-0.5 pl-1 pr-2 shrink-0">
+                          {bookQsCount > 0 && (
+                            <button type="button" onClick={function () { setBookQsBook(b) }} title="الأسئلة المستخرجة من الكتاب" className="h-7 px-2 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors cursor-pointer">
+                              الأسئلة ({bookQsCount})
+                            </button>
+                          )}
+                          {bookPreviewSrc(b) && (
+                            <button type="button" onClick={function () { setPreviewBook(b) }} title="معاينة الكتاب (اقراه من غير ما تغير المصدر)" className="h-7 w-7 rounded-md flex items-center justify-center text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors cursor-pointer" aria-label="معاينة">
+                              👁
+                            </button>
+                          )}
+                          <button type="button" onClick={function () { deleteSavedBook(b) }} title="حذف الكتاب نهائيًا" disabled={bookDeleting === String(b.id || '')} className="h-7 w-7 rounded-md flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors cursor-pointer disabled:opacity-40" aria-label="حذف">
+                            {bookDeleting === String(b.id || '') ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '🗑'}
+                          </button>
+                        </div>
+                      </div>
                     )
                   })}
                 </div>
@@ -6221,6 +6291,61 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
             onClose={function () { setCropEdit(null) }}
           />
         )}
+        {/* (2026-و110) معاينة الكتاب — «أشوفه» من غير ما يتغير المصدر */}
+        {previewBook && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-2 sm:p-6" onMouseDown={function (e) { if (e.target === e.currentTarget) setPreviewBook(null) }}>
+            <div className="bg-background rounded-xl border shadow-2xl w-full max-w-4xl h-[92vh] flex flex-col">
+              <div className="flex items-center justify-between gap-2 p-3 border-b shrink-0">
+                <p className="text-sm font-bold truncate">👁 معاينة: {previewBook.title}</p>
+                <div className="flex items-center gap-1 shrink-0">
+                  <a href={bookPreviewSrc(previewBook)} target="_blank" rel="noreferrer" className="text-xs text-sky-600 dark:text-sky-400 hover:underline px-2">فتح في تاب جديد</a>
+                  <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={function () { setPreviewBook(null) }} aria-label="إغلاق">✕</Button>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0">
+                <iframe src={bookPreviewSrc(previewBook)} title={'معاينة ' + (previewBook.title || 'الكتاب')} className="w-full h-full rounded-b-xl bg-white" />
+              </div>
+            </div>
+          </div>
+        )}
+        {/* (2026-و110) أسئلة الكتاب — «أشوف الأسئلة اللي جواه» */}
+        {bookQsBook && (function () {
+          var qsList: any[] = []
+          try { var parsed2 = JSON.parse(bookQsBook.questionsJson || '[]'); if (Array.isArray(parsed2)) qsList = parsed2 } catch (eQ2) {}
+          return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-2 sm:p-6" onMouseDown={function (e) { if (e.target === e.currentTarget) setBookQsBook(null) }}>
+              <div className="bg-background rounded-xl border shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
+                <div className="flex items-center justify-between gap-2 p-3 border-b shrink-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold truncate">📄 أسئلة «{bookQsBook.title}»</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">آخر أسئلة اتحكمت من الكتاب ده — {qsList.length} سؤال</p>
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={function () { setBookQsBook(null) }} aria-label="إغلاق">✕</Button>
+                </div>
+                <div className="p-3 overflow-y-auto custom-scrollbar flex-1 space-y-2">
+                  {qsList.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-8">لسه مستخرجتش أسئلة من الكتاب ده — افتحه وحدد الصفحات واستخرج، والأسئلة هتتفصل هنا أوتوماتيك</p>
+                  ) : qsList.map(function (q: any, qi: number) {
+                    return (
+                      <div key={qi} className="p-2.5 rounded-lg border border-border bg-muted/30">
+                        <p className="text-xs font-semibold leading-relaxed">{(qi + 1) + '. ' + String(q.question || q.q || '')}</p>
+                        {Array.isArray(q.options) && q.options.length > 0 && (
+                          <div className="mt-1.5 space-y-0.5">
+                            {q.options.map(function (op: any, oi: number) {
+                              var isCorrect = (typeof q.correct === 'number' && q.correct === oi) || (Array.isArray(q.correct) && q.correct.indexOf(oi) !== -1)
+                              return <p key={oi} className={'text-[11px] ' + (isCorrect ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground')}>{String.fromCharCode(65 + oi) + '. ' + String(op || '')}{isCorrect ? ' ✓' : ''}</p>
+                            })}
+                          </div>
+                        )}
+                        {!Array.isArray(q.options) || q.options.length === 0 ? (q.modelAnswer ? <p className="text-[11px] text-muted-foreground mt-1">النموذجي: {String(q.modelAnswer).substring(0, 200)}</p> : null) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </CardContent>
     </Card>
   )

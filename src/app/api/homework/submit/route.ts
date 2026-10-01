@@ -24,6 +24,8 @@ import { checkHwSequential } from '@/lib/sequential-guard'
 import { isWritingQuestion } from '@/lib/question-figures'
 /* (2026-و87) إشعار ولي الأمر بعد التسليم — القوالب من lib/parent-notify */
 import { notifyParentsOfResult, notifyParentsOfSubmission } from '@/lib/parent-notify'
+/* (2026-و110) حارس المساعد الذكي — عدّ المحاولات + الخصم عند التسليم */
+import { countAssistantUses, assistantPenaltyFor } from '@/lib/assistant-log'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -94,6 +96,9 @@ async function ensureTable() {
 
     // writingResults column — persisted AI verdicts (single source of truth)
     try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN writingResults TEXT DEFAULT \'\'') } catch (e) {}
+    /* (2026-و110) أعمدة حارس المساعد الذكي — عدد المحاولات والخصم المطبق */
+    try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN assistantUses INTEGER DEFAULT 0') } catch (e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE HomeworkResult ADD COLUMN assistantPenalty REAL DEFAULT 0') } catch (e) {}
   } catch (e) {
     console.error('Ensure HomeworkResult table error:', e)
   }
@@ -117,6 +122,10 @@ export async function POST(request) {
     var studentId = body.studentId
     var homeworkId = body.homeworkId
     var answers = body.answers
+    /* (2026-و110) حارس المساعد الذكي: محاولات الطالب في الواجب ده —
+       العدد من الكلينت + السجل على السيرفر (الأكبر فيهم) — أول مرة عادي،
+       من التانية −5 لكل محاولة، بحد أقصى −10 */
+    var clientAssistUses = Math.max(0, Math.min(Number(body.assistantUses) || 0, 10))
 
     if (!studentId || !homeworkId) {
       return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
@@ -288,6 +297,14 @@ export async function POST(request) {
     })
 
     if (maxScore === 0) { maxScore = mcq.length }
+    /* (2026-و110) تطبيق خصم المساعد الذكي قبل أي تخزين — الدرجة المحفوظة
+       والنهائية والمعروضة كلها بالخصم (عرض صادق زي منع الغش بالظبط) */
+    var assistantUses = clientAssistUses
+    try { var srvAssistUses = await countAssistantUses(studentId, homeworkId); if (srvAssistUses > assistantUses) assistantUses = srvAssistUses } catch (eAU) {}
+    var assistantPenalty = assistantPenaltyFor(assistantUses)
+    if (assistantPenalty > 0 && score > 0) {
+      score = Math.max(0, score - assistantPenalty)
+    }
     var mcqScore = score
 
     // ============ Writing questions: saved as PENDING, graded in background (بالفهرس الأصلي) ============
@@ -338,16 +355,16 @@ export async function POST(request) {
     var inserted = false
     try {
       await db.$executeRawUnsafe(
-        'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore, answers, writingResults, submittedAt) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-        resultId, studentId, homeworkId, score, maxScore, answersJson, JSON.stringify(writingAnswers)
+        'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore, answers, writingResults, assistantUses, assistantPenalty, submittedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+        resultId, studentId, homeworkId, score, maxScore, answersJson, JSON.stringify(writingAnswers), assistantUses, assistantPenalty
       )
       inserted = true
     } catch (insertErr) {
       console.error('Insert homework result error:', insertErr)
       try {
         await db.$executeRawUnsafe(
-          'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore, answers, submittedAt) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-          resultId, studentId, homeworkId, score, maxScore, answersJson
+          'INSERT INTO HomeworkResult (id, studentId, homeworkId, score, maxScore, answers, assistantUses, assistantPenalty, submittedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+          resultId, studentId, homeworkId, score, maxScore, answersJson, assistantUses, assistantPenalty
         )
         inserted = true
       } catch (retryErr) {
@@ -413,6 +430,9 @@ export async function POST(request) {
         id: resultId,
         score: score,
         maxScore: maxScore,
+        /* (2026-و110) شفافية الخصم — الطالب والمستر يشوفوا الخصم بوضوح */
+        assistantUses: assistantUses,
+        assistantPenalty: assistantPenalty,
         submittedAt: new Date().toISOString(),
         wrongQuestions: wrongQuestions,
         writingAnswers: writingAnswers,
@@ -624,6 +644,7 @@ export async function POST(request) {
             writingScore += Number((gradedList[s] && gradedList[s].awardedPoints) || 0)
           }
           await db.$executeRawUnsafe(
+            /* (2026-و110) mcqScore جوه خصم المساعد بالفعل — مفيش خصم مزدوج */
             'UPDATE HomeworkResult SET score = ?, writingResults = ? WHERE id = ?',
             mcqScore + writingScore, JSON.stringify(gradedList), resultId
           )

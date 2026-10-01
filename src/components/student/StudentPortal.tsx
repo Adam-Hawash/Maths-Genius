@@ -24,6 +24,9 @@ import { InstallPwaButton } from '@/components/InstallPwaButton'
 import { BooksTab } from '@/components/student/BooksTab'
 /* (2026-و66) نظام منع الغش والتشتت الذكي — مراقبة مغادرة الامتحان */
 import { useAntiCheat, AntiCheatModal, AntiCheatBadge } from '@/components/student/useAntiCheat'
+/* (2026-و110) حارس المساعد الذكي — طلب المستر: ممنوع المساعد أثناء الحل
+   3 محاولات: أولها عادي، تانية −5، تالتة −5 وتسليم تلقائي */
+import { beginSession, endSession, setFinalHandler, usesFor, clearUses } from '@/lib/assistant-guard'
 /* (2026-و66) الميزات الجديدة — المولد الذكي + ساحة التحدي + الخرائط الذهنية */
 import { PracticeGenerator } from '@/components/student/PracticeGenerator'
 import { BattleArena } from '@/components/student/BattleArena'
@@ -1248,6 +1251,38 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedHw])
+
+  /* ===== (2026-و110) جلسة المساعد الذكي للواجب المفتوح =====
+     طلب المستر: الطالب يستخدم المساعد وهو بيحل → تحذير/خصم/تسليم تلقائي */
+  useEffect(function () {
+    if (expandedHw) beginSession('homework', expandedHw, 'الواجب')
+    return function () {
+      if (expandedHw) endSession(expandedHw)
+    }
+  }, [expandedHw])
+  /* دالة التسليم التلقائي للمحاولة التالتة — نفس منطق onGiveUp بتاع المغادرات */
+  useEffect(function () {
+    setFinalHandler('homework', function (s) {
+      if (!s || s.kind !== 'homework') return
+      try { toast.error('⛔ استخدمت المساعد الذكي 3 مرات أثناء حل الواجب — الواجب هيتسلم تلقائيًا (خصم إجمالي 10 درجات)', { duration: 9000 }) } catch (e) {}
+      var tries = 0
+      var attempt = function () {
+        try {
+          var hwId = s.refId
+          if (!hwId) return
+          var btn = document.getElementById('hw-submit-' + hwId) as HTMLButtonElement | null
+          if (!btn || btn.getAttribute('data-photo-busy') === '1') {
+            if (++tries <= 40) setTimeout(attempt, 2000)
+            return
+          }
+          if (btn.disabled) btn.disabled = false
+          btn.click()
+        } catch (e) {}
+      }
+      attempt()
+    })
+    return function () { setFinalHandler('homework', null) }
+  }, [])
   const [hwAnswers, setHwAnswers] = useState<Record<string, Record<number, number | string>>>({})
   const [hwSubmitting, setHwSubmitting] = useState<string | null>(null)
   /* 2026-و20 — ممنوع تسليم الواجب لحد ما صور ورقة الحل توصل كاملة */
@@ -2525,10 +2560,17 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         /* (2026-و66) cheatStrikes — سجل مخالفات منع الغش */
-                        body: JSON.stringify({ studentId, homeworkId: hw.id, answers: mappedAnswers, tableAnswers: hwTablePayload, cheatStrikes: hwCheatStrikesRef.current || 0 }),
+                        /* (2026-و110) assistantUses — محاولات المساعد الذكي أثناء الحل (خصم من السيرفر) */
+                        body: JSON.stringify({ studentId, homeworkId: hw.id, answers: mappedAnswers, tableAnswers: hwTablePayload, cheatStrikes: hwCheatStrikesRef.current || 0, assistantUses: usesFor(hw.id) }),
                       })
                       var data = await res.json()
                       if (res.ok || data.alreadySubmitted) {
+                        /* (2026-و110) مسح عدّاد محاولات المساعد بعد التسليم + توست الخصم */
+                        clearUses(hw.id)
+                        var hwAssistPenalty = Number((data && data.result && data.result.assistantPenalty) || 0)
+                        if (hwAssistPenalty > 0) {
+                          toast.error('⚠️ اتحخصم ' + hwAssistPenalty + ' درجات — استخدام المساعد الذكي أثناء حل الواجب', { duration: 9000 })
+                        }
                         if (data.pendingGrading && data.result && data.result.id) {
                           // Submission saved instantly — AI grades writing questions in the background
                           toast.success('تم التسليم في ثانية ✅ المصحح الذكي بيصحح الأسئلة المقالية دلوقتي والنتيجة هتظهر تلقائياً')
@@ -2745,6 +2787,23 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
     onStrike: function (s: number) { antiCheatStrikesRef.current = s },
   })
 
+  /* ===== (2026-و110) جلسة المساعد الذكي للامتحان الشغال — طلب المستر:
+     الطالب يستخدم المساعد وهو بيحل → تحذير/خصم/تسليم تلقائي عند التالتة */
+  useEffect(function () {
+    if (takingExam && !examSubmitted) beginSession('exam', takingExam, 'الامتحان')
+    return function () {
+      if (takingExam) endSession(takingExam)
+    }
+  }, [takingExam, examSubmitted])
+  /* التسليم التلقائي للمحاولة التالتة — نفس مسار التسليم العادي بعلامة assistant */
+  useEffect(function () {
+    setFinalHandler('exam', function (s) {
+      if (!s || s.kind !== 'exam') return
+      try { doSubmitExamRef.current?.({ auto: true, assistant: true }) } catch (e) {}
+    })
+    return function () { setFinalHandler('exam', null) }
+  }, [])
+
   /* ===== (2026-و37) مسودة الامتحان المحفوظة تلقائيًا =====
      شكوى المستر: «لما الطالب بيرفع ورقة الحل بيتخرج من الصفحة ويحل من الأول».
      السبب: الموبايل بيرمي التاب من الميموري أثناء الرفع الطويل → reload →
@@ -2917,9 +2976,10 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
   /* ===== (25-b2) دالة التسليم الموحدة — نفس منطق زرار التسليم الأصلي بالظبط
      (نفس mappedAnswers من answers/writingAnswers state) — والعداد التنازلي
      بيسلّم بيها تلقائيًا عند 0 بنفس إجابات الطالب المتاحة (حتى لو فاضية) ===== */
-  async function submitExamNow(opts?: { auto?: boolean; cheat?: boolean }) {
+  async function submitExamNow(opts?: { auto?: boolean; cheat?: boolean; assistant?: boolean }) {
     var auto = !!(opts && opts.auto)
     var fromCheat = !!(opts && opts.cheat)
+    var fromAssistant = !!(opts && opts.assistant)
     var examIdLocal = takingExam
     /* (2026-و92) التسليم التلقائي ممنوع يضيع صامت — درس من شكوى المستر:
        «أول ما يخلص الأربعة بتاعته يتسلم تلقائي عشان هو ما بيتسلمش».
@@ -2979,7 +3039,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       const res = await fetch('/api/exams/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, examId: examIdLocal, answers: mappedAnswers, tableAnswers: examTablePayload, cheatStrikes: antiCheatStrikesRef.current || 0, autoSubmitted: fromCheat ? 1 : 0, penaltyPoints: Math.max(0, (antiCheatStrikesRef.current || 0) - 2) * 5 }),
+        /* (2026-و110) assistantUses — محاولات المساعد الذكي أثناء الحل (الخصم بيتحسب على السيرفر) */
+        body: JSON.stringify({ studentId, examId: examIdLocal, answers: mappedAnswers, tableAnswers: examTablePayload, cheatStrikes: antiCheatStrikesRef.current || 0, autoSubmitted: fromCheat ? 1 : 0, penaltyPoints: Math.max(0, (antiCheatStrikesRef.current || 0) - 2) * 5, assistantUses: usesFor(examIdLocal) }),
         signal: submitController.signal,
       })
       clearTimeout(submitTimeout)
@@ -2990,8 +3051,9 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         if (data.showResult === true) setExamSubmitResult(data)
         else setExamSubmitResult(null)
         if (auto) {
-          /* (25-b2) التسليم حصل تلقائيًا — برسالة تناسب السبب (وقت/مغادرات) */
-          if (fromCheat) toast.warning('⛔ عدّيت حد المغادرات — تم تسليم الامتحان تلقائيًا')
+          /* (25-b2) التسليم حصل تلقائي — برسالة تناسب السبب (وقت/مغادرات/مساعد) */
+          if (fromAssistant) toast.error('⛔ استخدمت المساعد الذكي 3 مرات أثناء حل الامتحان — تم تسليم الامتحان تلقائيًا (خصم إجمالي 10 درجات)', { duration: 9000 })
+          else if (fromCheat) toast.warning('⛔ عدّيت حد المغادرات — تم تسليم الامتحان تلقائيًا')
           else toast.warning('انتهى وقت الامتحان — تم تسليم إجاباتك')
           setExamTimeUpAuto(true)
         } else {
@@ -3002,6 +3064,12 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         /* العداد خلص مهمته — نمسح مفتاح وقت البدء + مسودة الحل (2026-و37) */
         try { localStorage.removeItem('mg_exam_start_' + examIdLocal + '_' + studentId) } catch (e) {}
         clearExamDraft(examIdLocal)
+        /* (2026-و110) مسح عدّاد محاولات المساعد بعد التسليم + توست الخصم */
+        clearUses(examIdLocal)
+        var examAssistPenalty = Number((data && data.assistantPenalty) || (data && data.result && data.result.assistantPenalty) || 0)
+        if (examAssistPenalty > 0 && !fromAssistant) {
+          toast.error('⚠️ اتحخصم ' + examAssistPenalty + ' درجات — استخدام المساعد الذكي أثناء حل الامتحان', { duration: 9000 })
+        }
         setSubmittedExamId(examIdLocal)
         setExamSubmitted(true)
         onExamSubmitted(examIdLocal)

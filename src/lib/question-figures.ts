@@ -216,8 +216,9 @@ export async function ensureFigureUrls(
       try {
         var numPages = Number(pdfDoc.numPages) || 0
         if (page >= 1 && (numPages <= 0 || page <= numPages)) {
-          /* (و52) رندر أعلى 2000/0.9 — ده المصدر اللي القص بيتقص منه */
-          var dataUrl = await renderPageToJpeg(pdfDoc, page, 2000, 0.9)
+          /* (و52) رندر أعلى — (2026-و110) 2300/0.92 بدل 2000/0.9 — طلب المستر:
+             «الجودة ضعيفة» — القص الأوتوماتيكي بقى بييجي من مصدر أعلى دقة */
+          var dataUrl = await renderPageToJpeg(pdfDoc, page, 2300, 0.92)
           canvas = await sourceToCanvas({ kind: 'dataurl', dataUrl: dataUrl })
         }
       } catch (e) { canvas = null }
@@ -227,7 +228,7 @@ export async function ensureFigureUrls(
       }
       if (!canvas && fallbackDoc) {
         try {
-          var dataUrl2 = await renderPageToJpeg(fallbackDoc, page, 2000, 0.9)
+          var dataUrl2 = await renderPageToJpeg(fallbackDoc, page, 2300, 0.92)
           canvas = await sourceToCanvas({ kind: 'dataurl', dataUrl: dataUrl2 })
         } catch (eFb2) { canvas = null }
       }
@@ -278,8 +279,9 @@ export async function ensureFigureUrls(
       var sw = regD.w, sh = regD.h, sx = regD.x, sy = regD.y
       if (sw < 8 || sh < 8) { done++; if (onProgress) onProgress(done, total); continue }
 
-      /* تصغير لأقصى ضلع 1600 — الحفاظ على النسبة */
-      var scale = Math.min(1, 1600 / Math.max(sw, sh))
+      /* (2026-و110) سقف التصغير بقى 2000 بدل 1600 — الرسمة بتتحفظ بدقتها الحقيقية
+         من غير تلاعب في الجودة (طلب المستر: «زي ما هي») */
+      var scale = Math.min(1, 2000 / Math.max(sw, sh))
       var outW = Math.max(8, Math.round(sw * scale))
       var outH = Math.max(8, Math.round(sh * scale))
       var out = document.createElement('canvas')
@@ -293,7 +295,8 @@ export async function ensureFigureUrls(
       octx.drawImage(pageCanvas, sx, sy, sw, sh, 0, 0, outW, outH)
 
       var blob = await new Promise<Blob | null>(function (resolve) {
-        out.toBlob(function (b: Blob | null) { resolve(b) }, 'image/jpeg', 0.92)
+        /* (2026-و110) JPEG 95% — خطوط وحروف الرسمة بتفضل حادة */
+        out.toBlob(function (b: Blob | null) { resolve(b) }, 'image/jpeg', 0.95)
       })
       if (!blob) { done++; if (onProgress) onProgress(done, total); continue }
 
