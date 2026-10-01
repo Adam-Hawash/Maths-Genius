@@ -250,8 +250,8 @@ export async function cropFiguresServerSide(
           var page = await doc.getPage(n)
           var base = page.getViewport({ scale: 1 })
           var longest = Math.max(base.width, base.height) || 1600
-          /* (و52) رندر أعلى — مصدر القص نفسه هو اللي بيحدد نعومة الرسمة */
-          var scale = Math.min(4, 2000 / longest)
+          /* (و52) رندر أعلى — (2026-و110) 2300 بدل 2000 — نفس الرفع الجودي للطلب: «زي ما هي» */
+          var scale = Math.min(4, 2300 / longest)
           var vp = page.getViewport({ scale: scale })
           var canvas = createCanvas(Math.max(1, Math.ceil(vp.width)), Math.max(1, Math.ceil(vp.height)))
           var ctx = canvas.getContext('2d')
@@ -322,7 +322,8 @@ async function cropOne(
     sx = regD.x; sy = regD.y; sw = regD.w; sh = regD.h
     if (sw < 8 || sh < 8) return false
 
-    var scale = Math.min(1, 1600 / Math.max(sw, sh))
+    /* (2026-و110) سقف التصغير بقى 2000 بدل 1600 — الرسمة بتنحفظ بدقتها الحقيقية */
+    var scale = Math.min(1, 2000 / Math.max(sw, sh))
     var outW = Math.max(8, Math.round(sw * scale))
     var outH = Math.max(8, Math.round(sh * scale))
     var out = createCanvas(outW, outH)
@@ -332,7 +333,8 @@ async function cropOne(
     octx.imageSmoothingEnabled = true
     octx.imageSmoothingQuality = 'high'
     octx.drawImage(pageCanvas, sx, sy, sw, sh, 0, 0, outW, outH)
-    var outBuf: Buffer = out.toBuffer('image/jpeg', 0.92)
+    /* (2026-و110) JPEG 95% بدل 92% — حدة كاملة للخطوط والحروف */
+    var outBuf: Buffer = out.toBuffer('image/jpeg', 0.95)
     if (!outBuf || outBuf.length < 100) return false
 
     var url = await saveFigure(outBuf)

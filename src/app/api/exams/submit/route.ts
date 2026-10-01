@@ -33,6 +33,8 @@ import { parseQuestions, resolveQuestionsForStudent } from '@/lib/exam-models'
 import { isWritingQuestion } from '@/lib/question-figures'
 /* (2026-و87) إشعار ولي الأمر بعد التسليم — القوالب من lib/parent-notify */
 import { notifyParentsOfResult } from '@/lib/parent-notify'
+/* (2026-و110) حارس المساعد الذكي — عدّ المحاولات + الخصم عند التسليم */
+import { countAssistantUses, assistantPenaltyFor } from '@/lib/assistant-log'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -73,6 +75,9 @@ async function ensureTable() {
     try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN cheatStrikes INTEGER DEFAULT 0') } catch(e) {}
     try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN autoSubmitted INTEGER DEFAULT 0') } catch(e) {}
     try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN penaltyPoints INTEGER DEFAULT 0') } catch(e) {}
+    /* (2026-و110) أعمدة حارس المساعد الذكي — المحاولات والخصم */
+    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN assistantUses INTEGER DEFAULT 0') } catch(e) {}
+    try { await db.$executeRawUnsafe('ALTER TABLE ExamResult ADD COLUMN assistantPenalty REAL DEFAULT 0') } catch(e) {}
   } catch (e) {
     console.error('Ensure ExamResult table error:', e)
   }
@@ -98,6 +103,9 @@ export async function POST(request) {
     var cheatStrikes = Math.max(0, Math.min(Number(body.cheatStrikes) || 0, 20))
     var autoSubmittedCheat = Number(body.autoSubmitted) ? 1 : 0
     var penaltyPoints = Math.max(0, Math.min(Number(body.penaltyPoints) || 0, 100))
+    /* (2026-و110) حارس المساعد الذكي: محاولات الطالب في الامتحان ده —
+       العدد من الكلينت + السجل على السيرفر (الأكبر فيهم) */
+    var clientAssistUsesEx = Math.max(0, Math.min(Number(body.assistantUses) || 0, 10))
 
     if (!studentId || !examId || answers === undefined || answers === null) {
       return NextResponse.json({ error: 'بيانات مفقودة' }, { status: 400 })
@@ -320,12 +328,19 @@ export async function POST(request) {
          «بيتصحح بالذكاء الاصطناعي» فضل ظاهر لحد ما الإصلاح الذاتي يعدّي */
       /* (2026-و66) خصم مخالفات منع الغش — كل مغادرة بعد التانية = −5 درجات
          (الدرجة المحفوظة والنهائية والمعروضة كلها بالخصم — عرض صادق) */
+      /* (2026-و110) + خصم المساعد الذكي: أول محاولة عادي، تانية −5، تالتة −5 */
+      var assistantUses = clientAssistUsesEx
+      try { var srvAssistUsesEx = await countAssistantUses(studentId, examId); if (srvAssistUsesEx > assistantUses) assistantUses = srvAssistUsesEx } catch (eAUx) {}
+      var assistantPenalty = assistantPenaltyFor(assistantUses)
       if (penaltyPoints > 0 && score > 0) {
         score = Math.max(0, score - penaltyPoints)
       }
+      if (assistantPenalty > 0 && score > 0) {
+        score = Math.max(0, score - assistantPenalty)
+      }
       await db.$executeRawUnsafe(
-        'INSERT INTO ExamResult (id, studentId, examId, score, maxScore, answers, writingGrades, writingResults, cheatStrikes, autoSubmitted, penaltyPoints) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        resultId, studentId, examId, score, maxScore, answersJson, writingGradesJson, writingGradesJson, cheatStrikes, autoSubmittedCheat, penaltyPoints
+        'INSERT INTO ExamResult (id, studentId, examId, score, maxScore, answers, writingGrades, writingResults, cheatStrikes, autoSubmitted, penaltyPoints, assistantUses, assistantPenalty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        resultId, studentId, examId, score, maxScore, answersJson, writingGradesJson, writingGradesJson, cheatStrikes, autoSubmittedCheat, penaltyPoints, assistantUses, assistantPenalty
       )
     } catch (insertErr) {
       console.error('Insert exam result error:', insertErr)
@@ -739,6 +754,9 @@ export async function POST(request) {
         resultId: resultId,
         mcqScore: score,
         maxScore: maxScore,
+        /* (2026-و110) شفافية خصم المساعد الذكي */
+        assistantUses: assistantUses,
+        assistantPenalty: assistantPenalty,
         mcqMaxScore: mcqMaxScore,
         writingPending: writingQuestions.length > 0,
         mcqResults: mcqResults,
@@ -749,6 +767,9 @@ export async function POST(request) {
       success: true,
       submitted: true,
       message: 'تم تسليم الامتحان بنجاح — انتظر النتيجة من المستر',
+      /* (2026-و110) شفافية خصم المساعد الذكي */
+      assistantUses: assistantUses,
+      assistantPenalty: assistantPenalty,
     })
   } catch (error) {
     console.error('Exam submit error:', error)

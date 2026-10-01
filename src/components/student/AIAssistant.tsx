@@ -6,6 +6,9 @@ import { toast } from 'sonner'
 /* (2026-و33) طلب المستر: المساعد يكتب برموز المنصة اللي بتظهر للطلاب —
    نفس العارض بتاع الأسئلة (كسور رأسية + أُس حقيقي + جذر) بدل LaTeX خام */
 import { FractionText } from '@/components/FractionText'
+/* (2026-و110) حارس المساعد — طلب المستر: ممنوع المساعد أثناء حل الواجب/الامتحان
+   3 محاولات: أول واحدة تحذير، تانية −5، تالتة −5 وبيتسلم تلقائي */
+import { registerUse, fireFinal, type UseResult } from '@/lib/assistant-guard'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -126,6 +129,29 @@ export function AIAssistant() {
     var imgs = pendingImages.map(function (p) { return p.dataUrl })
     if ((!msg && imgs.length === 0) || loading) return
 
+    /* (2026-و110) حارس المساعد: الطالب بيستخدم المساعد وهو في نص حل واجب/امتحان؟
+       المحاولة بتتسجل على السيرفر + تحذير فوري — تالت محاولة = تسليم تلقائي */
+    var guardUse: UseResult | null = null
+    try { guardUse = registerUse() } catch (eG) { guardUse = null }
+    if (guardUse) {
+      if (guardUse.uses === 1) {
+        toast.error('🚫 ممنوع المساعد الذكي أثناء حل ' + guardUse.label + '! دي أول مرة — تحذير بس. تاني مرة بتنقص 5 درجات، وتالت مرة بتنقص 5 درجات كمان وبيتسلم عليك تلقائي 😤', { duration: 9000 })
+        setMessages(function (prev) {
+          return [...prev, { role: 'assistant', content: '🚫 خد بالك! إنت في نص حل ' + guardUse.label + ' — المساعد الذكي ممنوع أثناء الحل وبيتحسب عليك.\n\n• المحاولة دي: تحذير بس (مفيش خصم)\n• المحاولة التانية: −5 درجات من النتيجة\n• المحاولة التالتة: −5 درجات كمان و' + guardUse.label + ' بيتسلم تلقائي!\n\nاقفلني وكمّل حل بنفسك يا بطل 💪' }]
+        })
+      } else if (guardUse.uses === 2) {
+        toast.error('⚠️ −5 درجات! استخدمت المساعد تاني مرة أثناء حل ' + guardUse.label + ' — الخصم هيتطبق على النتيجة. تحذير أخير: المحاولة التالتة بتنقصك 5 درجات كمان وبيتسلم تلقائي!', { duration: 9000 })
+        setMessages(function (prev) {
+          return [...prev, { role: 'assistant', content: '⚠️ ده استخدامك التاني للمساعد أثناء حل ' + guardUse.label + ' — اتخصم منك 5 درجات (هتتطبق على النتيجة).\n\nلو استخدمتني مرة تانية: −5 درجات إضافية و' + guardUse.label + ' هيتسلم تلقائي! ما تجربش 😬' }]
+        })
+      } else {
+        toast.error('⛔ −5 درجات تانية! عدّيت حد المحاولات — ' + guardUse.label + ' هيتسلم تلقائي.', { duration: 9000 })
+        setMessages(function (prev) {
+          return [...prev, { role: 'assistant', content: '⛔ وصلت لآخر محاولة! اتخصم 5 درجات تانية (إجمالي −10) و' + guardUse.label + ' بيتسلم تلقائي دلوقتي.' }]
+        })
+      }
+    }
+
     setInput('')
     setPendingImages([])
     // user message + empty assistant placeholder (the streaming target)
@@ -195,6 +221,8 @@ export function AIAssistant() {
           images: imgs.length > 0 ? imgs : undefined,
           history: historyForApi,
           context: { page: page, studentId: studentId },
+          /* (2026-و110) جلسة الحل النشطة — السيرفر بيسجل الاستخدام ويردّ بعدد المحاولات */
+          guard: guardUse ? { kind: guardUse.kind, refId: guardUse.refId } : undefined,
           stream: true,
         }),
         signal: controller.signal,
@@ -269,6 +297,11 @@ export function AIAssistant() {
     if (inactivityTimer) clearTimeout(inactivityTimer)
     setWaiting(false)
     setLoading(false)
+    /* (2026-و110) المحاولة التالتة خلصت → تسليم الواجب/الامتحان تلقائي
+       (بعد ما الطلب يخلص عشان الرد مايقطعش) */
+    if (guardUse && guardUse.final) {
+      setTimeout(function () { try { fireFinal() } catch (eF) {} }, 600)
+    }
   }
 
   return (

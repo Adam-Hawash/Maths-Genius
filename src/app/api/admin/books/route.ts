@@ -30,6 +30,10 @@ function ensureBookTable() {
       try {
         await db.$executeRawUnsafe("ALTER TABLE Book ADD COLUMN usage TEXT NOT NULL DEFAULT 'both'")
       } catch (e) {}
+      /* (2026-و110) الأسئلة المستخرجة من الكتاب — «أشوف الأسئلة اللي جواه» */
+      try {
+        await db.$executeRawUnsafe("ALTER TABLE Book ADD COLUMN questionsJson TEXT NOT NULL DEFAULT ''")
+      } catch (e) {}
     })()
   }
   return _bookTableReady
@@ -141,6 +145,43 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'تم إضافة الكتاب', book }, { status: 201 })
   } catch (error: any) {
     console.error('Book create error:', error)
+    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
+  }
+}
+
+/* (2026-و110) حفظ سناب شوت الأسئلة المستخرجة من الكتاب — طلب المستر:
+   «أشوف الكتاب وأشوف الأسئلة اللي جواه» — الاستخراج من الكتاب بيوثّق
+   أسئلته على صف الكتاب نفسه عشان تظهر في المعاينة من أي مكان */
+export async function PATCH(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const adminId = searchParams.get('adminId')
+    const admin = await isAdmin(adminId)
+    if (!admin) {
+      return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
+    }
+    await ensureBookTable()
+    const body = await request.json()
+    const id = String((body && body.id) || '')
+    if (!id) {
+      return NextResponse.json({ error: 'id مطلوب' }, { status: 400 })
+    }
+    var qJson = ''
+    try {
+      var qs = (body && body.questions) || null
+      if (Array.isArray(qs)) qJson = JSON.stringify(qs).substring(0, 490000)
+    } catch (eQ) {}
+    var existing2: any = null
+    try { existing2 = await db.book.findUnique({ where: { id } }) } catch (e2) {}
+    if (!existing2) {
+      return NextResponse.json({ error: 'الكتاب غير موجود' }, { status: 404 })
+    }
+    await safeWrite(function () {
+      return db.book.update({ where: { id }, data: { questionsJson: qJson } })
+    })
+    return NextResponse.json({ success: true, count: Array.isArray(body && body.questions) ? (body.questions as any[]).length : 0 })
+  } catch (error: any) {
+    console.error('Book patch error:', error)
     return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
   }
 }

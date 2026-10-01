@@ -5,6 +5,8 @@ import { callGemini, streamGemini, hasGeminiKey } from '@/lib/gemini'
 import ZAI from 'z-ai-web-dev-sdk'
 /* (2026-و33) منقّي الرموز المشترك — نفس المكتبة اللي بتنضّف ملاحظات المصحح */
 import { sanitizeMathText, ENGLISH_TERMS_RULE } from '@/lib/math-sanitize'
+/* (2026-و110) سجل استخدام المساعد أثناء الحل — طلب المستر: خصم 5 درجات */
+import { logAssistantUse, countAssistantUses, assistantPenaltyFor } from '@/lib/assistant-log'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -180,6 +182,21 @@ export async function POST(request: Request) {
       message = 'شوف الصور دي وساعدني فيها.'
     }
 
+    /* (2026-و110) حارس المساعد: الطالب بيستخدم المساعد وهو في نص حل واجب/امتحان؟
+       الاستخدام بيتسجل في جدول AssistantUse — وعند التسليم راوت الواجب/الامتحان
+       بيعدّه وبيطبق الخصم (أول مرة عادي، تانية −5، تالتة −5 وتسليم تلقائي) */
+    var guardInfo: any = null
+    var guardBody = (body && body.guard) || null
+    if (guardBody && guardBody.refId && context.studentId) {
+      try {
+        await logAssistantUse(String(context.studentId), String(guardBody.kind || ''), String(guardBody.refId), String(context.page || ''))
+        var guardUses = await countAssistantUses(String(context.studentId), String(guardBody.refId))
+        guardInfo = { uses: guardUses, penalty: assistantPenaltyFor(guardUses) }
+      } catch (eGuard) {
+        console.error('[AI Assistant] guard log error (ignored):', eGuard && eGuard.message)
+      }
+    }
+
     // ---------- نجرب المحركات بالترتيب ونرجّع أول واحد ينجح ----------
     var timeoutMs = imageParts.length > 0 ? 50000 : 35000
 
@@ -231,6 +248,8 @@ export async function POST(request: Request) {
             if (closed) return
             try { controller.enqueue(encoder.encode('data: ' + JSON.stringify(obj) + '\n\n')) } catch (e) {}
           }
+          /* (2026-و110) معلومات الحارس: عدد المحاولات + الخصم — أول حدث قبل الرد */
+          if (guardInfo) send({ guard: guardInfo })
           /* (و77) طلب نصي؟ فعّل الاستريم الحقيقي — كل قطعة من Gemini تتبعت للطالب لحظة بلحظة */
           if (imageParts.length === 0) sseForward = function (t: string) { acc += t; send({ delta: t }) }
           var result: any = null
@@ -292,7 +311,7 @@ export async function POST(request: Request) {
         var r2 = await engines[ei2]()
         if (r2 && r2.ok && r2.text) {
           r2.text = sanitizeMathText(r2.text)
-          return NextResponse.json({ reply: r2.text })
+          return NextResponse.json({ reply: r2.text, guard: guardInfo })
         }
       } catch (e) {}
     }
