@@ -5642,6 +5642,28 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
     setExtracting(false)
   }
 
+  /* (U-1) تصليح تلقائي لكل الأسئلة المخزنة — شكوى المستر: «الأسئلة ظهرت
+     u221b48 / Xu222aY / a u2208» — الزرار بيفك رموز \uXXXX لرموزها الحقيقية
+     (∛ ∪ ∩ ∈) في كل الجداول من غير إعادة استخراج ومن غير مساس بحلول الطلاب */
+  const [fixingUnicode, setFixingUnicode] = useState(false)
+  var handleFixUnicode = async function () {
+    if (fixingUnicode) return
+    setFixingUnicode(true)
+    try {
+      var res = await fetch('/api/admin/fix-unicode?adminId=' + encodeURIComponent(adminId || ''), { method: 'POST' })
+      var data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'فشل التصليح')
+      var parts: string[] = []
+      var fx = data.fixed || {}
+      Object.keys(fx).forEach(function (k) { if (fx[k] > 0) parts.push(k + ': ' + fx[k]) })
+      if (parts.length === 0) toast.success('كل حاجة نضيفة — مفيش أي رموز تالفة في الأسئلة')
+      else toast.success('اتصلحت الرموز في: ' + parts.join(' | '), { duration: 9000 })
+    } catch (e: any) {
+      toast.error(String((e && e.message) || 'خطأ في التصليح'), { duration: 6000 })
+    }
+    setFixingUnicode(false)
+  }
+
   var renderStep1 = function() {
     return (
       <div className="space-y-4">
@@ -5649,6 +5671,19 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
           <Sparkles className="h-10 w-10 text-purple-500 mx-auto mb-3" />
           <h3 className="text-lg font-bold">استخراج الذكاء الاصطناعي</h3>
           <p className="text-sm text-muted-foreground mt-1">ارفع ملف او استخرج من فيديو يوتيوب واحفظ الاسئلة مباشرة</p>
+        </div>
+        {/* (U-1) تصليح تلقائي للأسئلة المخزنة — من غير إعادة استخراج */}
+        <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold flex items-center gap-1.5"><Wrench className="h-3.5 w-3.5 text-amber-600 shrink-0" /> إصلاح رموز الأسئلة المخزنة</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">لو شفت رموز غريبة زي «u221b» أو «u222a» في أسئلة قديمة — الزرار ده يحولها لـ ∛ ∪ ∩ ∈ في كل الامتحانات والواجبات فورًا، من غير إعادة استخراج ومن غير أي تأثير على حلول الطلاب</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={handleFixUnicode} disabled={fixingUnicode} className="shrink-0 border-amber-300 hover:bg-amber-100 dark:border-amber-800 dark:hover:bg-amber-950">
+              {fixingUnicode ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+              تصليح تلقائي
+            </Button>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <button type="button" onClick={function() { setExtractType('exam') }} className={"p-4 rounded-xl border-2 text-center transition-all " + (extractType === 'exam' ? 'border-primary bg-primary/5 shadow-md' : 'border-muted hover:border-primary/30')}>
