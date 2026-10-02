@@ -69,7 +69,18 @@ export async function GET(
         var introVal = introRows && introRows[0] ? String(introRows[0].value || '') : ''
         isIntroPublic = !!introVal && introVal.indexOf(id) !== -1
       } catch (e) { /* جدول ناقص — نكمل بالحماية العادية */ }
-      if (!tokenOk && !adminOk && !isIntroPublic) {
+      /* (G-2) فيديو «إزاي تستخدم المنصة» — نفس نمط الفيديو التعريفي بالظبط:
+         لو معرّف الملف ده هو الموجود حالياً في howto_video_url فهو فيديو عام
+         بيشتغل على الصفحة الرئيسية قبل الدخول — زي فيديو المعرض زي ما هو */
+      let isHowToPublic = false
+      try {
+        const howtoRows: any[] = await db.$queryRawUnsafe(
+          "SELECT value FROM SiteConfig WHERE key = 'howto_video_url' LIMIT 1"
+        ) as any[]
+        const howtoVal = howtoRows && howtoRows[0] ? String(howtoRows[0].value || '') : ''
+        isHowToPublic = !!howtoVal && howtoVal.indexOf(id) !== -1
+      } catch (e) { /* جدول ناقص — نكمل بالحماية العادية */ }
+      if (!tokenOk && !adminOk && !isIntroPublic && !isHowToPublic) {
         return NextResponse.json(
           { error: 'غير مسموح — الفيديو بيتشغل من داخل المنصة بس' },
           { status: 403 }

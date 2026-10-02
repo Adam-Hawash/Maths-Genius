@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Settings, Save, Upload, Loader2, Image as ImageIcon, Trash2, Link2, Type, Layout, GraduationCap, Compass, Lightbulb, BookOpen, Smartphone, Globe, CalendarClock, PlusCircle } from 'lucide-react'
+import { Settings, Save, Upload, Loader2, Image as ImageIcon, Trash2, Link2, Type, Layout, GraduationCap, Compass, Lightbulb, BookOpen, Smartphone, Globe, CalendarClock, PlusCircle, MonitorPlay } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import type { SiteConfig } from '@/stores/app-store'
@@ -13,6 +13,8 @@ import { chunkedUpload } from '@/lib/chunked-upload'
 /* (و78) المحتوى الديناميكي — نصائح ومميزات إضافية JSON آمن */
 import { parseCustomContent, emptyCustomItem } from '@/lib/custom-content'
 import type { CustomContentItem } from '@/lib/custom-content'
+/* (G-2) فيديو «إزاي تستخدم المنصة» — تطبيع روابط يوتيوب/درايف/vimeo لـ embed */
+import { toEmbedUrl, isPlatformFile } from '@/lib/howto-video'
 
 interface FieldDef {
   key: string
@@ -359,6 +361,157 @@ function CustomContentSection(props: {
   )
 }
 
+/* ============================================================
+   (G-2) كارت «فيديو إزاي تستخدم المنصة» — اختياري بالكامل
+   ============================================================
+   - لينك (يوتيوب/درايف/vimeo) + زرار حفظ — بيتطعّم لـ embed تلقائيًا.
+   - رفع من الجهاز — بنفس بنية الرفع بتاعة المنصة (chunkedUpload →
+     /api/upload/chunk → Media → /api/files/<id>) وبيتحفظ فورًا.
+   - حذف الفيديو بيفضّي howto_video_url → سكشن الطالب بيختفي خالص
+     (القيمة فاضية = السكشن مش بيرندر في الـ DOM نهائيًا).
+   كل عملية بتتحفظ فورًا بنفس آلية persistConfigNow (PUT /api/config +
+   مزامنة ستور اللاندينج). */
+function HowToVideoCard(props: {
+  config: SiteConfig
+  setConfig: (c: SiteConfig) => void
+  persistNow: (c: SiteConfig) => Promise<void>
+}) {
+  const currentUrl = String(props.config.howto_video_url || '')
+  const currentKind = String(props.config.howto_video_kind || 'link')
+  const linkState = useState('')
+  const linkInput = linkState[0]
+  const setLinkInput = linkState[1]
+  const busyState = useState<'link' | 'upload' | 'delete' | null>(null)
+  const busy = busyState[0]
+  const setBusy = busyState[1]
+  const videoFileRef = useRef<HTMLInputElement | null>(null)
+
+  /* كتابة المفتاحين في الحالة المحلية + حفظ فوري */
+  const applyVideo = async function(url: string, kind: 'link' | 'file') {
+    const newConfig = Object.assign({}, props.config)
+    newConfig.howto_video_url = url
+    newConfig.howto_video_kind = kind
+    props.setConfig(newConfig)
+    await props.persistNow(newConfig)
+  }
+
+  /* حفظ لينك — التطبيع للـ embed بيحصل في العرض عند الطالب، والقيمة بتتخزن زي ما الأدمن كتبها */
+  const handleSaveLink = async function() {
+    const v = linkInput.trim()
+    if (!v) { toast.error('اكتب لينك الفيديو الأول (يوتيوب / درايف / vimeo)'); return }
+    setBusy('link')
+    await applyVideo(v, 'link')
+    setLinkInput('')
+    setBusy(null)
+  }
+
+  /* رفع ملف من الجهاز — نفس بنية رفع المنصة (chunked upload) */
+  const handleUploadFile = async function(file: File) {
+    setBusy('upload')
+    try {
+      const data = await chunkedUpload(file, 'howto-video')
+      await applyVideo(String(data.filePath || ''), 'file')
+      toast.success('تم رفع الفيديو وحفظه — السكشن ظهر للطلاب')
+    } catch (err: any) {
+      toast.error((err && err.message) || 'خطأ في رفع الفيديو')
+    }
+    setBusy(null)
+    if (videoFileRef.current) videoFileRef.current.value = ''
+  }
+
+  /* حذف الفيديو — القيمة بتقفى → السكشن بيختفي من الرئيسية */
+  const handleDeleteVideo = async function() {
+    setBusy('delete')
+    await applyVideo('', 'link')
+    toast.success('تم حذف الفيديو — السكشن اختفى من الصفحة الرئيسية')
+    setBusy(null)
+  }
+
+  const hasVideo = !!currentUrl.trim()
+  const isFile = currentKind === 'file' || isPlatformFile(currentUrl)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center justify-between flex-wrap gap-2">
+          <span className="flex items-center gap-2"><MonitorPlay className="h-5 w-5" />فيديو إزاي تستخدم المنصة | How-To Video</span>
+          <span className={'text-[10px] font-semibold px-2 py-0.5 rounded-full ' + (hasVideo ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground')}>
+            {hasVideo ? (isFile ? 'ملف مرفوع ✓' : 'لينك ✓') : 'مفيش فيديو — السكشن مخفي'}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">
+          اختياري: لو ضفت فيديو هيظهر قسم «إزاي تستخدم المنصة؟» في الصفحة الرئيسية بعد المميزات — ولو فضّيته (حذف) القسم بيختفي خالص.
+        </p>
+
+        {/* معاينة حية للفيديو الحالي */}
+        {hasVideo && (
+          <div className="rounded-lg border border-border/60 p-3 bg-muted/20">
+            <p className="text-[10px] font-semibold text-muted-foreground mb-2">المعاينة الحالية (اللي بياه الطلاب):</p>
+            {isFile ? (
+              <video controls playsInline preload="metadata" src={currentUrl} className="w-full rounded-lg bg-black aspect-video max-h-64" />
+            ) : (
+              <div className="relative w-full aspect-video max-h-64 rounded-lg overflow-hidden bg-black">
+                <iframe
+                  src={toEmbedUrl(currentUrl)}
+                  title="معاينة فيديو إزاي تستخدم المنصة"
+                  className="absolute inset-0 h-full w-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                  allowFullScreen
+                  loading="lazy"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 1) خانة لينك + حفظ */}
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto] items-end">
+          <div>
+            <Label className="text-xs mb-1 block">لينك فيديو (YouTube / Google Drive / Vimeo)</Label>
+            <Input
+              placeholder="https://www.youtube.com/watch?v=..."
+              value={linkInput}
+              onChange={function(e) { setLinkInput(e.target.value) }}
+              dir="ltr"
+              className="min-h-[44px]"
+            />
+          </div>
+          <Button onClick={function() { handleSaveLink() }} disabled={busy !== null} className="min-h-[44px]">
+            {busy === 'link' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            <span className="mr-1">{busy === 'link' ? 'جاري الحفظ...' : 'حفظ اللينك'}</span>
+          </Button>
+        </div>
+
+        {/* 2) رفع من الجهاز + 3) حذف */}
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={function(el) { videoFileRef.current = el }}
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime,video/*"
+            className="hidden"
+            onChange={function(e) { const f = e.target.files?.[0]; if (f) handleUploadFile(f) }}
+          />
+          <Button variant="outline" onClick={function() { videoFileRef.current?.click() }} disabled={busy !== null} className="min-h-[44px]">
+            {busy === 'upload' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            <span className="mr-1">{busy === 'upload' ? 'جاري الرفع...' : 'رفع من الجهاز'}</span>
+          </Button>
+          {hasVideo && (
+            <Button variant="ghost" onClick={function() { handleDeleteVideo() }} disabled={busy !== null} className="min-h-[44px] text-destructive hover:text-destructive">
+              {busy === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              <span className="mr-1">{busy === 'delete' ? 'جاري الحذف...' : 'حذف الفيديو'}</span>
+            </Button>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          ملاحظة: الملف المرفوع بيتخزن بنفس بنية ملفات المنصة (Media عبر /api/upload/chunk) وبيتشغل من /api/files — الحد الأقصى 120 ميجا.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function CMSPanel() {
   var [config, setConfig] = useState<SiteConfig>({})
   var [loading, setLoading] = useState(true)
@@ -544,6 +697,9 @@ export function CMSPanel() {
           </div>
         </CardContent>
       </Card>
+
+      {/* (G-2) فيديو «إزاي تستخدم المنصة» — لينك أو ملف مرفوع + حذف (اختياري بالكامل) */}
+      <HowToVideoCard config={config} setConfig={setConfig} persistNow={persistConfigNow} />
 
       {/* Section Tabs */}
       <div className="flex flex-wrap gap-2">
