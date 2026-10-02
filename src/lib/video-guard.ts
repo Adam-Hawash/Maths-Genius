@@ -190,14 +190,36 @@ export async function computePlayback(videoId: string, studentId: string | null 
 //      وفيديوهات متشافة بتتقفل لوحدها).
 //   3) الفيديو الجديد بيتفتح لوحده للطالب اللي كان خلص كل اللي قبله —
 //      «شاف كل الفيديوهات فاضل ده بس» ⇒ كله يتفتح.
-//   4) رسالة القفل بتقول باسم أول فيديو لازم يتشاف — وده فيديو مفتوح
+//   4) رسالة القفل عامة — «شوف الدرس اللي قبله» (2026-ص2: من غير أسماء
+//      دروس — احنا لعبنا في الترتيب فالاسم بيبوظ) — وده فيديو مفتوح
 //      مضمون (أول واحد مخلصش في السلسلة) — مفيش قفل دائري أبدًا.
 // نسبة «خلص»: 97%+ بتتحسب 100% (نفس تسنية /api/video-progress اللي
 // البوابة بتعرضها للطالب) — عشان السيرفر والبوابة يحكموا نفس الحكم.
 // الفيديوهات اللي مينفعش نتتبع نسبتها (لينك خارجي بس) بتتخطى عشان
 // التسلسل ميقلعش على فيديو مش قابل للقياس.
+//
+// (2026-ص2) تغييرات المستر:
+//   أ) الرسالة العامة بس — «شوف الدرس اللي قبله» من غير أسماء دروس
+//      (احنا لعبنا في الترتيب — الاسم ممكن يبقى في مكان تاني فبيبوظ)
+//   ب) سقف الحاجز: ممنوع الحاجز يرجع ورا أبعد فيديو الطالب بدأه —
+//      يعني الطالب عمره ما يترجع «يشوف الفيديوهات كلها من الأول» حتى
+//      لو الترتيب اتلعب فيه أو نسخ قديمة اتشالت
+//   ج) مفتاح عام من اللوحة (SiteConfig: video_sequence_lock) — '0' =
+//      التسلسل مطفي للكل بنفس الشكل (دروس/واجبات/امتحانات) — «كله موحد»
 // ============================================================
 export const SEQ_UNLOCK_RATIO = 0.97
+
+/* (2026-ص2) مفتاح قفل التسلسل الموحد — من إعدادات المنصة (لوحة التحكم).
+   غايب أو '1' = شغّال (السلوك الحالي) — '0' = مطفي للكل.
+   أي خطأ قراءة = شغّال (نفس السلوك المعروف) */
+export async function isSequenceLockEnabled(): Promise<boolean> {
+  try {
+    const row = await db.siteConfig.findUnique({ where: { key: 'video_sequence_lock' } })
+    return String((row && row.value) || '1') !== '0'
+  } catch (e) {
+    return true
+  }
+}
 
 export async function checkSequentialUnlock(
   videoId: string,
@@ -205,6 +227,10 @@ export async function checkSequentialUnlock(
 ): Promise<{ ok: boolean; code?: number; reason?: string }> {
   // زائر/معاينة أدمن → التسلسل مبيطبقش عليهم
   if (!studentId) return { ok: true }
+  // (2026-ص2) المفتاح الموحد من اللوحة — مطفي = مفيش أي قفل تسلسل لكل الطلبة
+  try {
+    if (!(await isSequenceLockEnabled())) return { ok: true }
+  } catch (e) { /* شغّال افتراضيًا */ }
   try {
     const video = await db.video.findUnique({ where: { id: videoId } })
     if (!video) return { ok: true }
@@ -283,27 +309,41 @@ export async function checkSequentialUnlock(
        بدأ مشاهدة الفيديو ده (أي نسبة > 0) ⇒ يكمّل عادي حتى لو المستر نزل
        فيديو جديد قبله في الترتيب — دي الحماية من «فيديوهات متشافة اتقفلت». */
     if ((ratioOf[videoId] || 0) > 0) return { ok: true }
+    /* (2026-ص2) سقف الحاجز: أبعد فيديو (ظاهر وقابل للتتبع) الطالب بدأه —
+       ممنوع أي حاجز يرجع قبل منه. ده اللي بيمنع «لازم تشوف الفيديوهات
+       كلها من الأول» لو الترتيب اتغير أو فيديوهات قديمة اتمسحت/اتعاد رفعها */
+    var frontierIdx = -1
+    for (var fi = 0; fi < gradeVideos.length; fi++) {
+      var fv = gradeVideos[fi]
+      if (!visibleToStudent(fv.id)) continue
+      var fYt = Boolean(getYouTubeId(fv.url || ''))
+      var fFile = Boolean(fv.filePath || fv.fileType)
+      if (!fYt && !fFile) continue
+      if ((ratioOf[fv.id] || 0) > 0) frontierIdx = fi
+    }
     // ندوّر على **أول** فيديو قبله لسه مخلصش (ده «الحاجز» — ومفتوح مضمون
     // لأن كل اللي قبله في الترتيب مخلص، فمفيش قفل دائري ولا رسالة كاذبة)
-    var blockerTitle = ''
+    var blockerFound = false
     for (let i = 0; i < idx; i++) {
+      if (i <= frontierIdx) continue // (2026-ص2) قبل حد الطالب — عمره ما يترجع له
       const v = gradeVideos[i]
       if (!visibleToStudent(v.id)) continue // مش ظاهر للطالب أصلاً — نتخطاه
       const isYT = Boolean(getYouTubeId(v.url || ''))
       const isFile = Boolean(v.filePath || v.fileType)
       if (!isYT && !isFile) continue // لينك خارجي — مش قابل للتتبع، نتخطاه
       if ((ratioOf[v.id] || 0) < SEQ_UNLOCK_RATIO) {
-        blockerTitle = v.title || ''
+        blockerFound = true
         break
       }
     }
     // كله اللي قبله مخلص → الفيديو ده مفتوح (ومنهم فيديو جديد نزل في نص القايمة:
     // الطالب اللي كان خلص كل اللي قبله بيشوفه فورًا من غير ما يعيد أي حاجة)
-    if (!blockerTitle) return { ok: true }
+    if (!blockerFound) return { ok: true }
     return {
       ok: false,
       code: 423,
-      reason: 'الفيديو ده هيتفتح أول ما تشوف فيديو «' + blockerTitle + '» كامل (100%) — الفيديو ده مفتوح عندك دلوقتي، كمّله الأول',
+      // (2026-ص2) رسالة عامة من غير أسماء دروس — طلب المستر
+      reason: 'الفيديو ده هيتفتح أول ما تشوف الدرس اللي قبله كامل (100%) — الدرس اللي قبله مفتوح عندك دلوقتي، كمّله الأول',
     }
   } catch (e) {
     // أي خطأ داخلي → ممنوع نمنع طالب بريء من المشاهدة بسبب عطل تقني

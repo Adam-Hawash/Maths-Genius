@@ -630,6 +630,13 @@ function videoKindOf(v: any): 'youtube' | 'file' | 'link' | 'none' {
 function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, videoProgress, studentStatus, isPaidAccess, studentName, studentPhone }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string; videoProgress: Record<string, number>; studentStatus?: string; isPaidAccess?: boolean; studentName?: string; studentPhone?: string }) {
   const { setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
+  /* (2026-ص2) مفتاح قفل التسلسل الموحد من إعدادات المنصة — '0' = التسلسل مطفي لكل الطلبة */
+  const [seqLockEnabled, setSeqLockEnabled] = useState(true)
+  useEffect(function () {
+    fetch('/api/config').then(function (r) { return r.json() }).then(function (d) {
+      setSeqLockEnabled(String((d || {}).video_sequence_lock ?? '1') !== '0')
+    }).catch(function () {})
+  }, [])
   // (2026-ف — رجعة نظام الجدولة القديم زي ما كان بالظبط)
   const [videoSchedules, setVideoSchedules] = useState<Record<string, any>>({})
   const [hiddenVideoIds, setHiddenVideoIds] = useState<Set<string>>(new Set())
@@ -764,35 +771,45 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         — «شاف كل الفيديوهات فاضل ده بس» ⇒ كله يتفتح
      4) نفس القواعد بالظبط مطبقة على السيرفر (video-guard) بنفس الترتيب —
         فمفيش قفل دائري ولا رسالة عن فيديو نفسه مقفول
-     الرسالة بتقول باسم الحاجز نفسه — وده فيديو مفتوح مضمون */
+     (2026-ص2) تغييرات المستر:
+     أ) الرسالة العامة بس — «شوف الدرس اللي قبله» من غير أي أسماء دروس
+        (احنا لعبنا في الترتيب — اسم الدرس ممكن يتغير مكانه فالاسم بيبوظ)
+     ب) سقف الحاجز: الحاجز ممنوع يرجع ورا أبعد فيديو الطالب بدأه —
+        يعني الطالب عمره ما يترجع «يشوف كل الفيديوهات من الأول»
+     ج) مفتاح عام من اللوحة (video_sequence_lock) — لو مطفي: مفيش أي قفل تسلسل
+        لكل الطلبة بنفس الشكل (دروس/واجبات/امتحانات) */
   const seqInfoMap = useMemo(function () {
-    var chain: { id: string; title: string }[] = []
+    if (!seqLockEnabled) return {} as Record<string, { blockerPct: number }>
+    var chain: { id: string }[] = []
     lessons.forEach(function (item) {
       var arr: VideoType[] = item.type === 'group' ? item.parts : [item.video]
       arr.forEach(function (v) {
         var k = videoKindOf(v)
-        if (k === 'youtube' || k === 'file') chain.push({ id: v.id, title: v.title })
+        if (k === 'youtube' || k === 'file') chain.push({ id: v.id })
       })
     })
     var completedOf = function (id: string) { return (mergedProgress[id] || 0) >= 99 }
     var touchedOf = function (id: string) { return (mergedProgress[id] || 0) > 0 }
-    var map: Record<string, { blockerTitle: string; blockerPct: number }> = {}
+    /* سقف الحاجز — أبعد فيديو الطالب بدأه: ممنوع أي قفل يرجع قبل منه */
+    var frontierIdx = -1
+    for (var fi = 0; fi < chain.length; fi++) { if (touchedOf(chain[fi].id)) frontierIdx = fi }
+    var map: Record<string, { blockerPct: number }> = {}
     for (var i = 0; i < chain.length; i++) {
       var node = chain[i]
       if (touchedOf(node.id)) continue // شافه أو بدأه قبل كده → عمره ما يتقفل
       var blockerIdx = -1
       for (var j = 0; j < i; j++) {
+        if (j <= frontierIdx) continue // قبل حد الطالب — عمره ما يترجع له
         if (!completedOf(chain[j].id)) { blockerIdx = j; break }
       }
       if (blockerIdx >= 0) {
         map[node.id] = {
-          blockerTitle: chain[blockerIdx].title,
           blockerPct: Math.min(100, Math.round(mergedProgress[chain[blockerIdx].id] || 0)),
         }
       }
     }
     return map
-  }, [lessons, mergedProgress])
+  }, [lessons, mergedProgress, seqLockEnabled])
 
   const lockedMap = useMemo(function () {
     var map: Record<string, boolean> = {}
@@ -804,10 +821,10 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
   // من /api/video-ticket — مفيش أي YouTube ID أو رابط ملف بيرجع للصفحة.
   // المشغل نفسه بيتفتح من /api/player/[ticket] على السيرفر.
   const openPlayModal = (video: VideoType) => {
-    // قفل التسلسل: فيه فيديو قبله في الترتيب لسه مخلصش → منع + رسالة باسم الفيديو المطلوب
+    // قفل التسلسل: فيه درس قبله في الترتيب لسه مخلصش → منع + رسالة عامة من غير أسماء (2026-ص2)
     var seqInfo = seqInfoMap[video.id]
     if (seqInfo) {
-      toast.error('الفيديو ده هيتفتح أول ما تشوف فيديو «' + seqInfo.blockerTitle + '» كامل (100%) — الفيديو ده مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 })
+      toast.error('الفيديو ده هيتفتح أول ما تشوف الدرس اللي قبله كامل (100%) — الدرس اللي قبله مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 })
       return
     }
     fetch('/api/video-ticket?videoId=' + video.id + '&studentId=' + encodeURIComponent(studentId || ''))
@@ -898,10 +915,10 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                   </div>
                 </div>
               ) : isSeqLocked ? (
-                // مقفول بالتسلسل — قفل + رسالة باسم أول فيديو لازم يتشاف (مفتوح مضمون)
+                // مقفول بالتسلسل — قفل + رسالة عامة من غير أسماء دروس (2026-ص2)
                 <div
                   className="w-full h-full relative cursor-not-allowed select-none"
-                  onClick={function () { toast.error('الفيديو ده هيتفتح أول ما تشوف فيديو «' + (seqInfo ? seqInfo.blockerTitle : 'اللي قبله') + '» كامل (100%) — الفيديو ده مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 }) }}
+                  onClick={function () { toast.error('الفيديو ده هيتفتح أول ما تشوف الدرس اللي قبله كامل (100%) — الدرس اللي قبله مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 }) }}
                   role="button"
                   aria-label="الفيديو مقفول — شوف الفيديو المطلوب الأول"
                 >
@@ -916,10 +933,10 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                       <Lock className="h-6 w-6 text-red-400" />
                     </div>
                     <p className="text-white text-xs sm:text-sm font-bold leading-relaxed">
-                      مقفول — لازم تشوف فيديو «{seqInfo ? seqInfo.blockerTitle : 'اللي قبله'}» الأول
+                      مقفول — لازم تشوف الدرس اللي قبله الأول
                     </p>
                     {seqInfo && seqInfo.blockerPct > 0 && (
-                      <p className="text-white/60 text-[10px]">نسبة «{seqInfo.blockerTitle}» دلوقتي: {seqInfo.blockerPct}%</p>
+                      <p className="text-white/60 text-[10px]">نسبة الدرس اللي قبله دلوقتي: {seqInfo.blockerPct}%</p>
                     )}
                   </div>
                 </div>
@@ -1158,7 +1175,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           {watchedP && <Badge variant="secondary" className="text-[10px] text-emerald-600">تمت المشاهدة</Badge>}
                           {pctP > 0 && !watchedP && <span className="text-[10px] font-bold text-muted-foreground">{pctP}%</span>}
-                          {seqLockedP && <Badge variant="outline" className="text-[10px] text-red-500">مقفول — شوف «{seqInfoP ? seqInfoP.blockerTitle : 'اللي قبله'}» الأول{seqInfoP && seqInfoP.blockerPct > 0 ? ' (' + seqInfoP.blockerPct + '%)' : ''}</Badge>}
+                          {seqLockedP && <Badge variant="outline" className="text-[10px] text-red-500">مقفول — شوف الجزء اللي قبله الأول{seqInfoP && seqInfoP.blockerPct > 0 ? ' (' + seqInfoP.blockerPct + '%)' : ''}</Badge>}
                           {!seqLockedP && payLockedP && <Badge variant="outline" className="text-[10px] text-amber-600">محتاج تسديد {p.price} ج.م</Badge>}
                           {!seqLockedP && !payLockedP && !watchedP && <Badge variant="outline" className="text-[10px] text-emerald-600">جاهز للمشاهدة</Badge>}
                         </div>
@@ -1211,6 +1228,13 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
 /* ========== HOMEWORK TAB ========== */
 function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { homework: Homework[]; studentId: string; completedHwIds: Set<string>; onHwSubmitted: (hwId: string) => void }) {
   const [expandedHw, setExpandedHw] = useState<string | null>(null)
+  /* (2026-ص2) مفتاح قفل التسلسل الموحد — '0' = مفيش قفل تسلسل على أي واجب */
+  const [seqLockEnabled, setSeqLockEnabled] = useState(true)
+  useEffect(function () {
+    fetch('/api/config').then(function (r) { return r.json() }).then(function (d) {
+      setSeqLockEnabled(String((d || {}).video_sequence_lock ?? '1') !== '0')
+    }).catch(function () {})
+  }, [])
 
   /* ===== (2026-و66) منع الغش في الواجبات — نفس نظام الامتحانات:
      تحذير لطيف 1-2 → خصم من 3 → تسليم تلقائي عند الرابعة ===== */
@@ -1480,6 +1504,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
        (الخريطة فاضية = مفيش حاجة مقفولة) عشان سباق التحميل ما يقفلش
        واجب على طالب سلّمه */
     if (!hwResultsLoaded) return map
+    /* (2026-ص2) التسلسل الموحد مطفي من اللوحة → مفيش أي واجب مقفول */
+    if (!seqLockEnabled) return map
     var prevTrackable: string | null = null
     orderedHw.forEach(function(h) {
       var track = hwTrackable(h)
@@ -1491,19 +1517,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
       if (track) prevTrackable = h.id
     })
     return map
-  }, [orderedHw, completedHwIds, hwResultsLoaded])
-
-  // الواجب اللي قبل كل واجب (عشان نعرض اسمه على كارت المقفول)
-  var hwPrevMap = useMemo(function() {
-    var map: Record<string, string> = {}
-    var prevTrackable: string | null = null
-    orderedHw.forEach(function(h) {
-      var track = hwTrackable(h)
-      if (track && prevTrackable) map[h.id] = prevTrackable
-      if (track) prevTrackable = h.id
-    })
-    return map
-  }, [orderedHw])
+  }, [orderedHw, completedHwIds, hwResultsLoaded, seqLockEnabled])
 
   /* Poll the background AI grading until it finishes — then update score + verdicts live */
   const startGradingPoll = (resultId: string, hwId: string) => {
@@ -2185,8 +2199,6 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         var isSubmitted = completedHwIds.has(hw.id)
         // مقفول بالتسلسل؟ الواجب اللي قبله لسه متسلمش (زي الفيديوهات — طلب المستر)
         var isHwSeqLocked = hwLockMap[hw.id] === true && !seqOkHwIds.has(hw.id)
-        var prevHwId = hwPrevMap[hw.id]
-        var prevHwTitle = prevHwId ? ((homework.find(function(x) { return x.id === prevHwId }) || ({} as any)).title || '') : ''
         var myAnswers = hwAnswers[hw.id] || {}
         var existingResult = hwResults[hw.id]
 
@@ -2306,7 +2318,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                     <h3 className="font-semibold text-sm">{hw.title}</h3>
                     {isHwSeqLocked && (
                       <p className="text-[11px] text-red-500 font-bold leading-relaxed">
-                        🔒 الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله{prevHwTitle ? ' — "' + prevHwTitle + '"' : ''}
+                        🔒 الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله
                       </p>
                     )}
                     {hw.content && <p className="text-xs text-muted-foreground line-clamp-2">{hw.content}</p>}
@@ -2723,6 +2735,13 @@ function normalizeExamWritingItems(raw: any): any[] {
 
 /* ========== EXAMS TAB ========== */
 function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId, resultsLoaded, onGoHome }: { exams: Exam[]; results: ExamResult[]; completedExamIds: Set<string>; onExamSubmitted: (examId: string) => void; studentId: string; resultsLoaded?: boolean; onGoHome?: () => void }) {
+  /* (2026-ص2) مفتاح قفل التسلسل الموحد — '0' = مفيش قفل تسلسل على أي امتحان */
+  const [seqLockEnabled, setSeqLockEnabled] = useState(true)
+  useEffect(function () {
+    fetch('/api/config').then(function (r) { return r.json() }).then(function (d) {
+      setSeqLockEnabled(String((d || {}).video_sequence_lock ?? '1') !== '0')
+    }).catch(function () {})
+  }, [])
   const [takingExam, setTakingExam] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [writingAnswers, setWritingAnswers] = useState<Record<number, string>>({})
@@ -2940,6 +2959,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
     /* (2026-و40) قبل تأكيد تحميل نتايج الامتحانات — كله مفتوح (بدون 🔒 وبدون منع)
        عشان سباق/فشل التحميل ما يقفلش امتحان على طالب قدمه أصلاً (fail-open) */
     if (resultsLoaded === false) return map
+    /* (2026-ص2) التسلسل الموحد مطفي من اللوحة → مفيش أي امتحان مقفول */
+    if (!seqLockEnabled) return map
     var prevTrackable: string | null = null
     orderedExams.forEach(function(e) {
       var track = false
@@ -2956,22 +2977,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       if (track) prevTrackable = e.id
     })
     return map
-  }, [orderedExams, completedExamIds, results, resultsLoaded])
-
-  var examPrevMap = useMemo(function() {
-    var map: Record<string, string> = {}
-    var prevTrackable: string | null = null
-    orderedExams.forEach(function(e) {
-      var track = false
-      try {
-        var qs = JSON.parse((e as any).questions || '[]')
-        track = Array.isArray(qs) && qs.length > 0
-      } catch (err) { track = false }
-      if (track && prevTrackable) map[e.id] = prevTrackable
-      if (track) prevTrackable = e.id
-    })
-    return map
-  }, [orderedExams])
+  }, [orderedExams, completedExamIds, results, resultsLoaded, seqLockEnabled])
 
   /* ===== (25-b2) دالة التسليم الموحدة — نفس منطق زرار التسليم الأصلي بالظبط
      (نفس mappedAnswers من answers/writingAnswers state) — والعداد التنازلي
@@ -3797,8 +3803,6 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         // مقفول بالتسلسل؟ الامتحان اللي قبله لسه متقدمش (زي الفيديوهات — طلب المستر)
         // (2026-و67) حكم السيرفر المؤكد بيتغلب على شك الخريطة المحلية
         const isExamSeqLocked = examLockMap[exam.id] === true && !seqOkExamIds.has(exam.id)
-        const prevExamId = examPrevMap[exam.id]
-        const prevExamTitle = prevExamId ? ((exams.find(function(x) { return x.id === prevExamId }) || ({} as any)).title || '') : ''
         /* 2026-و12 — مفيش نتيجة لحظية ولا تصحيح يتشاف من الطالب */
         let hasQuestions = false
         let parsedQuestions: any[] = []
@@ -3828,7 +3832,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                     })()}
                     {isExamSeqLocked && (
                       <p className="text-[11px] text-red-500 font-bold leading-relaxed">
-                        🔒 الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله{prevExamTitle ? ' — "' + prevExamTitle + '"' : ''}
+                        🔒 الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله
                       </p>
                     )}
                     {isCompleted ? (
@@ -3853,11 +3857,11 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                                 setSeqOkExamIds(function(prev) { var n = new Set(prev); n.add(exam.id); return n })
                                 handleStartExam(exam, parsedQuestions)
                               } else {
-                                toast.error(String(d.reason || 'الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — امتحان " ' + (prevExamTitle || 'اللي قبله') + ' " الأول'), { duration: 6000 })
+                                toast.error(String(d.reason || 'الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — خده الأول'), { duration: 6000 })
                               }
                             } catch (e) {
                               setCheckingServer(false)
-                              toast.error('الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — امتحان " ' + (prevExamTitle || 'اللي قبله') + ' " الأول', { duration: 6000 })
+                              toast.error('الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — خده الأول', { duration: 6000 })
                             }
                           })()
                         }}

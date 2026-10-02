@@ -23,6 +23,9 @@
 // الرد {ok,code,reason} + التوصيل 423 في مسارَي التسليم زي ما هما بالظبط.
 // ============================================================
 import { db, withRetry } from '@/lib/db'
+/* (2026-ص2) مفتاح قفل التسلسل الموحد — نفس مفتاح الفيديوهات بالظبط:
+   لوحة التحكم بتقفله مرة واحدة → دروس/واجبات/امتحانات كله موحد */
+import { isSequenceLockEnabled } from '@/lib/video-guard'
 /* (2026-و67) أسئلة الطالب الفعلية — نفس الدالة اللي بتقرأ شاشة الأدمن/التسليم،
    عشان امتحانات النماذج (أ/ب) تتتبع صح: سلسلة الحارس لازم تطابق حرفيًا
    اللي الطالب شايفه في قايمته (القايمة بترجع أسئلة نموذجه هو) */
@@ -215,6 +218,8 @@ export async function checkHwSequential(
   studentId: string | null | undefined
 ): Promise<SeqCheckResult> {
   if (!studentId) return { ok: true }
+  /* (2026-ص2) المفتاح الموحد من اللوحة — مطفي = مفيش قفل تسلسل على أي واجب */
+  try { if (!(await isSequenceLockEnabled())) return { ok: true } } catch (e) {}
   try {
     var hw: any = null
     try {
@@ -242,7 +247,8 @@ export async function checkHwSequential(
         return {
           ok: false,
           code: 423,
-          reason: 'الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله' + (prev.title ? ' — "' + prev.title + '"' : ''),
+          // (2026-ص2) رسالة عامة من غير أسماء — طلب المستر
+          reason: 'الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله',
         }
       }
       break // أقرب واجب قبله قابل للتسليم اتسلّم → الواجب ده مفتوح
@@ -261,6 +267,8 @@ export async function checkExamSequential(
   studentId: string | null | undefined
 ): Promise<SeqCheckResult> {
   if (!studentId) return { ok: true }
+  /* (2026-ص2) المفتاح الموحد من اللوحة — مطفي = مفيش قفل تسلسل على أي امتحان */
+  try { if (!(await isSequenceLockEnabled())) return { ok: true } } catch (e) {}
   try {
     var exam: any = null
     try {
@@ -288,7 +296,8 @@ export async function checkExamSequential(
         return {
           ok: false,
           code: 423,
-          reason: 'الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله' + (prev.title ? ' — "' + prev.title + '"' : ''),
+          // (2026-ص2) رسالة عامة من غير أسماء — طلب المستر
+          reason: 'الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله',
         }
       }
       break
