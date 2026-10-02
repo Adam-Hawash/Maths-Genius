@@ -5031,3 +5031,35 @@ Stage Summary:
 - المشروع مستقل وجاهز للرفع على GitHub بمجرد توكن/رابط من الاستاذ
 - صورة المستر: public/images/teacher-art.png — يبدلها بصورته الشخصية بنفس الاسم وهي بتتحدث تلقائيًا
 - درس تشغيلي مهم: أي سيرفر خلفي جديد لازم يتشغل بـ subshell double-fork وإلا بيتقتل بين الأوامر
+
+---
+Task ID: G-2
+Agent: Z.ai Code (main)
+Task: منصة Maths-Genius — قسم «إزاي تستخدم المنصة؟» بفيديو اختياري بيتحكم فيه الأدمن بالكامل (لو ضاف يظهر ويشتغل، لو ما ضافش ما يظهرش خالص)
+
+Work Log:
+- قراءة آخر 250 سطر من worklog.md (ملاحظة: المسار المطلوب /home/z/my-project/worklog.md مش موجود — السجل الفعلي هو worklog.md جذر الريبو وده اللي اتقرا واتضاف عليه) + استنساخ الريبو في /home/z/genius-howto + git config (Adam-Hawash / 223343744+Adam-Hawash@users.noreply.github.com)
+- باسلين tsc قبل التعديل: 35 خطأ (تاريخية في shadcn غير مستخدمة + examples + skills — زي ما موثق)
+- دراسة الأنماط القائمة: SiteConfig (مفتاح/قيمة upsirt عبر /api/config بـ DEFAULTS + PUT) — CMSPanel (تحميل الإعدادات + persistConfigNow = تنقية المفاتيح + PUT + توست + مزامنة ستور اللاندينج) — رفع chunkedUpload → /api/upload/chunk → جدول Media → /api/files/<id> — صفحات اللاندينج dynamic imports في page.tsx بترتيب: Hero → دليل الاستخدام → المميزات → الصفوف...
+- (1) الإعداد: DEFAULTS في /api/config كمل بمفتاحين howto_video_url: '' و howto_video_kind: 'link' — نفس نظام الإعدادات بالظبط (upsert + قراءة من قاعدة البيانات زي ما هي)
+- (2) src/lib/howto-video.ts جديد: toEmbedUrl (يوتيوب watch/youtu.be/shorts/embed → youtube-nocookie embed مع rel=0، درايف file/d → /preview، vimeo → player.vimeo.com) + isPlatformFile (بنية /api/files)
+- (3) src/components/landing/HowToVideoSection.tsx جديد: سكشن «إزاي تستخدم المنصة؟» نصوصه كلها عربي RTL — كارت بيضا بحدود ناعمة (bg-card border-border/60 shadow-sm) بنفس تصميم المنصة وأيقونة MonitorPlay بذهبي المنصة — لينك → iframe embed (aspect-video + allowFullScreen + loading=lazy) — ملف → <video controls playsInline preload=metadata> — **إخفاء شرطي صارم: rawUrl فاضي → return null فمفيش أي أثر في الـ DOM نهائياً**
+- (4) page.tsx: dynamic import للسكشن + رندره بين FeaturesSection و GradesSection (بعد الهيرو/المميزات وقبل صفوف الصفوف) — وبيظهر بس بعد ما الكونفج يوصل بأي قيمة
+- (5) CMSPanel.tsx (تاب المحتوى): كارت جديد «فيديو إزاي تستخدم المنصة | How-To Video» تحت إدارة الصور مباشرة فيه: شارة حالة (مفيش فيديو — السكشن مخفي / لينك ✓ / ملف مرفوع ✓) + خانة لينك (YouTube/Drive/Vimeo) + زرار «حفظ اللينك» بيتحفظ فورًا بنفس آلية persistConfigNow + زرار «رفع من الجهاز» بيرفع chunkedUpload(file, 'howto-video') بنفس بنية ملفات المنصة (Media في القاعدة مش /tmp — بيتخزن base64 في جدول Media ويخدم من /api/files/<id>، الحد 120MB) + زرار «حذف الفيديو» بيفضّي howto_video_url → السكشن بيختفي — + معاينة حية (iframe/video) للفيديو الحالي جوه الكارت
+- (6) اكتشاف أثناء الاختبار: /api/files بيحمي فيديوهات المرفوع بـ 403 إلا بتوكن/أدمن — فالفيديو كان مش هيشتغل على الرئيسية للزوار؛ الحل بنفس نمط الفيديو التعريفي الموجود (2026-و84): استثناء في files/[id]/route.ts — لو معرف الملف هو الموجود حالياً في SiteConfig.howto_video_url بيتخدم كفيديو عام (زي gallery) — الإضافة سطرية بتبطل أي خطر على باقي الفيديوهات المحمية
+- اختبار متصفح كامل (agent-browser session genius2، سيرفر dev بورت 3300 setsid + dev-3300.log):
+  * من غير فيديو: eval على document → getElementById('how-to-video') === null (مش موجود في الـ DOM نهائياً) ومفيش أي نص من السكشن في الصفحة ✓
+  * من اللوحة: حفظ لينك يوتيوب watch?v=dQw4w9WgXcQ → /api/config اتخزن (kind=link) → reload → السكشن ظهر بعنوان «إزاي تستخدم المنصة؟» و iframe واحد src= https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0 (تطبيع تلقائي) عرض 846px ✓
+  * ترتيب السكشن في الـ DOM: بعد قسم المميزات ومقبل صفوف «Academic Years» بالظبط ✓
+  * زرار حذف الفيديو من اللوحة → howto_video_url = '' → reload → السكشن اختفى من الـ DOM نهائياً ✓
+  * رفع ملف فيديو صغير من الجهاز (mp4 تجريبي 30KB) → chunked upload نجح → kind=file و filePath=/api/files/<id> → السكشن ظهر بعنصر <video> → readyState=4 والتشغيل اتأكد بمحاكاة تفاعل المستخدم: currentTime تقدم لحد نهاية الملف (2.0/2.0s) ✓ — وملف فيديو تاني (معرف عشوائي) لسه محمي 403/404 فالحماية ما اتكسرتش
+  * موبايل 390×844: صفر overflow أفقي، عرض الفيديو 332px متناسق ✓ — ديسكتوب 1440 سليم ✓ — console مفيش أخطاء (بس HMR logs) — page errors صفر — dev-3300.log نضيف من أخطاء ✓
+- تنظيف بعد الاختبار: صف Media التجريبي اتمسح من القاعدة + مفتاحي howto الفاضية اتمسحوا من SiteConfig (باسلين نضيف) — ملف الاختبار المؤقت اتمسح — الـ remote اللي فيه التوكن اتمسح من .git/config ومفيش توكن في أي ملف متتبع
+- التحقق النهائي: bunx tsc --noEmit = 35 خطأ (نفس الباسلين بالظبط — صفر أخطاء جديدة في الملفات الستة) — eslint على الملفات المعدلة: المقارنة قبل/بعد = صفر أخطاء جديدة (المستخدمة no-var التاريخية ما لمستش) — package.json/bun.lock رجعوا زي ما كانوا بعد تثبيت eslint المؤقت محلياً
+- Commit: 177f24a «G-2: قسم «إزاي تستخدم المنصة؟» — فيديو اختياري بيتحكم فيه الأدمن بالكامل» + push ناجح 5bd363d..177f24a على main (بتوكن inline في أمر push فقط — التوكن مش مكتوب في أي ملف) — Vercel هيوزع تلقائياً
+
+Stage Summary:
+- قسم «إزاي تستخدم المنصة؟» بقى تحت سيطرة الأدمن بالكامل: لينك يوتيوب/درايف/vimeo أو ملف مرفوع من الجهاز — وحالة «مفيش فيديو» معناها السكشن مش موجود في الصفحة خالص (return null — إخفاء شرطي صارم مش display:none)
+- الرفع ماشي على نفس بنية المنصة (chunked → Media → /api/files) والتخزين في قاعدة البيانات مش /tmp — والفيديو المرفوع بقى عام بالظبط زي الفيديو التعريفي الموجود قبل كده (نفس النمط) بدون مساس بحماية باقي الفيديوهات
+- أي تغيير من اللوحة (حفظ لينك/رفع/حذف) بيوصل للطالب فورًا بعد reload لأن القارئ هو نفس مصدر إعدادات الأدمن (/api/config → siteConfig في الستور)
+- للنشر: بعد pull على Vercel المستر يدخل تاب المحتوى → كارت «فيديو إزاي تستخدم المنصة» → يحط لينك أو يرفع ملف → السكشن هيظهر في الرئيسية على طول
