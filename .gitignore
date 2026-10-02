@@ -11,3 +11,4 @@ seed-test.cjs
 dev.log
 *.log
 tool-results/
+tool-results/
