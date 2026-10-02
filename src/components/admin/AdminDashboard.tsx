@@ -1210,6 +1210,9 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   const [formGroupGrade, setFormGroupGrade] = useState('')
   const [expandedGroup, setExpandedGroup] = useState('')
   const [movingOrder, setMovingOrder] = useState(false)
+  /* (2026-ص2) مفتاح قفل التسلسل الموحد — دروس/واجبات/امتحانات بقاعدة واحدة لكل الطلبة */
+  const [seqLockOn, setSeqLockOn] = useState(true)
+  const [seqLockSaving, setSeqLockSaving] = useState(false)
 
   const loadVideos = async (showLoader = true) => {
     if (showLoader) setLoading(true)
@@ -1229,6 +1232,32 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   }
 
   useEffect(() => { loadVideos() }, [filterGrade])
+
+  /* (2026-ص2) قراءة مفتاح قفل التسلسل من إعدادات المنصة */
+  useEffect(function () {
+    fetch('/api/config').then(function (r) { return r.json() }).then(function (d) {
+      setSeqLockOn(String((d || {}).video_sequence_lock ?? '1') !== '0')
+    }).catch(function () {})
+  }, [])
+
+  const saveSeqLock = async function (on: boolean) {
+    setSeqLockSaving(true)
+    var prev = seqLockOn
+    setSeqLockOn(on)
+    try {
+      const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ video_sequence_lock: on ? '1' : '0' }) })
+      if (res.ok) {
+        toast.success(on ? 'قفل التسلسل شغّال — كل الطلبة بنفس القاعدة' : 'قفل التسلسل اتقفل — الفيديوهات والواجبات والامتحانات مفتوحة لكل الطلبة', { duration: 6000 })
+      } else {
+        setSeqLockOn(prev)
+        toast.error('مقدرتش أحفظ الإعداد — جرب تاني')
+      }
+    } catch (e) {
+      setSeqLockOn(prev)
+      toast.error('مقدرتش أحفظ الإعداد — جرب تاني')
+    }
+    setSeqLockSaving(false)
+  }
 
   // Upload using shared chunked upload utility
   const uploadFileWithProgress = async (file: File, category: string, onProgress: (pct: number) => void, statusMsg: (msg: string) => void): Promise<string> => {
@@ -1759,6 +1788,22 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
             </div>
           </div>
         )}
+
+        {/* (2026-ص2) مفتاح قفل التسلسل الموحد — طلب المستر «خلي كله موحد»:
+            لوحة واحدة بتتحكم في التسلسل في الدروس والواجبات والامتحانات لكل الطلبة */}
+        <div className="rounded-lg border bg-card p-3 mb-4 flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-sm font-bold">قفل التسلسل في المشاهدة (دروس + واجبات + امتحانات)</p>
+            <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+              شغّال: كل الطلبة بنفس القاعدة — الفيديو/الواجب/الامتحان بيفتح بعد اللي قبله، والرسالة بتقول «شوف اللي قبله» من غير أسماء.
+              مطفي: كله مفتوح لكل الطلبة فورًا — لو طالب اتلخبط ترتيبه، اقفله وافتحه وهيرجع زي ما كان.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant={seqLockOn ? 'default' : 'secondary'} className="text-[10px]">{seqLockOn ? 'شغّال' : 'مطفي'}</Badge>
+            <Switch checked={seqLockOn} disabled={seqLockSaving} onCheckedChange={function (on) { saveSeqLock(on) }} aria-label="قفل التسلسل في المشاهدة" />
+          </div>
+        </div>
 
         {/* Video List — (2026-و106) الدروس المتعددة بتظهر كروت مجمعة بالأجزاء
             (2026-ص) قايمة موحدة بنفس ترتيب الطلبة الفعلي + ▲▼ لترتيب الدروس */}

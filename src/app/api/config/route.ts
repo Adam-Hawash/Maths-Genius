@@ -131,6 +131,11 @@ var DEFAULTS = {
   // kind: 'link' (يوتيوب/درايف/vimeo → iframe embed) أو 'file' (ملف مرفوع → <video>)
   howto_video_url: '',
   howto_video_kind: 'link',
+
+  // === (2026-ص2) مفتاح قفل التسلسل الموحد — دروس/واجبات/امتحانات ===
+  // '1' (أو غايب) = التسلسل شغّال: كل حاجة بتفتح بعد اللي قبلها لكل الطلبة
+  // '0' = التسلسل مطفي للكل: كله مفتوح بنفس الشكل لكل الطلبة
+  video_sequence_lock: '1',
 }
 
 export async function GET() {
