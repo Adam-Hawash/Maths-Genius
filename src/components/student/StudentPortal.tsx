@@ -129,6 +129,11 @@ function StudentPortalInner() {
   /* (2026-و40) نتايج الامتحانات وصلت **مؤكدة**؟ — القفل التسلسلي للامتحانات
      ممنوع يشتغل قبل تأكيد التحميل (نفس ضمانة الواجبات في HomeworkTab) */
   const [examResultsLoaded, setExamResultsLoaded] = useState(false)
+  /* (2026-ص2-ب) نسب مشاهدة الفيديوهات وصلت **مؤكدة** من السيرفر؟ — علاج
+     «شاف الفيديوهات كلها وبعدين لقيها مقفولة»: لو /api/video-progress فشل
+     أو رد غير سليم، نسب فاضية كانت بتحسب أقفال كاذبة على طالب خلص كل حاجة.
+     نفس ضمانة الواجبات والامتحانات — والسيرفر (video-ticket) هو الفيصل */
+  const [videoProgressLoaded, setVideoProgressLoaded] = useState(false)
 
   const grade = currentStudent?.grade || ''
   const studentId = currentStudent?.id || ''
@@ -237,6 +242,7 @@ function StudentPortalInner() {
     let cancelled = false
     /* (2026-و40) كل تحميل جديد = الحالة "مش عارفين" تاني لحد ما الرد يتأكد */
     setExamResultsLoaded(false)
+    setVideoProgressLoaded(false)
     ;(async () => {
       try {
         const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes, payRes, accessRes, progressRes, hwResultsRes] = await Promise.all([
@@ -248,10 +254,14 @@ function StudentPortalInner() {
           fetch(`/api/activities?studentId=${studentId}&action=watched_video&pageSize=200`).then(r => r.json()),
           fetch(`/api/payments?studentId=${studentId}&status=approved&pageSize=200`).then(r => r.json()),
           fetch(`/api/video-access?studentId=${studentId}`).then(r => r.json()).catch(() => ({ accesses: [] })),
-          fetch(`/api/video-progress?studentId=${studentId}`).then(r => r.json()).catch(() => ({ progress: [] })),
+          /* (2026-ص2-ب) _progressOk = رد سليم فعلًا (r.ok + JSON مفكوك) —
+             ممنوع نحسب أقفال على نسب ناقصة/فاشلة (علاج القفل الكاذب) */
+          fetch(`/api/video-progress?studentId=${studentId}`).then(function (r) { return r.ok ? r.json().then(function (d) { return Object.assign({}, d, { _progressOk: true }) }) : { progress: [] } }).catch(() => ({ progress: [] })),
           fetch(`/api/homework-results?studentId=${studentId}`).then(r => r.json()).catch(() => ({ results: [] })),
         ])
         if (cancelled) return
+        /* (2026-ص2-ب) الأقفال مسموحة بس بعد تأكيد وصول النسب سليمة */
+        if ((progressRes as any)._progressOk) setVideoProgressLoaded(true)
         const videos = videosRes.videos || []
         const watchedIds = new Set<string>((actRes.activities || []).map((a: any) => a.details?.replace('Watched: ', '')))
         const approvedPayments = payRes.payments || []
@@ -489,7 +499,7 @@ function StudentPortalInner() {
                 {T('بص على الكل', 'See All')}
               </Button>
             </div>
-            <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={initialData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} />
+            <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={initialData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} progressLoaded={videoProgressLoaded} />
           </div>
 
           {/* Guide modal */}
@@ -570,7 +580,7 @@ function StudentPortalInner() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} />}
+        {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} progressLoaded={videoProgressLoaded} />}
         {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} studentId={studentId} completedHwIds={completedHwIds} onHwSubmitted={(id) => setCompletedHwIds(prev => new Set([...prev, id]))} />}
         {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} completedExamIds={completedExamIds} onExamSubmitted={(id) => setCompletedExamIds(prev => new Set([...prev, id]))} studentId={studentId} resultsLoaded={examResultsLoaded} onGoHome={() => setActiveTab('videos')} />}
         {/* (2026-و66) المولد الذكي — 10 أسئلة تدريب بأي فكرة الطالب يكتبها */}
@@ -627,7 +637,7 @@ function videoKindOf(v: any): 'youtube' | 'file' | 'link' | 'none' {
   return 'none'
 }
 
-function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, videoProgress, studentStatus, isPaidAccess, studentName, studentPhone }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string; videoProgress: Record<string, number>; studentStatus?: string; isPaidAccess?: boolean; studentName?: string; studentPhone?: string }) {
+function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, videoProgress, studentStatus, isPaidAccess, studentName, studentPhone, progressLoaded }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string; videoProgress: Record<string, number>; studentStatus?: string; isPaidAccess?: boolean; studentName?: string; studentPhone?: string; progressLoaded: boolean }) {
   const { setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
   /* (2026-ص2) مفتاح قفل التسلسل الموحد من إعدادات المنصة — '0' = التسلسل مطفي لكل الطلبة */
@@ -780,6 +790,11 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         لكل الطلبة بنفس الشكل (دروس/واجبات/امتحانات) */
   const seqInfoMap = useMemo(function () {
     if (!seqLockEnabled) return {} as Record<string, { blockerPct: number }>
+    /* (2026-ص2-ب) قبل تأكيد تحميل نسب المشاهدة من السيرفر — مفيش أي قفل
+       (fail-open زي الواجبات والامتحانات بالظبط): النسب الفاضية/الفاشلة كانت
+       بتقفل فيديوهات على طالب شافها كلها. لو النسب ما وصلتش، الفتح بيبقى
+       مسموح في الواجهة والسيرفر (video-ticket) هو اللي بيحكم بجد */
+    if (!progressLoaded) return {} as Record<string, { blockerPct: number }>
     var chain: { id: string }[] = []
     lessons.forEach(function (item) {
       var arr: VideoType[] = item.type === 'group' ? item.parts : [item.video]
@@ -809,7 +824,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
       }
     }
     return map
-  }, [lessons, mergedProgress, seqLockEnabled])
+  }, [lessons, mergedProgress, seqLockEnabled, progressLoaded])
 
   const lockedMap = useMemo(function () {
     var map: Record<string, boolean> = {}
