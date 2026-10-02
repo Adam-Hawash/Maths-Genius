@@ -14,6 +14,14 @@ import { db } from '@/lib/db'
 import { gradeWritingSmart, gradeFallbackDecisive } from '@/lib/smart-grader'
 import { gradeImageAnswer, extractImageMediaIds } from '@/lib/ai-image-grader'
 import { resolveQuestionsForStudent } from '@/lib/exam-models'
+/* (2026-س1) مصدر واحد لمفتاح الإجابة + تصنيف واحد اختياري/مقالي — نفس اللي
+   وقت التسليم بالظبط. الجذر: mcqContrib كان بيقبل المفتاح الرقمي بس،
+   فأي إعادة حساب للدرجة (استكمال تصحيح/إعادة تصحيح/sweep) كانت بتق
+   أسئلة مفتاحها متخزن "2" أو "B" إنها من غير مفتاح = صفر — والطالب
+   اللي حل صح بيلاقي درجته نزلت (32 ← 29) من غير سبب. دلوقتي إعادة
+   الحساب بتستخدم نفس normalizeCorrectKey اللي حسبت بيها الدرجة أول مرة. */
+import { normalizeCorrectKey } from '@/lib/correct-key'
+import { isWritingQuestion } from '@/lib/question-figures'
 
 export type QItem = { q: any; origIdx: number }
 
@@ -34,12 +42,9 @@ export function splitQuestions(rawQuestions: any[]): { mcq: QItem[]; writing: QI
   var writing: QItem[] = []
   var all: any[] = Array.isArray(rawQuestions) ? rawQuestions : []
   all.forEach(function (q, idx) {
-    var isWriting = q.type === 'writing' || q.type === 'essay'
-    if (!isWriting && Array.isArray(q.options)) {
-      var allNA = q.options.length > 0 && q.options.every(function (o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
-      if (allNA) isWriting = true
-    }
-    if (!isWriting && (!q.options || q.options.length === 0)) isWriting = true
+    /* (2026-س1) نفس دالة التسليم isWritingQuestion — الاختيارات بالصور
+       اختياري دايمًا، ومفيش أي اختلاف تصنيف بين التسليم وإعادة الحساب */
+    var isWriting = isWritingQuestion(q)
     if (isWriting) writing.push({ q: q, origIdx: idx })
     else mcq.push({ q: q, origIdx: idx })
   })
@@ -62,14 +67,8 @@ export function questionsHaveWriting(qs: any): boolean {
     var parsed = typeof qs === 'string' ? JSON.parse(qs) : qs
     if (!Array.isArray(parsed)) return false
     for (var i = 0; i < parsed.length; i++) {
-      var q = parsed[i] || {}
-      var isWriting = q.type === 'writing' || q.type === 'essay'
-      if (!isWriting && Array.isArray(q.options)) {
-        var allNA = q.options.length > 0 && q.options.every(function (o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
-        if (allNA) isWriting = true
-      }
-      if (!isWriting && (!q.options || q.options.length === 0)) isWriting = true
-      if (isWriting) return true
+      /* (2026-س1) نفس دالة التسليم isWritingQuestion — تصنيف واحد في كل المكان */
+      if (isWritingQuestion(parsed[i] || {})) return true
     }
   } catch (e) {}
   return false
@@ -308,8 +307,11 @@ export function mcqContrib(mcq: QItem[], answers: any): { contrib: Record<string
     var pts = pointsOf(q, 1)
     maxFromMcq += pts
     var opts = Array.isArray(q.options) ? q.options : []
-    /* 2026-و11 — مفتاح ناقص = صفر صادق مش (A) بالحر — لحد ما المستر يثبت المفتاح */
-    var correctIdx = typeof q.correct === 'number' ? q.correct : -1
+    /* 2026-و11 — مفتاح ناقص = صفر صادق مش (A) بالحر — لحد ما المستر يثبت المفتاح
+       (2026-س1) التطبيع الموحّد normalizeCorrectKey — نفس حساب التسليم حرفيًا:
+       2 / "2" / "B" / نص الخيار كلها بتتقرأ صح، فإعادة الحساب ما بتنقّش
+       درجة مين ولا بتقلها — ده كان سبب «الدرجة نزلت لوحدها» */
+    var correctIdx = normalizeCorrectKey(q, opts)
     if (correctIdx < 0 || correctIdx >= opts.length) {
       contrib[String(item.origIdx)] = 0
       return
@@ -343,7 +345,7 @@ export function sumMax(all: any[], mcqCount: number, verdicts: any[]): number {
 export async function regradeExamResult(resultId: string): Promise<{ score: number; maxScore: number } | null> {
   await ensureResultColumns()
   var rows: any[] = await db.$queryRawUnsafe(
-    'SELECT id, examId, studentId, score, maxScore, answers, writingGrades, gradeOverrides FROM ExamResult WHERE id = ? LIMIT 1',
+    'SELECT id, examId, studentId, score, maxScore, answers, writingGrades, gradeOverrides, penaltyPoints, assistantPenalty FROM ExamResult WHERE id = ? LIMIT 1',
     resultId
   )
   if (!rows || rows.length === 0) return null
@@ -379,6 +381,10 @@ export async function regradeExamResult(resultId: string): Promise<{ score: numb
 
   var finalScore = 0
   Object.keys(contrib).forEach(function (k) { finalScore += contrib[k] || 0 })
+  /* (2026-س1) الخصم المخزّن (مخالفات الغش + المساعد الذكي) بيفضل محسوب
+     بعد إعادة التصحيح زي التسليم بالظبط — مفيش درجة بتزيد لوحدها */
+  var rgPenalty = Math.max(0, (Number(res.penaltyPoints) || 0) + (Number(res.assistantPenalty) || 0))
+  if (rgPenalty > 0) finalScore = Math.max(0, finalScore - rgPenalty)
   var maxScore = sumMax(parts.all, parts.mcq.length, writingResult.verdicts)
   if (maxScore === 0) maxScore = res.maxScore || 1
 

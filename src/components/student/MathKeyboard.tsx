@@ -547,8 +547,36 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
 
   return (
     <div className="w-full space-y-2">
+      {/* (2026-س2) إرشاد الحل بالصورة — بيظهر والخانة لسه فاضية:
+          ده اللي بيخلي الطالب اللي «ما بيعرفش يصور/يرفع» يعرف الخطوات
+          من أول ثانية — اكتب في الكشكول ← صوّر/ارفع من الزرارين اللي تحت */}
+      {!value && !uploading && (
+        <div className="flex items-start gap-2 p-2.5 rounded-lg border-2 border-sky-400/50 bg-sky-50 dark:bg-sky-950/40 dark:border-sky-700/60" dir="rtl">
+          <span className="text-lg leading-none mt-0.5">📸</span>
+          <p className="text-xs sm:text-[13px] font-bold text-sky-800 dark:text-sky-200 leading-relaxed">
+            اكتب حلك في كشكولك الأول ✍️ وبعدين صوّر الورقة بزرار
+            <span className="mx-1 px-1.5 py-0.5 rounded bg-emerald-600 text-white">📷 تصوير بالكاميرا</span>
+            أو ارفع صورة جاهزة بزرار
+            <span className="mx-1 px-1.5 py-0.5 rounded bg-amber-400 text-amber-950">📎 رفع صورة</span>
+            — الصورة بتوصل للمستر تلقائيًا مع إجابتك
+          </p>
+        </div>
+      )}
       {/* Toolbar above textarea - not overlapping */}
       <div className="flex items-center gap-1.5 flex-wrap">
+        {/* (2026-س2) زرار الكاميرا بقى أول زرار وأكبر وأوضح — ده الحل الأساسي
+            لشكوى «الطلاب ما بيعرفوش يصوروا ورقة الحل»: زرار كبير بلون صريح
+            ونص واضح بحد أدنى 44px لمس على الموبايل */}
+        <button
+          type="button"
+          onClick={openCamera}
+          disabled={uploading}
+          className="inline-flex items-center gap-2 px-4 min-h-[44px] rounded-lg text-sm font-bold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800 transition-colors disabled:opacity-50"
+          title="صوّر ورقة حلك بالكاميرا وارفعها"
+        >
+          <Camera className="h-4 w-4" />
+          <span>📷 تصوير بالكاميرا</span>
+        </button>
         <button
           type="button"
           onClick={function () {
@@ -557,28 +585,15 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
             fileInputRef.current?.click()
           }}
           disabled={uploading}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
-          title="Upload image"
+          className="inline-flex items-center gap-2 px-3 min-h-[44px] rounded-lg text-sm font-bold border-2 border-amber-500/60 bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50"
+          title="ارفع صورة ورقة الحل من الجهاز"
         >
           {uploading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <ImageIcon className="h-3.5 w-3.5" />
+            <ImageIcon className="h-4 w-4" />
           )}
-          <span>{uploading ? 'جاري رفع الورقة كاملة... ' + uploadPct + '%' : 'رفع صورة ورقة الحل'}</span>
-        </button>
-        {/* (2026-و73) زرار الكاميرا — طلب المستر: زرار جنب أي مسألة مقالية يقدر
-          * الطالب يصور ورقة حله بيها بكاميرا الجهاز نفسه — ومن غير ما يتحسب
-          * خروج من المنصة (نفس إعفاء زرار الرفع) */}
-        <button
-          type="button"
-          onClick={openCamera}
-          disabled={uploading}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors disabled:opacity-50"
-          title="Take a photo with your camera"
-        >
-          <Camera className="h-3.5 w-3.5" />
-          <span>تصوير بالكاميرا</span>
+          <span>{uploading ? 'جاري رفع الورقة... ' + uploadPct + '%' : '📎 رفع صورة الحل'}</span>
         </button>
         <button
           type="button"

@@ -58,12 +58,16 @@ function parseAnswers(raw: any): any {
 }
 
 // حساب الدرجة النهائية من الأحكام المدموجة (نفس معادلة regrade بالظبط)
+// (2026-س1) penalty = الخصم المخزّن في النتيجة (مخالفات الغش + المساعد الذكي)
+// — لازم يتقاص من الدرجة المعاد حسابها زي ما اتحسب وقت التسليم، وإلا أي
+// استكمال تصحيح كان بيرجّع الخصم ويزوّد الدرجة غلط
 function computeScore(
   parts: { mcq: QItem[]; writing: QItem[]; all: any[] },
   mergedVerdicts: any[],
   answers: any,
   overridesJson: any,
-  fallbackMax: number
+  fallbackMax: number,
+  penalty?: number
 ): { score: number; maxScore: number } {
   var mcqResult = mcqContrib(parts.mcq, answers)
   var overrideContrib = applyOverrides(mergedVerdicts, overridesJson, parts.all, 5)
@@ -74,6 +78,8 @@ function computeScore(
   Object.keys(overrideContrib).forEach(function (k) { contrib[k] = overrideContrib[k] })
   var score = 0
   Object.keys(contrib).forEach(function (k) { score += contrib[k] || 0 })
+  var pen = Math.max(0, Number(penalty) || 0)
+  if (pen > 0) score = Math.max(0, score - pen)
   var maxScore = sumMax(parts.all, parts.mcq.length, mergedVerdicts)
   if (!maxScore) maxScore = fallbackMax || 1
   return { score: score, maxScore: maxScore }
@@ -164,7 +170,7 @@ export async function finishPendingForExamResult(
   try {
     await ensureResultColumns()
     var rows: any[] = await db.$queryRawUnsafe(
-      'SELECT id, examId, studentId, score, maxScore, answers, writingGrades, writingResults, gradeOverrides FROM ExamResult WHERE id = ? LIMIT 1',
+      'SELECT id, examId, studentId, score, maxScore, answers, writingGrades, writingResults, gradeOverrides, penaltyPoints, assistantPenalty FROM ExamResult WHERE id = ? LIMIT 1',
       resultId
     )
     if (!rows || rows.length === 0) return null
@@ -205,7 +211,9 @@ export async function finishPendingForExamResult(
       var merged = parts.writing
         .map(function (it) { return byIdx[String(it.origIdx)] })
         .filter(Boolean)
-      var sc = computeScore(parts, merged, answers, res.gradeOverrides, res.maxScore)
+      /* (2026-س1) خصم النتيجة المخزّن (غش/مساعد ذكي) بيفضل محسوب — نفس رقم التسليم */
+      var exPenalty = Math.max(0, (Number(res.penaltyPoints) || 0) + (Number(res.assistantPenalty) || 0))
+      var sc = computeScore(parts, merged, answers, res.gradeOverrides, res.maxScore, exPenalty)
       try {
         await db.$executeRawUnsafe(
           'UPDATE ExamResult SET score = ?, maxScore = ?, writingGrades = ?, writingResults = ? WHERE id = ?',
