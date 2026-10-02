@@ -47,6 +47,8 @@ function parseTargetIds(raw: unknown): string[] {
 }
 
 // Normalize grade names so old and new naming conventions match
+import { gradeVariants } from '@/lib/grade-names'
+
 function normalizeGrade(grade: string): string {
   if (!grade) return ''
   var g = grade.trim()
@@ -132,11 +134,10 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {}
     if (grade) {
-      const normalizedGrade = normalizeGrade(grade)
+      /* (2026-ص3) مطابقة تساوي حرفية لكل صيغ نفس الصف — مفيش contains بأول
+         كلمة: كانت بتخلّي امتحان «أولى بكالوريا» يظهر لـ«أولى إعدادي» */
       where.OR = [
-        { grade: grade },
-        { grade: normalizedGrade },
-        { grade: { contains: normalizedGrade.split(' ')[0] } },
+        { grade: { in: gradeVariants(grade) } },
       ]
     }
     if (keyword) {

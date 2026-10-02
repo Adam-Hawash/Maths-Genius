@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { gradeVariants } from '@/lib/grade-names'
 
 export const runtime = 'nodejs'
 
@@ -58,12 +59,9 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {}
     if (grade) {
-      // Fuzzy grade matching: نفس فلاتر /api/homework بالظبط
-      const normalizedGrade = normalizeGrade(grade)
+      /* (2026-ص3) مطابقة تساوي حرفية — مفيش contains بأول كلمة (تسريب بين الصفوف) */
       where.OR = [
-        { grade: grade },
-        { grade: normalizedGrade },
-        { grade: { contains: normalizedGrade.split(' ')[0] } },
+        { grade: { in: gradeVariants(grade) } },
       ]
     }
 

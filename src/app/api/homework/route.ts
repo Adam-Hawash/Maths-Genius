@@ -29,6 +29,8 @@ function parseTargetIds(raw: unknown): string[] {
 
 // Normalize grade names so old and new naming conventions match
 // e.g. "الصف الثالث الاعدادي" == "تالتة إعدادي" == "الصف الثالث الإعدادي"
+import { gradeVariants } from '@/lib/grade-names'
+
 function normalizeGrade(grade: string): string {
   if (!grade) return ''
   var g = grade.trim()
@@ -72,15 +74,11 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {}
     if (grade) {
-      // Fuzzy grade matching: normalize both sides
-      const normalizedGrade = normalizeGrade(grade)
+      /* (2026-ص3) مطابقة تساوي حرفية لكل صيغ نفس الصف — مفيش contains بأول
+         كلمة: كانت بتخلّي «تالتة إعدادي» تلحق «تالتة بكالوريا» والعكس */
       where.OR = [
-        { grade: grade },                                    // exact match
-        { grade: normalizedGrade },                           // normalized match
-        { grade: { contains: normalizedGrade.split(' ')[0] } }, // contains first word (e.g. "تالتة")
+        { grade: { in: gradeVariants(grade) } },
       ]
-      // Also match if the homework grade contains the normalized grade's first word
-      // This handles cases like "تالتة إعدادي" matching "الصف الثالث الاعدادي"
     }
     if (keyword) {
       where.OR = where.OR ? [...(where.OR as unknown[]), { title: { contains: keyword } }] : [{ title: { contains: keyword } }]
