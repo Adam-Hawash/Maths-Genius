@@ -23,6 +23,7 @@
 // الرد {ok,code,reason} + التوصيل 423 في مسارَي التسليم زي ما هما بالظبط.
 // ============================================================
 import { db, withRetry } from '@/lib/db'
+import { gradeVariants } from '@/lib/grade-names'
 /* (2026-ص2) مفتاح قفل التسلسل الموحد — نفس مفتاح الفيديوهات بالظبط:
    لوحة التحكم بتقفله مرة واحدة → دروس/واجبات/امتحانات كله موحد */
 import { isSequenceLockEnabled } from '@/lib/video-guard'
@@ -157,12 +158,14 @@ async function loadVisibleChain(
        (hasQuestions=false على الخام) والحارس كان بيرجع لامتحان أقدم — فبيقفل
        طالب سلّم فعلاً. على العميل نفس الامتحان بيتتبّع عادي (أسئلة نموذجه
        واصلة ليه) → سلسلتين مختلفتين = قفل كاذب. */
+    /* (2026-ص3) مطابقة تساوي حرفية لكل صيغ نفس الصف — LIKE بأول كلمة كانت
+       بتخلّي سلسلة «أولى بكالوريا» تحتسب عناصر «أولى إعدادي» */
+    var gv = gradeVariants(grade)
+    var gvPh = gv.map(function () { return '?' }).join(', ')
     rows = await withRetry(function () {
-      return (db as any).$queryRawUnsafe(
-        'SELECT id, title, questions, scheduledAt, targetStudentIds, targetGroupIds' + (kind === 'exam' ? ', models, modelMode, fixedModel' : '') + ' FROM ' + table +
-        ' WHERE grade = ? OR grade = ? OR grade LIKE ? ORDER BY createdAt ASC',
-        grade, normalized, '%' + firstWord + '%'
-      )
+      var sql = 'SELECT id, title, questions, scheduledAt, targetStudentIds, targetGroupIds' + (kind === 'exam' ? ', models, modelMode, fixedModel' : '') + ' FROM ' + table +
+        ' WHERE grade IN (' + gvPh + ') ORDER BY createdAt ASC'
+      return (db as any).$queryRawUnsafe.apply(null, [sql].concat(gv))
     }, 3, 300) as any[]
   } catch (e) {
     console.warn('[SequentialGuard] chain load failed — failing OPEN (' + table + '):', e)
