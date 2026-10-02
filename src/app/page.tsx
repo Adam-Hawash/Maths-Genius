@@ -19,6 +19,11 @@ const FeaturesGuideSection = dynamic(() => import('@/components/landing/Features
 const FeaturesSection = dynamic(() => import('@/components/landing/FeaturesSection').then(function(m) { return { default: m.FeaturesSection } }), {
   loading: () => <div className="h-20" />,
 })
+/* (G-2) قسم «إزاي تستخدم المنصة؟» — فيديو اختياري من الأدمن: لو مفيش
+   فيديو محفوظ السكشن بيرجّع null فمش بيظهر في الـ DOM نهائيًا */
+const HowToVideoSection = dynamic(() => import('@/components/landing/HowToVideoSection').then(function(m) { return { default: (m as any).HowToVideoSection || (m as any).default } }), {
+  loading: () => <div className="h-20" />,
+})
 const GradesSection = dynamic(() => import('@/components/landing/GradesSection').then(function(m) { return { default: m.GradesSection } }), {
   loading: () => <div className="h-20" />,
 })
@@ -220,6 +225,9 @@ export default function HomePage() {
           <HeroSection />
           <FeaturesGuideSection />
           <FeaturesSection />
+          {/* (G-2) فيديو «إزاي تستخدم المنصة» — بعد المميزات وقبل صفوف الصفوف
+              الدراسية — وبيظهر بس لما الأدمن يكون ضاف فيديو من لوحة التحكم */}
+          <HowToVideoSection />
           <GradesSection />
           {/* (2026-و29) أفضل 3 طلاب بقوا في النافبار (زرار أوائل الطلبة) بدل الرئيسية */}
           <LessonsSection />

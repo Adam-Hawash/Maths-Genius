@@ -125,6 +125,12 @@ var DEFAULTS = {
   payment_vodafone_cash: '',
   payment_instapay: '',
   payment_fawry: '',
+
+  // === (G-2) قسم «إزاي تستخدم المنصة» — فيديو اختياري من الأدمن ===
+  // فاضي = السكشن مش بيظهر خالص في الصفحة الرئيسية (إخفاء شرطي صارم)
+  // kind: 'link' (يوتيوب/درايف/vimeo → iframe embed) أو 'file' (ملف مرفوع → <video>)
+  howto_video_url: '',
+  howto_video_kind: 'link',
 }
 
 export async function GET() {
