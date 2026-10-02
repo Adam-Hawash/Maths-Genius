@@ -26,6 +26,47 @@ export function repairCorruptMath(input: string): string {
   var s = String(input)
   // U+FFFD replacement chars are lossy-encoding leftovers — never legitimate
   s = s.replace(/\uFFFD/g, '')
+  // ---- Unicode double-escape repair (U-1 — شكوى المستر: «u221b48 + u221b27»،
+  //      «X u222a Y»، «a u2208 ]2, 5[») ----
+  // THE ROOT BUG: models sometimes emit non-ASCII math symbols as \uXXXX
+  // escapes INSIDE JSON but double-escape them ("\\u221b" in the raw bytes).
+  // After JSON.parse the stored text keeps a LITERAL \u221b sequence; the
+  // renderer's backslash stripping then shows "u221b48" instead of "∛48".
+  // LAYER 1 — literal "\uXXXX" (backslash still present) → real character.
+  //   Safe on ANY text: a literal backslash-u-4hex inside math content is
+  //   always an escape artifact, never real content. Also repairs rows that
+  //   were stored with the whole escape intact (\u221b48 → ∛48).
+  s = s.replace(/\\u([0-9a-fA-F]{4})/g, function (_m, hex: string) {
+    return String.fromCharCode(parseInt(hex, 16))
+  })
+  // LAYER 2 — bare "u221b48" (backslash already eaten by an older lossy
+  //   layer) → real character, but ONLY when:
+  //   (a) the char before "u" is not a hex digit (longer hex runs stay
+  //       intact — "bu22ed" is skipped, "Xu2229Y" decodes to X∩Y), and
+  //   (b) the codepoint falls in a known symbol block (math operators,
+  //       arrows, Greek, roots, shapes…) — ordinary words never change,
+  //   and the FIRST 4 hex digits are consumed exactly like the original
+  //   escape was written ("u221b48" = \u221b + "48" → ∛48, never ∛4+8).
+  s = s.replace(/(^|[^0-9a-fA-F])([uU])([0-9a-fA-F]{4})/g, function (_m, pre: string, _u: string, hex: string) {
+    var cp = parseInt(hex, 16)
+    var inBlock =
+      (cp >= 0x00A0 && cp <= 0x00FF) || // ° ± × ÷ µ …
+      (cp >= 0x0370 && cp <= 0x03FF) || // Greek π θ α …
+      (cp >= 0x2010 && cp <= 0x2027) || // dashes/quotes – — ‘ …
+      (cp >= 0x2030 && cp <= 0x205E) || // ‰ ′ ″ ⁿ …
+      (cp >= 0x2100 && cp <= 0x214F) || // letterlike ℃ ™ № …
+      (cp >= 0x2150 && cp <= 0x218F) || // number forms ½ ⅓ ⅔ …
+      (cp >= 0x2190 && cp <= 0x21FF) || // arrows → ↔ ⇒ …
+      (cp >= 0x2200 && cp <= 0x22FF) || // MATH: ∀ ∂ ∃ ∈ ∉ ∏ ∑ √ ∛ ∜ ∞ ∠ ∩ ∪ ≤ ≥ ≠ ≈ ⊂ ⊃ ⊥ …
+      (cp >= 0x2300 && cp <= 0x23FF) || // misc technical ⌀ ⎯ …
+      (cp >= 0x2460 && cp <= 0x24FF) || // enclosed ① ② ③ …
+      (cp >= 0x2500 && cp <= 0x25FF) || // box drawing + shapes △ □ ○ ● …
+      (cp >= 0x2600 && cp <= 0x26FF) || // misc symbols ☀ ⚡ …
+      (cp >= 0x2700 && cp <= 0x27BF) || // dingbats ✓ ✗ …
+      false
+    if (!inBlock) return _m
+    return pre + String.fromCharCode(cp)
+  })
   // ---- power heal (multi-digit powers stored broken by the old keyboard bug) ----
   // "2¹0" → "2¹⁰" , "x²15" → "x²¹⁵" : a superscript run followed by normal-size
   // digits was ALWAYS meant to be one whole power — join them at render time.
