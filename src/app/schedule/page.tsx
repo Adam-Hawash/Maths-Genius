@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAppStore } from '@/stores/app-store'
 import { useEffect, useState } from 'react'
-import { CalendarClock, Clock, GraduationCap, ArrowRight, BookOpen, Loader2 } from 'lucide-react'
+import { CalendarClock, Clock, GraduationCap, ArrowRight, BookOpen, Loader2, ChevronDown } from 'lucide-react'
 /* (و64) زراير الثيم + اللغة الموحدة في كل المنصة */
 import { PlatformToggles } from '@/components/platform-toggles'
 /* (و72) ترجمة نصوص الصفحة حسب لغة الزائر */
@@ -83,9 +83,20 @@ function slotCountLabel(count: number): string {
   return count + ' حصة'
 }
 
+/* (2026-ص4-ب) كشف الحصص البرايفت — المستر بيكتب «برايفت» جنب اسم الصف في اللوحة.
+   بطلب المستر: «تشيل كل الحصص اللي مكتوب جنبها برايفت… تعمل لي حاجة تحت زي الكلمة
+   كده صغيرة شوية مكتوب حصص برايفت بس في الآخر خالص بحيث إنها ما تبانش قوي» —
+   فصل عرض بس: المواعيد نفسها ما بتتلمسش خالص */
+function isPrivateGrade(grade: string): boolean {
+  const g = String(grade || '').toLowerCase()
+  return g.indexOf('برايفت') >= 0 || g.indexOf('بريفت') >= 0 || g.indexOf('private') >= 0
+}
+
 export default function SchedulePage() {
   const { siteConfig, setSiteConfig, configLoaded } = useAppStore()
   const [loading, setLoading] = useState(true)
+  /* (2026-ص4-ب) إظهار/إخفاء قسم الحصص البرايفت — مقفول بالافتراضي */
+  const [showPrivate, setShowPrivate] = useState(false)
   /* (و72) لغة الزائر */
   var lang = useLangStore(function (s) { return s.lang })
 
@@ -133,6 +144,19 @@ export default function SchedulePage() {
     if (siteConfig.schedule_brand) brandName = siteConfig.schedule_brand
   } catch (e) {
     // keep defaults
+  }
+
+  /* (2026-ص4-ب) فصل الحصص البرايفت عن الجدول الرئيسي — نفس البيانات حرفيًا
+     (فصل عرض بس: اليوم اللي كل حصصه برايفت بيختفي من الجدول الرئيسي وبيظهر
+     كله جوه قسم «حصص برايفت»، واليوم اللي فيه خليط بيتعرض العادي من غير حصص البرايفت) */
+  const mainSchedule: DaySchedule[] = []
+  const privateSchedule: DaySchedule[] = []
+  for (let di = 0; di < schedule.length; di++) {
+    const d = schedule[di]
+    const normalSlots = d.slots.filter((s) => !isPrivateGrade(s.grade))
+    const privateSlots = d.slots.filter((s) => isPrivateGrade(s.grade))
+    if (normalSlots.length > 0) mainSchedule.push({ day: d.day, slots: normalSlots })
+    if (privateSlots.length > 0) privateSchedule.push({ day: d.day, slots: privateSlots })
   }
 
   if (loading) {
@@ -187,9 +211,9 @@ export default function SchedulePage() {
           </p>
         </div>
 
-        {/* Schedule Grid */}
+        {/* Schedule Grid — الرئيسي من غير الحصص البرايفت (2026-ص4-ب) */}
         <div className="grid gap-5 md:grid-cols-2">
-          {schedule.map((daySchedule, dayIdx) => {
+          {mainSchedule.map((daySchedule, dayIdx) => {
             const gradient = DAY_COLORS[daySchedule.day] || 'from-primary to-primary'
             const count = daySchedule.slots.length
             return (
@@ -253,6 +277,79 @@ export default function SchedulePage() {
             </p>
           </div>
         </div>
+
+        {/* (2026-ص4-ب) «حصص برايفت» — كلمة صغيرة في الآخر خالص ما بتبانش قوي،
+           اللي يدوس عليها بيلاقي كل الحصص البرايفت بمواعيدها بالأيام بالمراحل
+           بتاعتها زي ما المستر حاططها بالظبط — والمواعيد نفسها ما بتتلمسش */}
+        {privateSchedule.length > 0 && (
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => setShowPrivate(!showPrivate)}
+              aria-expanded={showPrivate}
+              className="inline-flex items-center gap-1 min-h-[44px] px-3 text-xs text-muted-foreground/60 hover:text-muted-foreground underline underline-offset-2 decoration-muted-foreground/30 transition-colors cursor-pointer"
+            >
+              حصص برايفت
+              <ChevronDown className={'h-3 w-3 transition-transform' + (showPrivate ? ' rotate-180' : '')} />
+            </button>
+          </div>
+        )}
+
+        {/* (2026-ص4-ب) قسم الحصص البرايفت — بيفتح لما تدوس على الكلمة تحت خالص */}
+        {showPrivate && privateSchedule.length > 0 && (
+          <section className="mt-3" aria-label="الحصص البرايفت">
+            <p className="text-center text-[11px] text-muted-foreground mb-4">
+              الحصص البرايفت — مواعيدها بالأيام والمراحل
+            </p>
+            <div className="grid gap-5 md:grid-cols-2">
+              {privateSchedule.map((daySchedule, dayIdx) => {
+                const gradient = DAY_COLORS[daySchedule.day] || 'from-primary to-primary'
+                const count = daySchedule.slots.length
+                return (
+                  <Card
+                    key={'p-' + dayIdx}
+                    className="overflow-hidden border-border/50 hover:shadow-lg transition-shadow"
+                  >
+                    <div className={`bg-gradient-to-l ${gradient} px-5 py-3 flex items-center justify-between`}>
+                      <h3 className="text-white font-bold text-lg">
+                        {daySchedule.day}
+                      </h3>
+                      <span className="text-white/90 text-xs font-medium bg-white/20 px-2.5 py-0.5 rounded-full">
+                        {slotCountLabel(count)}
+                      </span>
+                    </div>
+                    <CardContent className="p-0">
+                      <div className="divide-y divide-border/40">
+                        {daySchedule.slots.map((slot, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-4 px-5 py-4 hover:bg-muted/40 transition-colors"
+                          >
+                            <div className="flex items-center gap-2 shrink-0 min-w-[110px]">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                                <Clock className="h-4 w-4 text-primary" />
+                              </div>
+                              <span className="text-sm font-bold text-foreground" dir="ltr">
+                                {slot.time}
+                              </span>
+                            </div>
+                            <div className="h-8 w-px bg-border/50" />
+                            <div className="flex items-center gap-2 flex-1">
+                              <GraduationCap className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="text-sm font-medium text-foreground">
+                                {slot.grade}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   )
