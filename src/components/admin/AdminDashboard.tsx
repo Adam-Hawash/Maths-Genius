@@ -346,7 +346,7 @@ export function AdminDashboard() {
       }
       // Load Resend API key
       try {
-        const cfgRes = await fetch('/api/config')
+        const cfgRes = await fetch('/api/config?fresh=' + Date.now())
         const cfgData = await cfgRes.json()
         setResendApiKey(cfgData.resend_api_key || '')
         setHeroDevUrl(cfgData.hero_developer_url || '')
@@ -1235,7 +1235,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
 
   /* (2026-ص2) قراءة مفتاح قفل التسلسل من إعدادات المنصة */
   useEffect(function () {
-    fetch('/api/config').then(function (r) { return r.json() }).then(function (d) {
+    fetch('/api/config?fresh=' + Date.now()).then(function (r) { return r.json() }).then(function (d) {
       setSeqLockOn(String((d || {}).video_sequence_lock ?? '1') !== '0')
     }).catch(function () {})
   }, [])
