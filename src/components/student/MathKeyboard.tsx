@@ -6,6 +6,8 @@ import { chunkedUpload } from '@/lib/chunked-upload'
 import { FractionText, hasMathMarkup } from '@/components/FractionText'
 /* (2026-و73) إعفاء نافذة الرفع/الكاميرا من عدّاد مغادرة الامتحان */
 import { notifyPickerOpen, notifyPickerClose } from '@/components/student/useAntiCheat'
+/* (ص7) رسالة الإذن على زرار الكاميرا/الرفع — طلب المستر */
+import { toast } from 'sonner'
 
 interface MathKeyboardProps {
   value: string
@@ -443,6 +445,11 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
   const openCamera = function () {
     /* الكاميرا مش خروج من المنصة — تعليق عدّاد المغادرة طوال التصوير */
     notifyPickerOpen()
+    /* (ص7) طلب المستر: أول ما الطالب يدوس زرار الكاميرا تظهرله رسالة الإذن
+       على طول — ولو سمح الكاميرا بتفتح مباشرة من غير «حاجات لازم» */
+    try {
+      toast.info('📸 لو ظهرلك طلب إذن الكاميرا اضغط «سماح / Allow» — ولو سمحت قبل كده هتفتح على طول', { duration: 5000 })
+    } catch (eT) {}
     setCamError('')
     setCamOpen(true)
     setTimeout(function () { startCamera(camFacing) }, 50)
@@ -582,6 +589,10 @@ export function MathKeyboard({ value, onChange, placeholder = 'Type your answer 
           onClick={function () {
             /* (و73) الرفع مش خروج من المنصة — إعفاء عدّاد المغادرة */
             notifyPickerOpen()
+            /* (ص7) نفس رسالة الإذن على زرار الرفع — الطالب يسمح مرة واحدة */
+            try {
+              toast.info('📸 لو ظهرلك طلب إذن الكاميرا أو الملفات اضغط «سماح / Allow» — عشان تقدر تصور ورقة الحل وترفعها', { duration: 5000 })
+            } catch (eT2) {}
             fileInputRef.current?.click()
           }}
           disabled={uploading}
