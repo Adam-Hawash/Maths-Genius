@@ -6,6 +6,7 @@ import { Footer } from '@/components/landing/Footer'
 import { StudentPendingView } from '@/components/landing/StudentPendingView'
 import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
 import { LoginView, RegisterView } from '@/components/landing/AuthPages'
+import { Reveal } from '@/components/landing/Reveal'
 import dynamic from 'next/dynamic'
 import { useEffect, useState, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
@@ -222,17 +223,32 @@ export default function HomePage() {
 
       {currentView === 'landing' && (
         <main className="flex-1">
+          {/* (و111-a) الهيرو من غير Reveal — حركة دخوله خاصة بيه */}
           <HeroSection />
-          <FeaturesGuideSection />
-          <FeaturesSection />
+          <Reveal>
+            <FeaturesGuideSection />
+          </Reveal>
+          <Reveal>
+            <FeaturesSection />
+          </Reveal>
           {/* (G-2) فيديو «إزاي تستخدم المنصة» — بعد المميزات وقبل صفوف الصفوف
               الدراسية — وبيظهر بس لما الأدمن يكون ضاف فيديو من لوحة التحكم */}
-          <HowToVideoSection />
-          <GradesSection />
+          <Reveal>
+            <HowToVideoSection />
+          </Reveal>
+          <Reveal>
+            <GradesSection />
+          </Reveal>
           {/* (2026-و29) أفضل 3 طلاب بقوا في النافبار (زرار أوائل الطلبة) بدل الرئيسية */}
-          <LessonsSection />
-          <TipsSection />
-          <GallerySection />
+          <Reveal>
+            <LessonsSection />
+          </Reveal>
+          <Reveal>
+            <TipsSection />
+          </Reveal>
+          <Reveal>
+            <GallerySection />
+          </Reveal>
         </main>
       )}
 
