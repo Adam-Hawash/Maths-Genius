@@ -39,16 +39,11 @@ export default function HeroSection() {
   }, [configLoaded, setSiteConfig, siteConfig])
 
   useEffect(() => {
-    var hasDbBg = !!(siteConfig.hero_bg_image || '')
+    /* (2026-ش) إصلاح 404: مفيش ملف /images/hero-bg.jpg في المشروع أصلًا —
+       فالفحص البديل كان بيضرب 404 في الكونسول كل زيارة وبالمرايا ×3.
+       بنسأل بس على صورة المعلم (موجودة) — وخلفية الهيرو من قاعدة البيانات فقط. */
     var hasDbPhoto = !!(siteConfig.instructor_photo || '')
-    if (!hasDbBg) {
-      var img = new Image()
-      img.onload = function () { setFallbackBgExists(true) }
-      img.onerror = function () { setFallbackBgExists(false) }
-      img.src = '/images/hero-bg.jpg'
-    } else {
-      setFallbackBgExists(false)
-    }
+    setFallbackBgExists(false)
     if (!hasDbPhoto) {
       var img2 = new Image()
       img2.onload = function () { setFallbackPhotoExists(true) }
@@ -65,8 +60,9 @@ export default function HeroSection() {
      الرابط القديم /images/instructor.webp كان شايل صورة تانية من القالب القديم ومتخزن
      في كاش الطلاب — فالصورة بقت على رابط جديد خالص mr-wael-photo.webp يكسر الكاش،
      والأساسية (قاعدة البيانات) والبديلة نفس الملف بالظبط */
+  /* (2026-ش) خلفية الهيرو من قاعدة البيانات فقط — مفيش ملف بديل موجود في المشروع */
+  const heroBg = dbBg
   const heroPhoto = dbPhoto || '/images/mr-wael-photo.webp'
-  const heroBg = dbBg || '/images/hero-bg.jpg'
 
   const showBg = !!dbBg || fallbackBgExists
   const showPhoto = !!dbPhoto || fallbackPhotoExists
