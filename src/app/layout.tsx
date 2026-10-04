@@ -71,8 +71,9 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en" dir="ltr" suppressHydrationWarning>
+    <html lang="en" dir="ltr" translate="no" suppressHydrationWarning>
       <head>
+      <meta name="google" content="notranslate" />
         {/* (و64) سكريبت مبكر — الثيم (ليلي/نهاري) واللغة بيتريّكوا قبل أول رسم
             عشان مفيش وميض غلط: الثيم من مفتاح next-themes «theme» والافتراضي ليلي.
             (2026-و79) اللغة الافتراضية بقت **إنجليزي LTR** — طلب المستر الحرفي:
