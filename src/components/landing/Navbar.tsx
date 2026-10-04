@@ -427,16 +427,14 @@ function AdminLoginDialog() {
     setView,
   } = useAppStore()
 
-  /* (2026-ص4-أ) حقل الرقم — المستر بيدخل بالرقم مش بإيميل
-     (نفس الرقم ونفس الباسورد اللي كتبهم في تسجيل الدخول) */
-  const [adminId, setAdminId] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
 
   const handleLogin = async () => {
-    if (!adminId || !password) {
-      toast.error('الرجاء إدخال الرقم وكلمة المرور')
+    if (!email || !password) {
+      toast.error('الرجاء إدخال البريد وكلمة المرور')
       return
     }
     if (loading) return // Prevent double-submit
@@ -451,7 +449,7 @@ function AdminLoginDialog() {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: adminId, password }),
+        body: JSON.stringify({ email, password }),
         signal: controller.signal,
       })
       const data = await res.json()
@@ -489,22 +487,20 @@ function AdminLoginDialog() {
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
-            {/* (2026-ص4-أ) «الرقم» بدل «البريد الإلكتروني» — طلب المستر: بيدخل بالرقم */}
-            <Label htmlFor="admin-dialog-id" className="text-foreground">
-              الرقم
+            <Label htmlFor="admin-dialog-email" className="text-foreground">
+              البريد الإلكتروني
             </Label>
             <Input
-              id="admin-dialog-id"
-              type="tel"
-              inputMode="numeric"
-              placeholder="الرقم"
-              value={adminId}
-              onChange={(e) => setAdminId(e.target.value.replace(/[^0-9+\s]/g, ''))}
+              id="admin-dialog-email"
+              type="email"
+              placeholder="البريد الإلكتروني"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !loading && handleLogin()}
               dir="ltr"
               className="min-h-[44px]"
               disabled={loading}
-              autoComplete="tel"
+              autoComplete="email"
             />
           </div>
           <div className="space-y-2">

@@ -4,13 +4,12 @@ import { db, safeWrite } from '@/lib/db'
 
 export var maxDuration = 10
 
-/* (2026-ص4-أ) بيانات المشرف الرئيسية — طلب المستر حرفيًا:
-   «عاوز ده الرقم اللي اكتبه 01118411148 وده الباسورد اللي اكتبه Zicolainmath2026»
-   لو صف القاعدة فيه بيانات قديمة مختلفة والمستخدم كتب دي صح → بنقبل الدخول
-   ونحدّث صف القاعدة عليها (مصدر حقيقة واحد) — والبيانات القديمة اللي في القاعدة
-   بتفضل شغالة لحد أول دخول بالبيانات الجديدة يزامنها */
-var DEFAULT_EMAIL = '01118411148'
-var DEFAULT_PASSWORD = 'Zicolainmath2026'
+/* (2026-ص4-ر) بيانات المشرف الرئيسية — رجّعناها زي ما كانت الأصل:
+   math genius / wael2026# — طلب المستر: «ماث جينيس ما تلعبش في الباسورد بتاعتها»
+   لو صف القاعدة اتزامن بالبيانات القديمة الغلط → أول دخول بالبيانات الأصلية
+   بيرجّع صف القاعدة عليها (مصدر حقيقة واحد) */
+var DEFAULT_EMAIL = 'math genius'
+var DEFAULT_PASSWORD = 'wael2026#'
 var ADMIN_NAME = 'Mr.Wael Khodair'
 
 export async function POST(request) {
@@ -25,7 +24,7 @@ export async function POST(request) {
   var password = body.password
 
   if (!email || !password) {
-    return NextResponse.json({ error: 'الرقم وكلمة المرور مطلوبين' }, { status: 400 })
+    return NextResponse.json({ error: 'البريد وكلمة المرور مطلوبين' }, { status: 400 })
   }
 
   // squash = strip ALL whitespace from both sides before comparing — the DB
@@ -40,7 +39,7 @@ export async function POST(request) {
 
     if (!admin) {
       if (cleanEmail !== squash(DEFAULT_EMAIL) || cleanPassword !== squash(DEFAULT_PASSWORD)) {
-        return NextResponse.json({ error: 'الرقم أو كلمة المرور غلط' }, { status: 401 })
+        return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
       }
       admin = await safeWrite(function() {
         return db.admin.create({
@@ -49,10 +48,10 @@ export async function POST(request) {
       })
     } else {
       if (cleanEmail !== squash(admin.email) || cleanPassword !== squash(admin.password)) {
-        /* (2026-ص4-أ) بيانات القاعدة قديمة/مختلفة → اللي بيكتب بيانات المشرف الرئيسية
-           بيدخل ومزامنة صف القاعدة عليها — وغير كده رفض زي ما هو */
+        /* (2026-ص4-ر) بيانات القاعدة مختلفة → اللي بيكتب البيانات الأصلية بيدخل
+           ومزامنة صف القاعدة عليها — وغير كده رفض زي ما هو */
         if (cleanEmail !== squash(DEFAULT_EMAIL) || cleanPassword !== squash(DEFAULT_PASSWORD)) {
-          return NextResponse.json({ error: 'الرقم أو كلمة المرور غلط' }, { status: 401 })
+          return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
         }
         var synced = await safeWrite(function() {
           return db.admin.update({
