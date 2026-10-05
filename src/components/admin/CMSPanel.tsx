@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Settings, Save, Upload, Loader2, Image as ImageIcon, Trash2, Link2, Type, Layout, GraduationCap, Compass, Lightbulb, BookOpen, Smartphone, Globe, CalendarClock, PlusCircle, MonitorPlay } from 'lucide-react'
+import { Settings, Save, Upload, Loader2, Image as ImageIcon, Trash2, Link2, Type, Layout, GraduationCap, Compass, Lightbulb, BookOpen, Smartphone, Globe, CalendarClock, PlusCircle, MonitorPlay, PlayCircle } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
+import { useAppStore } from '@/stores/app-store'
 import type { SiteConfig } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
 /* (و78) المحتوى الديناميكي — نصائح ومميزات إضافية JSON آمن */
@@ -15,6 +16,11 @@ import { parseCustomContent, emptyCustomItem } from '@/lib/custom-content'
 import type { CustomContentItem } from '@/lib/custom-content'
 /* (G-2) فيديو «إزاي تستخدم المنصة» — تطبيع روابط يوتيوب/درايف/vimeo لـ embed */
 import { toEmbedUrl, isPlatformFile } from '@/lib/howto-video'
+/* (ص119) الفيديوهات التعريفية — نفس ميزة Zicola-Math بالظبط:
+   تطبيع اللينكات قبل الحفظ + استخراج معرف الملف المرفوع لمسح اليتيم
+   + المشغل الموحد للمعاينة (ستريمابل بيتشغل على مشغل المنصة) */
+import { normalizeIntroVideoUrl, introMediaId, introVideoKind } from '@/lib/intro-video'
+import { ConfigVideoPlayer } from '@/components/landing/ConfigVideoPlayer'
 
 interface FieldDef {
   key: string
@@ -512,6 +518,221 @@ function HowToVideoCard(props: {
   )
 }
 
+/* ============================================================
+   (ص119) كارت «الفيديوهات التعريفية» — نفس ميزة Zicola-Math بالظبط
+   ============================================================
+   كارت واحد بيخدم المفتاحين: intro_video_url (فيديو تعريفي عن المنصة
+   — سكشن بعد الهيرو مباشرة) و teacher_video_url (فيديو عن المستر
+   — سكشن قبل المعرض). لكل كارت:
+   - خانة لينك + زرار حفظ → PUT /api/config **بمفتاح واحد بس**
+     (اللينك بيتطبع بـ normalizeIntroVideoUrl قبل الحفظ: يوتيوب/درايف/
+     فيميو/ستريمابل/أرشايف → صيغة embed، وأي حاجة تانية زي ما هي).
+   - زرار رفع ملف من الجهاز → chunkedUpload → Media → /api/files/<id>
+     (نفس بنية رفع المنصة — زي كارت الفيديو بتاع howto بالظبط).
+   - زرار حذف → بيفضّي القيمة (السكشن بيختفي من الـ DOM نهائيًا)
+     **وبيمسح ملف الـ Media اليتيم** (DELETE /api/files/<id>?adminId=...)
+     — والاستبدال (لينك/ملف جديد فوق ملف قديم) بيمسح القديم كمان.
+   القيمة المحفوظة على السيرفر (savedRef) هي اللي بيتحسب عليها مسح
+   اليتيم — مش نص الخانة (نفس منطق زيكولا بالظبط). */
+function ConfigVideoCard(props: {
+  config: SiteConfig
+  setConfig: (c: SiteConfig) => void
+  configKey: 'intro_video_url' | 'teacher_video_url'
+  uploadCategory: string
+  heading: string
+  icon: React.ReactNode
+  description: string
+  previewTitle: string
+  savedToast: string
+  deleteConfirm: string
+  deletedToast: string
+}) {
+  /* معرّف الأدمن الحالي — بوابة مسح ملف الـ Media اليتيم (DELETE /api/files) */
+  var adminId = useAppStore(function (s) { return s.currentAdmin?.id || '' })
+  var currentUrl = String(props.config[props.configKey] || '')
+
+  var linkState = useState('')
+  var linkInput = linkState[0]
+  var setLinkInput = linkState[1]
+  var busyState = useState<'link' | 'upload' | 'delete' | null>(null)
+  var busy = busyState[0]
+  var setBusy = busyState[1]
+  var statusState = useState('')
+  var status = statusState[0]
+  var setStatus = statusState[1]
+  var fileRef = useRef<HTMLInputElement | null>(null)
+  /* آخر قيمة محفوظة فعليًا على السيرفر — مسح الملف اليتيم بيتم ضدها */
+  var savedRef = useRef(currentUrl)
+
+  var kind = introVideoKind(currentUrl)
+  var hasVideo = kind !== 'none'
+  var kindLabel = kind === 'youtube' ? 'لينك يوتيوب'
+    : kind === 'drive' ? 'لينك جوجل درايف'
+    : kind === 'vimeo' ? 'لينك فيميو'
+    : kind === 'file' ? 'ملف مرفوع من الجهاز'
+    : kind === 'link' ? 'لينك خارجي'
+    : ''
+
+  /* كتابة القيمة في اللوحة + مزامنة ستور اللاندينج (نفس آلية handleSave) */
+  var syncAfterWrite = function (value: string) {
+    var next = Object.assign({}, props.config)
+    next[props.configKey] = value
+    props.setConfig(next)
+    try {
+      var st = useAppStore.getState()
+      if (st && st.setSiteConfig) st.setSiteConfig(next)
+    } catch (e) { /* صامت */ }
+  }
+
+  /* حفظ بمفتاح واحد في /api/config — زي زيكولا بالظبط (مش بيكتب الكونفيج كله) */
+  var writeConfig = async function (value: string): Promise<boolean> {
+    var body: Record<string, string> = {}
+    body[props.configKey] = value
+    try {
+      var res = await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      return res.ok
+    } catch (e) { return false }
+  }
+
+  /* مسح ملف الـ Media اليتيم — DELETE /api/files/<id>?adminId=... */
+  var removeOrphanMedia = function (oldValue: string) {
+    var oldId = introMediaId(oldValue)
+    if (!oldId) return
+    fetch('/api/files/' + oldId + '?adminId=' + encodeURIComponent(adminId || ''), { method: 'DELETE' })
+      .catch(function () { /* صامت — الملف ممكن يكون اتمسح قبل كده */ })
+  }
+
+  /* 1) حفظ لينك — التطبيع للـ embed قبل الحفظ (زي زيكولا بالظبط) */
+  var handleSaveLink = async function () {
+    var v = linkInput.trim()
+    if (!v) { toast.error('اكتب لينك الفيديو الأول (يوتيوب / درايف / فيميو / ستريمابل)'); return }
+    setBusy('link')
+    var normalized = normalizeIntroVideoUrl(v)
+    var ok = await writeConfig(normalized)
+    if (!ok) { toast.error('فشل الحفظ — جرب تاني'); setBusy(null); return }
+    /* لو كان ملف مرفوع واتستبدل بقيمة تانية → نمسح الملف اليتيم القديم */
+    if (normalized !== savedRef.current) removeOrphanMedia(savedRef.current)
+    savedRef.current = normalized
+    syncAfterWrite(normalized)
+    setLinkInput('')
+    toast.success(props.savedToast)
+    setBusy(null)
+  }
+
+  /* 2) رفع ملف من الجهاز — نفس بنية chunk بتاعة المنصة (زي howto بالظبط) */
+  var handleUploadFile = async function (file: File) {
+    setBusy('upload')
+    setStatus('جاري الرفع...')
+    try {
+      var data = await chunkedUpload(file, props.uploadCategory, function (pct) {
+        setStatus('جاري الرفع... ' + pct + '%')
+      }, function (msg) { setStatus(msg) })
+      setStatus('جاري الحفظ...')
+      var filePath = String(data.filePath || '')
+      var ok = await writeConfig(filePath)
+      if (!ok) { toast.error('الفيديو اترفع لكن الحفظ فشل — جرب تاني'); setStatus(''); setBusy(null); return }
+      if (filePath !== savedRef.current) removeOrphanMedia(savedRef.current)
+      savedRef.current = filePath
+      syncAfterWrite(filePath)
+      toast.success(props.savedToast)
+      setStatus('')
+    } catch (err: any) {
+      toast.error((err && err.message) || 'خطأ في رفع الفيديو')
+      setStatus('')
+    }
+    setBusy(null)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  /* 3) حذف — القيمة بتقفى + ملف الـ Media اليتيم بيتمسح من القاعدة */
+  var handleDeleteVideo = async function () {
+    if (!window.confirm(props.deleteConfirm)) return
+    setBusy('delete')
+    var ok = await writeConfig('')
+    if (!ok) { toast.error('فشل الحذف — جرب تاني'); setBusy(null); return }
+    removeOrphanMedia(savedRef.current)
+    savedRef.current = ''
+    syncAfterWrite('')
+    toast.success(props.deletedToast)
+    setBusy(null)
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center justify-between flex-wrap gap-2">
+          <span className="flex items-center gap-2">{props.icon}{props.heading}</span>
+          <span className={'text-[10px] font-semibold px-2 py-0.5 rounded-full ' + (hasVideo ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground')}>
+            {hasVideo ? (kindLabel ? kindLabel + ' ✓' : 'مضبوط ✓') : 'مفيش فيديو — السكشن مخفي'}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">{props.description}</p>
+
+        {/* معاينة حية للفيديو الحالي — على المشغل الموحد (زي صفحة الطالب بالظبط) */}
+        {hasVideo && (
+          <div className="rounded-lg border border-border/60 p-3 bg-muted/20">
+            <p className="text-[10px] font-semibold text-muted-foreground mb-2">المعاينة الحالية (اللي بياهش الطلاب):</p>
+            <div className="relative w-full aspect-video max-h-64 rounded-lg overflow-hidden bg-black">
+              <ConfigVideoPlayer url={currentUrl} title={props.previewTitle} className="absolute inset-0 h-full w-full" />
+            </div>
+          </div>
+        )}
+
+        {/* 1) خانة لينك + حفظ */}
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto] items-end">
+          <div>
+            <Label className="text-xs mb-1 block">لينك فيديو (YouTube / Google Drive / Vimeo / Streamable / Archive.org)</Label>
+            <Input
+              placeholder="https://www.youtube.com/watch?v=..."
+              value={linkInput}
+              onChange={function(e) { setLinkInput(e.target.value) }}
+              dir="ltr"
+              className="min-h-[44px]"
+            />
+          </div>
+          <Button onClick={function() { handleSaveLink() }} disabled={busy !== null} className="min-h-[44px]">
+            {busy === 'link' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            <span className="mr-1">{busy === 'link' ? 'جاري الحفظ...' : 'حفظ اللينك'}</span>
+          </Button>
+        </div>
+
+        {/* 2) رفع من الجهاز + 3) حذف */}
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={function(el) { fileRef.current = el }}
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime,video/*"
+            className="hidden"
+            onChange={function(e) { const f = e.target.files?.[0]; if (f) handleUploadFile(f) }}
+          />
+          <Button variant="outline" onClick={function() { fileRef.current?.click() }} disabled={busy !== null} className="min-h-[44px]">
+            {busy === 'upload' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            <span className="mr-1">{busy === 'upload' ? 'جاري الرفع...' : 'رفع من الجهاز'}</span>
+          </Button>
+          {hasVideo && (
+            <Button variant="ghost" onClick={function() { handleDeleteVideo() }} disabled={busy !== null} className="min-h-[44px] text-destructive hover:text-destructive">
+              {busy === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              <span className="mr-1">{busy === 'delete' ? 'جاري الحذف...' : 'حذف الفيديو'}</span>
+            </Button>
+          )}
+        </div>
+        {status && (
+          <p className="text-[11px] text-muted-foreground" dir="rtl">{status}</p>
+        )}
+        <p className="text-[10px] text-muted-foreground">
+          ملاحظة: الملف المرفوع بيتخزن بنفس بنية ملفات المنصة (Media عبر /api/upload/chunk) وبيتشغل من /api/files — الحد الأقصى 120 ميجا. الحذف بيمسح الملف من قاعدة البيانات كمان.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function CMSPanel() {
   var [config, setConfig] = useState<SiteConfig>({})
   var [loading, setLoading] = useState(true)
@@ -700,6 +921,36 @@ export function CMSPanel() {
 
       {/* (G-2) فيديو «إزاي تستخدم المنصة» — لينك أو ملف مرفوع + حذف (اختياري بالكامل) */}
       <HowToVideoCard config={config} setConfig={setConfig} persistNow={persistConfigNow} />
+
+      {/* (ص119) الفيديوهات التعريفية — نفس ميزة Zicola-Math بالظبط:
+          فيديو المنصة (intro_video_url — بعد الهيرو) + فيديو المستر
+          (teacher_video_url — قبل المعرض). فاضي = السكشن مخفي خالص. */}
+      <ConfigVideoCard
+        config={config}
+        setConfig={setConfig}
+        configKey="intro_video_url"
+        uploadCategory="intro-video"
+        heading="الفيديو التعريفي للمنصة | Intro Video"
+        icon={<PlayCircle className="h-5 w-5" />}
+        description="اختياري: لو ضفت فيديو هيظهر قسم «الفيديو التعريفي» في الصفحة الرئيسية بعد الهيرو مباشرة — ولو فضّيته (حذف) القسم بيختفي خالص."
+        previewTitle="معاينة الفيديو التعريفي للمنصة"
+        savedToast="الفيديو التعريفي اتسجل ✅ — هيظهر بعد الهيرو في الصفحة الرئيسية"
+        deleteConfirm="حذف الفيديو التعريفي؟ القسم هيختفي من الصفحة الرئيسية وملف الفيديو هيتمسح من قاعدة البيانات."
+        deletedToast="الفيديو التعريفي اتمسح ✅ — القسم اختفى من الصفحة الرئيسية"
+      />
+      <ConfigVideoCard
+        config={config}
+        setConfig={setConfig}
+        configKey="teacher_video_url"
+        uploadCategory="teacher-video"
+        heading="فيديو عن المستر | Teacher Video"
+        icon={<GraduationCap className="h-5 w-5" />}
+        description="اختياري: لو ضفت فيديو هيظهر قسم «فيديو عن المستر» في الصفحة الرئيسية قبل المعرض — ولو فضّيته (حذف) القسم بيختفي خالص."
+        previewTitle="معاينة فيديو عن المستر"
+        savedToast="فيديو المستر اتسجل ✅ — هيظهر قبل المعرض في الصفحة الرئيسية"
+        deleteConfirm="حذف فيديو عن المستر؟ القسم هيختفي من الصفحة الرئيسية وملف الفيديو هيتمسح من قاعدة البيانات."
+        deletedToast="فيديو المستر اتمسح ✅ — القسم اختفى من الصفحة الرئيسية"
+      />
 
       {/* Section Tabs */}
       <div className="flex flex-wrap gap-2">

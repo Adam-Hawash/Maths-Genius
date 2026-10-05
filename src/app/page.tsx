@@ -25,6 +25,16 @@ const FeaturesSection = dynamic(() => import('@/components/landing/FeaturesSecti
 const HowToVideoSection = dynamic(() => import('@/components/landing/HowToVideoSection').then(function(m) { return { default: (m as any).HowToVideoSection || (m as any).default } }), {
   loading: () => <div className="h-20" />,
 })
+/* (ص119) الفيديوهات التعريفية — نفس ميزة Zicola-Math بالظبط:
+   IntroVideoSection (intro_video_url) بعد الهيرو مباشرة، و
+   TeacherVideoSection (teacher_video_url) قبل المعرض. فاضي = مفيش
+   سكشن في الـ DOM نهائيًا (نفس منطق HowToVideoSection) */
+const IntroVideoSection = dynamic(() => import('@/components/landing/IntroVideoSection').then(function(m) { return { default: (m as any).IntroVideoSection || (m as any).default } }), {
+  loading: () => <div className="h-20" />,
+})
+const TeacherVideoSection = dynamic(() => import('@/components/landing/TeacherVideoSection').then(function(m) { return { default: (m as any).TeacherVideoSection || (m as any).default } }), {
+  loading: () => <div className="h-20" />,
+})
 const GradesSection = dynamic(() => import('@/components/landing/GradesSection').then(function(m) { return { default: m.GradesSection } }), {
   loading: () => <div className="h-20" />,
 })
@@ -225,6 +235,11 @@ export default function HomePage() {
         <main className="flex-1">
           {/* (و111-a) الهيرو من غير Reveal — حركة دخوله خاصة بيه */}
           <HeroSection />
+          {/* (ص119) الفيديو التعريفي عن المنصة — بعد الهيرو مباشرة
+              (نفس مكان زيكولا بالظبط) — بيظهر بس لو intro_video_url مش فاضي */}
+          <Reveal>
+            <IntroVideoSection />
+          </Reveal>
           <Reveal>
             <FeaturesGuideSection />
           </Reveal>
@@ -245,6 +260,11 @@ export default function HomePage() {
           </Reveal>
           <Reveal>
             <TipsSection />
+          </Reveal>
+          {/* (ص119) فيديو تعريف المستر — قبل قسم المعرض بالظبط (نفس زيكولا)
+              — بيظهر بس لو teacher_video_url مش فاضي */}
+          <Reveal>
+            <TeacherVideoSection />
           </Reveal>
           <Reveal>
             <GallerySection />

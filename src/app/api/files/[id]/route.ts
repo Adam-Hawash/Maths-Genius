@@ -12,6 +12,37 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdmin, verifyVideoToken } from '@/lib/video-guard'
 
+/* ============================================================
+   (ص119) حذف ملف من جدول Media — محمي بمعرّف الأدمن (نفس بوابة
+   isAdmin بتاعة تشغيل الفيديو). نفس ميزة Zicola-Math بالظبط:
+   بيستخدمه كارت «الفيديوهات التعريفية» في لوحة الأدمن لمسح ملف
+   الـ Media اليتيم لما الفيديو يتشال أو يتستبدل — عشان مايفضلش
+   ياكل مساحة من قاعدة البيانات.
+   ============================================================ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    var { id } = await params
+    const { searchParams } = new URL(request.url)
+    const adminOk = await isAdmin(searchParams.get('adminId'))
+    if (!adminOk) {
+      return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
+    }
+    var removed = await db.media.delete({ where: { id } }).catch(function (e) {
+      return null
+    })
+    if (!removed) {
+      return NextResponse.json({ error: 'الملف مش موجود' }, { status: 404 })
+    }
+    return NextResponse.json({ ok: true, deleted: id })
+  } catch (error: any) {
+    console.error('File delete error:', error)
+    return NextResponse.json({ error: 'حذف الملف فشل' }, { status: 500 })
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -54,24 +85,29 @@ export async function GET(
 
     // ===== بوابة الفيديو: ملفات الفيديو محمية دايماً =====
     /* (و93) استثناء فيديوهات المعرض: category='gallery' عامة زي يوتيوب.
-       (2026-و84) الفيديو التعريفي العام — بيبص على القيمة الحالية كل طلب. */
+       (2026-و84) الفيديو التعريفي العام — بيبص على القيمة الحالية كل طلب.
+       (G-2) كمان فيديو «إزاي تستخدم المنصة» (howto_video_url).
+       (ص119) الفيديوهات التعريفية (intro_video_url + teacher_video_url)
+       — نفس ميزة Zicola-Math بالظبط: أي واحد منهم قيمته الحالية فيها
+       id الملف → عام بيشتغل على الصفحة الرئيسية قبل الدخول. */
     if (String(contentType).startsWith('video/') && meta.category !== 'gallery') {
       const token = searchParams.get('token')
       const reqId = searchParams.get('req') || ''
       const adminId = searchParams.get('adminId') || ''
       const tokenOk = token ? verifyVideoToken(token, id, reqId) : false
       const adminOk = adminId ? await isAdmin(adminId) : false
-      var isIntroPublic = false
+      /* (ص119) intro_video_url + teacher_video_url في استعلام واحد */
+      var isPublicConfigVideo = false
       try {
-        var introRows: any[] = await db.$queryRawUnsafe(
-          "SELECT value FROM SiteConfig WHERE key = 'intro_video_url' LIMIT 1"
+        var pubRows: any[] = await db.$queryRawUnsafe(
+          "SELECT value FROM SiteConfig WHERE key IN ('intro_video_url', 'teacher_video_url')"
         ) as any[]
-        var introVal = introRows && introRows[0] ? String(introRows[0].value || '') : ''
-        isIntroPublic = !!introVal && introVal.indexOf(id) !== -1
+        for (var ri = 0; ri < pubRows.length; ri++) {
+          var pubVal = String(pubRows[ri].value || '')
+          if (pubVal && pubVal.indexOf(id) !== -1) { isPublicConfigVideo = true; break }
+        }
       } catch (e) { /* جدول ناقص — نكمل بالحماية العادية */ }
-      /* (G-2) فيديو «إزاي تستخدم المنصة» — نفس نمط الفيديو التعريفي بالظبط:
-         لو معرّف الملف ده هو الموجود حالياً في howto_video_url فهو فيديو عام
-         بيشتغل على الصفحة الرئيسية قبل الدخول — زي فيديو المعرض زي ما هو */
+      /* (G-2) فيديو «إزاي تستخدم المنصة» — زي ما هو (مش بيتلمس) */
       let isHowToPublic = false
       try {
         const howtoRows: any[] = await db.$queryRawUnsafe(
@@ -80,7 +116,7 @@ export async function GET(
         const howtoVal = howtoRows && howtoRows[0] ? String(howtoRows[0].value || '') : ''
         isHowToPublic = !!howtoVal && howtoVal.indexOf(id) !== -1
       } catch (e) { /* جدول ناقص — نكمل بالحماية العادية */ }
-      if (!tokenOk && !adminOk && !isIntroPublic && !isHowToPublic) {
+      if (!tokenOk && !adminOk && !isPublicConfigVideo && !isHowToPublic) {
         return NextResponse.json(
           { error: 'غير مسموح — الفيديو بيتشغل من داخل المنصة بس' },
           { status: 403 }
