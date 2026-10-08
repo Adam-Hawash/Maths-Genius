@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { notifyStudents } from '@/lib/notify'
+/* (S-4a — توحيد الصفوف) المرجع الموحد: قراءة = gradeWhere، كتابة = storeGrade */
+import { gradeWhere, storeGrade } from '@/lib/grade-names'
 
 // GET /api/announcements - جلب كل الإعلانات
 export async function GET(request: NextRequest) {
@@ -13,7 +15,8 @@ export async function GET(request: NextRequest) {
     const pageSize = parseInt(searchParams.get('pageSize') || '20')
 
     const where: Record<string, unknown> = {}
-    if (grade) where.grade = grade
+    /* (S-4a — توحيد الصفوف) كل صيغ نفس الصف مع بعض */
+    if (grade) where.grade = gradeWhere(grade)
     if (keyword) {
       where.OR = [
         { title: { contains: keyword } },
@@ -54,12 +57,13 @@ export async function POST(request: NextRequest) {
     }
 
     const announcement = await db.announcement.create({
-      data: { title, content, grade },
+      /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
+      data: { title, content, grade: storeGrade(grade) },
     })
 
     /* (و44) إشعار للطلاب: إعلان جديد */
     /* (و45) await — الإشعار بيتكتب قبل الرد */
-      try { await notifyStudents({ grade: String(grade || ''), type: 'announcement', title: '📣 إعلان جديد: ' + String(title), body: String(content || '').slice(0, 200) }) } catch (nE) {}
+      try { await notifyStudents({ grade: storeGrade(String(grade || '')), type: 'announcement', title: '📣 إعلان جديد: ' + String(title), body: String(content || '').slice(0, 200) }) } catch (nE) {}
 
     return NextResponse.json({ message: 'تم إنشاء الإعلان بنجاح', announcement }, { status: 201 })
   } catch (error) {

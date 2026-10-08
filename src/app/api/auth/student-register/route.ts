@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+/* (S-4a — توحيد الصفوف) المرجع الموحد */
+import { storeGrade } from '@/lib/grade-names'
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +37,8 @@ export async function POST(req: NextRequest) {
         name: String(name).trim(),
         phone: cleanPhone,
         password: String(password),
-        grade: grade || "تالتة إعدادي",
+        /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
+        grade: storeGrade(grade || "تالتة إعدادي"),
         parentName: parentName ? String(parentName).trim() : "",
         parentPhone: parentPhone ? String(parentPhone).trim() : "",
         status: "active",

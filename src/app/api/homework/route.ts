@@ -29,33 +29,9 @@ function parseTargetIds(raw: unknown): string[] {
 
 // Normalize grade names so old and new naming conventions match
 // e.g. "الصف الثالث الاعدادي" == "تالتة إعدادي" == "الصف الثالث الإعدادي"
-import { gradeVariants } from '@/lib/grade-names'
-
-function normalizeGrade(grade: string): string {
-  if (!grade) return ''
-  var g = grade.trim()
-  // Remove "الصف " prefix
-  g = g.replace(/^الصف\s+/i, '')
-  // Normalize إعدادي variants
-  g = g.replace(/الاعدادي/gi, 'إعدادي')
-  g = g.replace(/الإعدادي/gi, 'إعدادي')
-  // Normalize بكالوريا variants
-  g = g.replace(/البكالوريا/gi, 'بكالوريا')
-  g = g.replace(/بكالوريا/gi, 'بكالوريا')
-  // Map old names to new
-  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
-  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
-  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
-  if (g.includes('الرابع')) g = 'الرابع'
-  if (g.includes('الخامس')) g = 'الخامس'
-  if (g.includes('السادس')) g = 'السادس'
-  // Add إعدادي/بكالوريا suffix
-  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
-  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
-  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
-  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
-  return g
-}
+/* (S-4a — توحيد الصفوف) المرجع الموحد بدل النسخة المحلية المكسورة —
+   النسخة المحلية القديمة كانت بتقص «الخامسة الابتدائي» لـ«الخامس» */
+import { gradeVariants, storeGrade } from '@/lib/grade-names'
 
 export async function GET(request: NextRequest) {
   try {
@@ -192,7 +168,7 @@ export async function POST(request: NextRequest) {
 
     const homework = await safeWrite(function () {
       return db.homework.create({
-        data: { title, content: content || '', grade, filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '', questions: questions || '', scheduledAt: scheduledDate, targetStudentIds: targetIds, targetGroupIds: targetGids },
+        data: { title, content: content || '', /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */ grade: storeGrade(grade), filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '', questions: questions || '', scheduledAt: scheduledDate, targetStudentIds: targetIds, targetGroupIds: targetGids },
       })
     })
 
@@ -201,7 +177,7 @@ export async function POST(request: NextRequest) {
       var nIds: string[] = []
       try { var tp = JSON.parse(targetIds); if (Array.isArray(tp)) nIds = tp.filter(Boolean) } catch (e) {}
       /* (و45) await — الإشعار بيتكتب قبل الرد */
-        try { await notifyStudents({ studentIds: nIds, grade: String(grade || ''), type: 'homework', title: '📚 واجب جديد: ' + String(title), body: 'دخل من تاب الواجبات وسلّمه قبل ميعاده' }) } catch (nE) {}
+        try { await notifyStudents({ studentIds: nIds, grade: storeGrade(String(grade || '')), type: 'homework', title: '📚 واجب جديد: ' + String(title), body: 'دخل من تاب الواجبات وسلّمه قبل ميعاده' }) } catch (nE) {}
     } catch (nE) {}
 
     return NextResponse.json({ message: 'Homework added', homework }, { status: 201 })

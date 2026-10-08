@@ -8,6 +8,9 @@
 // (الرد على الشكوى/إضافة الكتاب/…) — بنلقط الخطأ بسجلوه وبس.
 // ============================================================
 import { db } from '@/lib/db'
+/* (S-4a — توحيد الصفوف) كل صيغ نفس الصف — الإشعار بيوصل لكل طلاب الصف
+   مهما كانت صيغة صفهم المخزنة («الخامس» = «خمسة ابتدائي») */
+import { gradeVariants } from '@/lib/grade-names'
 
 function nid(): string {
   return 'ntf' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
@@ -69,9 +72,13 @@ export async function notifyStudents(opts: {
     var ids: string[] = Array.isArray(opts.studentIds) ? opts.studentIds.filter(Boolean) : []
     if (ids.length === 0 && opts.grade) {
       try {
+        /* (S-4a — توحيد الصفوف) مطابقة كل الصيغ المخزنة لنفس الصف —
+           grade = ? الحرفية كانت بتسيب طلاب صفهم مخزن بصيغة تانية */
+        var vs = gradeVariants(String(opts.grade))
+        var ph = vs.map(function () { return '?' }).join(',')
         var rows: any = await db.$queryRawUnsafe(
-          "SELECT id FROM Student WHERE status IN ('approved','paid') AND grade = ?",
-          opts.grade
+          "SELECT id FROM Student WHERE status IN ('approved','paid') AND grade IN (" + ph + ')',
+          ...vs
         )
         ids = (rows || []).map(function (r: any) { return String(r.id) })
       } catch (eG) {

@@ -23,7 +23,7 @@
 // الرد {ok,code,reason} + التوصيل 423 في مسارَي التسليم زي ما هما بالظبط.
 // ============================================================
 import { db, withRetry } from '@/lib/db'
-import { gradeVariants } from '@/lib/grade-names'
+import { gradeVariants, normalizeGrade } from '@/lib/grade-names'
 /* (2026-ص2) مفتاح قفل التسلسل الموحد — نفس مفتاح الفيديوهات بالظبط:
    لوحة التحكم بتقفله مرة واحدة → دروس/واجبات/امتحانات كله موحد */
 import { isSequenceLockEnabled } from '@/lib/video-guard'
@@ -80,24 +80,8 @@ async function rowExists(table: 'ExamResult' | 'HomeworkResult', studentId: stri
    /api/homework و /api/exams (مش في lib مشترك — لو اتعدلت هناك لازم تتعدل هنا)
    عشان السلسلة السيرفرية تطابق قايمة الطالب بنفس منطق المطابقة الضبابية */
 function normalizeGradeSeq(grade: string): string {
-  if (!grade) return ''
-  var g = grade.trim()
-  g = g.replace(/^الصف\s+/i, '')
-  g = g.replace(/الاعدادي/gi, 'إعدادي')
-  g = g.replace(/الإعدادي/gi, 'إعدادي')
-  g = g.replace(/البكالوريا/gi, 'بكالوريا')
-  g = g.replace(/بكالوريا/gi, 'بكالوريا')
-  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
-  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
-  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
-  if (g.includes('الرابع')) g = 'الرابع'
-  if (g.includes('الخامس')) g = 'الخامس'
-  if (g.includes('السادس')) g = 'السادس'
-  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
-  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
-  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
-  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
-  return g
+  /* (S-4a — توحيد الصفوف) تفويض للمرجع الموحد — النسخة المحلية القديمة كانت بتقص أسماء الابتدائي */
+  return normalizeGrade(grade)
 }
 
 /* (2026-و40) قراءة قايمة الاستهداف — نفس parseTargetIds في مسارَي القايمة */

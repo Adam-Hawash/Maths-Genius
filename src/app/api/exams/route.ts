@@ -54,26 +54,9 @@ function parseTargetIds(raw: unknown): string[] {
 var EXAM_END_GRACE_MS = 2 * 24 * 60 * 60 * 1000
 
 // Normalize grade names so old and new naming conventions match
-import { gradeVariants } from '@/lib/grade-names'
-
-function normalizeGrade(grade: string): string {
-  if (!grade) return ''
-  var g = grade.trim()
-  g = g.replace(/^الصف\s+/i, '')
-  g = g.replace(/الاعدادي/gi, 'إعدادي').replace(/الإعدادي/gi, 'إعدادي')
-  g = g.replace(/البكالوريا/gi, 'بكالوريا')
-  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
-  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
-  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
-  if (g.includes('الرابع')) g = 'الرابع'
-  if (g.includes('الخامس')) g = 'الخامس'
-  if (g.includes('السادس')) g = 'السادس'
-  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
-  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
-  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
-  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
-  return g
-}
+/* (S-4a — توحيد الصفوف) المرجع الموحد بدل النسخة المحلية المكسورة —
+   النسخة المحلية القديمة كانت بتقص «الخامسة الابتدائي» لـ«الخامس» */
+import { gradeVariants, storeGrade } from '@/lib/grade-names'
 
 // ============================================================
 // توزيع النماذج العشوائي (طلب المستر): لما الامتحان يكون فيه نماذج كتير
@@ -299,7 +282,8 @@ export async function POST(request: NextRequest) {
         data: {
           title,
           content: content || '',
-          grade,
+          /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
+          grade: storeGrade(grade),
           filePath: filePath || '',
           fileType: fileType || '',
           answerKeyPath: answerKeyPath || '',
@@ -325,7 +309,7 @@ export async function POST(request: NextRequest) {
       var nIds: string[] = []
       try { var tp = JSON.parse(targetIds); if (Array.isArray(tp)) nIds = tp.filter(Boolean) } catch (e) {}
       /* (و45) await — الإشعار بيتكتب قبل الرد */
-        try { await notifyStudents({ studentIds: nIds, grade: String(grade || ''), type: 'exam', title: '📝 امتحان جديد: ' + String(title), body: 'دخل من تاب الامتحانات وحل دلوقتي' }) } catch (nE) {}
+        try { await notifyStudents({ studentIds: nIds, grade: storeGrade(String(grade || '')), type: 'exam', title: '📝 امتحان جديد: ' + String(title), body: 'دخل من تاب الامتحانات وحل دلوقتي' }) } catch (nE) {}
     } catch (nE) {}
 
     return NextResponse.json({ message: 'Exam added', exam }, { status: 201 })

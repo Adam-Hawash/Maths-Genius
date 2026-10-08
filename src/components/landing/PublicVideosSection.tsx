@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Loader2, Lock, Play } from 'lucide-react'
 import { useAppStore, gradesFromConfig } from '@/stores/app-store'
+/* (S-4a — توحيد الصفوف) displayGrade — عرض/مطابقة الصف بالاسم المعتمد الكامل */
+import { displayGrade } from '@/lib/grade-names'
 
 interface VideoItem {
   id: string
@@ -50,7 +52,7 @@ export function PublicVideosSection() {
 
   var filtered = gradeFilter === 'all'
     ? videos
-    : videos.filter(function (v) { return v.grade === gradeFilter })
+    : videos.filter(function (v) { return displayGrade(v.grade) === gradeFilter })
 
   if (loading) {
     return (

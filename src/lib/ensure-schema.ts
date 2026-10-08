@@ -4,6 +4,9 @@
 // missing) so a freshly-swapped database repairs itself instead of 500ing
 // every API (the "الفديو مش شغال" outage class).
 import { createClient } from '@libsql/client'
+/* (توحيد الصفوف — S-4a) المرجع الموحد لأسماء الصفوف — الترحيل بيرجع
+   لـ normalizeGrade عشان أي صيغة قديمة مخزنة تترحّل للاسم المعتمد */
+import { normalizeGrade } from './grade-names'
 
 export function makeLibsqlClient() {
   var dbUrl = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || ''
@@ -330,6 +333,74 @@ async function execTolerant(client: any, sql: string, meta: any, results: any[])
   }
 }
 
+/* ============================================================
+ * (S-4a — توحيد الصفوف) ترحيل الصفوف القديمة المخزنة في جداول
+ * المحتوى — طلب المستر: «عاوز كله يبقى موحد — البيانات كلها زي بعض».
+ * ------------------------------------------------------------
+ * العلّة: الفيديوهات/الامتحانات/الواجبات/الطلاب اتخزنت عبر السنين
+ * بصيغ مختلفة لنفس الصف («الخامس» بتقطيع includes قديم، «الخامسة
+ * الابتدائي»، «5»، «السادس»، «أولى ثانوي»...) — فالمحتوى المضاف لصف
+ * مش بيظهر لطلاب نفس الصف. القاعدة:
+ *  - لكل جدول فيه عمود صف (GRADE_CONTENT_TABLES):
+ *      SELECT DISTINCT <col> AS g FROM <Table>
+ *    ولكل قيمة: canonical = normalizeGrade(value) من المرجع الموحد
+ *    src/lib/grade-names.ts → لو مختلف: UPDATE ... SET col = canonical
+ *    WHERE col = value.
+ *  - idempotent 100%: الصفوف اللي بالاسم المعتمد بيفضلوا زي ما هم
+ *    (canonical === value → مفيش UPDATE) — التشغيل التاني بلاقي
+ *    مفيش أي قيمة قديمة فبيعدّي من غير أي كتابة.
+ *  - كل جدول في try/catch لوحده: جدول ناقص في قاعدة قديمة
+ *    (no such table) بيتجاهل بصمت والباقي بيكمّل.
+ *  - راية _gradeRowsMigrationDone: مرة واحدة لكل عملية تشغيل سيرفر
+ *    (أول نداء لـ ensureSchema قبل المسار السريع للبصمة) — والترحيل
+ *    نفسه آمن يتكرر على أي حال (بيكتب فقط لو فيه تغيير فعلي).
+ *  - نفس libsql client (ممنوع Prisma هنا).
+ * ============================================================ */
+/* كل الجداول اللي بتحفظ الصف بالاسم النصي + عمودها (Payment بـ studentGrade) */
+var GRADE_CONTENT_TABLES: Array<[string, string]> = [
+  ['Video', 'grade'],
+  ['Homework', 'grade'],
+  ['Exam', 'grade'],
+  ['Announcement', 'grade'],
+  ['Discussion', 'grade'],
+  ['Book', 'grade'],
+  ['Student', 'grade'],
+  ['Complaint', 'grade'],
+  ['Payment', 'studentGrade'],
+]
+
+var _gradeRowsMigrationDone = false
+
+export async function migrateGradeRows(client: any): Promise<{ changed: boolean; migrated: number; tables: number; renamed: Array<{ table: string; column: string; from: string; to: string }> }> {
+  if (_gradeRowsMigrationDone) return { changed: false, migrated: 0, tables: 0, renamed: [] }
+  var migrated = 0
+  var tablesScanned = 0
+  var renamed: Array<{ table: string; column: string; from: string; to: string }> = []
+  for (var t = 0; t < GRADE_CONTENT_TABLES.length; t++) {
+    var tbl = GRADE_CONTENT_TABLES[t][0]
+    var col = GRADE_CONTENT_TABLES[t][1]
+    /* كل جدول لوحده — جدول مش موجود (no such table) يتتجاهل بصمت */
+    try {
+      var dist = await client.execute('SELECT DISTINCT ' + col + ' AS g FROM ' + tbl)
+      if (!dist || !dist.rows) continue
+      tablesScanned++
+      for (var d = 0; d < dist.rows.length; d++) {
+        var val = String(dist.rows[d].g || '')
+        if (!val.trim()) continue /* فاضي/NULL — مفيش حاجة نتوحّده */
+        var canonical = normalizeGrade(val)
+        if (!canonical || canonical === val) continue /* بالاسم المعتمد أصلًا — idempotent */
+        try {
+          await client.execute({ sql: 'UPDATE ' + tbl + ' SET ' + col + ' = ? WHERE ' + col + ' = ?', args: [canonical, val] })
+          migrated++
+          renamed.push({ table: tbl, column: col, from: val, to: canonical })
+        } catch (eUp) { /* تحديث قيمة واحدة فشل — الباقي بيكمّل */ }
+      }
+    } catch (eTbl) { /* جدول ناقص في قاعدة قديمة — الترحيل مكمل */ }
+  }
+  _gradeRowsMigrationDone = true
+  return { changed: migrated > 0, migrated: migrated, tables: tablesScanned, renamed: renamed }
+}
+
 export async function ensureSchema(client: any, opts?: { force?: boolean }) {
   var force = !!(opts && opts.force)
   var results: any[] = []
@@ -338,6 +409,19 @@ export async function ensureSchema(client: any, opts?: { force?: boolean }) {
   if (!force && _schemaVerifiedInProcess) {
     return { missing: [], repaired: false, skipped: true, memo: true, results: [] }
   }
+
+  /* ============================================================
+   * (S-4a — توحيد الصفوف) ترحيل الصفوف المخزنة فعليًا في جداول
+   * المحتوى — أول نداء في العملية قبل المسار السريع للبصمة، وبعد
+   * كده الراية بترجع فورًا. فشله ما يمنعش السكيما.
+   * ============================================================ */
+  try {
+    var gr = await migrateGradeRows(client)
+    if (gr && gr.changed) {
+      results.push({ gradeRowsMigration: gr })
+      console.log('[ensure-schema] grade rows migration:', JSON.stringify(gr))
+    }
+  } catch (eGr) { /* ترحيل صفوف — فشله ما يمنعش السكيما */ }
 
   /* المسار السريع: البصمة متخزنة ومطابقة → مفيش أي ترميم محتاج
      (استعلام واحد بدل ~70 — ده اللي هيخلي الدخول ولوحة الطلاب فورًا) */

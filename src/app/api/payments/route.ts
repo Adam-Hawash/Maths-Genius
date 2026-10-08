@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+/* (S-4a — توحيد الصفوف) المرجع الموحد: كتابة = storeGrade */
+import { storeGrade } from '@/lib/grade-names'
 import { db } from '@/lib/db'
 
 // POST - Student submits a payment/activation request
@@ -67,7 +69,8 @@ export async function POST(request: NextRequest) {
         studentId: resolvedStudent.id,
         studentName: studentName || resolvedStudent.name,
         studentPhone: studentPhone || resolvedStudent.phone,
-        studentGrade: studentGrade || resolvedStudent.grade,
+        /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد */
+        studentGrade: storeGrade(studentGrade || resolvedStudent.grade),
         method: paymentMethod,
         amount,
         videoId,

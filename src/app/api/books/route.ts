@@ -2,7 +2,7 @@
 // FILE: src/app/api/books/route.ts
 // (2026-و40) قايمة الكتب والملازم العامة — تاب «الكتب والملازم» في بورتال الطالب.
 // ?grade= اختياري → نفس المطابقة الضبابية للصف المستخدمة في /api/homework
-// (normalizeGrade + OR contains) — من غيرها بنرجّع كل الكتب.
+// (gradeVariants من المرجع الموحد — توحيد الصفوف S-4a) — من غيرها بنرجّع كل الكتب.
 // بنرجّع الحقول الآمنة بس (من غير أي داتا داخلية).
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -27,29 +27,8 @@ function ensureBookTable() {
   return _bookTableReady
 }
 
-// Normalize grade names so old and new naming conventions match
-// e.g. "الصف الثالث الاعدادي" == "تالتة إعدادي" == "الصف الثالث الإعدادي"
-// (نسخة مطابقة من normalizeGrade في /api/homework — لو اتعدلت هناك تتعدل هنا)
-function normalizeGrade(grade: string): string {
-  if (!grade) return ''
-  var g = grade.trim()
-  g = g.replace(/^الصف\s+/i, '')
-  g = g.replace(/الاعدادي/gi, 'إعدادي')
-  g = g.replace(/الإعدادي/gi, 'إعدادي')
-  g = g.replace(/البكالوريا/gi, 'بكالوريا')
-  g = g.replace(/بكالوريا/gi, 'بكالوريا')
-  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
-  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
-  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
-  if (g.includes('الرابع')) g = 'الرابع'
-  if (g.includes('الخامس')) g = 'الخامس'
-  if (g.includes('السادس')) g = 'السادس'
-  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
-  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
-  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
-  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
-  return g
-}
+/* (S-4a — توحيد الصفوف) النسخة المحلية القديمة اتحذت — المرجع الموحد
+   grade-names.ts هو اللي بيطبّع (النسخة القديمة كانت بتقص أسماء الابتدائي) */
 
 export async function GET(request: NextRequest) {
   try {

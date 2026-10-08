@@ -11,6 +11,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { isAdmin, getStudentAnyStatus, safeThumb, getYouTubeId, mediaIdFromPath, ensureVideoTable } from '@/lib/video-guard'
+/* (S-4a — توحيد الصفوف) المرجع الموحد: قراءة = gradeWhere (كل الصيغ)، كتابة = storeGrade (الاسم المعتمد) */
+import { gradeWhere, storeGrade } from '@/lib/grade-names'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -45,7 +47,9 @@ export async function GET(request: NextRequest) {
     const student = admin ? null : await getStudentAnyStatus(studentId)
 
     const where: Record<string, unknown> = {}
-    if (grade) where.grade = grade
+    /* (S-4a — توحيد الصفوف) كل صيغ نفس الصف مع بعض — الفيديو المخزن
+       «الخامس» ظاهر لطلب «خمسة ابتدائي» والعكس — من غير أي تسريب لصف تاني */
+    if (grade) where.grade = gradeWhere(grade)
     if (keyword) {
       where.OR = [
         { title: { contains: keyword } },
@@ -209,7 +213,7 @@ export async function POST(request: NextRequest) {
        ترتيب يدوي بيفضل زي ما هو (0 = الأحدث أولًا). */
     let newSortIndex = 0
     try {
-      const agg = await db.video.aggregate({ _max: { sortIndex: true }, where: { grade: String(grade) } })
+      const agg = await db.video.aggregate({ _max: { sortIndex: true }, where: { grade: gradeWhere(String(grade)) } })
       const maxSort = Number((agg._max && (agg._max as { sortIndex: number | null }).sortIndex) || 0)
       if (maxSort > 0) newSortIndex = maxSort + 1
     } catch {}
@@ -234,7 +238,8 @@ export async function POST(request: NextRequest) {
           data: {
             title: String(title).trim(),
             url: finalUrl,
-            grade,
+            /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
+            grade: storeGrade(grade),
             filePath: filePath || '',
             fileType: fileType || '',
             thumbnail: finalThumb,

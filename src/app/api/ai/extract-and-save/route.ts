@@ -5,6 +5,8 @@
 //          Receives pre-extracted questions JSON from AdminDashboard review step
 
 import { NextResponse } from 'next/server'
+/* (S-4a — توحيد الصفوف) المرجع الموحد */
+import { storeGrade } from '@/lib/grade-names'
 import { db, safeWrite } from '@/lib/db'
 
 export const runtime = 'nodejs'
@@ -203,7 +205,8 @@ export async function POST(request) {
         return db.exam.create({
           data: {
             title: title.trim(),
-            grade: grade,
+            /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
+            grade: storeGrade(grade),
             content: questions.length + ' questions extracted by AI',
             questions: questionsStr,
             /* (و51) المصدر الأصلي — خط إنقاذ الـ backfill للرسمات الناقصة */
@@ -227,7 +230,7 @@ export async function POST(request) {
         return db.homework.create({
           data: {
             title: title.trim(),
-            grade: grade,
+            grade: storeGrade(grade),
             content: questions.length + ' questions extracted by AI',
             questions: questionsStr,
             /* (و51) المصدر الأصلي — خط إنقاذ الـ backfill للرسمات الناقصة */

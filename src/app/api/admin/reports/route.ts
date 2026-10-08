@@ -23,27 +23,9 @@
    ============================================================ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { gradeVariants } from '@/lib/grade-names'
+import { gradeVariants, normalizeGrade } from '@/lib/grade-names'
 
 /* توحيد أسماء الصفوف — نفس منطق /api/students/analytics بالظبط */
-function normalizeGrade(grade: string): string {
-  if (!grade) return ''
-  var g = grade.trim()
-  g = g.replace(/^الصف\s+/i, '')
-  g = g.replace(/الاعدادي/gi, 'إعدادي').replace(/الإعدادي/gi, 'إعدادي')
-  g = g.replace(/البكالوريا/gi, 'بكالوريا')
-  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
-  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
-  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
-  if (g.includes('الرابع')) g = 'الرابع'
-  if (g.includes('الخامس')) g = 'الخامس'
-  if (g.includes('السادس')) g = 'السادس'
-  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
-  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
-  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
-  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
-  return g
-}
 
 /* مطابقة صف بعنصر (فيديو/امتحان/واجب) — نفس سماحية analytics:
    نفس الاسم بعد التوحيد، أو أول كلمة من صف الطالب جوه اسم العنصر */
