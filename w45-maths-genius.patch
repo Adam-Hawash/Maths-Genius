@@ -1,0 +1,1787 @@
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index ce7a3bf..a76130d 100755
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -242,6 +242,9 @@ model GalleryImage {
+   filePath  String   @default("")
+   type      String   @default("image")
+   videoUrl  String   @default("")
++  // (2026-و45) صورة مصغرة لعناصر الفيديو — افتراضيًا بيتجيب أوتوماتيك من
++  // رابط اليوتيوب، والأدمن يقدر يعدّلها برابط صورة من عنده
++  thumbnail String   @default("")
+   sortOrder Int      @default(0)
+   createdAt DateTime @default(now())
+   updatedAt DateTime @updatedAt
+diff --git a/src/app/api/admin/books/route.ts b/src/app/api/admin/books/route.ts
+index e3ca3fd..63d20fa 100644
+--- a/src/app/api/admin/books/route.ts
++++ b/src/app/api/admin/books/route.ts
+@@ -99,7 +99,8 @@ export async function POST(request: NextRequest) {
+         })
+       })
+       /* (و44) إشعار للطلاب: كتاب جديد اتضاف */
+-      notifyStudents({ grade: String(grade || ''), type: 'book', title: '📕 كتاب جديد اتضاف: ' + String(title).trim(), body: String(description || '').slice(0, 200) || 'تقدر تفتحه أو تحمله من تاب الكتب والملازم' }).catch(function () {})
++      /* (و45) await — الإشعار بيتكتب قبل الرد */
++      try { await notifyStudents({ grade: String(grade || ''), type: 'book', title: '📕 كتاب جديد اتضاف: ' + String(title).trim(), body: String(description || '').slice(0, 200) || 'تقدر تفتحه أو تحمله من تاب الكتب والملازم' }) } catch (nE) {}
+       return NextResponse.json({ message: 'تم إضافة الكتاب باللينك الخارجي', book: linkBook }, { status: 201 })
+     }
+ 
+@@ -125,7 +126,8 @@ export async function POST(request: NextRequest) {
+     })
+ 
+     /* (و44) إشعار للطلاب: كتاب جديد اتضاف */
+-    notifyStudents({ grade: String(grade || ''), type: 'book', title: '📕 كتاب جديد اتضاف: ' + String(title).trim(), body: String(description || '').slice(0, 200) || 'تقدر تفتحه أو تحمله من تاب الكتب والملازم' }).catch(function () {})
++    /* (و45) await — الإشعار بيتكتب قبل الرد */
++      try { await notifyStudents({ grade: String(grade || ''), type: 'book', title: '📕 كتاب جديد اتضاف: ' + String(title).trim(), body: String(description || '').slice(0, 200) || 'تقدر تفتحه أو تحمله من تاب الكتب والملازم' }) } catch (nE) {}
+ 
+     return NextResponse.json({ message: 'تم إضافة الكتاب', book }, { status: 201 })
+   } catch (error: any) {
+diff --git a/src/app/api/ai-extract-pages/route.ts b/src/app/api/ai-extract-pages/route.ts
+index 355020e..bfc2aee 100644
+--- a/src/app/api/ai-extract-pages/route.ts
++++ b/src/app/api/ai-extract-pages/route.ts
+@@ -26,6 +26,8 @@
+ import { NextRequest, NextResponse } from 'next/server'
+ import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
+ import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
++/* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات صور = اختياري مش مقالي */
++import { isWritingQuestion } from '@/lib/question-figures'
+ 
+ export const runtime = 'nodejs'
+ export const maxDuration = 180
+@@ -139,6 +141,7 @@ function buildPagesPrompt(pageNumbers: number[], mode: 'all' | 'top', count: num
+   lines.push('bbox = tight rectangle around the drawing INCLUDING its axes/labels, as FRACTIONS of the whole page image (each value 0..1, x/y = top-left corner, w/h = size of the rectangle).')
+   lines.push('NEVER convert a drawing into text: do NOT describe the graph, do NOT write coordinate tables or step-by-step plotting inside question text or modelAnswer. modelAnswer = concise final results only (example: "axis of symmetry: x = 3, maximum value = 4").')
+   lines.push('If unsure whether something is a figure, treat it AS a figure. Options that are pure images get empty string text plus their optionFigures entry.')
++  lines.push('IMAGE-CHOICE RULE (2026-W45 — mandatory): a question whose choices are PICTURES / FIGURES (not text) is STILL "mcq" — NEVER "writing". Return "options" as empty strings with the SAME length as the picture-choices and put each picture in "optionFigures" aligned by index.')
+   lines.push('- modelAnswer must include the expected table values when applicable (e.g. "f(-1)=5, f(0)=3 → points (-1,5), (0,3)").')
+   lines.push('- MATH FORMAT (the platform renders it as real math): powers as x^2; EVERY fraction as \\frac{numerator}{denominator} (NEVER a/b, and do NOT wrap the whole numerator/denominator in parentheses); square root √, cube root ∛, × ÷ π ≤ ≥ ≠ ≈ ∠ °. No $ signs, no other LaTeX, no markdown.')
+   lines.push('- ALL output text in English (same as the rest of the platform).')
+@@ -182,8 +185,8 @@ function finalizeQuestion(q: any): any | null {
+   if (q.table && Array.isArray(q.table.rows)) ws.table = q.table
+   if (q.figure && q.figure.bbox) ws.figure = q.figure
+   if (Array.isArray(q.optionFigures)) ws.optionFigures = q.optionFigures
+-  var isWriting = q.type === 'writing' || q.type === 'essay'
+-  if (!isWriting && (!Array.isArray(q.options) || q.options.length === 0)) isWriting = true
++  /* (و45) سؤال له اختيارات (نص أو صور/رسومات) = اختياري دايمًا — ممنوع يتحول مقالي */
++  var isWriting = isWritingQuestion(q)
+   if (isWriting) {
+     return Object.assign({
+       type: 'writing',
+@@ -196,7 +199,13 @@ function finalizeQuestion(q: any): any | null {
+       sourcePage: sourcePage,
+     }, ws)
+   }
+-  var opts = (q.options || []).map(function (o: any) { return normalizeMath(String(o == null ? '' : o)) }).filter(function (o: string) { return o.trim() !== '' }).slice(0, 4)
++  /* (و45) رسومات الاختيارات: النص الفاضي بيفضل زي ما هو (الاختيار صورة) —
++     ولو مفيش نص أصلًا بنملأ نص فاضي بنفس عدد رسومات الاختيارات */
++  var hasOf = Array.isArray(q.optionFigures) && q.optionFigures.length > 0
++  var opts = (q.options || []).map(function (o: any) { return normalizeMath(String(o == null ? '' : o)) })
++  if (!hasOf) { opts = opts.filter(function (o: string) { return o.trim() !== '' }) }
++  if (opts.length === 0 && hasOf) { for (var oiE = 0; oiE < q.optionFigures.length; oiE++) opts.push('') }
++  opts = opts.slice(0, 4)
+   var correct = typeof q.correct === 'number' ? q.correct : (parseInt(String(q.correct), 10) || -1)
+   if (correct >= opts.length) correct = -1
+   return Object.assign({
+diff --git a/src/app/api/ai-extract/route.ts b/src/app/api/ai-extract/route.ts
+index 6d96735..f1c4211 100755
+--- a/src/app/api/ai-extract/route.ts
++++ b/src/app/api/ai-extract/route.ts
+@@ -11,6 +11,8 @@
+ import { NextResponse } from 'next/server'
+ import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
+ import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
++/* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات (حتى لو صور) = اختياري */
++import { isWritingQuestion } from '@/lib/question-figures'
+ 
+ export const runtime = 'nodejs'
+ export const maxDuration = 180
+@@ -138,11 +140,10 @@ function mergeQuestionsAndAnswers(questions: any[], answers: any[]): any[] {
+       }
+     }
+ 
+-    var qType = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) ? 'writing' : 'mcq'
++    /* (و45) سؤال له اختيارات (نص أو صور/رسومات) = اختياري دايمًا — ممنوع يتحول مقالي */
++    var qType = isWritingQuestion(q) ? 'writing' : 'mcq'
+     var modelAnswer = (ans && (ans.modelAnswer || ans.answer || ans.solution)) || q.modelAnswer || ''
+     var acceptedAnswers = (ans && Array.isArray(ans.acceptedAnswers) ? ans.acceptedAnswers : (Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []))
+-
+-    /* (2026-و40-w) pass-through حقول ورقة العمل من أسئلة المصدر */
+     var wsFields: any = {}
+     ;['sourcePage', 'srcName', 'table', 'figure', 'optionFigures'].forEach(function (k: string) {
+       if (q[k] !== undefined && q[k] !== null) wsFields[k] = q[k]
+@@ -365,6 +366,7 @@ function buildSingleFilePrompt(grade: string, type: string): string {
+   lines.push('1. "mcq" - Multiple Choice Questions: the document shows ANSWER CHOICES under the question (A/B/C/D letters, numbered choices, boxes, or any listed options).')
+   lines.push('2. "writing" - Essay/Written Questions: NO answer choices are printed under the question — the student writes the full solution themselves.')
+   lines.push('DECISIVE CLASSIFICATION RULE (follow it EXACTLY): choices/options printed under the question → "mcq". NO choices printed → "writing". The VERB in the question NEVER decides the type: math questions that say "Solve", "Find x", "Calculate", "Simplify" are STILL "mcq" whenever choices are listed under them. Only classify "writing" when the document truly shows no choices at all.')
++  lines.push('IMAGE-CHOICE RULE (2026-W45 — mandatory): a question whose choices are PICTURES / FIGURES / GRAPHS (not text) is STILL "mcq": return "options" as an array of empty strings with the SAME length as the number of picture-choices, and put each choice picture in "optionFigures" aligned by index. NEVER label a picture-choices question as "writing" and NEVER flatten its choices into text.')
+   lines.push('')
+   lines.push('For "mcq" questions:')
+   lines.push('- Copy the EXACT question text from the document (translate to English if needed)')
+@@ -438,6 +440,7 @@ function buildQuestionsOnlyPrompt(grade: string, type: string): string {
+   lines.push('1. "mcq" - Multiple Choice Questions: the document shows ANSWER CHOICES under the question (A/B/C/D letters, numbered choices, boxes, or any listed options).')
+   lines.push('2. "writing" - Essay/Written Questions: NO answer choices are printed under the question — the student writes the full solution themselves.')
+   lines.push('DECISIVE CLASSIFICATION RULE (follow it EXACTLY): choices/options printed under the question → "mcq". NO choices printed → "writing". The VERB in the question NEVER decides the type: math questions that say "Solve", "Find x", "Calculate", "Simplify" are STILL "mcq" whenever choices are listed under them. Only classify "writing" when the document truly shows no choices at all.')
++  lines.push('IMAGE-CHOICE RULE (2026-W45 — mandatory): a question whose choices are PICTURES / FIGURES / GRAPHS (not text) is STILL "mcq": return "options" as an array of empty strings with the SAME length as the number of picture-choices, and put each choice picture in "optionFigures" aligned by index. NEVER label a picture-choices question as "writing" and NEVER flatten its choices into text.')
+   lines.push('')
+   lines.push('For "mcq" questions:')
+   lines.push('- Copy the EXACT question text from the document (translate to English if needed)')
+@@ -490,7 +493,8 @@ function buildAnswersOnlyPrompt(grade: string, type: string, questions: any[]):
+   lines.push('')
+   lines.push('Here are the questions extracted from a separate questions document (in order):')
+   questions.forEach(function(q, i) {
+-    var qType = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) ? 'writing' : 'mcq'
++    /* (و45) سؤال له اختيارات (نص أو صور) = اختياري دايمًا */
++    var qType = isWritingQuestion(q) ? 'writing' : 'mcq'
+     if (qType === 'mcq') {
+       lines.push((i + 1) + '. [MCQ] ' + (q.question || ''))
+       if (Array.isArray(q.options) && q.options.length > 0) {
+@@ -560,7 +564,8 @@ function finalizeExtracted(extracted: any, type: string, grade: string, twoFiles
+   if (!extracted.answerKey) { extracted.answerKey = '' }
+ 
+   extracted.questions = extracted.questions.map(function(q) {
+-    var qType = q.type === 'writing' || q.type === 'essay' ? 'writing' : 'mcq'
++    /* (و45) سؤال له اختيارات (نص أو صور/رسومات) = اختياري دايمًا — ممنوع يتحول مقالي */
++    var qType = isWritingQuestion(q) ? 'writing' : 'mcq'
+     /* (2026-و40-w) حقول ورقة العمل — pass-through (المصدر: البحث عن الجداول
+        والرسومات في ورقة المستر): sourcePage/srcName/table/figure/optionFigures
+        بتتحفظ زي ما هي جنب الحقول القانونية — مع تطبيع خفيف */
+@@ -586,7 +591,16 @@ function finalizeExtracted(extracted: any, type: string, grade: string, twoFiles
+     return withWs({
+       type: 'mcq',
+       question: normalizeMath(q.question || ''),
+-      options: (q.options || ['N/A', 'N/A', 'N/A', 'N/A']).slice(0, 4).map(function(o: any) { return normalizeMath(String(o)) }),
++      /* (و45) لو الاختيارات صور من غير نص — بنملأ نص فاضي بنفس عدد رسومات الاختيارات
++         عشان الفهارس تبقى متوافقة والسؤال يفضل اختياري صور مش مقالي */
++      options: (function () {
++        var opts = Array.isArray(q.options) ? q.options.slice() : []
++        if (opts.length === 0 && Array.isArray(q.optionFigures) && q.optionFigures.length > 0) {
++          for (var ofi = 0; ofi < q.optionFigures.length; ofi++) opts.push('')
++        }
++        if (opts.length === 0) opts = ['N/A', 'N/A', 'N/A', 'N/A']
++        return opts.slice(0, 4).map(function(o: any) { return normalizeMath(String(o)) })
++      })(),
+       correct: typeof q.correct === 'number' ? q.correct : 0,
+       points: q.points || 1,
+       modelAnswer: normalizeMath(q.modelAnswer || '')
+diff --git a/src/app/api/ai/assistant/route.ts b/src/app/api/ai/assistant/route.ts
+index b13125b..1de076a 100644
+--- a/src/app/api/ai/assistant/route.ts
++++ b/src/app/api/ai/assistant/route.ts
+@@ -22,6 +22,8 @@ var MAX_IMAGES = 4
+ var MAX_B64_LENGTH = 7000000 // ~5MB binary after base64
+ var DATA_URL_RE = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/
+ var MAX_HISTORY = 10 // آخر 10 رسائل (5 أدوار) بتبني سياق المحادثة
++/* (و45) حارس طول الرسالة — طلب الحزمة: مفيش رسالة أطول من 2000 حرف */
++var MAX_MESSAGE = 2000
+ 
+ /* ============================================================
+  * الشكاوى التلقائية — لو الطالب قال للمساعد إن فيه مشكلة، الشكوى
+@@ -98,14 +100,31 @@ function buildHistory(rawHistory: any): any[] {
+   return out
+ }
+ 
+-/* ===== البرومبت الأساسي — أقوى بكتير: شخصية ثابتة + ردود نضيفة ===== */
+-function buildSystemPrompt(platformName: string, subjectLine: string): string {
++/* (و45) هل النداء ده لشخصية شيرين؟ */
++function isSherinePersona(persona: string): boolean {
++  return String(persona || '').trim() === 'sherine'
++}
++
++/* ===== البرومبت الأساسي — أقوى بكتير: شخصية ثابتة + ردود نضيفة =====
++ * (و45) شخصية «شيرين» — مدرّبة الرياضيات الشخصية (persona: 'sherine'):
++ * نفس القواعد الرياضية والرموز والمصطلحات بالظبط، بس الشخصية بقى بنت مصرية
++ * ودودة بتشرح بالعامية البسيطة وتشجّع الطالب — بدل «المساعد الذكي» الجاف. */
++function buildSystemPrompt(platformName: string, subjectLine: string, persona: string): string {
++  var isSherine = String(persona || '').trim() === 'sherine'
++  var assistantName = isSherine ? 'شيرين' : 'المساعد الذكي'
++  var opener = isSherine
++    ? 'أنتي "شيرين" — مدرّبة الرياضيات الشخصية والودودة في ' + platformName + '. ' + subjectLine
++    : 'أنت "' + assistantName + '" الرسمي لـ' + platformName + '. ' + subjectLine
+   return [
+-    'أنت "المساعد الذكي" الرسمي لـ' + platformName + '. ' + subjectLine,
++    opener,
+     '',
+     '## شخصيتك وقواعد الكتابة (أهم حاجة):',
+-    '- بتكتب عربي مصري سليم وواضح ومقروء — ممنوع نهائيًا تكلمات مش موجودة في العربي أو حروف متلخبطة أو كلام مش مفهوم.',
+-    '- لو مش عارف أو مش متأكد، قول ببساطة: "مش متأكد، اسأل المستر في الحصة" — بدل ما تخترع معلومة.',
++    isSherine
++      ? '- إنتي شيرين: بتتكلمي عامية مصرية دافية وقريبة من الطالب («يلا بينا»، «برافو عليك»، «بص يا بطل») — وممنوع نهائيًا حروف متلخبطة أو كلام مش مفهوم أو فصحى جافة.'
++      : '- بتكتب عربي مصري سليم وواضح ومقروء — ممنوع نهائيًا تكلمات مش موجودة في العربي أو حروف متلخبطة أو كلام مش مفهوم.',
++    isSherine
++      ? '- لو مش متأكدة من حاجة، قولي ببساطة: «مش متأكدة، اسأل المستر في الحصة» — بدل ما تخترعي معلومة.'
++      : '- لو مش عارف أو مش متأكد، قول ببساطة: "مش متأكد، اسأل المستر في الحصة" — بدل ما تخترع معلومة.',
+     '- ردودك قصيرة ومنظمة: نقاط أو خطوات مرقمة لما الموضوع يستحق، وإيموجي بسيط (✅ 💡 📚) من غير مبالغة.',
+     '- ممنوع تبدأ ردك بترحيب طويل كل مرة — ادخل في الجواب على طول.',
+     '',
+@@ -122,7 +141,7 @@ function buildSystemPrompt(platformName: string, subjectLine: string): string {
+     ...ENGLISH_TERMS_RULE.split('\n'),
+     '',
+     '## معلومات عنك وعن المنصة:',
+-    '- اسمك: المساعد الذكي. وأنت جزء من المنصة نفسها — شغال 24 ساعة.',
++    '- اسمك: ' + assistantName + (isSherine ? ' — صاحبة الطالب في الرياضيات، شغالة 24 ساعة.' : '. وأنت جزء من المنصة نفسها — شغال 24 ساعة.'),
+     '- بتساعد الطلاب في: شرح أي جزئية رياضيات، مراجعة حل الواجبات من الصور، أسئلة الامتحانات، وتنظيم المذاكرة.',
+     '- المنصة فيها: فيديوهات الشرح، واجبات، امتحانات، نقاط وتقييمات، ومناقشات.',
+     '',
+@@ -174,6 +193,7 @@ export async function POST(request: Request) {
+     var body = await request.json()
+     var message = (body.message || '').trim()
+     var context = body.context || {}
++    var persona = String(body.persona || '') /* (و45) 'sherine' = شخصية شيرين */
+     var useStream = body.stream !== false
+     var imageParts = buildImageParts(body.images)
+     var history = buildHistory(body.history)
+@@ -182,13 +202,22 @@ export async function POST(request: Request) {
+       return NextResponse.json({ error: 'مفيش رسالة' }, { status: 400 })
+     }
+ 
++    /* (و45) حارس الطول — رسالة أطول من الحد مرفوضة برسالة عربية ودودة */
++    if (message.length > MAX_MESSAGE) {
++      return NextResponse.json({ error: 'الرسالة طويلة أوي 😅 اكتبلي سؤالك في ' + MAX_MESSAGE + ' حرف أو أقل وهرد عليك فورًا.' }, { status: 400 })
++    }
++
+     // الصور اتبعتت لكن كلها غير صالحة → نقول للطالب بوضوح
+     var sentImages = Array.isArray(body.images) ? body.images.length : 0
+     if (sentImages > 0 && imageParts.length === 0) {
+       return NextResponse.json({ reply: 'الصور اللي بعتها مش مقبولة 😅 جرب تبعت صورة PNG أو JPG عادية.' })
+     }
+ 
+-    var systemPrompt = buildSystemPrompt('منصة Math Genius (مستر وائل خضير)', 'مدرّب رياضيات شاطر بيساعد الطلاب في الـ Math.')
++    var systemPrompt = buildSystemPrompt(
++      'منصة Math Genius (مستر وائل خضير)',
++      isSherinePersona(persona) ? 'مدرّبة رياضيات شاطرة بتشرح بالعامية وبتساعد الطلاب في الـ Math.' : 'مدرّب رياضيات شاطر بيساعد الطلاب في الـ Math.',
++      persona
++    )
+     if (context.page) systemPrompt += '\nالصفحة اللي الطالب واقف فيها: ' + context.page
+     if (context.studentId) {
+       try {
+diff --git a/src/app/api/announcements/route.ts b/src/app/api/announcements/route.ts
+index 1fa5f3b..c37bf27 100755
+--- a/src/app/api/announcements/route.ts
++++ b/src/app/api/announcements/route.ts
+@@ -58,7 +58,8 @@ export async function POST(request: NextRequest) {
+     })
+ 
+     /* (و44) إشعار للطلاب: إعلان جديد */
+-    notifyStudents({ grade: String(grade || ''), type: 'announcement', title: '📣 إعلان جديد: ' + String(title), body: String(content || '').slice(0, 200) }).catch(function () {})
++    /* (و45) await — الإشعار بيتكتب قبل الرد */
++      try { await notifyStudents({ grade: String(grade || ''), type: 'announcement', title: '📣 إعلان جديد: ' + String(title), body: String(content || '').slice(0, 200) }) } catch (nE) {}
+ 
+     return NextResponse.json({ message: 'تم إنشاء الإعلان بنجاح', announcement }, { status: 201 })
+   } catch (error) {
+diff --git a/src/app/api/complaints/[id]/route.ts b/src/app/api/complaints/[id]/route.ts
+index 6af468e..1343f8f 100644
+--- a/src/app/api/complaints/[id]/route.ts
++++ b/src/app/api/complaints/[id]/route.ts
+@@ -52,7 +52,9 @@ export async function PATCH(request: Request, ctx: any) {
+       var cid = String(rows[0].studentId || '')
+       if (cid && (body.reply !== undefined || status === 'resolved')) {
+         var nTitle = status === 'resolved' ? '✅ المستر رد على شكواك — واتحلت' : '💬 المستر رد على شكواك'
+-        notifyStudent(cid, 'complaint_reply', nTitle, String(reply || '').slice(0, 240) || 'افتح تاب الشكاوى وشوف الرد')
++        /* (و45) await — الإشعار بيتكتب قبل الرد على السيرفلس
++           (fire-and-forget كان بيتقتل أحيانًا على السيرفلس بعد إرسال الرد) */
++        try { await notifyStudent(cid, 'complaint_reply', nTitle, String(reply || '').slice(0, 240) || 'افتح تاب الشكاوى وشوف الرد') } catch (nE2) {}
+       }
+     } catch (nErr) {}
+     return NextResponse.json({ complaint: rows[0], message: 'تم الحفظ ✅' })
+diff --git a/src/app/api/exams/route.ts b/src/app/api/exams/route.ts
+index d918a4e..14a857d 100755
+--- a/src/app/api/exams/route.ts
++++ b/src/app/api/exams/route.ts
+@@ -262,7 +262,8 @@ export async function POST(request: NextRequest) {
+     try {
+       var nIds: string[] = []
+       try { var tp = JSON.parse(targetIds); if (Array.isArray(tp)) nIds = tp.filter(Boolean) } catch (e) {}
+-      notifyStudents({ studentIds: nIds, grade: String(grade || ''), type: 'exam', title: '📝 امتحان جديد: ' + String(title), body: 'دخل من تاب الامتحانات وحل دلوقتي' }).catch(function () {})
++      /* (و45) await — الإشعار بيتكتب قبل الرد */
++        try { await notifyStudents({ studentIds: nIds, grade: String(grade || ''), type: 'exam', title: '📝 امتحان جديد: ' + String(title), body: 'دخل من تاب الامتحانات وحل دلوقتي' }) } catch (nE) {}
+     } catch (nE) {}
+ 
+     return NextResponse.json({ message: 'Exam added', exam }, { status: 201 })
+diff --git a/src/app/api/exams/submit/route.ts b/src/app/api/exams/submit/route.ts
+index 4eb9194..d43299a 100755
+--- a/src/app/api/exams/submit/route.ts
++++ b/src/app/api/exams/submit/route.ts
+@@ -29,6 +29,8 @@ import { normalizeCorrectKey } from '@/lib/correct-key'
+    دلوقتي تصحيح متسلسل سؤال-بسؤال (نفس إصلاح الواجب و25) — فشل سؤال ما يأثرش على غيره. */
+ import { checkExamSequential } from '@/lib/sequential-guard'
+ import { parseQuestions, resolveQuestionsForStudent } from '@/lib/exam-models'
++/* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات صور = اختياري مش مقالي */
++import { isWritingQuestion } from '@/lib/question-figures'
+ 
+ export const runtime = 'nodejs'
+ export const maxDuration = 300
+@@ -184,12 +186,8 @@ export async function POST(request) {
+     var mcqQuestions: any[] = []
+     var writingQuestions: any[] = []
+     questions.forEach(function(q, idx) {
+-      var isWriting = q.type === 'writing' || q.type === 'essay'
+-      if (!isWriting && Array.isArray(q.options)) {
+-        var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+-        if (allNA) isWriting = true
+-      }
+-      if (!isWriting && (!q.options || q.options.length === 0)) isWriting = true
++      /* (و45) تصنيف موحّد: سؤال له اختيارات (نص أو صور/رسومات) = اختياري دايمًا */
++      var isWriting = isWritingQuestion(q)
+       if (isWriting) writingQuestions.push({ q: q, origIdx: idx })
+       else mcqQuestions.push({ q: q, origIdx: idx })
+     })
+diff --git a/src/app/api/gallery/route.ts b/src/app/api/gallery/route.ts
+index 7107016..de27b0c 100755
+--- a/src/app/api/gallery/route.ts
++++ b/src/app/api/gallery/route.ts
+@@ -2,6 +2,13 @@
+ import { NextResponse } from 'next/server'
+ import { db } from '@/lib/db'
+ 
++/* (و45) استخراج معرف اليوتيوب من أي صيغة (watch/youtu.be/shorts/live/embed)
++   — بنجيب صورة الفيديو نفسه كصورة مصغرة افتراضية بطلب المستر */
++function ytIdFrom(url: string): string {
++  var m = String(url || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/))([\w-]{11})/)
++  return m ? m[1] : ''
++}
++
+ export async function GET() {
+   try {
+     var images = await db.galleryImage.findMany({ orderBy: { sortOrder: 'asc' } })
+@@ -19,6 +26,13 @@ export async function POST(request) {
+     var type = body.type || 'image'
+     var filePath = body.filePath || ''
+     var videoUrl = body.videoUrl || ''
++    /* (و45) الصورة المصغرة: رابط يدوي من الأدمن ← أوتوماتيك من اليوتيوب
++       لو الفيديو لينك يوتيوب — عشان كل فيديو في المعرض يبان بصورته */
++    var thumbnail = String(body.thumbnail || '').trim()
++    if (!thumbnail && type === 'video') {
++      var ytId = ytIdFrom(videoUrl)
++      if (ytId) thumbnail = 'https://i.ytimg.com/vi/' + ytId + '/hqdefault.jpg'
++    }
+ 
+     if (type === 'video') {
+       if (!videoUrl) {
+@@ -31,7 +45,7 @@ export async function POST(request) {
+     }
+        var count = await db.galleryImage.count()
+     var image = await db.galleryImage.create({
+-      data: { title: title, filePath: filePath, type: type, videoUrl: videoUrl, sortOrder: body.sortOrder != null ? parseInt(body.sortOrder) : count },
++      data: { title: title, filePath: filePath, type: type, videoUrl: videoUrl, thumbnail: thumbnail, sortOrder: body.sortOrder != null ? parseInt(body.sortOrder) : count },
+     })
+     return NextResponse.json({ image }, { status: 201 })
+   } catch (error) {
+diff --git a/src/app/api/homework/route.ts b/src/app/api/homework/route.ts
+index 344aa16..ddc216a 100755
+--- a/src/app/api/homework/route.ts
++++ b/src/app/api/homework/route.ts
+@@ -191,7 +191,8 @@ export async function POST(request: NextRequest) {
+     try {
+       var nIds: string[] = []
+       try { var tp = JSON.parse(targetIds); if (Array.isArray(tp)) nIds = tp.filter(Boolean) } catch (e) {}
+-      notifyStudents({ studentIds: nIds, grade: String(grade || ''), type: 'homework', title: '📚 واجب جديد: ' + String(title), body: 'دخل من تاب الواجبات وسلّمه قبل ميعاده' }).catch(function () {})
++      /* (و45) await — الإشعار بيتكتب قبل الرد */
++        try { await notifyStudents({ studentIds: nIds, grade: String(grade || ''), type: 'homework', title: '📚 واجب جديد: ' + String(title), body: 'دخل من تاب الواجبات وسلّمه قبل ميعاده' }) } catch (nE) {}
+     } catch (nE) {}
+ 
+     return NextResponse.json({ message: 'Homework added', homework }, { status: 201 })
+diff --git a/src/app/api/homework/submit/route.ts b/src/app/api/homework/submit/route.ts
+index 21c4dbf..865dc28 100755
+--- a/src/app/api/homework/submit/route.ts
++++ b/src/app/api/homework/submit/route.ts
+@@ -19,6 +19,8 @@ import { runGradePool } from '@/lib/grade-pool'
+ import { normalizeCorrectKey } from '@/lib/correct-key'
+ import { gradeFallbackDecisive, quickSmartMatch } from '@/lib/smart-grader'
+ import { checkHwSequential } from '@/lib/sequential-guard'
++/* (و45) تصنيف موحّد اختياري/مقالي — سؤال له اختيارات صور = اختياري مش مقالي */
++import { isWritingQuestion } from '@/lib/question-figures'
+ 
+ export const runtime = 'nodejs'
+ export const maxDuration = 300
+@@ -212,14 +214,8 @@ export async function POST(request) {
+         var raw = typeof homework.questions === 'string' ? JSON.parse(homework.questions) : homework.questions
+         if (Array.isArray(raw)) {
+           raw.forEach(function(q, idx) {
+-            var isWriting = q.type === 'writing' || q.type === 'essay'
+-            if (!isWriting && Array.isArray(q.options)) {
+-              var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+-              if (allNA) isWriting = true
+-            }
+-            if (!isWriting && (!q.options || q.options.length === 0)) {
+-              isWriting = true
+-            }
++            /* (و45) تصنيف موحّد: سؤال له اختيارات (نص أو صور/رسومات) = اختياري دايمًا */
++            var isWriting = isWritingQuestion(q)
+             if (isWriting) {
+               writingQuestions.push({ q: q, origIdx: idx })
+             } else {
+@@ -604,6 +600,41 @@ export async function POST(request) {
+         }
+       })
+       await runGradePool(hwTasks, 2, 400)
++      /* (و45) شبكة أمان نهائية — زي الامتحان بالظبط: أي سؤال مافيش له حكم
++         نهائي بعد الـ pool (فشل شبكة/انقطاع) بياخد فولباك حاسم فورًا —
++         ممنوع يفضل معلق «جاري التصحيح» للأبد */
++      for (var fi = 0; fi < gradedList.length; fi++) {
++        var fg = gradedList[fi]
++        if (fg && fg.gradingStatus === 'graded') continue
++        var fAns = String((fg && fg.answer) || '')
++        var fPts = Number((fg && fg.points) || 1)
++        if (/\[📷/.test(fAns)) {
++          var hasWorkF = fAns.replace(/\[📷[^\]]*\]/g, '').trim().length > 0
++          gradedList[fi] = Object.assign({}, fg, {
++            gradingStatus: 'graded', needsGrading: false, isCorrect: false,
++            awardedPoints: hasWorkF ? Math.ceil(fPts / 2) : 0,
++            feedback: hasWorkF ? 'صورة الحل اترفعت — درجة مؤقتة لحد مراجعة المستر (يقدر يعدلها من لوحته)' : 'لم يتم الإجابة',
++          })
++        } else if (!fAns.trim() || fAns.trim() === '[📷 صورة مرفقة]') {
++          gradedList[fi] = Object.assign({}, fg, {
++            gradingStatus: 'graded', needsGrading: false, isCorrect: false,
++            awardedPoints: 0, feedback: 'لم يتم الإجابة',
++          })
++        } else {
++          var fbF = gradeFallbackDecisive({
++            question: (fg && fg.question) || '',
++            answer: fAns,
++            modelAnswer: (fg && fg.modelAnswer) || '',
++            acceptedAnswers: (fg && fg.acceptedAnswers) || [],
++            points: fPts,
++          })
++          gradedList[fi] = Object.assign({}, fg, {
++            gradingStatus: 'graded', needsGrading: false,
++            isCorrect: fbF.isCorrect, awardedPoints: fbF.awardedPoints, feedback: fbF.feedback,
++          })
++        }
++      }
++      await persistPartial()
+       console.log('[HW BG] Grading done for', resultId, '— final score', (mcqScore + writingScore) + '/' + maxScore)
+     }
+ 
+diff --git a/src/app/api/videos/route.ts b/src/app/api/videos/route.ts
+index b763481..4cdf30e 100755
+--- a/src/app/api/videos/route.ts
++++ b/src/app/api/videos/route.ts
+@@ -9,8 +9,8 @@
+ // عمليات الكتابة (POST) للأدمن بس.
+ // ============================================================
+ import { NextRequest, NextResponse } from 'next/server'
+-import { db } from '@/lib/db'
+-import { isAdmin, getStudentAnyStatus, safeThumb, getYouTubeId, mediaIdFromPath } from '@/lib/video-guard'
++import { db, safeWrite } from '@/lib/db'
++import { isAdmin, getStudentAnyStatus, safeThumb, getYouTubeId, mediaIdFromPath, ensureVideoTable } from '@/lib/video-guard'
+ 
+ export const dynamic = 'force-dynamic'
+ 
+@@ -30,6 +30,8 @@ function stripVideo(v: { id: string; thumbnail: string; url: string; filePath: s
+ 
+ export async function GET(request: NextRequest) {
+   try {
++    /* (و45) ترميم دفاعي لجدول Video — أي عمود ناقص في الإنتاج بيفشل القايمة كلها */
++    await ensureVideoTable()
+     const { searchParams } = new URL(request.url)
+     const grade = searchParams.get('grade')
+     const keyword = searchParams.get('keyword')
+@@ -112,22 +114,28 @@ export async function GET(request: NextRequest) {
+     })
+   } catch (error: any) {
+     console.error('Videos fetch error:', error)
+-    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
++    return NextResponse.json({ error: 'قائمة الفيديوهات ما قدرتش تتحمل — السبب التقني: ' + String((error && error.message) || error).slice(0, 160) }, { status: 500 })
+   }
+ }
+ 
+ export async function POST(request: NextRequest) {
++  /* (و45) رسالة خطأ عربية وصفية — المستر لازم يعرف السبب الحقيقي،
++     مفيش «في مشكلة» من غير سبب */
++  const errOut = (msg: string, status = 500) => NextResponse.json({ error: msg }, { status })
+   try {
+     const body = await request.json()
+     const { title, url, grade, filePath, fileType, thumbnail, price, adminId } = body
+ 
+     // الكتابة للأدمن بس
+     if (!(await isAdmin(adminId))) {
+-      return NextResponse.json({ error: 'غير مسموح' }, { status: 401 })
++      return errOut('مسموح للأدمن بس — سجل الدخول من الأول', 401)
+     }
+ 
+-    if (!title || !grade) {
+-      return NextResponse.json({ error: 'Title and grade are required' }, { status: 400 })
++    if (!title || !String(title).trim()) {
++      return errOut('لازم تكتب عنوان الدرس الأول', 400)
++    }
++    if (!grade) {
++      return errOut('لازم تختار الصف الدراسي الأول', 400)
+     }
+ 
+     // (ملغاة 2026-و4) ميزة «إضافة فيديو من كود HTML» اتلغت بطلب المستر
+@@ -135,24 +143,61 @@ export async function POST(request: NextRequest) {
+     const finalUrl = String(url || '').trim()
+ 
+     if (!finalUrl && !filePath) {
+-      return NextResponse.json({ error: 'URL or file is required' }, { status: 400 })
++      return errOut('لازم لينك فيديو (يوتيوب أو أي موقع) أو ملف فيديو مرفوع — دوس واحدة منهم الأول', 400)
+     }
+ 
+-    const video = await db.video.create({
+-      data: {
+-        title,
+-        url: finalUrl,
+-        grade,
+-        filePath: filePath || '',
+-        fileType: fileType || '',
+-        thumbnail: thumbnail || '',
+-        price: Number(price) || 0,
+-      },
+-    })
++    /* (و45) الصورة المصغرة الأوتوماتيكية — لو الأدمن ماحطش صورة وفيه لينك
++       يوتيوب: بنخزّن صورة الفيديو من i.ytimg.com على السيرفر كمان
++       (hqdefault) عشان تظهر في كل الشاشات من غير خطوة إضافية */
++    let finalThumb = String(thumbnail || '').trim()
++    if (!finalThumb) {
++      const ytId = getYouTubeId(finalUrl)
++      if (ytId) finalThumb = 'https://i.ytimg.com/vi/' + ytId + '/hqdefault.jpg'
++    }
++
++    /* (و45) ترميم دفاعي لجدول Video قبل الكتابة — درس و43: أي عمود ناقص
++       في الإنتاج بيفشل الـ INSERT بصمت، فبنضمن الجدول كامل الأول */
++    await ensureVideoTable()
++
++    let video: any = null
++    try {
++      video = await safeWrite(function () {
++        return db.video.create({
++          data: {
++            title: String(title).trim(),
++            url: finalUrl,
++            grade,
++            filePath: filePath || '',
++            fileType: fileType || '',
++            thumbnail: finalThumb,
++            price: Number(price) || 0,
++          },
++        })
++      })
++    } catch (createErr: any) {
++      /* (و45) ترجمة أخطاء Prisma/Turso لأسباب عربية مفهومة */
++      const code = String(createErr && createErr.code ? createErr.code : '')
++      const raw = String((createErr && createErr.message) || createErr || '')
++      console.error('Video create error:', raw)
++      if (code === 'P2021') {
++        return errOut('جدول الفيديوهات مش موجود في قاعدة البيانات — دوس حفظ تاني بعد ثانية (الترميم الأوتوماتيك هيشتغل)، ولو فضلت المشكلة كلمني', 500)
++      }
++      if (code === 'P2022' || raw.indexOf('no such column') !== -1) {
++        return errOut('في عمود ناقص في جدول الفيديوهات بالقاعدة — جرب تاني بعد ثانية (الترميم الأوتوماتيك بيتكفل)، ولو فضلت المشكلة كلمني', 500)
++      }
++      if (raw.indexOf('database is locked') !== -1 || raw.indexOf('SQLITE_BUSY') !== -1) {
++        return errOut('قاعدة البيانات كانت مشغولة لحظة الحفظ — جرب تاني كام ثانية وهتنجح', 503)
++      }
++      return errOut('الفيديو ما اتضافش — السبب التقني: ' + (raw.slice(0, 160) || 'غير معروف'), 500)
++    }
+ 
+     return NextResponse.json({ message: 'Video added', video }, { status: 201 })
+   } catch (error: any) {
+-    console.error('Video create error:', error)
+-    return NextResponse.json({ error: 'Server error: ' + (error.message || String(error)) }, { status: 500 })
++    const raw = String((error && error.message) || error || '')
++    console.error('Video create error:', raw)
++    if (raw.indexOf('JSON') !== -1 || raw.indexOf('json') !== -1) {
++      return errOut('البيانات المتبعتة مش سليمة — جرب تحمّل الصفحة تاني وتعبّي الفورم من الأول', 400)
++    }
++    return errOut('الفيديو ما اتضافش — السبب التقني: ' + raw.slice(0, 160), 500)
+   }
+ }
+diff --git a/src/components/admin/AdminDashboard.tsx b/src/components/admin/AdminDashboard.tsx
+index 91c7182..3cf10e8 100755
+--- a/src/components/admin/AdminDashboard.tsx
++++ b/src/components/admin/AdminDashboard.tsx
+@@ -20,7 +20,7 @@ import {
+   BarChart3, RefreshCw, Settings, Upload, MessageSquare,
+   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
+   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
+-  Video as VideoIcon,
++  Video as VideoIcon, LinkIcon,
+   ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown
+ } from 'lucide-react'
+ import { AdminComplaints } from './AdminComplaints'
+@@ -41,7 +41,7 @@ import { MathKeyboard } from '@/components/student/MathKeyboard'
+ /* (2026-و40) استخراج من صفحات كتاب PDF — تصوير الصفحات على المتصفح بـ pdf.js */
+ import { openPdf, renderPageToJpeg } from '@/lib/pdf-pages'
+ /* (2026-و40-w) ورقة العمل: قص رسومات الأسئلة + عرض الجداول/الرسومات في المراجعة */
+-import { ensureFigureUrls } from '@/lib/question-figures'
++import { ensureFigureUrls, isWritingQuestion } from '@/lib/question-figures'
+ import BidiText from '@/components/BidiText'
+ import { WorksheetTableReadonly, WorksheetFigure, parseTableValuesFromText } from '@/components/worksheet/WorksheetParts'
+ /* (2026-و40) الكتب والملازم — تاب مكتبة الكتب للطالب */
+@@ -97,10 +97,8 @@ function writingVerdictBadge(aq: any): { cls: string; text: string } {
+ 
+ /* (و43) كشف «شكله فيه رسمة» من النص — للتحذير في شاشة المراجعة:
+    سؤال شكله graphical من غير figure (url ولا bbox) → تحذير + رفع يدوي للرسمة */
+-var isGraphicalLike = function(q:any){
+-  var t = String((q&&q.question)||'')+' '+String((q&&q.modelAnswer)||'')
+-  return /(رسم|مخطط|شكل هندسي|مثلث|دائرة|زاوية|منحنى|graph|plot|diagram|figure|shape|axis of symmetry|represent graphically)/i.test(t)
+-}
++/* (و45) دالة isGraphicalLike اتنشلت — كانت بتشغّل تحذير «السؤال ده محتاج رسم»
++   اللي المستر طلب إلغاءه خالص (كان بينبّه غلط على أسئلة مش محتاجة رسمة) */
+ 
+ /* ============================================================
+    (25-ب1) أدوات الجدولة + إظهار الإجابات — طلبات المستر:
+@@ -777,6 +775,10 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+   const [formFile, setFormFile] = useState<File | null>(null)
+   const [formThumbnail, setFormThumbnail] = useState<File | null>(null)
+   const [formThumbnailUrl, setFormThumbnailUrl] = useState('')
++  /* (و45) قيمة الصورة المصغرة الأوتوماتيكية الأخيرة — عشان الكتابة اليدوية للأدمن
++     ما تتبدلش غلط: أوتوماتيك بيبدّل أوتوماتيك، واليدوي محترم */
++  const [autoThumbRef, setAutoThumbRef] = useState('')
++  const [thumbCapturing, setThumbCapturing] = useState(false)
+   const [submitting, setSubmitting] = useState(false)
+   const [uploadProgress, setUploadProgress] = useState(0)
+   const [uploading, setUploading] = useState(false)
+@@ -866,14 +868,18 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+         toast.success('تم إضافة الفيديو بنجاح! سيظهر للصف ' + formGrade)
+         setShowForm(false)
+         setFormTitle(''); setFormUrl(''); setFormGrade(''); setFormPrice('')
+-        setFormFile(null); setFormThumbnail(null); setFormThumbnailUrl('')
++        setFormFile(null); setFormThumbnail(null); setFormThumbnailUrl(''); setAutoThumbRef('')
+         loadVideos(false)
+         onStatsRefresh()
+       } else {
+-        try { const d = await res.json(); toast.error(d.error || 'خطأ في الإضافة', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر - حاول تاني', { duration: 8000 }) }
++        /* (و45) رسالة الخطأ الحقيقية بتوصل للمستر — مفيش «في مشكلة» من غير سبب */
++        var errDetail = ''
++        try { const d = await res.json(); errDetail = String(d.error || d.detail || '') } catch { errDetail = 'السيرفر رجّع كود ' + res.status }
++        toast.error(errDetail ? 'الفيديو ما اتضافش: ' + errDetail : 'الفيديو ما اتضافش — حصلت مشكلة في السيرفر، حاول تاني', { duration: 10000 })
+       }
+     } catch (err: any) {
+-      toast.error('خطأ في الاتصال: ' + (err.message || ''), { duration: 8000 })
++      var netMsg = String(err && err.message ? err.message : '')
++      toast.error('الفيديو ما اتضافش — مشكلة اتصال بالسيرفر: ' + (netMsg || 'الشبكة مقطوعة'), { duration: 10000 })
+     }
+     setSubmitting(false)
+     setUploading(false)
+@@ -954,10 +960,90 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+   }
+ 
+   const getYouTubeId = (url: string) => {
+-    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([\w-]{11})/)
++    /* (و45) دعم كل صيغ يوتيوب: watch?v= و youtu.be و shorts و live و embed */
++    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/))([\w-]{11})/)
+     return match ? match[1] : null
+   }
+ 
++  /* ===== (و45) الصورة المصغرة الأوتوماتيكية — طلب المستر =====
++     يوتيوب → نفس صورة الفيديو من i.ytimg.com (hqdefault)
++     ملف مرفوع → لقطة حقيقية من الفيديو نفسه (canvas عند ~1 ثانية أو 10% من المدة)
++     والأدمن دايمًا يقدر يعمّل override بصورة من عنده */
++  const applyAutoThumb = function (val: string) {
++    setAutoThumbRef(val)
++    setFormThumbnailUrl(val)
++  }
++
++  const handleVideoUrlChange = function (val: string) {
++    setFormUrl(val)
++    var ytId = getYouTubeId(val)
++    var nextAuto = ytId ? 'https://i.ytimg.com/vi/' + ytId + '/hqdefault.jpg' : ''
++    if (nextAuto) {
++      applyAutoThumb(nextAuto)
++    } else if (autoThumbRef && formThumbnailUrl === autoThumbRef) {
++      /* اللينك بقي مش يوتيوب والصورة الحالية أوتوماتيك قديمة → نفرغها */
++      applyAutoThumb('')
++    }
++  }
++
++  /* لقطة من ملف الفيديو: بنحمّل أول ثانية (أو 10% من المدة) ونرسمها على canvas 640px */
++  const captureVideoFrame = async function (file: File): Promise<string> {
++    return new Promise(function (resolve) {
++      var url = ''
++      try { url = URL.createObjectURL(file) } catch (e) { resolve(''); return }
++      var v = document.createElement('video')
++      v.preload = 'metadata'; v.muted = true
++      var settled = false
++      var done = function (val: string) {
++        if (settled) return
++        settled = true
++        try { URL.revokeObjectURL(url) } catch (e) {}
++        resolve(val)
++      }
++      var timer = setTimeout(function () { done('') }, 10000)
++      v.onloadedmetadata = function () {
++        try {
++          var t = isFinite(v.duration) && v.duration > 0 ? Math.min(Math.max(v.duration * 0.1, 0.5), 3) : 1
++          v.onseeked = function () {
++            try {
++              var w = 640
++              var ratio = (v.videoWidth && v.videoHeight) ? (v.videoHeight / v.videoWidth) : 0.5625
++              var canvas = document.createElement('canvas')
++              canvas.width = w
++              canvas.height = Math.max(1, Math.round(w * ratio))
++              var ctx = canvas.getContext('2d')
++              if (!ctx) { clearTimeout(timer); done(''); return }
++              ctx.drawImage(v, 0, 0, canvas.width, canvas.height)
++              var dataUrl = canvas.toDataURL('image/jpeg', 0.82)
++              clearTimeout(timer)
++              done(dataUrl)
++            } catch (e) { clearTimeout(timer); done('') }
++          }
++          v.currentTime = t
++        } catch (e) { clearTimeout(timer); done('') }
++      }
++      v.onerror = function () { clearTimeout(timer); done('') }
++      v.src = url
++    })
++  }
++
++  const handleVideoFilePick = async function (f: File | null) {
++    setFormFile(f)
++    if (!f) return
++    /* (و45) لقطة أوتوماتيكية من الفيديو نفسه — بترفع فورًا كصورة مصغرة */
++    setThumbCapturing(true)
++    try {
++      var dataUrl = await captureVideoFrame(f)
++      if (dataUrl) {
++        var blob = await (await fetch(dataUrl)).blob()
++        var asFile = new File([blob], 'video-thumb.jpg', { type: 'image/jpeg' })
++        var up = await chunkedUpload(asFile, 'thumbnails')
++        if (up && up.filePath) applyAutoThumb(up.filePath)
++      }
++    } catch (e) { /* اللقطة الأوتوماتيكية اختيارية — فشلها ما يمنعش إضافة الفيديو */ }
++    setThumbCapturing(false)
++  }
++
+   return (
+     <Card>
+       <CardHeader className="pb-3">
+@@ -1000,8 +1086,8 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+             {/* YouTube URL */}
+             <div className="space-y-1.5">
+               <Label className="text-xs">رابط الفيديو — يوتيوب أو أي لينك من أي موقع (Cloudinary / Drive / Dropbox / mp4 مباشر…) — أو ارفع ملف فيديو. للتحكم في الجودات: ارفع على Cloudinary وهتلاقي قايمة جودات في المشغل</Label>
+-              <Input value={formUrl} onChange={(e) => setFormUrl(e.target.value)} placeholder="https://youtube.com/watch?v=… أو https://res.cloudinary.com/…/video/upload/v…/name.mp4" dir="ltr" />
+-              {formUrl && getYouTubeId(formUrl) && !/<\s*iframe/i.test(formUrl) && (
++              <Input value={formUrl} onChange={(e) => handleVideoUrlChange(e.target.value)} placeholder="https://youtube.com/watch?v=… أو https://res.cloudinary.com/…/video/upload/v…/name.mp4" dir="ltr" />
++              {getYouTubeId(formUrl) && !/<\s*iframe/i.test(formUrl) && (
+                 <div className="mt-2 w-40 aspect-video rounded-lg overflow-hidden border relative">
+                   <Image src={`https://img.youtube.com/vi/${getYouTubeId(formUrl)}/mqdefault.jpg`} alt="thumbnail" fill className="object-cover" sizes="400px" unoptimized />
+                 </div>
+@@ -1012,17 +1098,18 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+             <div className="space-y-1.5">
+               <Label className="text-xs">أو ارفع ملف فيديو</Label>
+               <div className="flex items-center gap-2">
+-                <input ref={videoFileRef} type="file" accept="video/*" className="hidden" onChange={(e) => { setFormFile(e.target.files?.[0] || null) }} />
+-                <Button type="button" variant="outline" size="sm" onClick={() => videoFileRef.current?.click()}>
+-                  <Upload className="h-4 w-4 ml-1" />{formFile ? formFile.name : 'اختر فيديو'}
++                <input ref={videoFileRef} type="file" accept="video/*" className="hidden" onChange={(e) => { handleVideoFilePick(e.target.files?.[0] || null) }} />
++                <Button type="button" variant="outline" size="sm" onClick={() => videoFileRef.current?.click()} disabled={thumbCapturing}>
++                  {thumbCapturing ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <Upload className="h-4 w-4 ml-1" />}{formFile ? formFile.name : 'اختر فيديو'}
+                 </Button>
+                 {formFile && <span className="text-xs text-muted-foreground">{(formFile.size / 1024 / 1024).toFixed(1)} MB</span>}
+               </div>
++              <p className="text-[10px] text-muted-foreground">لو الفيديو ملف مرفوع، هتاخد صورة مصغرة أوتوماتيك من وسط الفيديو نفسه — وتقدر تغيرها من خانة الصورة المصغرة لو عايز</p>
+             </div>
+ 
+             {/* Thumbnail Upload */}
+             <div className="space-y-1.5">
+-              <Label className="text-xs">صورة مصغرة للفيديو (اختياري)</Label>
++              <Label className="text-xs">صورة مصغرة للفيديو (اختياري — بتتعمل أوتوماتيك لو سبتها فاضية)</Label>
+               <div className="flex items-center gap-3">
+                 <input ref={thumbFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { setFormThumbnail(e.target.files?.[0] || null) }} />
+                 <Button type="button" variant="outline" size="sm" onClick={() => thumbFileRef.current?.click()}>
+@@ -1038,7 +1125,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+ 
+             {/* Thumbnail URL */}
+             <div className="space-y-1.5">
+-              <Label className="text-xs">أو رابط صورة مصغرة (اختياري)</Label>
++              <Label className="text-xs">أو رابط صورة مصغرة (اختياري — أوتوماتيك من اليوتيوب لو سبتها فاضي)</Label>
+               <Input value={formThumbnailUrl} onChange={(e) => setFormThumbnailUrl(e.target.value)} placeholder="https://example.com/thumbnail.jpg" dir="ltr" />
+               {formThumbnailUrl && (
+                 <div className="mt-2 w-40 aspect-video rounded-lg overflow-hidden border relative">
+@@ -1064,7 +1151,7 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
+               <Button size="sm" onClick={handleSubmit} disabled={submitting || uploading}>
+                 {submitting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ ونشر'}
+               </Button>
+-              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormTitle(''); setFormUrl(''); setFormGrade(''); setFormFile(null); setFormThumbnail(null); setFormThumbnailUrl('') }}>إلغاء</Button>
++              <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormTitle(''); setFormUrl(''); setFormGrade(''); setFormFile(null); setFormThumbnail(null); setFormThumbnailUrl(''); setAutoThumbRef('') }}>إلغاء</Button>
+             </div>
+           </div>
+         )}
+@@ -1611,7 +1698,7 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
+       var data = await res.json()
+       if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
+         var extracted = data.extracted.questions.map(function (q: any) {
+-          if (q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.every(function (o: string) { return !o || o === 'N/A' || o === 'لا يوجد' }))) {
++          if (isWritingQuestion(q)) {
+             return { q: q.question || '', options: [] as string[], correct: -1, points: q.points || 5, type: 'writing', modelAnswer: q.modelAnswer || '', acceptedAnswers: q.acceptedAnswers || [] }
+           }
+           return { q: q.question || '', options: (q.options || ['','','','']).slice(0, 4), correct: q.correct || 0, points: q.points || 1, type: 'mcq', modelAnswer: q.modelAnswer || '' }
+@@ -2127,6 +2214,12 @@ function GalleryManager() {
+     setLoading(false)
+   }
+ 
++  /* (و45) صورة مصغرة أوتوماتيكية للفيديو — يوتيوب من i.ytimg.com */
++  var getYtThumb = function (url: string) {
++    var yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/))([\w-]{11})/)
++    return yt ? 'https://i.ytimg.com/vi/' + yt[1] + '/hqdefault.jpg' : ''
++  }
++
+   useEffect(function() { loadGallery() }, [])
+ 
+   var resetAll = function() {
+@@ -2187,7 +2280,8 @@ function GalleryManager() {
+         type: 'video',
+         sortOrder: parseInt(vidOrder) || 0
+       }
+-      if (vidThumb.trim()) { body.filePath = vidThumb.trim() }
++      /* (و45) الصورة المصغرة: رابط يدوي ← أوتوماتيك من اليوتيوب (والسيرفر كمان بيتعامل مع الحالتين) */
++      if (vidThumb.trim()) { body.thumbnail = vidThumb.trim() }
+       var res = await fetch('/api/gallery', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+@@ -2196,7 +2290,11 @@ function GalleryManager() {
+       if (res.ok) {
+         toast.success('تم إضافة الفيديو بنجاح')
+         setVidUrl(''); setVidThumb(''); loadGallery()
+-      } else { toast.error('خطأ في الإضافة') }
++      } else {
++        var gErr = ''
++        try { var gData = await res.json(); gErr = String(gData.error || '') } catch { gErr = 'كود ' + res.status }
++        toast.error('الفيديو ما اتضافش: ' + gErr)
++      }
+     } catch { toast.error('خطأ في الاتصال') }
+     setSaving(false)
+   }
+@@ -2210,7 +2308,8 @@ function GalleryManager() {
+   }
+ 
+   var getVideoThumb = function(url: string) {
+-    var yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/)
++    /* (و45) كل صيغ اليوتيوب زي الصفحة العامة */
++    var yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/))([\w-]{11})/)
+     if (yt) return 'https://img.youtube.com/vi/' + yt[1] + '/mqdefault.jpg'
+     return ''
+   }
+@@ -2289,8 +2388,15 @@ function GalleryManager() {
+                   <Input placeholder="https://youtube.com/watch?v=..." value={vidUrl} onChange={function(e) { setVidUrl(e.target.value) }} dir="ltr" />
+                 </div>
+                 <div className="space-y-1">
+-                  <Label className="text-xs text-muted-foreground">رابط صورة مصغرة (اختياري)</Label>
++                  <Label className="text-xs text-muted-foreground">رابط صورة مصغرة (اختياري — أوتوماتيك من اليوتيوب لو سبتها فاضية)</Label>
+                   <Input placeholder="https://example.com/thumb.jpg" value={vidThumb} onChange={function(e) { setVidThumb(e.target.value) }} dir="ltr" />
++                  {vidUrl.trim() && !vidThumb.trim() && getYtThumb(vidUrl) && (
++                    <div className="flex items-center gap-2 mt-1">
++                      {/* eslint-disable-next-line @next/next/no-img-element */}
++                      <img src={getYtThumb(vidUrl)} alt="الصورة المصغرة الأوتوماتيكية" className="h-12 w-20 object-cover rounded border border-border bg-white" />
++                      <p className="text-[10px] text-muted-foreground">هتتحط أوتوماتيك من اليوتيوب لو مكتتبتش حاجة</p>
++                    </div>
++                  )}
+                 </div>
+               </div>
+ 
+@@ -2322,7 +2428,7 @@ function GalleryManager() {
+           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto custom-scrollbar">
+             {images.map(function(img) {
+               var isVideo = img.type === 'video'
+-              var thumb = isVideo ? (getVideoThumb(img.videoUrl) || img.filePath || '') : img.filePath
++              var thumb = isVideo ? ((img as any).thumbnail || getVideoThumb(img.videoUrl) || img.filePath || '') : img.filePath
+               var src = isVideo ? thumb : img.filePath
+               return (
+                 <div key={img.id} className="relative group rounded-lg overflow-hidden border bg-card aspect-square">
+@@ -3173,7 +3279,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
+       if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
+         // Preserve question type (mcq/writing) and all fields
+         var extracted = data.extracted.questions.map(function(q: any) {
+-          if (q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' }))) {
++          if (isWritingQuestion(q)) {
+             return { type: 'writing', question: q.question || '', options: [], correct: -1, points: q.points || 5, modelAnswer: q.modelAnswer || '', acceptedAnswers: q.acceptedAnswers || [] }
+           }
+           return { type: 'mcq', question: q.question || '', options: (q.options || ['','','','']).slice(0, 4), correct: q.correct || 0, points: q.points || 1, modelAnswer: q.modelAnswer || '' }
+@@ -3229,7 +3335,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
+       var data = await res.json()
+       if (res.ok && data.extracted && data.extracted.questions && data.extracted.questions.length > 0) {
+         var extracted = data.extracted.questions.map(function (q: any) {
+-          if (q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.every(function (o: string) { return !o || o === 'N/A' || o === 'لا يوجد' }))) {
++          if (isWritingQuestion(q)) {
+             return { type: 'writing', question: q.question || '', options: [], correct: -1, points: q.points || 5, modelAnswer: q.modelAnswer || '', acceptedAnswers: q.acceptedAnswers || [] }
+           }
+           return { type: 'mcq', question: q.question || '', options: (q.options || ['','','','']).slice(0, 4), correct: q.correct || 0, points: q.points || 1, modelAnswer: q.modelAnswer || '' }
+@@ -3702,6 +3808,9 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+   const [bookCount, setBookCount] = useState(10)
+   const [bookName, setBookName] = useState('')
+   const [bookPdfLoading, setBookPdfLoading] = useState(false)
++  /* (و45) وضع الكتاب بلينك: «أو ضع رابط PDF» — بيتحمل من خلال /api/books/proxy */
++  const [bookUrl, setBookUrl] = useState('')
++  const [bookLinkLoading, setBookLinkLoading] = useState(false)
+   const bookDocRef = useRef<any>(null)
+   const bookFileRef = useRef<HTMLInputElement>(null)
+   /* (25-ب1) إعدادات الامتحان قبل الحفظ: إظهار الإجابات + المؤقت + موعد الظهور */
+@@ -3746,12 +3855,13 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+      3) لو أول ملف → استبدال عادي من غير srcName (سؤال بمصدر واحد بيتعرض «صفحة N» بس) */
+   var finishExtraction = async function (newQs: any[], cropSource: { file?: File | null; doc?: any | null }) {
+     try {
+-      /* (و44) العدّاد بيشمل رسومات الاختيارات كمان (optionFigures) */
++      /* (و44) قص رسومات السؤال أوتوماتيك — (و45) رسومات الاختيارات اتشالت من العدّاد
++         والإلزام بالكامل بطلب المستر: مش مطلوب رفع صورة للسؤال ولا للختيار —
++         القص أوتوماتيك بس لما ينفع، ومن غير أي تنبيه أو منع */
+       var needCrop = 0
+       newQs.forEach(function (q: any) {
+         if (!q) return
+         if (q.figure && q.figure.bbox && !q.figure.url) needCrop++
+-        if (Array.isArray(q.optionFigures)) q.optionFigures.forEach(function (of: any) { if (of && of.bbox && !of.url) needCrop++ })
+       })
+       if (needCrop > 0) {
+         setStatusMsg('جهز الرسومات 0 من ' + needCrop + '…')
+@@ -4068,6 +4178,39 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+     setBookPdfLoading(false)
+   }
+ 
++  /* (و45 بطلب المستر) وضع الكتاب بلينك: «أو ضع رابط PDF» — التحميل بيتم من
++     خلال /api/books/proxy (نفس بروكسي الكتب: حماية SSRF + سقف 250MB + حل CORS)
++     والملف بيتحول File وبيفتح في نفس pipeline وضع الكتاب بالظبط (openPdf).
++     الملف المحلي لو موجود بياخد الأسبقية — واللينك مكتوب في bookUrl زي ما هو. */
++  var openBookFromLink = async function () {
++    var link = bookUrl.trim()
++    if (!link || bookLinkLoading) return
++    if (!/^https?:\/\//i.test(link)) { toast.error('الرابط لازم يبدأ بـ http أو https'); return }
++    if (bookFile) { toast.error('فيه ملف محلي مختار — الملف بياخد الأسبقية. امسحه الأول لو عايز تفتح الرابط'); return }
++    setBookLinkLoading(true)
++    try {
++      var res = await fetch('/api/books/proxy?url=' + encodeURIComponent(link), { cache: 'no-store' })
++      if (!res.ok) {
++        var je: any = null
++        try { je = await res.json() } catch (e) {}
++        throw new Error((je && je.error) || 'مقدرتش أجيب الملف من الرابط (كود ' + res.status + ') — اتأكد إن الرابط شغال ومباشر')
++      }
++      var blob = await res.blob()
++      if (blob.size === 0) throw new Error('الملف اللي جاي من الرابط فاضي — اتأكد إن الرابط بيوصل للملف مباشرة')
++      var file = new File([blob], 'book-' + Date.now() + '.pdf', { type: 'application/pdf' })
++      setBookFile(file); bookDocRef.current = null; setBookNumPages(0); setBookFrom(1); setBookTo(1)
++      var opened = await openPdf(file)
++      bookDocRef.current = opened.doc
++      setBookNumPages(opened.numPages)
++      setBookName(''); setTitle(function (t: string) { return t || 'كتاب من رابط' })
++      setBookFrom(1); setBookTo(Math.min(opened.numPages, 30))
++      toast.success('اتفتح الكتاب من الرابط — عدد الصفحات: ' + opened.numPages + ' — حدد الصفحات واضغط استخراج')
++    } catch (e: any) {
++      toast.error('الرابط ما اتنفذش: ' + (e && e.message ? e.message : 'حصلت مشكلة'))
++    }
++    setBookLinkLoading(false)
++  }
++
+   /* (2026-و44) قايمة الكتب المحفوظة (من تاب الكتب والملازم — ملف أو لينك خارجي)
+      اللينك الخارجي بيمر من /api/books/proxy (pdf.js مش بيوصل للينكات بسبب CORS) */
+   var loadSavedBooks = async function () {
+@@ -4365,6 +4508,21 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+                 {bookFile ? bookFile.name : 'اختر ملف الكتاب (PDF)'}
+               </Button>
+             </div>
++            {/* (و45 بطلب المستر) الاستخراج بملف أو لينك — في وضع الكتاب كمان:
++               لو الكتاب على لينك (Drive أو أي موقع) حط اللينك وهيتحمل من خلال
++               بروكسي المنصة (بيحل CORS) ويفتح زي الملف بالظبط — الملف لو متحط
++               بياخد الأسبقية. الملف الصغير الأسرع، واللينك أحسن للكتب الكبيرة */}
++            <div className="space-y-1.5">
++              <div className="flex items-center gap-3"><div className="flex-grow h-px bg-sky-200" /><span className="text-[11px] text-muted-foreground">أو ضع رابط PDF</span><div className="flex-grow h-px bg-sky-200" /></div>
++              <div className="flex items-center gap-2">
++                <Input placeholder="https://drive.google.com/… أو https://example.com/book.pdf" value={bookUrl} onChange={function(e) { setBookUrl(e.target.value) }} dir="ltr" className="flex-1" />
++                <Button type="button" variant="outline" onClick={openBookFromLink} disabled={bookLinkLoading || !bookUrl.trim()} className="border-sky-400/40 text-sky-700 dark:text-sky-400 shrink-0">
++                  {bookLinkLoading ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <LinkIcon className="h-4 w-4 ml-2" />}
++                  افتح الرابط
++                </Button>
++              </div>
++              <p className="text-[10px] text-muted-foreground">لو حطيت ملف ورابط، الملف هو اللي هيفتح. اللينك بيتحمل عن طريق المنصة (حماية + بلا مشاكل CORS) — مستحسن للكتب الكبيرة على Drive</p>
++            </div>
+             {/* (2026-و44) الكتب المحفوظة — سهم يفتح قايمة الكتب المضافة من تاب
+                «الكتب والملازم» (ملف أو لينك) — دوست على الكتاب يفتح وتحدد صفحاته */}
+             <div className="space-y-1.5">
+@@ -4462,7 +4620,7 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+         {statusMsg && <div className="flex items-center gap-2 p-3 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400"><Loader2 className="h-4 w-4 animate-spin" /><p className="text-sm">{statusMsg}</p></div>}
+         <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
+           {extractedQuestions.map(function(q, qi) {
+-            var qType = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) ? 'writing' : 'mcq'
++            var qType = isWritingQuestion(q) ? 'writing' : 'mcq' /* (و45) اختيارات صور = اختياري */
+             /* (2026-و40-w) فاصل خفيف بين مجموعات الملفات (srcName بيتبدل) */
+             var prevSrc = qi > 0 ? String(extractedQuestions[qi - 1].srcName || '') : ''
+             var curSrc = String(q.srcName || '')
+@@ -4530,45 +4688,36 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+                   </div>
+                 )}
+ 
+-                {/* (و43) تحذير كهرماني: سؤال شكله فيه رسمة من غير figure مسجل —
+-                   المستر يرفع صورة الرسمة يدويًا عشان تظهر للطالب زي الملف */}
+-                {isGraphicalLike(q) && !(q.figure && (q.figure.url || q.figure.bbox)) && (
+-                  <div className="mt-1 rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-2 flex-wrap">
+-                    <span>⚠ السؤال ده فيه رسمة غالبًا ومش متسجلة — ارفع صورة الرسمة عشان تظهر للطالب زي الملف</span>
+-                    <label className="inline-flex items-center gap-1 cursor-pointer rounded-md border border-amber-400/60 bg-white dark:bg-transparent px-2 py-0.5 font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
+-                      📷 ارفع الرسمة
+-                      <input type="file" accept="image/*" hidden onChange={function(e) { var f = e.target.files && e.target.files[0]; e.target.value = ''; uploadQuestionFigure(qi, f) }} />
+-                    </label>
+-                    {q.figure && q.figure.url && (
+-                      <button type="button" onClick={function() { updateQuestion(qi, 'figure', null) }} className="underline underline-offset-2 hover:text-foreground">✕ إزالة</button>
+-                    )}
+-                  </div>
++                {/* (و45 بطلب المستر) تحذير «السؤال ده محتاج رسم» اتلغى خالص —
++                   كان بينبّه غلط على أسئلة مش محتاجة رسمة. القص أوتوماتيك شغال،
++                   وزرار 📷 لرفع رسمة السؤال يدويًا لسه موجود اختياريًا تحت. */}
++                {!q.figure && (
++                  <label className="inline-flex items-center gap-1 mt-1 cursor-pointer text-[11px] text-muted-foreground hover:text-foreground transition-colors">
++                    📷 رفع رسمة للسؤال (اختياري)
++                    <input type="file" accept="image/*" hidden onChange={function(e) { var f = e.target.files && e.target.files[0]; e.target.value = ''; uploadQuestionFigure(qi, f) }} />
++                  </label>
+                 )}
+ 
+                 {qType === 'mcq' ? (
+                   <>
+                     <div className="grid grid-cols-2 gap-2">
+                       {(q.options || []).map(function(opt, oi) {
+-                        /* (و43) صورة الاختيار المرفوعة (optionFigures[i] = { url }) */
++                        /* (و43) صورة الاختيار المرفوعة (optionFigures[i] = { url })
++                           (و45 بطلب المستر) مفيش أي تنبيه أو إلزام لصور الاختيارات —
++                           زرار 📷 بقى أداة اختيارية بس: مفيش كهرماني ولا نبض ولا تحذير */
+                         var ofImg = q.optionFigures && q.optionFigures[oi]
+-                        /* (و44) الاختيار ده فيه رسمة من الملف (bbox) ولسه متلقطتش → تنبيه واضح */
+-                        var ofMissing = !!(q.optionFigures && q.optionFigures[oi] && q.optionFigures[oi].bbox && !q.optionFigures[oi].url)
+                         return (
+                           <div key={oi} className="space-y-1">
+                             <div className="flex items-center gap-1.5">
+                               <button type="button" className={"w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors " + (q.correct === oi ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30 hover:border-primary/50')} onClick={function() { updateQuestion(qi, 'correct', oi) }}>{String.fromCharCode(65 + oi)}</button>
+                               <Input value={opt} onChange={function(e) { updateQuestion(qi, 'option_' + oi, e.target.value) }} placeholder={"اختيار " + (oi + 1)} className="h-8 text-xs" />
+-                              {/* (و43) زرار رفع صورة للاختيار — الاختيار اللي هو صورة في الملف الأصلي
+-                                 (و44) الاختيار الناقص رسمته بيبقى كهرماني بنبض عشان المستر يشوفه فورًا */}
+-                              <label title={ofMissing ? 'الاختيار ده صورة في الملف الأصلي — ارفع صورته عشان تظهر للطالب' : 'ارفع صورة للاختيار'}
+-                                className={"shrink-0 h-8 px-1.5 inline-flex items-center justify-center rounded-md border text-[11px] cursor-pointer transition-colors " + (ofMissing ? 'border-amber-500 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 animate-pulse font-bold' : 'border-border hover:bg-muted')}>
++                              {/* (و43) زرار رفع صورة للاختيار — أداة اختيارية بالكامل (و45) */}
++                              <label title="رفع صورة للاختيار (اختياري)"
++                                className="shrink-0 h-8 px-1.5 inline-flex items-center justify-center rounded-md border border-border text-[11px] cursor-pointer transition-colors hover:bg-muted">
+                                 📷
+                                 <input type="file" accept="image/*" hidden onChange={function(e) { var f = e.target.files && e.target.files[0]; e.target.value = ''; uploadOptionFigure(qi, oi, f) }} />
+                               </label>
+                             </div>
+-                            {ofMissing && (
+-                              <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400">⚠ الاختيار ده صورة في الملف الأصلي — دوس 📷 وارفع صورته</p>
+-                            )}
+                             {ofImg && ofImg.url && (
+                               <span className="relative inline-flex pr-6">
+                                 {/* eslint-disable-next-line @next/next/no-img-element */}
+diff --git a/src/components/landing/AuthPages.tsx b/src/components/landing/AuthPages.tsx
+index e15dad0..8a1ec49 100755
+--- a/src/components/landing/AuthPages.tsx
++++ b/src/components/landing/AuthPages.tsx
+@@ -297,9 +297,9 @@ export function LoginView() {
+                   {studentLoading ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />استنى شوية...</>) : 'ادخل لحسابك'}
+                 </button>
+                 <p className="text-center text-sm text-muted-foreground">عندك حساب؟ <button onClick={function () { setView('auth-register') }} className="text-primary font-medium hover:underline cursor-pointer">اعمل حساب جديد</button></p>
+-                <div className="border-t border-border pt-3">
+-                  <p className="text-center text-sm text-muted-foreground">انت <span className="font-bold">ولي أمر</span> وعايز تتابع ابنك؟ <button onClick={function () { setView('parent-login') }} className="text-primary font-bold hover:underline cursor-pointer">ادخل من هنا</button></p>
+-                </div>
++                {/* (و45 بطلب المستر) سطر «انت ولي أمر وعايز تتابع ابنك؟ ادخل من هنا» اتشال من
++                   صفحة الدخول — دخول ولي الأمر شغال من نفس الصفحة أوتوماتيك (و44:
++                   لو مطابقة الطالب فشلت بيتحقق /api/parents/login تلقائيًا) */}
+               </div>
+             </CardContent>
+           </Card>
+diff --git a/src/components/landing/GallerySection.tsx b/src/components/landing/GallerySection.tsx
+index 9f6751d..3a21364 100755
+--- a/src/components/landing/GallerySection.tsx
++++ b/src/components/landing/GallerySection.tsx
+@@ -46,7 +46,8 @@ function getVideoEmbedUrl(url: string) {
+ }
+ 
+ function getVideoThumb(url: string) {
+-  var yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/)
++  /* (و45) كل صيغ اليوتيوب — وبنرجّع فاضي عشان السلسلة تكمل لـ thumbnail/filePath */
++  var yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/))([\w-]{11})/)
+   if (yt) return 'https://img.youtube.com/vi/' + yt[1] + '/mqdefault.jpg'
+   return ''
+ }
+@@ -221,7 +222,9 @@ export default function GallerySection() {
+                 </div>
+                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                   {onlyVideos.map((img, index) => {
+-                    var thumb = getVideoThumb(img.videoUrl) || img.filePath || ''
++                    /* (و45) سلسلة الصورة المصغرة: المخزنة ← أوتوماتيك يوتيوب ← القديم (filePath)
++                       كل فيديو بيبان بصورته من غير خطوة إضافية من الأدمن */
++                    var thumb = (img as any).thumbnail || getVideoThumb(img.videoUrl) || img.filePath || ''
+                     return (
+                       <div
+                         key={img.id}
+diff --git a/src/components/student/FigurePointEditor.tsx b/src/components/student/FigurePointEditor.tsx
+index aabc03c..097755c 100644
+--- a/src/components/student/FigurePointEditor.tsx
++++ b/src/components/student/FigurePointEditor.tsx
+@@ -116,6 +116,9 @@ export function FigurePointEditor({ figureUrl, questionLabel, onAttached, onClos
+           <MousePointerClick className="h-3.5 w-3.5" />
+           حط نقط على الرسمة{questionLabel ? ' — ' + questionLabel : ''} — دوس على المكان وربع هتتحط نقطة، ودوس عليها تاني لو عايز تشيلها
+         </p>
++        <p className="text-[10px] text-sky-700/80 dark:text-sky-400/80 w-full">
++          متقلقش من الدقة — المصحح بيفهم الرسم: المهم مكان النقطة يكون منطقي على الرسمة (مش بالملّيمتر) 👌
++        </p>
+         <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="إغلاق">
+           <X className="h-4 w-4" />
+         </button>
+diff --git a/src/components/student/SherineChat.tsx b/src/components/student/SherineChat.tsx
+new file mode 100644
+index 0000000..c488d70
+--- /dev/null
++++ b/src/components/student/SherineChat.tsx
+@@ -0,0 +1,261 @@
++'use client'
++
++// ============================================================
++// (2026-و45) SherineChat — شيرين: المساعدة الشخصية للطالب
++// طلب الحزمة: شات عائم زراره تحت على الشمال، لوحة RTL باسم شيرين،
++// الرسايل بسكرول (max-h)، حقول إدخال + إرسال، نقط تحميل، المحادثة
++// محفوظة في localStorage ('sherine_chat') + زرار مسح، وكل أهداف
++// اللمس 44px على الأقل — وبتكلم /api/ai/assistant بشخصية 'sherine'.
++// ملاحظة: المساعد الذكي القديم (AIAssistant) عائم تحت على اليمين —
++// الاتنين مالهمش تعارض في المكان ولا في الشخصية.
++// ============================================================
++
++import * as React from 'react'
++import { Send, X, Trash2, Sparkles } from 'lucide-react'
++import { toast } from 'sonner'
++import { useAppStore } from '@/stores/app-store'
++import { FractionText } from '@/components/FractionText'
++
++interface ChatMessage {
++  role: 'user' | 'assistant'
++  content: string
++}
++
++var STORAGE_KEY = 'sherine_chat'
++var MAX_STORED = 60 // بنحفظ آخر 60 رسالة بس في الجهاز
++var MAX_HISTORY_SENT = 10 // آخر 10 رسائل للسيرفر (نفس حد المسار)
++
++var GREETING = 'أهلاً بيك 👋 أنا شيرين — مساعدتك الشخصية في الرياضيات.\nاسألني أي حاجة مش فاهمها في الدروس، أو اكتبلي مسألة وحنا نحلها مع بعض خطوة بخطوة 🌟'
++
++function loadStored(): ChatMessage[] {
++  try {
++    var raw = localStorage.getItem(STORAGE_KEY)
++    if (!raw) return []
++    var parsed = JSON.parse(raw)
++    if (parsed && Array.isArray(parsed.messages)) {
++      return parsed.messages
++        .filter(function (m: any) { return m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim() })
++        .slice(-MAX_STORED)
++    }
++  } catch (e) { /* التخزين التالف مش سبب لكسر حاجة */ }
++  return []
++}
++
++function saveStored(messages: ChatMessage[]) {
++  try {
++    localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, messages: messages.slice(-MAX_STORED) }))
++  } catch (e) { /* ممتلئ أو ممنوع — صامت */ }
++}
++
++/* نقط التحميل — 3 نقط بتنط بأوقات متأخرة */
++function LoadingDots() {
++  return (
++    <span className="inline-flex items-center gap-1 py-1.5" aria-label="شيرين بتكتب">
++      <span className="h-1.5 w-1.5 rounded-full bg-primary/70 animate-bounce" style={{ animationDelay: '0ms' }} />
++      <span className="h-1.5 w-1.5 rounded-full bg-primary/70 animate-bounce" style={{ animationDelay: '150ms' }} />
++      <span className="h-1.5 w-1.5 rounded-full bg-primary/70 animate-bounce" style={{ animationDelay: '300ms' }} />
++    </span>
++  )
++}
++
++export function SherineChat() {
++  const { currentStudent } = useAppStore()
++  const [open, setOpen] = React.useState(false)
++  const [messages, setMessages] = React.useState<ChatMessage[]>([{ role: 'assistant', content: GREETING }])
++  const [input, setInput] = React.useState('')
++  const [sending, setSending] = React.useState(false)
++  const [restored, setRestored] = React.useState(false)
++  const messagesEndRef = React.useRef<HTMLDivElement | null>(null)
++  const inputRef = React.useRef<HTMLInputElement | null>(null)
++
++  /* استرجاع المحادثة مرة واحدة بعد أول رندر (عشان مش نكسر الهيدريشن) */
++  React.useEffect(function () {
++    var stored = loadStored()
++    if (stored.length > 0) setMessages(stored)
++    setRestored(true)
++  }, [])
++
++  /* حفظ كل تغيير بعد الاسترجاع */
++  React.useEffect(function () {
++    if (!restored) return
++    saveStored(messages)
++  }, [messages, restored])
++
++  /* سكرول لآخر رسالة */
++  React.useEffect(function () {
++    if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
++  }, [messages, open, sending])
++
++  /* فوكس على خانة الكتابة لما الشات يفتح */
++  React.useEffect(function () {
++    if (open && inputRef.current) {
++      var t = setTimeout(function () { if (inputRef.current) inputRef.current.focus() }, 120)
++      return function () { clearTimeout(t) }
++    }
++  }, [open])
++
++  var send = async function () {
++    var text = input.trim()
++    if (!text || sending) return
++    if (text.length > 2000) {
++      toast.error('الرسالة طويلة أوي — اكتبيها في 2000 حرف أو أقل 😅')
++      return
++    }
++    var userMsg: ChatMessage = { role: 'user', content: text }
++    var history = messages
++      .filter(function (m) { return m.role === 'user' || m.role === 'assistant' })
++      .filter(function (m) { return m.content !== GREETING })
++      .slice(-MAX_HISTORY_SENT)
++      .map(function (m) { return { role: m.role, content: m.content } })
++
++    setMessages(function (prev) { return prev.concat([userMsg]) })
++    setInput('')
++    setSending(true)
++    try {
++      var res = await fetch('/api/ai/assistant', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({
++          message: text,
++          persona: 'sherine',
++          stream: false,
++          history: history,
++          context: { studentId: currentStudent?.id || '', page: 'student-portal' },
++        }),
++      })
++      var data: any = null
++      try { data = await res.json() } catch (e) { data = null }
++      if (res.ok && data && data.reply) {
++        setMessages(function (prev) { return prev.concat([{ role: 'assistant', content: String(data.reply) }]) })
++      } else {
++        var errMsg = (data && data.error) ? String(data.error) : 'شيرين مشغولة شوية دلوقتي — جرب تاني بعد لحظة 🙏'
++        setMessages(function (prev) { return prev.concat([{ role: 'assistant', content: errMsg }]) })
++      }
++    } catch (e) {
++      setMessages(function (prev) { return prev.concat([{ role: 'assistant', content: 'حصلت مشكلة في الاتصال — اتأكد إن النت شغال وجرب تاني 🙏' }]) })
++    }
++    setSending(false)
++  }
++
++  var clearChat = function () {
++    setMessages([{ role: 'assistant', content: GREETING }])
++    try { localStorage.removeItem(STORAGE_KEY) } catch (e) {}
++    toast.success('اتمسحت المحادثة — نبدأ من الأول 🌟')
++  }
++
++  /* من غير طالب مسجل دخول — مفيش شيرين */
++  if (!currentStudent) return null
++
++  return (
++    <>
++      {/* الزرار العائم — تحت على الشمال (المساعد الذكي على اليمين) */}
++      {!open && (
++        <button
++          type="button"
++          onClick={function () { setOpen(true) }}
++          className="fixed bottom-5 left-5 z-50 h-14 w-14 rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-white shadow-lg hover:scale-105 transition-transform flex items-center justify-center cursor-pointer"
++          aria-label="افتح شات شيرين — المساعدة الشخصية في الرياضيات"
++        >
++          <Sparkles className="h-6 w-6" />
++        </button>
++      )}
++
++      {open && (
++        <div
++          dir="rtl"
++          className="fixed bottom-24 left-5 z-50 w-[calc(100vw-2.5rem)] sm:w-[380px] max-w-[380px] flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
++          role="dialog"
++          aria-label="شات شيرين — المساعدة الشخصية في الرياضيات"
++        >
++          {/* الهيدر */}
++          <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gradient-to-l from-pink-500/15 to-rose-500/10 border-b border-border">
++            <div className="flex items-center gap-2 min-w-0">
++              <span className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-white flex items-center justify-center">
++                <Sparkles className="h-4 w-4" />
++              </span>
++              <div className="min-w-0">
++                <p className="text-sm font-bold leading-tight">شيرين</p>
++                <p className="text-[10px] text-muted-foreground leading-tight">مساعدتك الشخصية في الرياضيات — بترد فورًا 🌟</p>
++              </div>
++            </div>
++            <div className="flex items-center gap-1 shrink-0">
++              <button
++                type="button"
++                onClick={clearChat}
++                className="h-11 w-11 rounded-lg inline-flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
++                aria-label="مسح المحادثة وابدأ من جديد"
++                title="مسح المحادثة"
++              >
++                <Trash2 className="h-4 w-4" />
++              </button>
++              <button
++                type="button"
++                onClick={function () { setOpen(false) }}
++                className="h-11 w-11 rounded-lg inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
++                aria-label="اقفل الشات"
++                title="اقفل"
++              >
++                <X className="h-5 w-5" />
++              </button>
++            </div>
++          </div>
++
++          {/* الرسايل — max-h مع سكرول */}
++          <div className="max-h-[380px] min-h-[180px] overflow-y-auto custom-scrollbar px-3 py-3 space-y-2.5">
++            {messages.map(function (m, i) {
++              var isUser = m.role === 'user'
++              return (
++                <div key={i} className={'flex ' + (isUser ? 'justify-end' : 'justify-start')}>
++                  <div
++                    className={
++                      'max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words ' +
++                      (isUser
++                        ? 'bg-primary text-primary-foreground rounded-br-md'
++                        : 'bg-muted text-foreground rounded-bl-md')
++                    }
++                  >
++                    {isUser ? m.content : <FractionText text={m.content} />}
++                  </div>
++                </div>
++              )
++            })}
++            {sending && (
++              <div className="flex justify-start">
++                <div className="bg-muted rounded-2xl rounded-bl-md px-3 py-1.5">
++                  <LoadingDots />
++                </div>
++              </div>
++            )}
++            <div ref={messagesEndRef} />
++          </div>
++
++          {/* خانة الكتابة + الإرسال */}
++          <div className="border-t border-border p-2 flex items-center gap-2">
++            <input
++              ref={inputRef}
++              value={input}
++              onChange={function (e) { setInput(e.target.value) }}
++              onKeyDown={function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
++              placeholder="اكتب سؤالك لشيرين…"
++              className="flex-1 h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
++              maxLength={2000}
++              disabled={sending}
++              aria-label="اكتب رسالتك لشيرين"
++            />
++            <button
++              type="button"
++              onClick={send}
++              disabled={sending || !input.trim()}
++              className="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 text-white inline-flex items-center justify-center shadow disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity cursor-pointer"
++              aria-label="ابعت الرسالة"
++            >
++              <Send className="h-4 w-4 -scale-x-100" />
++            </button>
++          </div>
++        </div>
++      )}
++    </>
++  )
++}
++
++export default SherineChat
+diff --git a/src/components/student/StudentComplaints.tsx b/src/components/student/StudentComplaints.tsx
+index 0e37f4c..210d8de 100644
+--- a/src/components/student/StudentComplaints.tsx
++++ b/src/components/student/StudentComplaints.tsx
+@@ -47,6 +47,14 @@ export function StudentComplaints({ studentId, studentName, studentPhone, grade
+ 
+   useEffect(function () { loadMine() }, [loadMine])
+ 
++  /* (و45 بطلب المستر) الطالب يشوف علامة الرد على الشكوة من غير ما يحدث الصفحة
++     — بندور كل دقيقة على تحديث حالات الشكاوى (رد/حل) */
++  useEffect(function () {
++    if (!studentId) return
++    var t = setInterval(function () { loadMine() }, 60000)
++    return function () { clearInterval(t) }
++  }, [studentId, loadMine])
++
+   async function submit() {
+     const msg = message.trim()
+     if (msg.length < 3) {
+@@ -125,8 +133,10 @@ export function StudentComplaints({ studentId, studentName, studentPhone, grade
+             <div className="space-y-3 max-h-96 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+               {mine.map(function (c) {
+                 const resolved = c.status === 'resolved'
++                /* (و45) علامة واضحة على الشكوة نفسها: تم الرد ✓ / تم الحل */
++                const hasReply = Boolean(c.reply && String(c.reply).trim())
+                 return (
+-                  <div key={c.id} className="rounded-xl border p-3 space-y-2">
++                  <div key={c.id} className={'rounded-xl border p-3 space-y-2 ' + (resolved ? 'border-emerald-300/60 dark:border-emerald-800/60' : hasReply ? 'border-primary/40 bg-primary/5' : '')}>
+                     <div className="flex items-center justify-between gap-2 flex-wrap">
+                       <div className="flex items-center gap-1.5">
+                         {c.source === 'ai'
+@@ -134,7 +144,9 @@ export function StudentComplaints({ studentId, studentName, studentPhone, grade
+                           : null}
+                         {resolved
+                           ? <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 gap-1"><CheckCircle2 className="h-3 w-3" />تم الحل</Badge>
+-                          : <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300 dark:text-amber-400 gap-1"><Clock3 className="h-3 w-3" />قيد المراجعة</Badge>}
++                          : hasReply
++                            ? <Badge className="text-[10px] bg-primary/10 text-primary border border-primary/30 gap-1"><CheckCircle2 className="h-3 w-3" />تم الرد ✓</Badge>
++                            : <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300 dark:text-amber-400 gap-1"><Clock3 className="h-3 w-3" />قيد المراجعة</Badge>}
+                       </div>
+                       <span className="text-[10px] text-muted-foreground">
+                         {new Date(c.createdAt).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })}
+diff --git a/src/components/student/StudentPortal.tsx b/src/components/student/StudentPortal.tsx
+index 9b7c1c4..b73346e 100755
+--- a/src/components/student/StudentPortal.tsx
++++ b/src/components/student/StudentPortal.tsx
+@@ -27,7 +27,11 @@ import BidiText from '@/components/BidiText'
+ import { FigurePointEditor } from '@/components/student/FigurePointEditor'
+ /* (2026-و44) جرس الإشعارات + بادج المجتمع — أي حاجة جديدة توصل للطالب */
+ import { NotificationsBell } from '@/components/student/NotificationsBell'
++/* (2026-و45) شيرين — المساعدة الشخصية العائمة (تحت على الشمال) */
++import { SherineChat } from '@/components/student/SherineChat'
+ import { normalizeCorrectKey } from '@/lib/correct-key'
++/* (و45) تصنيف موحّد: سؤال له اختيارات صور/رسومات = اختياري مش مقالي */
++import { isWritingQuestion } from '@/lib/question-figures'
+ /* (2026-و40-w) ورقة العمل: جداول قابلة للكتابة + رسومات مقصوصة + تجميع صفحات المصدر */
+ import {
+   WorksheetQuestionBadge, WorksheetPageChip, WorksheetTableEditable, WorksheetTableReadonly,
+@@ -36,6 +40,17 @@ import {
+ } from '@/components/worksheet/WorksheetParts'
+ 
+ export function StudentPortal() {
++  return (
++    <>
++      <StudentPortalInner />
++      {/* (2026-و45) شيرين — مركّبة مرة واحدة فوق البورتال كله (الداشبورد + الشوز)،
++         بتقفل نفسها لو مفيش طالب مسجل */}
++      <SherineChat />
++    </>
++  )
++}
++
++function StudentPortalInner() {
+   const { currentStudent, logout } = useAppStore()
+   const [dashboardData, setDashboardData] = useState<{
+     videos: VideoType[]
+@@ -1416,7 +1431,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+           <div className="mx-4 space-y-3">
+             <p className="text-sm font-semibold text-foreground">مراجعة الأسئلة:</p>
+             {sDisplayQuestions.map(function(q: any, di: number) {
+-              var qType = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' })) ? 'writing' : 'mcq'
++              var qType = isWritingQuestion(q) ? 'writing' : 'mcq'
+               /* (2026-و32) المطابقة بالفهرس الأصلي بدل نص السؤال — نصين متطابقين
+                  كانوا بيخليوا السؤال اللي اتحل صح ياخد حكم السؤال الغلط
+                  (وده كان سبب شكاوى «بحل صح وبيظهرلي غلط»). المطابقة بالنص فضلت
+@@ -1669,17 +1684,11 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+         var writingQuestions: any[] = []
+         if (hasQuestions) {
+           allQuestions.forEach(function(q: any) {
+-            // Detect writing: type field, OR options are empty/N/A
+-            var isWriting = q.type === 'writing' || q.type === 'essay'
+-            // Also detect if all options are N/A or empty → treat as writing
+-            if (!isWriting && Array.isArray(q.options)) {
+-              var allNA = q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' })
+-              if (allNA) isWriting = true
+-            }
+-            // Also detect if options array is empty
+-            if (!isWriting && (!q.options || q.options.length === 0)) {
+-              isWriting = true
+-            }
++            /* (و45) الحكم الموحد — سؤال له اختيارات (نص أو صور/رسومات في
++               optionFigures) = اختياري دايمًا. الحقائق القديمة (type/كله N/A)
++               جوه isWritingQuestion نفسها — ممنوع أي override بعدها عشان
++               سؤال اختياراته صور ما يتحولش مقالي تاني. */
++            var isWriting = isWritingQuestion(q)
+             if (isWriting) {
+               writingQuestions.push(q)
+             } else {
+@@ -1707,7 +1716,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+           var mcqOrigIdx: number[] = []
+           var writingOrigIdx: number[] = []
+           allQuestions.forEach(function(q: any, i: number) {
+-            var isW = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' }))
++            var isW = isWritingQuestion(q)
+             if (isW) writingOrigIdx.push(i)
+             else mcqOrigIdx.push(i)
+           })
+@@ -1741,7 +1750,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+           var mcqOriginalIndices: number[] = []
+           var writingOriginalIndices: number[] = []
+           allQuestions.forEach(function(q: any, i: number) {
+-            var isW = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' }))
++            var isW = isWritingQuestion(q)
+             if (isW) writingOriginalIndices.push(i)
+             else mcqOriginalIndices.push(i)
+           })
+@@ -1839,7 +1848,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                             {g.items.map(function(item, ii) {
+                               var q = item.q
+                               var displayIdx = item.idx
+-                              var qIsWriting = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || o.trim() === '' }))
++                              var qIsWriting = isWritingQuestion(q)
+                               var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : (qIsWriting ? 5 : 1)
+                               var tVals = hwTableMap[displayIdx] || (q.table ? emptyTableValues(q.table) : undefined)
+                               return (
+@@ -2984,7 +2993,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+     var mcqQs: any[] = []
+     var writingQs: any[] = []
+     examQuestions.forEach(function(q: any, idx: number) {
+-      var isWriting = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' }))
++      var isWriting = isWritingQuestion(q)
+       if (isWriting) writingQs.push({ q: q, displayIdx: idx })
+       else mcqQs.push({ q: q, displayIdx: idx })
+     })
+@@ -3054,7 +3063,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                   {g.items.map(function(item, ii) {
+                     var q = item.q
+                     var displayIdx = item.idx
+-                    var qIsWriting = q.type === 'writing' || q.type === 'essay' || (!q.options || q.options.length === 0) || (Array.isArray(q.options) && q.options.length > 0 && q.options.every(function(o: string) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' }))
++                    var qIsWriting = isWritingQuestion(q)
+                     var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : (qIsWriting ? 5 : 1)
+                     var tVals = examTableAnswers[displayIdx] || (q.table ? emptyTableValues(q.table) : undefined)
+                     return (
+diff --git a/src/lib/ai-image-grader.ts b/src/lib/ai-image-grader.ts
+index 44d9faa..678731c 100644
+--- a/src/lib/ai-image-grader.ts
++++ b/src/lib/ai-image-grader.ts
+@@ -448,12 +448,17 @@ export async function gradeImageAnswer(params: {
+   /* (2026-و39) طلب المستر: التصحيح يفهم إجابة الطالب كأنها رسالة شات — نفس قاعدة smart-grader في الواجب النصي */
+   prompt += 'STEP 6.7 — CHAT-LIKE ANSWER UNDERSTANDING (2026-و39 — mandatory): the answer in the photo may be written like a CHAT MESSAGE: short, colloquial, incomplete, no formal math notation ("يعني 8", "الناتج ٢", "x تساوي 4", "هو 8 صح"). Judge the MEANING and the final VALUE, never the wording or format. If the wording differs from the model answer but the value/meaning is the same → CORRECT with full points; colloquial fillers (يعني/بص/تقريبا), missing punctuation or casual phrasing NEVER make a correct value wrong. If a phrase is ambiguous, pick the most plausible mathematical reading that matches the model answer before deciding wrong.\n'
+   /* (و44) طلب المستر الحرفي: الطالب بيرسم في كشكول من غير مربعات/خطوط —
+-     التصحيح بيكون بالنقط القريبة وشكل الرسمة، مش بمطابقة ملّيمترية */
+-  prompt += 'STEP 6.8 — HAND-DRAWN GRAPHS / FIGURES (2026-و44 — mandatory, judged like a human teacher): the student usually draws in a plain notebook WITHOUT grid lines, so the drawing will be approximate by nature. Grade the drawing by CLOSENESS, not by precision:\n'
+-  prompt += '   • A plotted POINT is correct if it sits NEAR the expected location (roughly within one grid cell of where it should be — close enough that a teacher looking at it says "the point is right, just slightly off").\n'
+-  prompt += '   • A curve/line/parabola is correct if the SHAPE is right (opens the same way, passes near the same points, axis of symmetry roughly in the right place) even if wobbly or not perfectly scaled.\n'
+-  prompt += '   • A triangle/shape is correct if it matches the required type and labeled measurements approximately.\n'
+-  prompt += '   • Missing grid lines, faint marks, uneven spacing, slight tilt or offset — NEVER make a correct drawing wrong. Only fail the drawing when a point/shape is CLEARLY in the wrong place or the figure is fundamentally different from what the question asked.\n\n'
++     التصحيح بيكون بالنقط القريبة وشكل الرسمة، مش بمطابقة ملّيمترية
++     (و45) طلب المستر: تسامح أقوى — الشكل والعلاقة هي الأساس، النقط البعيدة
++     الواضحة على نفس المنحنى صح، وغياب المربعات مش غلط أبدًا */
++  prompt += 'STEP 6.8 — HAND-DRAWN GRAPHS / FIGURES (2026-و44 + و45 — mandatory, judged like a human teacher looking at a notebook): the student draws in a plain notebook WITHOUT grid lines or precise scaling, so the drawing is approximate BY NATURE. Grade the SHAPE and the MATHEMATICAL PROPERTY it demonstrates — NEVER exact coordinates:\n'
++  prompt += '   • NEAREST-POINT TOLERANCE: a plotted POINT is CORRECT if it is the closest reasonable spot to the expected location and a teacher looking at the notebook would say "yes, that is the point" — even if it sits a noticeable distance away on paper. A point that is clearly ON the same curve/line/side/region as the expected one is CORRECT even if far in exact coordinates.\n'
++  prompt += '   • SHAPE OVER COORDINATES: judge the curve FAMILY and its properties — correct direction of opening (up/down/left/right), monotonicity (increasing/decreasing where it should be), approximate intercepts crossing the axes near the right places, vertex/axis of symmetry roughly right, correct concavity. A wobbly, unscaled, slightly tilted curve with the RIGHT shape and RIGHT properties = FULL credit.\n'
++  prompt += '   • A point placed far from the reference point but clearly on the same drawn curve or in the same required region is CORRECT.\n'
++  prompt += '   • A triangle/shape is correct if it matches the required type and its labeled measurements are approximately honored.\n'
++  prompt += '   • MISSING GRID SQUARES IS NEVER A PENALTY. Faint marks, uneven spacing, no ruler, slight tilt, points not exactly on printed positions — none of these make a correct drawing wrong.\n'
++  prompt += '   • MARKED-POINTS IMAGES: if the image is the printed figure with the student\u2019s points MARKED on it (interactive editor), check each marked point against where it SHOULD be using the same nearest-point tolerance — being roughly in the right area counts as right.\n'
++  prompt += '   • FINAL RULE: if the drawing clearly demonstrates the required mathematical property (right shape, right direction, right relationship), grade it CORRECT — full points — even if coordinates, labels, or scale are imprecise. Only fail the drawing when the shape/property is fundamentally wrong (opens the wrong way, wrong curve type, point/shape clearly in the wrong region).\n\n'
+   prompt += 'STEP 7 — ALWAYS give a definite verdict (isCorrect true or false). Only say onTopic=false when the photo truly contains NO student work at all.\n\n'
+   prompt += 'awardedPoints: an integer from 0 to ' + maxPoints + '. HARD RULE — no partial credit: if isCorrect=true then awardedPoints MUST be exactly ' + maxPoints + ' (NEVER deduct for messy/hard-to-read/unfinished-looking steps when the final answer is right); if isCorrect=false then awardedPoints MUST be 0.\n\n'
+   prompt += 'FEEDBACK STYLE (2026-و24 + 2026-و30 — the teacher wants STRONG teacher-style notes like a real chat with the student): LANGUAGE IS MANDATORY — write the feedback in عامية مصرية بسيطة (Egyptian COLLOQUIAL Arabic) — ممنوع منعًا باتًا الفصحى (لا «حدث/ثم/قمت ب/خطأ في») — use «بص، خلي بالك، اللي حصل إن، طبّق تاني، برافو، مش، عشان» talking DIRECTLY to the student (استخدم «إنت») — 2–3 short sentences. Correct → praise + say WHAT he did right (the method/rule + the final value): «برافو عليك! تبسيطك للأسس صح ووصلت للناتج بالظبط.» Wrong → (1) WHERE exactly the mistake happened (which step/rule), (2) the correct approach, (3) the correct final answer: «بص يا بطل، اللي حصل إنك في الخطوة التانية ضربت الأس غلط — الضرب بيجمّع الأسس a^6 × a^2 = a^8 مش a^4، خلي بالك وطبّق القاعدة تاني والصح a^4 b^6.» NEVER generic (ممنوع «إجابة غلط» لوحدها) وNEVER فصحى. (و44) BIDI ORDER RULE — mandatory: اكتب كل ملاحظة كجمل عربية متصلة من اليمين للشمال، وكل مقطع إنجليزي أو معادلة حطه بين قوسين ( ) في نص الجملة (مثال: «المحور هو (x = -1) والقيمة (f(-1) = 4)») — ممنوع تبدأ الجملة بمقطع إنجليزي أو تخلي المعادلة تقطع الجملة العربية.\n\nMATH NOTATION IN FEEDBACK (2026-و33 — mandatory, the platform renders these as real symbols for the student):\n' + NOTATION_RULES + '\n\nENGLISH MATH TERMS IN FEEDBACK (2026-و34 — mandatory, the teacher wants the platform lesson terms):\n' + ENGLISH_TERMS_RULE + '\n\n'
+diff --git a/src/lib/ensure-schema.ts b/src/lib/ensure-schema.ts
+index 763cd50..4707573 100644
+--- a/src/lib/ensure-schema.ts
++++ b/src/lib/ensure-schema.ts
+@@ -27,7 +27,7 @@ export var SCHEMA_TABLES = [
+   'CREATE TABLE IF NOT EXISTS SiteConfig (id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, value TEXT DEFAULT "", updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+   'CREATE TABLE IF NOT EXISTS Media (id TEXT PRIMARY KEY, filename TEXT NOT NULL, filePath TEXT NOT NULL, fileType TEXT NOT NULL, fileSize TEXT DEFAULT "", data TEXT DEFAULT "", category TEXT DEFAULT "general", createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+   'CREATE TABLE IF NOT EXISTS VideoProgress (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, videoId TEXT NOT NULL, watchedSeconds REAL DEFAULT 0, totalSeconds REAL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0, lastWatchedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(studentId, videoId))',
+-  'CREATE TABLE IF NOT EXISTS GalleryImage (id TEXT PRIMARY KEY, title TEXT DEFAULT "", filePath TEXT DEFAULT "", type TEXT DEFAULT "image", videoUrl TEXT DEFAULT "", sortOrder INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
++  'CREATE TABLE IF NOT EXISTS GalleryImage (id TEXT PRIMARY KEY, title TEXT DEFAULT "", filePath TEXT DEFAULT "", type TEXT DEFAULT "image", videoUrl TEXT DEFAULT "", thumbnail TEXT DEFAULT "", sortOrder INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+   'CREATE TABLE IF NOT EXISTS Payment (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, studentName TEXT DEFAULT "", studentPhone TEXT DEFAULT "", studentGrade TEXT DEFAULT "", method TEXT DEFAULT "", amount REAL DEFAULT 0, videoId TEXT DEFAULT "", videoTitle TEXT DEFAULT "", receiptPath TEXT DEFAULT "", receiptType TEXT DEFAULT "", status TEXT NOT NULL DEFAULT "pending", note TEXT DEFAULT "", reviewedAt DATETIME, reviewedBy TEXT DEFAULT "", createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (studentId) REFERENCES Student(id) ON DELETE CASCADE)',
+   'CREATE TABLE IF NOT EXISTS VideoAccess (id TEXT PRIMARY KEY, videoId TEXT NOT NULL, studentId TEXT NOT NULL, grantedBy TEXT NOT NULL DEFAULT "admin", createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(videoId, studentId))',
+   'CREATE TABLE IF NOT EXISTS PlayTicket (id TEXT PRIMARY KEY, videoId TEXT NOT NULL, studentId TEXT DEFAULT "", createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, expiresAt DATETIME NOT NULL, consumed INTEGER NOT NULL DEFAULT 0)',
+@@ -91,6 +91,8 @@ var SCHEMA_COLUMNS = [
+   ['Media', 'fileSize', 'TEXT', "DEFAULT ''"],
+   ['GalleryImage', 'type', 'TEXT', "DEFAULT 'image'"],
+   ['GalleryImage', 'videoUrl', 'TEXT', "DEFAULT ''"],
++  // (و45) صورة مصغرة لعناصر الفيديو في المعرض — أوتوماتيك من اليوتيوب + قابلة للتعديل
++  ['GalleryImage', 'thumbnail', 'TEXT', "DEFAULT ''"],
+   ['GalleryImage', 'sortOrder', 'INTEGER', 'NOT NULL DEFAULT 0'],
+   ['Payment', 'studentPhone', 'TEXT', "DEFAULT ''"],
+   ['Payment', 'studentGrade', 'TEXT', "DEFAULT ''"],
+@@ -190,7 +192,10 @@ export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homew
+ /* (و44) مفتاح البصمة اتبدّل تالت — جدول Notification (الإشعارات) دخل
+  * SCHEMA_TABLES + CORE_TABLES — نفس درس و38/و40: من غير تغيير المفتاح
+  * الجدول الجديد عمرك ما بيتعمل على Turso بعد النشر. */
+-var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w44'
++/* (و45) مفتاح البصمة اتبدّل رابع — عمود GalleryImage.thumbnail (صورة مصغرة
++ * لفيديوهات المعرض) دخل SCHEMA_TABLES + SCHEMA_COLUMNS — نفس الدرس الموثق:
++ * من غير البَمب العمود مش هيتضاف على Turso أول ريكوست بعد النشر. */
++var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w45'
+ 
+ /* ============================================================
+  * 2026-و23 — **إصلاح بطء المنصة** (طلب المستر: «المنصة بطيئة، تسجيل
+diff --git a/src/lib/notify.ts b/src/lib/notify.ts
+index 5d0a8a5..8ef87d0 100644
+--- a/src/lib/notify.ts
++++ b/src/lib/notify.ts
+@@ -13,18 +13,38 @@ function nid(): string {
+   return 'ntf' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+ }
+ 
+-/** إشعار لطالب واحد */
++/* (و45) ضمان وجود جدول Notification — درس و43 الموثق: الـ heal الرئيسي
++   مش مضمون يتشغّل على كل نشر، فأول فشل INSERT بنعمل CREATE TABLE IF NOT
++   EXISTS + الفهارس ونعدّي المحاولة — مرة واحدة لكل process */
++var _notificationTableReady = false
++async function ensureNotificationTable(): Promise<void> {
++  if (_notificationTableReady) return
++  try {
++    await db.$executeRawUnsafe("CREATE TABLE IF NOT EXISTS Notification (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'general', title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', read INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)")
++    try { await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_notification_student ON Notification(studentId, read)') } catch (e) {}
++    try { await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_notification_created ON Notification(createdAt)') } catch (e) {}
++    _notificationTableReady = true
++  } catch (e) {
++    console.error('[notify] ensure table failed (ignored):', e)
++  }
++}
++
++/** إشعار لطالب واحد — (و45) لو الجدول ناقص بنعمله ونعدّي المحاولة */
+ export async function notifyStudent(studentId: string, type: string, title: string, body?: string): Promise<void> {
+   if (!studentId) return
++  var args = [nid(), studentId, type, String(title || '').slice(0, 160), String(body || '').slice(0, 500)]
+   try {
+     await db.$executeRawUnsafe(
+       'INSERT INTO Notification (id, studentId, type, title, body, read, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+-      nid(), studentId, type, String(title || '').slice(0, 160), String(body || '').slice(0, 500)
++      args[0], args[1], args[2], args[3], args[4]
+     )
++    return
+   } catch (e) {
++    /* المحاولة الأولى فشلت — غالبًا الجدول ناقص: نعمله ونعدّي مرة كمان */
+     try {
++      await ensureNotificationTable()
+       await db.$executeRawUnsafe(
+-        "INSERT INTO Notification (id, studentId, type, title, body, read, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
++        'INSERT INTO Notification (id, studentId, type, title, body, read, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+         nid(), studentId, type, String(title || '').slice(0, 160), String(body || '').slice(0, 500)
+       )
+     } catch (e2) {
+@@ -69,8 +89,10 @@ export async function notifyStudents(opts: {
+         ids = (all || []).map(function (r: any) { return String(r.id) })
+       } catch (eA) { ids = [] }
+     }
+-    /* INSERT مجمّع على دفعات — سريع ومفيش N نداءات */
++    /* INSERT مجمّع على دفعات — سريع ومفيش N نداءات
++       (و45) أول فشل دفعة بنضمن وجود الجدول ونعدّيها مرة */
+     var CHUNK = 40
++    var retried = false
+     for (var i = 0; i < ids.length; i += CHUNK) {
+       var slice = ids.slice(i, i + CHUNK)
+       var values: string[] = []
+@@ -85,7 +107,21 @@ export async function notifyStudents(opts: {
+           ...args
+         )
+       } catch (eB) {
+-        console.error('[notifyStudents] batch insert failed (ignored):', eB)
++        if (!retried) {
++          retried = true
++          try {
++            await ensureNotificationTable()
++            await db.$executeRawUnsafe(
++              'INSERT INTO Notification (id, studentId, type, title, body, read, createdAt, updatedAt) VALUES ' + values.join(', '),
++              ...args
++            )
++            continue
++          } catch (eB2) {
++            console.error('[notifyStudents] batch insert failed after heal (ignored):', eB2)
++          }
++        } else {
++          console.error('[notifyStudents] batch insert failed (ignored):', eB)
++        }
+       }
+     }
+   } catch (e) {
+diff --git a/src/lib/question-figures.ts b/src/lib/question-figures.ts
+index cffc074..19262b6 100644
+--- a/src/lib/question-figures.ts
++++ b/src/lib/question-figures.ts
+@@ -23,6 +23,41 @@ export interface FigureCropSource {
+   doc?: any | null     // مستند pdf.js مفتوح — وضع الصفحات
+ }
+ 
++/* ============================================================
++ * (و45) تصنيف موحّد MCQ/مقالي — طلب المستر الحرفي:
++ *   «الطالب يجي يحل الواجب ما يلاقيش الاختيارات، يلاقي السؤال اللي في
++ *    اختيارات على شكل رسومات يلاقي سؤال مقالي»
++ * السؤال اللي له اختيارات — حتى لو الاختيارات نفسها **صور/رسومات**
++ * (optionFigures بدون نص) — لازم يتصنف اختياري (mcq) ومطلقًا مقالي.
++ * ============================================================ */
++
++/** هل السؤال ده له اختيارات مرئية (صور/رسومات في الاختيارات)؟ */
++export function hasVisualOptions(q: any): boolean {
++  if (!q || typeof q !== 'object') return false
++  if (!Array.isArray(q.optionFigures)) return false
++  return q.optionFigures.some(function (of: any) {
++    return of && typeof of === 'object' && (of.url || of.bbox)
++  })
++}
++
++/**
++ * الحكم الموحد: هل السؤال مقالي؟
++ * مقالي = مفيش اختيارات نصية مرة واحدة ومفيش رسومات اختيارات.
++ * أي اختيارات (نص أو صور) → اختياري زي ما هو.
++ */
++export function isWritingQuestion(q: any): boolean {
++  if (!q || typeof q !== 'object') return true
++  if (hasVisualOptions(q)) return false
++  if (Array.isArray(q.options) && q.options.length > 0) {
++    // اختيارات موجودة — لو كلها فاضية/N/A من غير رسومات → مقالي
++    var allNA = q.options.every(function (o: any) {
++      return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === ''
++    })
++    return allNA
++  }
++  return true
++}
++
+ /* تطبيع bbox: كل القيم 0..1 وw/h أكبر من صفر — وإلا null (مفيش قص) */
+ function sanitizeBbox(bbox: any): { x: number; y: number; w: number; h: number } | null {
+   if (!bbox || typeof bbox !== 'object') return null
+diff --git a/src/lib/video-guard.ts b/src/lib/video-guard.ts
+index eaf12ec..fd69212 100644
+--- a/src/lib/video-guard.ts
++++ b/src/lib/video-guard.ts
+@@ -45,6 +45,7 @@ export function verifyVideoToken(token: string | null | undefined, mediaId: stri
+ 
+ export function getYouTubeId(url: string): string | null {
+   if (!url) return null
++  /* (و45) دعم كل الصيغ: watch?v= و youtu.be و shorts و live و embed و v/ */
+   const m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/))([\w-]{11})/)
+   return m ? m[1] : null
+ }
+@@ -82,6 +83,41 @@ export async function ensurePlayTicketTable(force = false): Promise<void> {
+   }
+ }
+ 
++/* ============================================================
++ * (و45) ترميم دفاعي لجدول Video — درس و43 الموثق: الـ heal الرئيسي
++ * (بصمة ensure-schema) مش مضمون يتشغّل على كل نشر، وأي عمود ناقص
++ * في جدول Video بيبوّظ كل قراية/كتابة Prisma (لأن Prisma بيختار كل
++ * الأعمدة) → «الفيديو ما بيتضفش» من غير سبب واضح. الدالة دي بتشتغل
++ * قبل الكتابة في /api/videos: CREATE TABLE IF NOT EXISTS + ALTER
++ * متسامح لكل عمود — مرة واحدة لكل instance، وفشلها ما يمنعش المحاولة.
++ * ============================================================ */
++var _videoTableReady = false
++export async function ensureVideoTable(force = false): Promise<void> {
++  if (_videoTableReady && !force) return
++  try {
++    await db.$executeRawUnsafe(
++      'CREATE TABLE IF NOT EXISTS Video (id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT DEFAULT "", filePath TEXT DEFAULT "", fileType TEXT DEFAULT "", thumbnail TEXT DEFAULT "", grade TEXT NOT NULL, price REAL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)'
++    )
++    var cols = [
++      ['url', 'TEXT', "DEFAULT ''"],
++      ['filePath', 'TEXT', "DEFAULT ''"],
++      ['fileType', 'TEXT', "DEFAULT ''"],
++      ['thumbnail', 'TEXT', "DEFAULT ''"],
++      ['price', 'REAL', 'DEFAULT 0'],
++    ]
++    for (var i = 0; i < cols.length; i++) {
++      try {
++        await db.$executeRawUnsafe('ALTER TABLE Video ADD COLUMN ' + cols[i][0] + ' ' + cols[i][1] + ' ' + cols[i][2])
++      } catch (eCol) {
++        /* duplicate column = تمام — أي خطأ تاني بيتتجاهل والمحاولة الجاية تقول */
++      }
++    }
++    _videoTableReady = true
++  } catch (e) {
++    console.error('ensureVideoTable error:', e)
++  }
++}
++
+ // (ملغاة 2026-و4) self-heal عمود nativeEmbed + extractEmbedSrc — ميزة
+ // «إضافة فيديو من كود HTML» اتنست بطلب المستر نفسه (كانت بتجيب واجهة
+ // يوتيوب ومفيش تحكم فعلي في الجودة). العمود القديم في داتابيز قديمة هيفضل
+diff --git a/src/stores/app-store.ts b/src/stores/app-store.ts
+index c2dba01..9a29200 100755
+--- a/src/stores/app-store.ts
++++ b/src/stores/app-store.ts
+@@ -64,6 +64,7 @@ export interface GalleryImage {
+   filePath: string
+   type: string
+   videoUrl: string
++  thumbnail?: string // (و45) صورة مصغرة لعناصر الفيديو (أوتوماتيك من اليوتيوب)
+   sortOrder: number
+   createdAt: string
+ }

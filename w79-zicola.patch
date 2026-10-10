@@ -1,0 +1,627 @@
+From 009a21b09271d440548b64cbdab58af7a09e3a11 Mon Sep 17 00:00:00 2001
+From: Adam-Hawash <223343744+Adam-Hawash@users.noreply.github.com>
+Date: Tue, 22 Sep 2026 08:02:02 +0000
+Subject: [PATCH] =?UTF-8?q?=D9=8879:=20=D8=AA=D8=B9=D8=AF=D9=8A=D9=84?=
+ =?UTF-8?q?=D8=A7=D8=AA=20=D8=A7=D9=84=D8=A3=D8=AF=D9=85=D9=86=20=D8=A8?=
+ =?UTF-8?q?=D8=AA=D9=81=D8=B6=D9=84=20=D8=AB=D8=A7=D8=A8=D8=AA=D8=A9=20(?=
+ =?UTF-8?q?=D8=B4=D9=8A=D9=84=20=D8=A7=D9=84=D8=AA=D8=B1=D9=85=D9=8A=D9=85?=
+ =?UTF-8?q?=D8=A7=D8=AA=20=D8=A7=D9=84=D9=84=D9=8A=20=D8=A8=D8=AA=D8=B1?=
+ =?UTF-8?q?=D8=AC=D8=B9=20=D8=A7=D9=84=D9=82=D9=8A=D9=85=20=D8=A7=D9=84?=
+ =?UTF-8?q?=D9=82=D8=AF=D9=8A=D9=85=D8=A9=20=D8=B9=D9=84=D9=89=20=D9=83?=
+ =?UTF-8?q?=D9=84=20=D9=82=D8=B1=D8=A7=D8=A1=D8=A9=20+=20=D9=85=D9=8A?=
+ =?UTF-8?q?=D8=AC=D9=8A=D8=B4=D9=86=20=D9=86=D9=87=D8=A7=D8=A6=D9=8A=20?=
+ =?UTF-8?q?=D9=85=D8=B1=D8=A9=20=D9=88=D8=A7=D8=AD=D8=AF=D8=A9)=20+=20?=
+ =?UTF-8?q?=D8=B1=D8=AC=D9=88=D8=B9=20=D8=A7=D9=84=D9=88=D9=88=D8=AA=D8=B1?=
+ =?UTF-8?q?=D9=85=D8=A7=D8=B1=D9=83=20=D9=84=D9=84=D9=83=D9=88=D8=AF=20?=
+ =?UTF-8?q?=D8=A7=D9=84=D9=82=D8=AF=D9=8A=D9=85=20=D8=A8=D8=A7=D9=84=D8=B8?=
+ =?UTF-8?q?=D8=A8=D8=B7:=20=D8=A7=D8=B3=D9=85=20=D8=A7=D9=84=D8=B7=D8=A7?=
+ =?UTF-8?q?=D9=84=D8=A8=20=D8=AB=D9=86=D8=A7=D8=A6=D9=8A=20=D9=81=D9=88?=
+ =?UTF-8?q?=D9=82=20=D8=A8=D8=AE=D8=B7=20=D9=88=D8=A7=D8=B6=D8=AD=20=D9=88?=
+ =?UTF-8?q?=D8=A7=D9=84=D8=B1=D9=82=D9=85=20=D8=AA=D8=AD=D8=AA=D9=87=20?=
+ =?UTF-8?q?=E2=80=94=20=D8=B4=D9=8A=D9=84=20=D8=AA=D9=83=D8=B1=D8=A7=D8=B1?=
+ =?UTF-8?q?=20=D8=A7=D9=84=D8=A7=D8=B3=D9=85=20=D9=88=D8=A7=D8=B3=D9=85=20?=
+ =?UTF-8?q?=D8=A7=D9=84=D9=85=D9=86=D8=B5=D8=A9=20=D9=85=D9=86=20=D8=A7?=
+ =?UTF-8?q?=D9=84=D9=88=D9=88=D8=AA=D8=B1=D9=85=D8=A7=D8=B1=D9=83=20+=20?=
+ =?UTF-8?q?=D8=AA=D8=B1=D9=82=D9=8A=D8=A9=20=D8=A7=D9=84=D9=83=D9=88=D9=86?=
+ =?UTF-8?q?=D9=81=D8=AC=20=D8=A7=D9=84=D9=82=D8=AF=D9=8A=D9=85=20v3?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/app/api/config/route.ts                  | 178 ++-----------------
+ src/app/api/player/[ticket]/route.ts         |  82 +++++----
+ src/components/admin/PlayerSettingsPanel.tsx |  34 ++--
+ src/lib/ensure-schema.ts                     |  21 +++
+ src/lib/player-config.ts                     |  53 ++++--
+ 5 files changed, 127 insertions(+), 241 deletions(-)
+
+diff --git a/src/app/api/config/route.ts b/src/app/api/config/route.ts
+index f09b626..f5ad51c 100755
+--- a/src/app/api/config/route.ts
++++ b/src/app/api/config/route.ts
+@@ -2,12 +2,6 @@
+ import { NextResponse } from 'next/server'
+ import { db, safeWrite } from '@/lib/db'
+ 
+-/* (و73-B2) تصحيح البراند القديم: الاختصار الغلط بيتهيّأ هنا بالتركيب (حرف M
+-   + الباقي) بدل كتابته نصًا حرفيًا في الكود — عشان فحص الجودة (grep على
+-   «M» + «. Ahmed» في src/) يرجع صفر نتايج، والاستبدال شغال وقت التشغيل زي ما هو */
+-var LEGACY_MISTAKE_BRAND = 'M' + '. Ahmed Shaban' /* الاختصار الغلط (M بدل Mr) */
+-var LEGACY_MISTER_BRAND = 'Mr' + '. Ahmed Shaban' /* الصحيح رسميًا */
+-
+ var DEFAULTS = {
+   // === Navbar ===
+   /* (و72) الهوية الجديدة للنافبار: Zicola In Math — في الاتجاهين */
+@@ -201,6 +195,18 @@ var DEFAULTS = {
+   payment_fawry: '',
+ }
+ 
++/* ============================================================
++   (و79) GET — قراءة نضيفة بلا أي «ترميمات وقت القراءة»
++   ============================================================
++   الجذر اللي كان بيخلي تعديلات المستر في صفحة الأدمن «ترجع زي ما كانت»:
++   الـ GET كان بعد ما يقرأ من الداتابيز بي override قيم مخزنة بقواعد
++   قديمة (أي navbar_subtitle فيها Mr / أي hero_title فيها Zicola / صور
++   قديمة...) — فالمستر يعدل، الحفظ بيتسجل، وأول ما الصفحة تترفري القيمة
++   المخزنة بتترسم فوقها بالقيمة القديمة، وأول حفظ تاني بيكتبها في
++   الداتابيز فالتعديل يضيع فعلًا.
++   الحل: الـ GET بيرجع المخزن كما هو (وفوقه DEFAULTS للمفاتيح الناقصة بس)
++   — وأي تصحيح قيم قديمة بقى ميجيشن واحد نهائي في ensure-schema بيشتغل
++   مرة واحدة عند النشر (و79) مش على كل قراءة. */
+ export async function GET() {
+   try {
+     var configs = await db.siteConfig.findMany()
+@@ -209,166 +215,6 @@ export async function GET() {
+       var c = configs[i]
+       map[c.key] = c.value
+     }
+-    /* (و72) القيم الخام المخزنة قبل ترميمات البراند — بنحتاجها عشان
+-       نطبّق ترميم الهوية الجديدة في آخر الخطوات (تحت) من غير ما
+-       الترميمات القديمة (اللي بتنقل أي Zicola إلى The Scholar) تلغّيها */
+-    var rawNavbarBrand = typeof map['navbar_brand'] === 'string' ? map['navbar_brand'] : ''
+-    var rawNavbarBrandEn = typeof map['navbar_brand_en'] === 'string' ? map['navbar_brand_en'] : ''
+-    var rawHeroTitle2En = typeof map['hero_title_line2_en'] === 'string' ? map['hero_title_line2_en'] : ''
+-    // اسم المنصة الصحيح: Zicola In Math (من غير s) — لو قاعدة البيانات لسه فيها
+-    // الاسم القديم من نسخة قديمة بنصلحه على القراءة، والترحيل في ensure-schema
+-    // بصلحه نهائيًا في قاعدة البيانات
+-    var brandKeys = ['navbar_brand', 'footer_brand', 'footer_copyright', 'guide_subtitle', 'schedule_brand']
+-    for (var b = 0; b < brandKeys.length; b++) {
+-      /* (و73) أي قيمة مخزنة قديمة (Zicola Math / Zicola in Math / Maths Genius
+-         / Zicola In Math) بتتصحح فورًا على القراءة إلى «Zicola In Math»
+-         — الاسم اللي طلبه المستر صراحةً — والترحيل في ensure-schema بصلحها نهائيًا */
+-      if (typeof map[brandKeys[b]] === 'string' && (map[brandKeys[b]].indexOf('Zicola') !== -1 || map[brandKeys[b]].indexOf('Math Genius') !== -1 || map[brandKeys[b]].indexOf('Maths Genius') !== -1)) {
+-        map[brandKeys[b]] = map[brandKeys[b]].split('Zicola in Math').join('Zicola In Math').split('Zicola Math').join('Zicola In Math').split('Maths Genius').join('Zicola In Math').split('Math Genius').join('Zicola In Math').split('Zicola In Math').join('Zicola In Math')
+-      }
+-    }
+-    /* (و73) تصحيح البراند القديم (الاختصار الغلط M بدل Mr) → «Mr. Ahmed Shaban» —
+-       على القراءة في مفاتيح البراند (وفرعاتها الإنجليزية) عشان الإنتاج
+-       يتصحح لوحده من غير تعديل قاعدة البيانات يدويًا. ملاحظة: الاستبدال آمن
+-       لأن النص الصحيح «Mr. …» مش بيحتوي النص الغلط كنص فرعي */
+-    var mrBrandKeys = ['navbar_brand', 'navbar_brand_en', 'footer_brand', 'footer_brand_en', 'footer_copyright', 'footer_copyright_en', 'guide_subtitle', 'guide_subtitle_en', 'schedule_brand', 'schedule_brand_en']
+-    for (var m = 0; m < mrBrandKeys.length; m++) {
+-      var mv = map[mrBrandKeys[m]]
+-      if (typeof mv === 'string' && mv.indexOf(LEGACY_MISTAKE_BRAND) !== -1) {
+-        map[mrBrandKeys[m]] = mv.split(LEGACY_MISTAKE_BRAND).join(LEGACY_MISTER_BRAND)
+-      }
+-    }
+-    /* (و78) اسم المطوّر الصحيح «Adham Hawash» — أي قيمة مخزنة قديمة فيها اللقب
+-       الغلط «Adam Hawash» بتتصحح على القراءة فورًا (والترحيل في ensure-schema
+-       بصلّحها نهائيًا في قاعدة البيانات) — توحيد الفوتر في كل المنصات */
+-    var devNameKeys = ['footer_made_by_label', 'footer_made_by_label_en', 'hero_developer_label', 'hero_developer_label_en']
+-    for (var d = 0; d < devNameKeys.length; d++) {
+-      var dv = map[devNameKeys[d]]
+-      if (typeof dv === 'string' && dv.indexOf('Adam Hawash') !== -1) {
+-        map[devNameKeys[d]] = dv.split('Adam Hawash').join('Adham Hawash')
+-      }
+-    }
+-    /* (و73) وصف الهيرو القديم المخلوط بكلمات إنجليزية → النص العربي النضيف
+-       (القيمة الجديدة في DEFAULTS) — على القراءة عشان الإنتاج يتصحح لوحده */
+-    if (typeof map['hero_subtitle'] === 'string' && map['hero_subtitle'].indexOf('Algebra, Geometry, Formulas') !== -1) {
+-      map['hero_subtitle'] = DEFAULTS.hero_subtitle
+-    }
+-    /* (و73) عنوان الهيرو الأول «مستر الماث» — أي قيمة Zicola قديمة بتترجم على القراءة */
+-    if (typeof map['hero_title_line1'] === 'string' && map['hero_title_line1'].indexOf('Zicola') !== -1) {
+-      map['hero_title_line1'] = 'مستر الماث'
+-    }
+-    /* (و70) صورة الهيرو القديمة (مستر وائل/استضافة خارجية) = صورة السحابة الجديدة */
+-    if (typeof map['instructor_photo'] === 'string' && (map['instructor_photo'].indexOf('mr-wael') !== -1 || map['instructor_photo'].indexOf('i.imghos.co') !== -1 || map['instructor_photo'] === '')) {
+-      map['instructor_photo'] = '/images/the-scholar-full.png'
+-    }
+-    /* (و71) صورة الهيرو القديمة (the-scholar-hero — كانت مقتطعة من مرجع تاني
+-       فيها شخص غلط) = الصورة الرسمية الكاملة للسيد المستر من غير قص */
+-    if (typeof map['instructor_photo'] === 'string' && (map['instructor_photo'].indexOf('the-scholar-hero') !== -1 || map['instructor_photo'].indexOf('mostafa') !== -1 || map['instructor_photo'].indexOf('hossam') !== -1)) {
+-      map['instructor_photo'] = '/images/the-scholar-full.png'
+-    }
+-    /* (و70) صورة النافيبار + الفيفيكون: أي قيمة فاضية أو قديمة = الصور الرسمية الجديدة */
+-    if (typeof map['navbar_photo'] === 'string' && (map['navbar_photo'].indexOf('mr-wael') !== -1 || map['navbar_photo'] === '')) {
+-      map['navbar_photo'] = '/images/the-scholar-nav.png'
+-    }
+-    if (typeof map['favicon_url'] === 'string' && (map['favicon_url'].indexOf('mr-wael') !== -1 || map['favicon_url'].indexOf('logo.svg') !== -1 || map['favicon_url'] === '')) {
+-      map['favicon_url'] = '/images/the-scholar-favicon.png'
+-    }
+-    // اسم المستر في النافيبار: **مستر أحمد شعبان** بالعربي — من غير علامة
+-    // العصاية (|) ومن غير الإنجليزي (طلب المستر: شيل العصاية واكتب بس
+-    // مستر أحمد شعبان) — أي قيمة مخزنة قديمة بتتصحح على القراءة هنا،
+-    // والترحيل في ensure-schema بصلحه نهائيًا
+-    var navSub = map['navbar_subtitle']
+-    if (typeof navSub === 'string' && navSub !== 'مستر أحمد شعبان' && (navSub.indexOf('زيكولا') !== -1 || navSub.indexOf('Zicola') !== -1 || navSub.indexOf('خضير') !== -1 || navSub.indexOf('Khadir') !== -1 || navSub.indexOf('Khodair') !== -1 || navSub.indexOf('Khudair') !== -1 || navSub.indexOf('Khodier') !== -1 || navSub.indexOf('El-Kh') !== -1 || navSub.indexOf('Sherif') !== -1 || navSub.indexOf('شريف') !== -1 || navSub.indexOf('Mr') !== -1)) {
+-      map['navbar_subtitle'] = 'مستر أحمد شعبان'
+-    }
+-    // اسم المستر العربي الصحيح للمنصة دي: **مستر أحمد شعبان** (الاسم الرسمي
+-    // بطلب المستر حرفيًا) — أي قيمة قديمة مخزنة (مستر شريف أو تهجئة غلط
+-    // 'الخضيري') بتتصحح على القراءة هنا، والترحيل في ensure-schema
+-    // بصلحه نهائيًا في قاعدة البيانات
+-    var arabicNameKeys = ['hero_title_line2', 'instructor_name']
+-    for (var a = 0; a < arabicNameKeys.length; a++) {
+-      var av = map[arabicNameKeys[a]]
+-      /* (و70) أي اسم قديم (شريف/الخضيري) بيترجم هنا والترحيل يصلحه نهائيًا —
+-         (و73) سطر الهيرو التاني بقى «م/أحمد شعبان» رسميًا */
+-      if (typeof av === 'string' && av.indexOf('Zicola') === -1 && (av.indexOf('Sherif') !== -1 || av.indexOf('شريف') !== -1 || av.indexOf('الخضيري') !== -1)) {
+-        map[arabicNameKeys[a]] = arabicNameKeys[a] === 'hero_title_line2' ? 'م/أحمد شعبان' : 'مستر أحمد شعبان'
+-      }
+-      if (typeof av === 'string' && (av.indexOf('زيكولا') !== -1 || av.indexOf('Zicola') !== -1)) {
+-        map[arabicNameKeys[a]] = arabicNameKeys[a] === 'hero_title_line2' ? 'م/أحمد شعبان' : 'مستر أحمد شعبان'
+-      }
+-      /* (و71) قاعدة بيانات إنتاج قديمة بتعرض «مهندس الماث م/مصطفى حسام» —
+-         بنرجّع هوية مستر أحمد شعبان فورًا على القراءة (والترحيل يصلح نهائيًا) */
+-      if (typeof av === 'string' && (av.indexOf('مهندس') !== -1 || av.indexOf('مصطفى') !== -1 || av.indexOf('حسام') !== -1 || av.indexOf('Mostafa') !== -1 || av.indexOf('Hossam') !== -1 || av.indexOf('Math Engineer') !== -1)) {
+-        map[arabicNameKeys[a]] = arabicNameKeys[a] === 'hero_title_line2' ? 'م/أحمد شعبان' : 'مستر أحمد شعبان'
+-      }
+-    }
+-    /* (و73) عنوان الهيرو الأول «مستر الماث» — أي اسم قديم تاني (أو The Scholar
+-       القديمة) بيترجم فورًا على القراءة */
+-    if (typeof map['hero_title_line1'] === 'string' && (map['hero_title_line1'].indexOf('مهندس') !== -1 || map['hero_title_line1'].indexOf('مصطفى') !== -1 || map['hero_title_line1'].indexOf('حسام') !== -1 || map['hero_title_line1'].indexOf('Mostafa') !== -1 || map['hero_title_line1'].indexOf('Hossam') !== -1 || map['hero_title_line1'].indexOf('Math Engineer') !== -1 || map['hero_title_line1'] === 'The Scholar')) {
+-      map['hero_title_line1'] = 'مستر الماث'
+-    }
+-    /* (و71) اسم النافيبار/الفوتر — نفس الحماية للإنتاج */
+-    if (typeof map['navbar_brand'] === 'string' && (map['navbar_brand'].indexOf('مهندس الماث') !== -1 || map['navbar_brand'].indexOf('مصطفى') !== -1 || map['navbar_brand'].indexOf('حسام') !== -1 || map['navbar_brand'].indexOf('Mostafa') !== -1 || map['navbar_brand'].indexOf('Hossam') !== -1 || map['navbar_brand'].indexOf('Math Engineer') !== -1)) {
+-      map['navbar_brand'] = 'Zicola In Math'
+-    }
+-    var cfgKeys = Object.keys(map)
+-    for (var k = 0; k < cfgKeys.length; k++) {
+-      var v = map[cfgKeys[k]]
+-      if (typeof v !== 'string') continue
+-      /* (و73) صيد أخير على مستوى كل المفاتيح: أي قيمة براند قديمة بالاختصار
+-         الغلط (M بدل Mr) متخزّنة في أي مفتاح بترجع بالصيغة الصحيحة */
+-      if (v.indexOf(LEGACY_MISTAKE_BRAND) !== -1) {
+-        map[cfgKeys[k]] = v.split(LEGACY_MISTAKE_BRAND).join(LEGACY_MISTER_BRAND)
+-        v = map[cfgKeys[k]]
+-      }
+-      if (v.indexOf('Mr. Sherif ElSayed') !== -1 || v.indexOf('مستر شريف السيد') !== -1 || v.indexOf('نصائح مستر أحمد شعبان') !== -1 || v.indexOf('Mr. Wael El-Khadiry') !== -1 || v.indexOf('مستر أحمد شعبان') !== -1) {
+-        map[cfgKeys[k]] = v.split('Mr. Sherif ElSayed').join('Zicola In Math').split('مستر شريف السيد').join('مستر أحمد شعبان').split('نصائح مستر أحمد شعبان').join('نصائح مستر أحمد شعبان').split('Mr. Wael El-Khadiry').join('Zicola In Math').split('Zicola In Math').join('Zicola In Math').split('مستر أحمد شعبان').join('مستر أحمد شعبان')
+-      }
+-    }
+-    /* (و72) الهوية الجديدة للنافبار: «Zicola In Math» + تهجئة الاسم Shaban —
+-       آخر خطوة بعد كل ترميمات The Scholar القديمة (اللي كانت بتترجم أي
+-       Zicola إلى The Scholar في brandKeys فوق):
+-       - أي قيمة مخزنة فيها Zicola In Math بترجع زي ما هي (الترميم القديم كان بيغيرها)
+-       - أي قيمة مخزنة = Zicola In Math بالظبط بتتحول Zicola In Math
+-         وبتتكتب نهائيًا في قاعدة البيانات (write-through)
+-       - hero_title_line2_en القديمة (Shaaban) بتتهجأ Shaban بنفس النمط */
+-    var brandFixups: string[][] = []
+-    if (rawNavbarBrand.indexOf('Zicola In Math') !== -1) {
+-      map['navbar_brand'] = 'Zicola In Math'
+-    } else if (rawNavbarBrand === 'Zicola In Math') {
+-      map['navbar_brand'] = 'Zicola In Math'
+-      brandFixups.push(['navbar_brand', 'Zicola In Math'])
+-    }
+-    if (rawNavbarBrandEn.indexOf('Zicola In Math') !== -1) {
+-      map['navbar_brand_en'] = 'Zicola In Math'
+-    } else if (rawNavbarBrandEn === 'Zicola In Math') {
+-      map['navbar_brand_en'] = 'Zicola In Math'
+-      brandFixups.push(['navbar_brand_en', 'Zicola In Math'])
+-    }
+-    if (rawHeroTitle2En === 'by Mr. Ahmed Shaaban' || rawHeroTitle2En === 'by Mr. Ahmed Shaban') {
+-      map['hero_title_line2_en'] = 'Mr. Ahmed Shaban'
+-      brandFixups.push(['hero_title_line2_en', 'Mr. Ahmed Shaban'])
+-    }
+-    /* (و73) ترحيل هوية الهيرو للسطور الجديدة (نفس نمط ترحيل و72):
+-       القيم المخزنة القديمة الافتراضية (The Scholar / by مستر أحمد شعبان)
+-       بتتحول للهوية الجديدة «مستر الماث» / «م/أحمد شعبان» وتتكتب نهائيًا */
+-    if (map['hero_title_line1'] === 'The Scholar') {
+-      map['hero_title_line1'] = 'مستر الماث'
+-      brandFixups.push(['hero_title_line1', 'مستر الماث'])
+-    }
+-    if (map['hero_title_line2'] === 'by مستر أحمد شعبان') {
+-      map['hero_title_line2'] = 'م/أحمد شعبان'
+-      brandFixups.push(['hero_title_line2', 'م/أحمد شعبان'])
+-    }
+-    for (var f = 0; f < brandFixups.length; f++) {
+-      (function (fk: string, fv: string) {
+-        db.siteConfig.upsert({
+-          where: { key: fk },
+-          update: { value: fv, updatedAt: new Date() },
+-          create: { key: fk, value: fv },
+-        }).catch(function () {})
+-      })(brandFixups[f][0], brandFixups[f][1])
+-    }
+     return NextResponse.json(map)
+   } catch (error) {
+     console.error('Config fetch error:', error)
+diff --git a/src/app/api/player/[ticket]/route.ts b/src/app/api/player/[ticket]/route.ts
+index bcdb46c..a4bae7c 100644
+--- a/src/app/api/player/[ticket]/route.ts
++++ b/src/app/api/player/[ticket]/route.ts
+@@ -345,25 +345,27 @@ const PLAYER_PAGE = `<!doctype html>
+   .wmQr.s-lg .qr{width:clamp(34px,4vw,52px);height:clamp(34px,4vw,52px)}
+   .wmQr.s-lg .nm{font-size:clamp(9px,1.1vw,13px)}
+   .wmQr.s-lg .ph{font-size:clamp(8px,.95vw,11px)}
+-  /* شيب اسم الطالب + رقمه (بيترسم ديناميكيًا لكل طالب — {اسم} • {رقم}) */
++  /* شيب اسم الطالب + رقمه (بيترسم ديناميكيًا لكل طالب)
++     (و79) سطرين: الاسم الثنائي فوق (.l1) والرقم تحته (.l2) — زي الكود القديم */
+   .wmNm .in{display:inline-block;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.4);color:#fff;
+-    border-radius:9px;padding:3px 9px;direction:rtl;white-space:nowrap;
++    border-radius:9px;padding:3px 9px;direction:rtl;white-space:nowrap;text-align:center;
+     font-weight:800;unicode-bidi:plaintext;letter-spacing:0;box-shadow:0 2px 10px rgba(0,0,0,.45)}
+   .wmNm.s-sm .in{font-size:clamp(8px,1vw,11px)}
+   .wmNm.s-md .in{font-size:clamp(11px,1.4vw,15px)}
+   .wmNm.s-lg .in{font-size:clamp(14px,1.9vw,20px)}
+-  .wmNm .ph{direction:ltr;unicode-bidi:plaintext;font-weight:700;opacity:.85}
+-  /* لوجو المنصة في نص الفيديو — نص أبيض بظل قوي يبان على أي مشهد */
++  .wmNm .l1{display:block}
++  .wmNm .l2{display:block;direction:ltr;unicode-bidi:plaintext;font-weight:700;opacity:.85;margin-top:1px}
++  /* الووترمارك الكبير في نص الفيديو — نص أبيض واضح بظل قوي يبان على أي مشهد
++     (و79) رجعنا لشكل الكود القديم: سطرين ثابتين — الاسم الثنائي (.b1) فوق
++     والرقم تحته (.b2) — من غير تكرار ولا اسم منصة */
+   .wmLogo{position:absolute;z-index:40;pointer-events:none;transform:translate(-50%,-50%);
+-    font-weight:900;direction:ltr;white-space:nowrap;user-select:none;text-align:center;
+-    font-family:system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:.5px;
++    font-weight:900;direction:rtl;white-space:nowrap;user-select:none;text-align:center;
++    font-family:system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:0;
+     color:rgba(255,255,255,.95);
+     text-shadow:0 2px 14px rgba(0,0,0,.55),0 0 3px rgba(0,0,0,.45)}
+-  /* (MG-3) اللوجو الوسطاني ممكن يظهر عليه اسم الطالب ورقمه تحت — «زي الأول» */
+-  .wmLogo .in{display:block}
+-  .wmLogo .over{display:block;font-size:.42em;font-weight:900;letter-spacing:.5px;margin-bottom:.18em;opacity:.9;direction:ltr}
+-  .wmLogo .sub{display:block;font-size:.4em;font-weight:800;letter-spacing:0;margin-top:.2em;opacity:.95;direction:rtl;unicode-bidi:plaintext}
+-  .wmLogo .sub.ph{direction:ltr;unicode-bidi:plaintext}
++  .wmLogo .b1{display:block}
++  .wmLogo .b2{display:block;font-size:.5em;font-weight:800;direction:ltr;unicode-bidi:plaintext;
++    letter-spacing:0;margin-top:.14em;opacity:.92;white-space:nowrap}
+   .wmLogo.s-sm{font-size:clamp(16px,2.5vw,34px)}
+   .wmLogo.s-md{font-size:clamp(24px,4vw,56px)}
+   .wmLogo.s-lg{font-size:clamp(36px,5.6vw,80px)}
+@@ -579,6 +581,15 @@ function deobfuscate(b64, key){
+    لو مفيش كونفج محفوظ → الووترمارك زي MG-1 (كارتين QR بس) والشريط بالمقاسات الجديدة 40/46 */
+ var wmName = String(CFG.wm.name || '').trim();
+ var wmPhone = String(CFG.wm.phone || '').trim();
++/* (و79) الاسم الثنائي: أول كلمتين بس من اسم الطالب — طلب المستر الحرفي:
++   «عاوز اسم الطالب ثنائي زي ما كانت في الأول، وبخط واضح تحتيه الرقم بس،
++   اسم الطالب ثنائي فوق وتحتيه الرقم بالظبط زي ما كنا عاملينها في الأول،
++   نرجع للكود القديم على جيت هب» — ده نفس تصميم الكود القديم (92eef51):
++   الاسم الثنائي فوق والرقم تحته — ممنوع الاسم الرباعي في أي ووترمارك */
++function wmShort(){
++  var p = wmName.split(/\\s+/).filter(Boolean);
++  return p.slice(0, 2).join(' ');
++}
+ 
+ /* احتياط لو مفيش كونفج محفوظ:
+    - الووترمارك = سلوك MG-1 بالظبط (كارتين QR بس — فوق شمال وتحت يمين)
+@@ -591,7 +602,8 @@ var PCFALLBACK = {
+   qrTL: { on: true, x: 6, y: 6, size: 'md', opacity: 0.55, blink: { on: false, show: 15, hide: 15 } },
+   qrBR: { on: true, x: 94, y: 84, size: 'md', opacity: 0.55, blink: { on: false, show: 15, hide: 15 } },
+   nameItems: [],
+-  centerLogo: { on: false, x: 50, y: 46, size: 'lg', opacity: 0.42, content: 'name', blink: { on: false, show: 10, hide: 20 } },
++  /* (و79) الووترمارك الكبير في النص رجع زي الأول: ظاهر دايمًا — اسم ثنائي + رقم تحته */
++  centerLogo: { on: true, x: 50, y: 46, size: 'lg', opacity: 0.42, content: 'name', blink: { on: false, show: 10, hide: 20 } },
+   ytMark: { on: true, size: 'lg' }
+ };
+ 
+@@ -600,6 +612,10 @@ var PC = (function () {
+   /* (MG-4) ترقية v:1 → v:2 — الكونفج القديم شفافياته كانت باهتة فبتترفع */
+   var savedVer = Number(c.v) || 1;
+   var upgrade = savedVer < 2;
++  /* (و79) ترقية v:2 → v:3 — رجوع الووترمارك الكبير لشكل الكود القديم:
++     أي كونفج محفوظ قديم كان ممكن يكون فيه content=brand (اسم المنصة مكان
++     اسم الطالب) أو blink 10/20 أو مطفي — الكل بيرجع: ظاهر دايمًا + اسم ثنائي ورقم تحته */
++  var upgrade3 = savedVer < 3;
+   function num(v, d, lo, hi) { var n = Number(v); if (!isFinite(n)) return d; return Math.min(hi, Math.max(lo, n)); }
+   function size(v, d) { return (v === 'sm' || v === 'md' || v === 'lg') ? v : d; }
+   function op(v, d, lo, hi) { var n = Number(v); if (!isFinite(n)) return d; return Math.min(hi, Math.max(lo, n)); }
+@@ -619,7 +635,9 @@ var PC = (function () {
+     var content = (s.content === 'brand' || s.content === 'name' || s.content === 'both') ? s.content : d.content;
+     var o = op(s.opacity, d.opacity, 0.03, 0.6);
+     if (upgrade && s.opacity !== undefined && s.opacity <= 0.2) o = Math.max(o, 0.42); /* القديم 0.14 كان مختفي */
+-    return { on: s.on === true, x: num(s.x, d.x, 0, 100), y: num(s.y, d.y, 0, 100), size: size(s.size, d.size), opacity: o, content: content, blink: blink(s.blink, d.blink) };
++    var lo = { on: s.on === true, x: num(s.x, d.x, 0, 100), y: num(s.y, d.y, 0, 100), size: size(s.size, d.size), opacity: o, content: content, blink: blink(s.blink, d.blink) };
++    if (upgrade3) { lo.on = true; lo.content = 'name'; lo.blink = { on: false, show: 10, hide: 20 }; } /* (و79) رجوع للقديم */
++    return lo;
+   }
+   function ytm(v, d) {
+     var s = (v && typeof v === 'object') ? v : {};
+@@ -659,9 +677,11 @@ function applyPlayerChrome(){
+ applyPlayerChrome();
+ 
+ function wmCardHtml(){
++  /* (و79) الاسم في الكارت بقى ثنائي — مش الرباعي — والرقم تحته */
++  var nmLine = wmShort() || wmPhone;
+   var qr = CFG.wm.qr ? '<img class="qr" src="' + CFG.wm.qr + '" alt="">' : '';
+-  return '<div class="in">' + qr + '<span class="nm">' + esc(wmName || wmPhone) + '</span>' +
+-    ((wmName && wmPhone) ? '<span class="sep">•</span><span class="ph">' + esc(wmPhone) + '</span>' : '') + '</div>';
++  return '<div class="in">' + qr + '<span class="nm">' + esc(nmLine) + '</span>' +
++    ((nmLine && wmPhone) ? '<span class="sep">•</span><span class="ph">' + esc(wmPhone) + '</span>' : '') + '</div>';
+ }
+ /* موضع أي عنصر ووترمارك من الكونفج: مركزه على x%/y% + شفافيته
+    (MG-3) + تسجيله في محرك الظهور/الاختفاء لو عليه دورة blink */
+@@ -706,35 +726,27 @@ function buildWm(){
+     var tl = document.createElement('div'); tl.className = 'wmCard wmQr s-' + PC.qrTL.size; tl.innerHTML = ch; placeWm(tl, PC.qrTL); layer.appendChild(tl);
+     var br = document.createElement('div'); br.className = 'wmCard wmQr s-' + PC.qrBR.size; br.innerHTML = ch; placeWm(br, PC.qrBR); layer.appendChild(br);
+   }
+-  /* 3) عناصر الاسم + الرقم (بتتبعت لكل طالب — من غير طالب مفيش حاجة تترسم) */
++  /* 3) عناصر الاسم + الرقم (بتتبعت لكل طالب — من غير طالب مفيش حاجة تترسم)
++     (و79) سطرين: الاسم الثنائي فوق والرقم تحته — مش سطر واحد بالاسم الرباعي */
+   if(hasStudent && PC.nameItems.length){
+-    var label = esc(wmName) + (wmName && wmPhone ? ' <span class="ph">• ' + esc(wmPhone) + '</span>' : '');
++    var nmTop = esc(wmShort() || wmPhone);
++    var nmSub = (wmShort() && wmPhone) ? '<span class="l2">' + esc(wmPhone) + '</span>' : '';
+     for(var i = 0; i < PC.nameItems.length; i++){
+       var it = PC.nameItems[i];
+       var nm = document.createElement('div'); nm.className = 'wmNm s-' + it.size;
+-      nm.innerHTML = '<span class="in">' + label + '</span>';
++      nm.innerHTML = '<span class="in"><span class="l1">' + nmTop + '</span>' + nmSub + '</span>';
+       placeWm(nm, it); layer.appendChild(nm);
+     }
+   }
+-  /* 4) لوجو المنصة في النص — (MG-4) الشكل الجديد «زي الأول»:
+-     name = اسم الطالب الثنائي وتحتيه رقم تليفونه (سطرين — الافتراضي)
+-     both = Zicola In Math فوق + الاسم تحتيه + الرقم تحتيه
+-     brand = «Zicola In Math» بس */
++  /* 4) الووترمارك الكبير في نص الفيديو — رجعنا للكود القديم بالظبط (و79):
++     سطرين ثابتين: الاسم الثنائي فوق بخط واضح + الرقم تحته —
++     شيلنا تكرار الاسم اللي كان بيظهر (اسم كبير + اسم صغير + رقم)
++     وشيلنا حالة «brand» اللي كانت بتكتب اسم المنصة مكان اسم الطالب */
+   if(PC.centerLogo.on){
+     var lg = document.createElement('div'); lg.className = 'wmLogo s-' + PC.centerLogo.size;
+-    var lgContent = PC.centerLogo.content || 'name';
+-    var lgTwo = (function(){ var p = String(wmName||'').split(/\s+/).filter(Boolean); return p.slice(0,2).join(' '); })();
+-    var lgSub = (lgTwo ? '<span class="sub">' + esc(lgTwo) + '</span>' : '') +
+-                (wmPhone ? '<span class="sub ph">' + esc(wmPhone) + '</span>' : '');
+-    if(lgContent !== 'brand' && (lgTwo || wmPhone)){
+-      if(lgContent === 'name'){
+-        lg.innerHTML = '<span class="in">' + esc(lgTwo || wmPhone) + '</span>' + lgSub;
+-      } else {
+-        lg.innerHTML = '<span class="over">Zicola In Math</span><span class="in">' + esc(lgTwo || wmPhone) + '</span>' + lgSub;
+-      }
+-    } else {
+-      lg.textContent = 'Zicola In Math';
+-    }
++    var lgBig = wmShort() || wmPhone;
++    var lgNum = (wmShort() && wmPhone) ? '<span class="b2">' + esc(wmPhone) + '</span>' : '';
++    lg.innerHTML = '<span class="b1">' + esc(lgBig) + '</span>' + lgNum;
+     placeWm(lg, PC.centerLogo); layer.appendChild(lg);
+   }
+   wrap.appendChild(layer);
+diff --git a/src/components/admin/PlayerSettingsPanel.tsx b/src/components/admin/PlayerSettingsPanel.tsx
+index 05c5004..8cf0455 100644
+--- a/src/components/admin/PlayerSettingsPanel.tsx
++++ b/src/components/admin/PlayerSettingsPanel.tsx
+@@ -29,7 +29,6 @@ import {
+   type PlayerConfig,
+   type WmSize,
+   type WmBlink,
+-  type WmLogoContent,
+ } from '@/lib/player-config'
+ import { DEFAULT_PARENT_TEMPLATE } from '@/lib/parent-message'
+ 
+@@ -206,13 +205,11 @@ export function PlayerSettingsPanel() {
+       return { ...prev, nameItems: prev.nameItems.map((it) => (it.id === selected.id ? { ...it, blink: nb } : it)) }
+     })
+   }
+-  /* (MG-3) محتوى اللوجو الوسطاني: لوجو بس / اسم ورقم بس / الاتنين (زي الأول) */
+-  function setLogoContent(c: WmLogoContent) {
+-    setCfg((prev) => ({ ...prev, centerLogo: { ...prev.centerLogo, content: c } }))
+-  }
++  /* (و79) محتوى الووترمارك الكبير بقى ثابت (اسم ثنائي + رقم) — الدالة اتشالت
++     والخيارات القديمة (لوجو بس / لوجو + اسم) اتشالت من الواجهة */
+ 
+   const selLabel = selected
+-    ? selected.kind === 'qrTL' ? 'كارت QR فوق شمال' : selected.kind === 'qrBR' ? 'كارت QR تحت يمين' : selected.kind === 'logo' ? 'لوجو المنصة' : 'اسم ورقم'
++    ? selected.kind === 'qrTL' ? 'كارت QR فوق شمال' : selected.kind === 'qrBR' ? 'كارت QR تحت يمين' : selected.kind === 'logo' ? 'الووترمارك في النص' : 'اسم ورقم'
+     : null
+ 
+   /* ===== الحفظ ===== */
+@@ -338,16 +335,9 @@ export function PlayerSettingsPanel() {
+                 style={{ left: `${cfg.centerLogo.x}%`, top: `${cfg.centerLogo.y}%`, opacity: cfg.centerLogo.opacity, fontSize: cfg.centerLogo.size === 'sm' ? 18 : cfg.centerLogo.size === 'md' ? 30 : 44, textShadow: '0 2px 14px rgba(0,0,0,.55)' }}
+                 onPointerDown={(e) => onItemPointerDown(e, { kind: 'logo' })}
+               >
+-                {/* (MG-4) نفس شكل المشغل: brand = لوجو بس | name = اسم ثنائي وتحتيه الرقم | both = لوجو فوق + اسم ورقم */}
+-                {cfg.centerLogo.content === 'both' && <span style={{ display: 'block', fontSize: '0.42em', fontWeight: 900, letterSpacing: 0.5, marginBottom: 2, opacity: 0.9 }}>Zicola In Math</span>}
+-                {cfg.centerLogo.content === 'brand' ? (
+-                  <span style={{ display: 'block' }}>Zicola In Math</span>
+-                ) : (
+-                  <>
+-                    <span style={{ display: 'block' }}>اسم الطالب الثنائي</span>
+-                    <span style={{ display: 'block', fontSize: '0.4em', fontWeight: 800, marginTop: 2, opacity: 0.95, direction: 'ltr', unicodeBidi: 'plaintext' }}>01xxxxxxxxx</span>
+-                  </>
+-                )}
++                {/* (و79) نفس شكل المشغل بالظبط: اسم ثنائي + الرقم تحته — محتوى ثابت */}
++                <span style={{ display: 'block' }}>اسم الطالب الثنائي</span>
++                <span style={{ display: 'block', fontSize: '0.5em', fontWeight: 800, marginTop: 2, opacity: 0.92, direction: 'ltr', unicodeBidi: 'plaintext' }}>01xxxxxxxxx</span>
+               </div>
+             )}
+             {cfg.qrTL.on && (
+@@ -392,7 +382,7 @@ export function PlayerSettingsPanel() {
+ 
+           {/* عناصر التبديل السريع */}
+           <div className="grid gap-2 sm:grid-cols-3">
+-            {([['qrTL', 'كارت QR فوق شمال'], ['qrBR', 'كارت QR تحت يمين'], ['logo', 'لوجو المنصة في النص']] as const).map(([k, lbl]) => (
++            {([['qrTL', 'كارت QR فوق شمال'], ['qrBR', 'كارت QR تحت يمين'], ['logo', 'الووترمارك في النص (اسم + رقم)']] as const).map(([k, lbl]) => (
+               <div key={k} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                 <span className="text-sm">{lbl}</span>
+                 <Switch
+@@ -432,14 +422,10 @@ export function PlayerSettingsPanel() {
+                     <Slider className="flex-1" value={[Math.round(selOpacity * 100)]} min={5} max={85} step={1} onValueChange={(v) => setOpacity(v[0] / 100)} />
+                   </div>
+                 </div>
+-                {/* (MG-3) محتوى اللوجو الوسطاني */}
++                {/* (و79) محتوى الووترمارك الكبير بقى ثابت زي الكود القديم:
++                    اسم الطالب الثنائي وتحتيه رقمه — مفيش اختيار تاني */}
+                 {selected.kind === 'logo' && (
+-                  <div className="flex flex-wrap items-center gap-2">
+-                    <span className="text-xs text-muted-foreground">محتوى اللوجو:</span>
+-                    {([['brand', 'لوجو بس'], ['name', 'اسم الطالب وتحتيه رقمه (زي الأول)'], ['both', 'لوجو فوق + اسم ورقم']] as const).map(([k, lbl]) => (
+-                      <Button key={k} type="button" size="sm" variant={cfg.centerLogo.content === k ? 'default' : 'outline'} className="h-7 px-2.5 text-xs" onClick={() => setLogoContent(k)}>{lbl}</Button>
+-                    ))}
+-                  </div>
++                  <p className="text-xs text-muted-foreground">الوترمارك الكبير بيكتب اسم الطالب الثنائي وتحته رقمه تلقائيًا لكل طالب — زي الكود القديم بالظبط.</p>
+                 )}
+                 {/* (MG-3) دورة الظهور والاختفاء — طلب المستر الحرفي */}
+                 <div className="flex flex-wrap items-center gap-3 pt-2 border-t">
+diff --git a/src/lib/ensure-schema.ts b/src/lib/ensure-schema.ts
+index f79e75c..3812dd4 100644
+--- a/src/lib/ensure-schema.ts
++++ b/src/lib/ensure-schema.ts
+@@ -191,6 +191,27 @@ var SCHEMA_FIXES = [
+   // كانت فيها اللقب الغلط «Adam Hawash» (من غير h) والمستر طلب توحيد
+   // الكلمة في كل المنصات. idempotent: القيم الصح مفيهاش Adam فمش هتتلمس.
+   "UPDATE SiteConfig SET value = REPLACE(value, 'Adam Hawash', 'Adham Hawash') WHERE (key LIKE '%made_by%' OR key LIKE '%developer_label%') AND value LIKE '%Adam Hawash%'",
++
++  /* ============================================================
++   * (و79) ترحيل نهائي لقيم الهوية — بديل «ترميمات وقت القراءة»
++   * ============================================================
++   * سبب باج «تعديلات الأدمن بترجع زي ما كانت»: /api/config GET كان
++   * بيعيد كتابة قيم مخزنة بقواعد قديمة على كل قراءة. الترميمات اتشالت
++   * من القراءة والقواعد دي اتنقلت هنا كترحيل **نهائي مرة واحدة** عند
++   * النشر (بصمة السكيما بتتغير لوحدها لأن القايمة اتغيرت) — وبعد ما
++   * تتنفذ، أي تعديل جديد من المستر بيفضل ثابت في الداتابيز.
++   * كلها idempotent: القيم الصح مش بتطابق الشروط فمش بتتلمس. */
++  // عنوان الهيرو الأول: أي هوية قديمة → «مستر الماث»
++  "UPDATE SiteConfig SET value = 'مستر الماث' WHERE key = 'hero_title_line1' AND (value LIKE '%Zicola%' OR value LIKE '%زيكولا%' OR value = 'The Scholar' OR value LIKE '%مهندس%' OR value LIKE '%مصطفى%' OR value LIKE '%حسام%' OR value LIKE '%Mostafa%' OR value LIKE '%Hossam%' OR value LIKE '%Math Engineer%')",
++  // سطر الهيرو التاني + اسم المستر: أي اسم قديم → الهوية الرسمية
++  "UPDATE SiteConfig SET value = 'م/أحمد شعبان' WHERE key = 'hero_title_line2' AND (value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%الخضيري%' OR value LIKE '%زيكولا%' OR value LIKE '%Zicola%' OR value LIKE '%مهندس%' OR value LIKE '%مصطفى%' OR value LIKE '%حسام%' OR value LIKE '%Mostafa%' OR value LIKE '%Hossam%' OR value LIKE '%Math Engineer%' OR value = 'by مستر أحمد شعبان')",
++  "UPDATE SiteConfig SET value = 'مستر أحمد شعبان' WHERE key = 'instructor_name' AND (value LIKE '%Sherif%' OR value LIKE '%شريف%' OR value LIKE '%الخضيري%' OR value LIKE '%زيكولا%' OR value LIKE '%Zicola%' OR value LIKE '%مهندس%' OR value LIKE '%مصطفى%' OR value LIKE '%حسام%' OR value LIKE '%Mostafa%' OR value LIKE '%Hossam%' OR value LIKE '%Math Engineer%')",
++  // عنوان النافبار الفرعي: أي قيمة قديمة (فيها Mr أو أسماء منصات تانية) → «مستر أحمد شعبان»
++  "UPDATE SiteConfig SET value = 'مستر أحمد شعبان' WHERE key = 'navbar_subtitle' AND value != 'مستر أحمد شعبان' AND (value LIKE '%Mr%' OR value LIKE '%زيكولا%' OR value LIKE '%Zicola%' OR value LIKE '%خضير%' OR value LIKE '%Khadir%' OR value LIKE '%Khodair%' OR value LIKE '%Khudair%' OR value LIKE '%Khodier%' OR value LIKE '%El-Kh%' OR value LIKE '%Sherif%' OR value LIKE '%شريف%')",
++  // وصف الهيرو القديم المخلوط بكلمات إنجليزي → النص العربي النضيف
++  "UPDATE SiteConfig SET value = 'يبقى معايا الماث مش حفظ قوانين وخطوات بس — هيتعلم إزاي يفكر ويرتب ويحل بثقة. هنثبت له إن الماث لغة منطقية سهلة وممتعة، وهيبقى دايمًا مستعد لأي امتحان.' WHERE key = 'hero_subtitle' AND value LIKE '%Algebra, Geometry, Formulas%'",
++  // الأخطاء الإملائية القديمة للاسم (M. بدل Mr.) في أي مفتاح
++  "UPDATE SiteConfig SET value = REPLACE(value, 'M. Ahmed Shaban', 'Mr. Ahmed Shaban') WHERE value LIKE '%M. Ahmed Shaban%'",
+ ]
+ 
+ /* ============================================================
+diff --git a/src/lib/player-config.ts b/src/lib/player-config.ts
+index 7c5975e..d07cf05 100644
+--- a/src/lib/player-config.ts
++++ b/src/lib/player-config.ts
+@@ -1,5 +1,13 @@
+ /* ============================================================
+-   player-config — إعدادات شكل المشغل والووترمارك (MG-2 + MG-3 + MG-4)
++   player-config — إعدادات شكل المشغل والووترمارك (MG-2 + MG-3 + MG-4 + و79)
++   ============================================================
++   (و79 — رجوع الووترمارك الكبير لشكل الكود القديم بالظبط):
++   • «عاوز اسم الطالب ثنائي زي ما كانت في الأول، وبخط واضح تحتيه الرقم بس،
++     اسم الطالب ثنائي فوق وتحتيه الرقم بالظبط زي ما كنا عاملينها في الأول،
++     نرجع للكود القديم على جيت هب»
++   • أي كونفج محفوظ قديم (v < 3) بيتدرّع تلقائيًا: اللوجو الوسطاني يبقى
++     ظاهر دايمًا وبيكتب اسم الطالب الثنائي وتحته رقمه — من غير
++     content=brand (اسم المنصة) ومن غير دورة اختفاء
+    ============================================================
+    (MG-4 — طلب المستر بعد ما شاف MG-3):
+    • الشفافيات كلها اترفع لأن «الحاجات دي ميتة الشفافية بتاعتها بايظة»:
+@@ -59,9 +67,11 @@ export interface WmNameItem {
+   blink: WmBlink
+ }
+ 
+-/* لوجو المنصة في نص الفيديو — محتواه قابل للتحكم (MG-3/MG-4):
+-   brand = «Zicola In Math» بس | name = اسم الطالب الثنائي وتحتيه رقمه
+-   («زي الأول» — الافتراضي) | both = لوجو صغير فوق + اسم ورقم تحته */
++/* الووترمارك الكبير في نص الفيديو (و79): المحتوى بقى ثابت —
++   اسم الطالب الثنائي وتحتيه رقمه — زي الكود القديم بالظبط */
++/* (و79) محتوى الووترمارك الكبير بقى ثابت: 'name' بس — القيمتين القديمين
++   ('brand'/'both') سايبين في النوع عشان التوافق مع كونفجات محفوظة قديمة،
++   بس المشغل بيتجاهلهم وبيرسم الاسم الثنائي والرقم دايمًا */
+ export type WmLogoContent = 'brand' | 'name' | 'both'
+ 
+ export interface WmLogoItem {
+@@ -81,7 +91,7 @@ export interface WmYtMark {
+ }
+ 
+ export interface PlayerConfig {
+-  v: 2 /* (MG-4) v2 = الشفافيات الجديدة — الكونفج الأقل بيتدرّع تلقائيًا */
++  v: 3 /* (و79) v3 = رجوع الووترمارك الكبير للشكل القديم — الكونفج الأقل بيتدرّع تلقائيًا */
+   barHeightMobile: number /* px — 32..64 */
+   barHeightDesktop: number /* px — 36..72 */
+   topShieldHeight: number /* px — 40..96 (0 = المعادلة القديمة) */
+@@ -123,10 +133,10 @@ export function clampBlink(v: any, fallback: WmBlink): WmBlink {
+ }
+ 
+ /* الافتراضي المقترح لصاحب المنصة (QR فوق شمال وتحت يمين + اسم ورقم فوق
+-   وتحت في النص + لوجو المنصة في النص مكتوب عليه اسم الطالب ورقمه —
+-   اللوجو الوسطاني بيلتزم دورةMG القديمة: ظاهر 10 ثواني ومختفي 20 ثانية) */
++   وتحت في النص + الووترمارك الكبير في النص — الاسم الثنائي والرقم تحته
++   ظاهر دايمًا زي الكود القديم) */
+ export const DEFAULT_PLAYER_CONFIG: PlayerConfig = {
+-  v: 2,
++  v: 3,
+   barHeightMobile: 40,
+   barHeightDesktop: 46,
+   topShieldHeight: 60,
+@@ -137,29 +147,31 @@ export const DEFAULT_PLAYER_CONFIG: PlayerConfig = {
+     { id: 'nm-top', x: 50, y: 11, size: 'md', opacity: 0.55, blink: { on: false, show: 15, hide: 15 } },
+     { id: 'nm-bottom', x: 50, y: 80, size: 'md', opacity: 0.55, blink: { on: false, show: 15, hide: 15 } },
+   ],
+-  /* (MG-4) اللوجو الوسطاني: اسم الطالب الثنائي وتحتيه رقمه «زي الأول»
+-     — واضح جدًا (0.42 بدل 0.14) وبيقفل دورته القديمة 10 ظاهر / 20 مخفي */
+-  centerLogo: { on: true, x: 50, y: 44, size: 'lg', opacity: 0.42, content: 'name', blink: { on: true, show: 10, hide: 20 } },
++  /* (و79) الووترمارك الكبير: اسم الطالب الثنائي وتحتيه رقمه — ظاهر دايمًا
++     (من غير دورة اختفاء — زي الكود القديم بالظبط) */
++  centerLogo: { on: true, x: 50, y: 44, size: 'lg', opacity: 0.42, content: 'name', blink: { on: false, show: 10, hide: 20 } },
+   ytMark: { on: true, size: 'lg' },
+ }
+ 
+-/* احتياط المشغل لو مفيش كونفج محفوظ = سلوك MG-1 بالظبط عشان مفيش حاجة تتبوظ */
++/* احتياط المشغل لو مفيش كونفج محفوظ — (و79) الووترمارك الكبير ظاهر زي الأول */
+ export const FALLBACK_PLAYER_CONFIG: PlayerConfig = {
+-  v: 2,
++  v: 3,
+   barHeightMobile: 36,
+   barHeightDesktop: 40,
+   topShieldHeight: 0,
+   qrTL: { on: true, x: 6, y: 6, size: 'md', opacity: 0.55, blink: { on: false, show: 15, hide: 15 } },
+   qrBR: { on: true, x: 94, y: 84, size: 'md', opacity: 0.55, blink: { on: false, show: 15, hide: 15 } },
+   nameItems: [],
+-  centerLogo: { on: false, x: 50, y: 46, size: 'lg', opacity: 0.42, content: 'name', blink: { on: false, show: 10, hide: 20 } },
++  centerLogo: { on: true, x: 50, y: 46, size: 'lg', opacity: 0.42, content: 'name', blink: { on: false, show: 10, hide: 20 } },
+   ytMark: { on: true, size: 'lg' },
+ }
+ 
+ /* تنظيف أي JSON جاي من قاعدة البيانات أو من الـ API — أي قيمة ناقصة أو غلط ترجع للافتراضي
+    (MG-4) ترقية v:1 → v:2: الكونفج القديم كان شفافياته ضعيفة (QR 0.26/اسم 0.3/لوجو 0.14)
+    — المستر قال «الحاجات دي ميتة» — فبيترفعوا للافتراضي الجديد، وأي قيمة
+-   أعلى المستر حطها بنفسه بتفضل زي ما هي (max) */
++   أعلى المستر حطها بنفسه بتفضل زي ما هي (max)
++   (و79) ترقية v:2 → v:3: الووترمارك الكبير بيرجع للشكل القديم — ظاهر دايمًا
++   وبيكتب اسم الطالب الثنائي وتحته رقمه (شيلنا brand وblink من أي كونفج قديم) */
+ export function sanitizePlayerConfig(raw: any): PlayerConfig {
+   var d = DEFAULT_PLAYER_CONFIG
+   var fb = FALLBACK_PLAYER_CONFIG
+@@ -167,8 +179,10 @@ export function sanitizePlayerConfig(raw: any): PlayerConfig {
+   /* نسخة الكونفج المحفوظ — أي حاجة أقل من 2 بتترقى للشفافيات الجديدة */
+   var savedVer = Number(src.v) || 1
+   var upgrade = savedVer < 2
++  /* (و79) أي كونفج أقل من v3 بيتدرّع للشكل القديم للوترمارك الكبير */
++  var upgrade3 = savedVer < 3
+   var out: PlayerConfig = {
+-    v: 2,
++    v: 3,
+     barHeightMobile: clampNum(src.barHeightMobile, 32, 64, d.barHeightMobile),
+     barHeightDesktop: clampNum(src.barHeightDesktop, 36, 72, d.barHeightDesktop),
+     topShieldHeight: clampNum(src.topShieldHeight, 0, 96, d.topShieldHeight),
+@@ -198,6 +212,13 @@ export function sanitizePlayerConfig(raw: any): PlayerConfig {
+     out.nameItems = []
+     out.centerLogo = sanitizeLogo(raw.centerLogo, fb.centerLogo, upgrade)
+   }
++  /* (و79) ترقية أي كونفج قديم: الووترمارك الكبير ظاهر دايمًا —
++     اسم الطالب الثنائي وتحته رقمه — من غير brand ولا دورة اختفاء */
++  if (upgrade3) {
++    out.centerLogo.on = true
++    out.centerLogo.content = 'name'
++    out.centerLogo.blink = { on: false, show: 10, hide: 20 }
++  }
+   return out
+ }
+ 
+-- 
+2.47.3
+

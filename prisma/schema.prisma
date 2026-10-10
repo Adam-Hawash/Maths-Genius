@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// إعلانات المنصة — بتظهر في صفحة الأخبار بالرئيسية
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  important Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// الدروس — دروس اللغة العربية لكل الصفوف
+model Lesson {
+  id          String   @id @default(cuid())
+  title       String
+  grade       String
+  description String   @default("")
+  url         String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

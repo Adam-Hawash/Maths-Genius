@@ -1,0 +1,1920 @@
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index fe69a2c..ce7a3bf 100755
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -349,6 +349,27 @@ model VideoGroupSchedule {
+   @@index([groupId])
+ }
+ 
++// ============================================================
++// (2026-و44) الإشعارات — طلب المستر: «أي حاجة يتضاف تظهر له إشعار للطالب»:
++//   • الأدمن رد على شكوى → الطالب ياخد إشعار «شكواك اتحلت/اترد عليها»
++//   • كتاب/ملزمة جديدة → إشعار للطلاب (حسب الصف)
++//   • امتحان/واجب/إعلان جديد → إشعار للطلاب المستهدفين
++// read=true يعني الطالب شافه — العداد بيبقى unreadCount بس
++// ============================================================
++model Notification {
++  id        String   @id @default(cuid())
++  studentId String
++  type      String   @default("general") // complaint_reply | book | exam | homework | announcement | general
++  title     String
++  body      String   @default("")
++  read      Boolean  @default(false)
++  createdAt DateTime @default(now())
++  updatedAt DateTime @updatedAt
++
++  @@index([studentId, read])
++  @@index([createdAt])
++}
++
+ // ============================================================
+ // (2026-و40) الكتب والملازم — مكتبة PDF للطالب:
+ //   الأدمن يرفع كتاب/ملزمة PDF (chunkedUpload → Media → /api/files/<id>)
+diff --git a/src/app/api/admin/books/route.ts b/src/app/api/admin/books/route.ts
+index e655967..e3ca3fd 100644
+--- a/src/app/api/admin/books/route.ts
++++ b/src/app/api/admin/books/route.ts
+@@ -8,6 +8,7 @@
+ import { NextRequest, NextResponse } from 'next/server'
+ import { db, safeWrite } from '@/lib/db'
+ import { isAdmin } from '@/lib/video-guard'
++import { notifyStudents } from '@/lib/notify'
+ 
+ export const runtime = 'nodejs'
+ 
+@@ -97,6 +98,8 @@ export async function POST(request: NextRequest) {
+           },
+         })
+       })
++      /* (و44) إشعار للطلاب: كتاب جديد اتضاف */
++      notifyStudents({ grade: String(grade || ''), type: 'book', title: '📕 كتاب جديد اتضاف: ' + String(title).trim(), body: String(description || '').slice(0, 200) || 'تقدر تفتحه أو تحمله من تاب الكتب والملازم' }).catch(function () {})
+       return NextResponse.json({ message: 'تم إضافة الكتاب باللينك الخارجي', book: linkBook }, { status: 201 })
+     }
+ 
+@@ -121,6 +124,9 @@ export async function POST(request: NextRequest) {
+       })
+     })
+ 
++    /* (و44) إشعار للطلاب: كتاب جديد اتضاف */
++    notifyStudents({ grade: String(grade || ''), type: 'book', title: '📕 كتاب جديد اتضاف: ' + String(title).trim(), body: String(description || '').slice(0, 200) || 'تقدر تفتحه أو تحمله من تاب الكتب والملازم' }).catch(function () {})
++
+     return NextResponse.json({ message: 'تم إضافة الكتاب', book }, { status: 201 })
+   } catch (error: any) {
+     console.error('Book create error:', error)
+diff --git a/src/app/api/announcements/route.ts b/src/app/api/announcements/route.ts
+index fd3afea..1fa5f3b 100755
+--- a/src/app/api/announcements/route.ts
++++ b/src/app/api/announcements/route.ts
+@@ -1,6 +1,7 @@
+ 
+ import { NextRequest, NextResponse } from 'next/server'
+ import { db } from '@/lib/db'
++import { notifyStudents } from '@/lib/notify'
+ 
+ // GET /api/announcements - جلب كل الإعلانات
+ export async function GET(request: NextRequest) {
+@@ -56,6 +57,9 @@ export async function POST(request: NextRequest) {
+       data: { title, content, grade },
+     })
+ 
++    /* (و44) إشعار للطلاب: إعلان جديد */
++    notifyStudents({ grade: String(grade || ''), type: 'announcement', title: '📣 إعلان جديد: ' + String(title), body: String(content || '').slice(0, 200) }).catch(function () {})
++
+     return NextResponse.json({ message: 'تم إنشاء الإعلان بنجاح', announcement }, { status: 201 })
+   } catch (error) {
+     console.error('فشل إنشاء الإعلان:', error)
+diff --git a/src/app/api/books/proxy/route.ts b/src/app/api/books/proxy/route.ts
+new file mode 100644
+index 0000000..c8e58c1
+--- /dev/null
++++ b/src/app/api/books/proxy/route.ts
+@@ -0,0 +1,61 @@
++// @ts-nocheck
++// ============================================================
++// (2026-و44) /api/books/proxy?url=… — بروكسي تحميل PDF من لينك خارجي
++// طلب المستر: «الكتاب المضاف باللينك يبقى ثابت في صفحة الاستخراج —
++// لو دوست عليه تظهر صفحات الكتاب وأختار الصفحات» — pdf.js في المتصفح
++// مش بيوصل للينكات الخارجية (CORS) — فبنمرر التحميل من هنا (same-origin).
++// ملاحظات أمان: http/https بس + ممنوع localhost/private IPs (SSRF) +
++// حجم أقصى 250MB — والاستجابة بتتحول stream زي ما هي.
++// ============================================================
++import { NextRequest, NextResponse } from 'next/server'
++
++var MAX_BYTES = 250 * 1024 * 1024
++
++function isBlockedHost(hostname: string): boolean {
++  var h = String(hostname || '').toLowerCase()
++  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true
++  /* 127.x / 10.x / 172.16-31.x / 192.168.x / 169.254.x / ::1 */
++  var m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
++  if (m) {
++    var a = parseInt(m[1], 10)
++    var b = parseInt(m[2], 10)
++    if (a === 127 || a === 10 || a === 0) return true
++    if (a === 172 && b >= 16 && b <= 31) return true
++    if (a === 192 && b === 168) return true
++    if (a === 169 && b === 254) return true
++  }
++  return false
++}
++
++export async function GET(request: NextRequest) {
++  try {
++    var url = new URL(request.url).searchParams.get('url') || ''
++    if (!/^https?:\/\//i.test(url)) {
++      return NextResponse.json({ error: 'لينك غير صالح' }, { status: 400 })
++    }
++    var parsed = new URL(url)
++    if (isBlockedHost(parsed.hostname)) {
++      return NextResponse.json({ error: 'اللينك غير مسموح' }, { status: 400 })
++    }
++    var upstream = await fetch(parsed.toString(), {
++      headers: { 'User-Agent': 'Mozilla/5.0 (books-proxy)' },
++      redirect: 'follow',
++      cache: 'no-store',
++    })
++    if (!upstream.ok || !upstream.body) {
++      return NextResponse.json({ error: 'مقدرتش أجيب الملف من اللينك (' + upstream.status + ')' }, { status: 502 })
++    }
++    var len = parseInt(String(upstream.headers.get('content-length') || ''), 10)
++    if (!isNaN(len) && len > MAX_BYTES) {
++      return NextResponse.json({ error: 'الملف أكبر من الحد المسموح (250MB)' }, { status: 413 })
++    }
++    var headers = new Headers()
++    headers.set('Content-Type', upstream.headers.get('content-type') || 'application/pdf')
++    if (!isNaN(len)) headers.set('Content-Length', String(len))
++    headers.set('Cache-Control', 'no-store')
++    return new NextResponse(upstream.body, { status: 200, headers: headers })
++  } catch (e: any) {
++    console.error('[books-proxy] error:', e)
++    return NextResponse.json({ error: 'فشل تحميل الملف من اللينك' }, { status: 500 })
++  }
++}
+diff --git a/src/app/api/complaints/[id]/route.ts b/src/app/api/complaints/[id]/route.ts
+index 2fb0a63..6af468e 100644
+--- a/src/app/api/complaints/[id]/route.ts
++++ b/src/app/api/complaints/[id]/route.ts
+@@ -8,6 +8,7 @@
+ // ============================================================
+ import { NextResponse } from 'next/server'
+ import { db, safeWrite } from '@/lib/db'
++import { notifyStudent } from '@/lib/notify'
+ 
+ export var maxDuration = 10
+ 
+@@ -46,6 +47,14 @@ export async function PATCH(request: Request, ctx: any) {
+ 
+     var rows = (await db.$queryRawUnsafe('SELECT * FROM Complaint WHERE id = ? LIMIT 1', id)) || []
+     if (!rows.length) return NextResponse.json({ error: 'الشكوى مش موجودة' }, { status: 404 })
++    /* (و44) طلب المستر: لما الأدمن يرد على الطالب يجيله إشعار إن الشكوى اتحلت */
++    try {
++      var cid = String(rows[0].studentId || '')
++      if (cid && (body.reply !== undefined || status === 'resolved')) {
++        var nTitle = status === 'resolved' ? '✅ المستر رد على شكواك — واتحلت' : '💬 المستر رد على شكواك'
++        notifyStudent(cid, 'complaint_reply', nTitle, String(reply || '').slice(0, 240) || 'افتح تاب الشكاوى وشوف الرد')
++      }
++    } catch (nErr) {}
+     return NextResponse.json({ complaint: rows[0], message: 'تم الحفظ ✅' })
+   } catch (error) {
+     console.error('[Complaints] PATCH error:', error)
+diff --git a/src/app/api/exams/route.ts b/src/app/api/exams/route.ts
+index c7c3c6a..d918a4e 100755
+--- a/src/app/api/exams/route.ts
++++ b/src/app/api/exams/route.ts
+@@ -1,5 +1,6 @@
+ import { NextRequest, NextResponse } from 'next/server'
+ import { db, safeWrite } from '@/lib/db'
++import { notifyStudents } from '@/lib/notify'
+ import { isAdmin } from '@/lib/video-guard'
+ 
+ /* (25-ب1) أعمدة الميزات الجديدة (إظهار الإجابات / المؤقت / جدولة الظهور) —
+@@ -257,6 +258,13 @@ export async function POST(request: NextRequest) {
+       })
+     })
+ 
++    /* (و44) إشعار للطلاب المستهدفين: امتحان جديد */
++    try {
++      var nIds: string[] = []
++      try { var tp = JSON.parse(targetIds); if (Array.isArray(tp)) nIds = tp.filter(Boolean) } catch (e) {}
++      notifyStudents({ studentIds: nIds, grade: String(grade || ''), type: 'exam', title: '📝 امتحان جديد: ' + String(title), body: 'دخل من تاب الامتحانات وحل دلوقتي' }).catch(function () {})
++    } catch (nE) {}
++
+     return NextResponse.json({ message: 'Exam added', exam }, { status: 201 })
+   } catch (error: any) {
+     console.error('Exam create error:', error)
+diff --git a/src/app/api/exams/submit/route.ts b/src/app/api/exams/submit/route.ts
+index bb4bebe..4eb9194 100755
+--- a/src/app/api/exams/submit/route.ts
++++ b/src/app/api/exams/submit/route.ts
+@@ -20,6 +20,8 @@ import { after } from 'next/server'
+ import { db } from '@/lib/db'
+ import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds, finalAnswerCandidates } from '@/lib/ai-image-grader'
+ import { quickSmartMatch, gradeFallbackDecisive } from '@/lib/smart-grader'
++/* (2026-و44) تسريع التصحيح — توازي محدود (اتنين) بمرحلة بداية متدرجة */
++import { runGradePool } from '@/lib/grade-pool'
+ /* (2026-و33) مصدر واحد لمفتاح الإجابة — نفس الدالة اللي شاشة المراجعة بتستخدمها على العميل */
+ import { normalizeCorrectKey } from '@/lib/correct-key'
+ /* (2026-و29) مسار gradeWritingSmart الجماعي اتشال من التسليم — كان نداء AI واحد
+@@ -444,133 +446,154 @@ export async function POST(request) {
+         }
+       }
+ 
+-      /* (2026-و29) تصحيح متسلسل سؤال-بسؤال — نفس نمط الواجب بالظبط:
++      /* (2026-و29 + و44) تصحيح سؤال-بسؤال بتوازي محدود (اتنين مع بعض):
+          1) مطابقة سريعة محلية (quickSmartMatch) → كاملة من غير AI
+          2) AI لكل سؤال لوحده (gradeTextAnswer — فيه تحقق قيم مدمج STRICT VERIFY)
+          3) فشل/عدم تأكد → فولباك حاسم للسؤال ده بس (مش الدفعة كلها)
+-         + partial persist بعد كل سؤال — اللي اتصحح مش بيضيع لو اتقطعنا */
+-      try {
+-        for (var tw = 0; tw < textWorkload.length; tw++) {
+-          var twItem = textWorkload[tw]
+-          var twAnswer = twItem.studentText || ''
+-          var graded1: any = null
+-          if (!twAnswer.trim() || twAnswer.trim() === '[📷 صورة مرفقة]') {
+-            graded1 = {
+-              question: twItem.question, answer: twAnswer, modelAnswer: twItem.modelAnswer,
+-              awardedPoints: 0, maxPoints: twItem.points, isCorrect: false,
+-              feedback: 'لم يتم الإجابة', gradingStatus: 'graded',
+-            }
+-          } else if (quickSmartMatch(twAnswer, twItem.modelAnswer || '', twItem.acceptedAnswers || []) === true) {
+-            /* (و24) ملاحظة شخصية زي معلم بيتكلم مع الطالب — حتى في المسار السريع */
+-            var stNote = (finalAnswerCandidates(twAnswer)[0] || twAnswer.trim() || '').slice(0, 40)
+-            graded1 = {
+-              question: twItem.question, answer: twAnswer, modelAnswer: twItem.modelAnswer,
+-              awardedPoints: twItem.points, maxPoints: twItem.points, isCorrect: true,
+-              feedback: 'برافو عليك ✓ الإجابة النهائية (' + stNote + ') مطابقة للإجابة الصحيحة',
+-              gradingStatus: 'graded',
++         + partial persist بعد كل سؤال — اللي اتصحح مش بيضيع لو اتقطعنا
++         + (و44) طلب المستر «تسرع التصحيح»: النصي والصور في pool واحد
++           بعاملين مع تأخير بداية — نفس منطق كل سؤال بالظبط، بس أسرع ~1.8x */
++      var gradeTasks: (() => Promise<void>)[] = []
++      var _tw2: number
++      for (_tw2 = 0; _tw2 < textWorkload.length; _tw2++) {
++        (function (tw: number) {
++          gradeTasks.push(async function () {
++            try {
++              var twItem = textWorkload[tw]
++              var twAnswer = twItem.studentText || ''
++              var graded1: any = null
++              if (!twAnswer.trim() || twAnswer.trim() === '[📷 صورة مرفقة]') {
++                graded1 = {
++                  question: twItem.question, answer: twAnswer, modelAnswer: twItem.modelAnswer,
++                  awardedPoints: 0, maxPoints: twItem.points, isCorrect: false,
++                  feedback: 'لم يتم الإجابة', gradingStatus: 'graded',
++                }
++              } else if (quickSmartMatch(twAnswer, twItem.modelAnswer || '', twItem.acceptedAnswers || []) === true) {
++                /* (و24) ملاحظة شخصية زي معلم بيتكلم مع الطالب — حتى في المسار السريع */
++                var stNote = (finalAnswerCandidates(twAnswer)[0] || twAnswer.trim() || '').slice(0, 40)
++                graded1 = {
++                  question: twItem.question, answer: twAnswer, modelAnswer: twItem.modelAnswer,
++                  awardedPoints: twItem.points, maxPoints: twItem.points, isCorrect: true,
++                  feedback: 'برافو عليك ✓ الإجابة النهائية (' + stNote + ') مطابقة للإجابة الصحيحة',
++                  gradingStatus: 'graded',
++                }
++              } else {
++                var tGrade: any = null
++                try {
++                  tGrade = await gradeTextAnswer({
++                    question: twItem.question,
++                    studentAnswer: twAnswer,
++                    modelAnswer: twItem.modelAnswer || '',
++                    acceptedAnswers: twItem.acceptedAnswers || [],
++                    maxPoints: twItem.points,
++                  })
++                } catch (tgErr) { console.error('[exam-submit] text grade error:', tgErr) }
++                if (tGrade && !tGrade.needsGrading) {
++                  graded1 = {
++                    question: twItem.question, answer: twAnswer, modelAnswer: twItem.modelAnswer,
++                    awardedPoints: tGrade.awardedPoints || 0, maxPoints: twItem.points,
++                    isCorrect: tGrade.isCorrect === true,
++                    feedback: tGrade.feedback || (tGrade.isCorrect ? 'إجابة صحيحة' : 'إجابة مختلفة عن الإجابة الصحيحة'),
++                    gradingStatus: 'graded',
++                  }
++                } else {
++                  /* AI فشل أو مش متأكد في السؤال ده بس → فولباك حاسم —
++                     تكافؤ القيم → كاملة، علاقة بالحل → نص درجة + مراجعة */
++                  graded1 = gradeFallbackDecisive({
++                    question: twItem.question, answer: twAnswer,
++                    modelAnswer: twItem.modelAnswer || '',
++                    acceptedAnswers: twItem.acceptedAnswers || [],
++                    points: twItem.points,
++                  })
++                }
++              }
++              textGraded[tw] = graded1
++              await persistExamGrades(false)
++            } catch (twErr) {
++              console.error('[exam-submit] text task error:', twErr)
+             }
+-          } else {
+-            var tGrade: any = null
++          })
++        })(_tw2)
++      }
++      /* الصور في نفس الـ pool — بتتقص على اتنين زي النصي بالظبط */
++      var _im2: number
++      for (_im2 = 0; _im2 < imageWorkload.length; _im2++) {
++        (function (im: number) {
++          gradeTasks.push(async function () {
++            var iw = imageWorkload[im]
++            var mediaIds2 = extractImageMediaIds(iw.studentText)
++            var gradeData: any = null
+             try {
+-              tGrade = await gradeTextAnswer({
+-                question: twItem.question,
+-                studentAnswer: twAnswer,
+-                modelAnswer: twItem.modelAnswer || '',
+-                acceptedAnswers: twItem.acceptedAnswers || [],
+-                maxPoints: twItem.points,
++              gradeData = await gradeImageAnswer({
++                mediaId: mediaIds2[0],
++                question: iw.question,
++                modelAnswer: iw.modelAnswer,
++                acceptedAnswers: iw.acceptedAnswers,
++                maxPoints: iw.points,
++                /* (و44) النص الكامل للإجابة — عشان «الجدول: …» المكتوب بالكيبورد
++                   يتحسب مع الرسمة المصورة في نفس الحكم (المستر: التصحيح من الاثنين) */
++                studentText: iw.studentText || '',
+               })
+-            } catch (tgErr) { console.error('[exam-submit] text grade error:', tgErr) }
+-            if (tGrade && !tGrade.needsGrading) {
+-              graded1 = {
+-                question: twItem.question, answer: twAnswer, modelAnswer: twItem.modelAnswer,
+-                awardedPoints: tGrade.awardedPoints || 0, maxPoints: twItem.points,
+-                isCorrect: tGrade.isCorrect === true,
+-                feedback: tGrade.feedback || (tGrade.isCorrect ? 'إجابة صحيحة' : 'إجابة مختلفة عن الإجابة الصحيحة'),
++            } catch (imErr) {
++              console.error('Exam writing image grade error:', imErr)
++            }
++            if (gradeData && gradeData.needsGrading !== true) {
++              /* حكم الـ AI الواثق — نهائي: صح/جزئي/غلط (زي الواجب بالظبط) */
++              var imAwarded = Math.min(Math.max(Math.round(Number(gradeData.awardedPoints) || (gradeData.isCorrect ? iw.points : 0)), 0), iw.points)
++              imageGraded[im] = {
++                question: iw.question,
++                answer: iw.studentText,
++                modelAnswer: iw.modelAnswer,
++                awardedPoints: imAwarded,
++                maxPoints: iw.points,
++                isCorrect: imAwarded >= Math.ceil(iw.points * 0.5) && imAwarded > 0,
++                feedback: gradeData.feedback || (imAwarded > 0 ? 'تم تصحيح صورة الحل' : 'الحل مش مطابق'),
+                 gradingStatus: 'graded',
++                aiExtractedAnswer: gradeData.extractedAnswer || '',
+               }
+             } else {
+-              /* AI فشل أو مش متأكد في السؤال ده بس → فولباك حاسم —
+-                 تكافؤ القيم → كاملة، علاقة بالحل → نص درجة + مراجعة */
+-              graded1 = gradeFallbackDecisive({
+-                question: twItem.question, answer: twAnswer,
+-                modelAnswer: twItem.modelAnswer || '',
+-                acceptedAnswers: twItem.acceptedAnswers || [],
+-                points: twItem.points,
+-              })
++              /* 2026-و13 — طلب المستر الحرفي: الامتحان يتصرف زي الواجب بالظبط —
++                 مفيش حالة «محتاجة مراجعة» معلقة وخالص: الـ AI مش متأكد من قراية
++                 الصورة ← درجة مؤقتة عادلة (نص درجة المحاولة) والمستر يقدر يعدلها
++                 بضغطة من لوحته — مفيش صفر ظالم ومفيش بادج معلق */
++              var hasRealWork = iw.studentText.replace(/\[📷[^\]]*\]/g, '').trim().length > 0
++              imageGraded[im] = {
++                question: iw.question,
++                answer: iw.studentText,
++                modelAnswer: iw.modelAnswer,
++                awardedPoints: hasRealWork ? Math.ceil(iw.points / 2) : 0,
++                maxPoints: iw.points,
++                isCorrect: false,
++                feedback: hasRealWork
++                  ? 'صورة الحل اترفعت — درجة مؤقتة لحد ما تراجعها وعدّلها من لوحتك'
++                  : 'لم يتم الإجابة',
++                gradingStatus: 'graded',
++                aiExtractedAnswer: hasRealWork ? '(صورة الحل مقدرناش نقراها بدقة)' : '',
++              }
+             }
+-          }
+-          textGraded[tw] = graded1
+-          await persistExamGrades(false)
+-        }
++            /* (2026-و25) snapshot بعد كل صورة — اللي اتصحح متضيعش لو اتقطعنا */
++            await persistExamGrades(false)
++          })
++        })(_im2)
++      }
++      try {
++        await runGradePool(gradeTasks, 2, 400)
+       } catch (grErr) {
+         console.error('Exam writing grade error:', grErr)
+-        for (var tw2 = 0; tw2 < textWorkload.length; tw2++) {
+-          if (!textGraded[tw2]) {
+-            textGraded[tw2] = gradeFallbackDecisive({
+-              question: textWorkload[tw2].question,
+-              answer: textWorkload[tw2].studentText,
+-              modelAnswer: textWorkload[tw2].modelAnswer || '',
+-              acceptedAnswers: textWorkload[tw2].acceptedAnswers || [],
+-              points: textWorkload[tw2].points,
+-            })
+-          }
+-        }
+       }
+-      await persistExamGrades(false)
+-
+-      // 3ب) صور → VLM لكل سؤال (بتسلسل — مفتاح واحد مبيتحملش متوازي)
+-      for (var im = 0; im < imageWorkload.length; im++) {
+-        var iw = imageWorkload[im]
+-        var mediaIds2 = extractImageMediaIds(iw.studentText)
+-        var gradeData: any = null
+-        try {
+-          gradeData = await gradeImageAnswer({
+-            mediaId: mediaIds2[0],
+-            question: iw.question,
+-            modelAnswer: iw.modelAnswer,
+-            acceptedAnswers: iw.acceptedAnswers,
+-            maxPoints: iw.points,
++      /* شبكة أمان: أي سؤال نصي ماحصلش حكم ليه → فولباك حاسم (مفيش pending) */
++      for (var twF = 0; twF < textWorkload.length; twF++) {
++        if (!textGraded[twF]) {
++          textGraded[twF] = gradeFallbackDecisive({
++            question: textWorkload[twF].question,
++            answer: textWorkload[twF].studentText,
++            modelAnswer: textWorkload[twF].modelAnswer || '',
++            acceptedAnswers: textWorkload[twF].acceptedAnswers || [],
++            points: textWorkload[twF].points,
+           })
+-        } catch (imErr) {
+-          console.error('Exam writing image grade error:', imErr)
+-        }
+-        if (gradeData && gradeData.needsGrading !== true) {
+-          /* حكم الـ AI الواثق — نهائي: صح/جزئي/غلط (زي الواجب بالظبط) */
+-          var imAwarded = Math.min(Math.max(Math.round(Number(gradeData.awardedPoints) || (gradeData.isCorrect ? iw.points : 0)), 0), iw.points)
+-          imageGraded[im] = {
+-            question: iw.question,
+-            answer: iw.studentText,
+-            modelAnswer: iw.modelAnswer,
+-            awardedPoints: imAwarded,
+-            maxPoints: iw.points,
+-            isCorrect: imAwarded >= Math.ceil(iw.points * 0.5) && imAwarded > 0,
+-            feedback: gradeData.feedback || (imAwarded > 0 ? 'تم تصحيح صورة الحل' : 'الحل مش مطابق'),
+-            gradingStatus: 'graded',
+-            aiExtractedAnswer: gradeData.extractedAnswer || '',
+-          }
+-        } else {
+-          /* 2026-و13 — طلب المستر الحرفي: الامتحان يتصرف زي الواجب بالظبط —
+-             مفيش حالة «محتاجة مراجعة» معلقة وخالص: الـ AI مش متأكد من قراية
+-             الصورة ← درجة مؤقتة عادلة (نص درجة المحاولة) والمستر يقدر يعدلها
+-             بضغطة من لوحته — مفيش صفر ظالم ومفيش بادج معلق */
+-          var hasRealWork = iw.studentText.replace(/\[📷[^\]]*\]/g, '').trim().length > 0
+-          imageGraded[im] = {
+-            question: iw.question,
+-            answer: iw.studentText,
+-            modelAnswer: iw.modelAnswer,
+-            awardedPoints: hasRealWork ? Math.ceil(iw.points / 2) : 0,
+-            maxPoints: iw.points,
+-            isCorrect: false,
+-            feedback: hasRealWork
+-              ? 'صورة الحل اترفعت — درجة مؤقتة لحد ما تراجعها وعدّلها من لوحتك'
+-              : 'لم يتم الإجابة',
+-            gradingStatus: 'graded',
+-            aiExtractedAnswer: hasRealWork ? '(صورة الحل مقدرناش نقراها بدقة)' : '',
+-          }
+         }
+-        /* (2026-و25) snapshot بعد كل صورة — اللي اتصحح متضيعش لو اتقطعنا */
+-        await persistExamGrades(false)
+       }
++      await persistExamGrades(false)
+ 
+       // 3ج) الحكم النهائي — كل اللي ماتصححش بياخد fallback حاسم (مش pending)
+       await persistExamGrades(true)
+diff --git a/src/app/api/homework/route.ts b/src/app/api/homework/route.ts
+index 70920ca..344aa16 100755
+--- a/src/app/api/homework/route.ts
++++ b/src/app/api/homework/route.ts
+@@ -1,5 +1,6 @@
+ import { NextRequest, NextResponse } from 'next/server'
+ import { db, safeWrite } from '@/lib/db'
++import { notifyStudents } from '@/lib/notify'
+ import { isAdmin } from '@/lib/video-guard'
+ 
+ /* (25-ب1) جدولة الظهور للواجبات — defensive ALTER بنفس نمط المشروع
+@@ -186,6 +187,13 @@ export async function POST(request: NextRequest) {
+       })
+     })
+ 
++    /* (و44) إشعار للطلاب المستهدفين: واجب جديد */
++    try {
++      var nIds: string[] = []
++      try { var tp = JSON.parse(targetIds); if (Array.isArray(tp)) nIds = tp.filter(Boolean) } catch (e) {}
++      notifyStudents({ studentIds: nIds, grade: String(grade || ''), type: 'homework', title: '📚 واجب جديد: ' + String(title), body: 'دخل من تاب الواجبات وسلّمه قبل ميعاده' }).catch(function () {})
++    } catch (nE) {}
++
+     return NextResponse.json({ message: 'Homework added', homework }, { status: 201 })
+   } catch (error: any) {
+     console.error('Homework create error:', error)
+diff --git a/src/app/api/homework/submit/route.ts b/src/app/api/homework/submit/route.ts
+index 4bf2a2f..21c4dbf 100755
+--- a/src/app/api/homework/submit/route.ts
++++ b/src/app/api/homework/submit/route.ts
+@@ -13,6 +13,8 @@
+ import { NextResponse, after } from 'next/server'
+ import { db } from '@/lib/db'
+ import { gradeImageAnswer, gradeTextAnswer, extractImageMediaIds, finalAnswerCandidates } from '@/lib/ai-image-grader'
++/* (2026-و44) تسريع التصحيح — توازي محدود (اتنين) بمرحلة بداية متدرجة */
++import { runGradePool } from '@/lib/grade-pool'
+ /* (2026-و33) مصدر واحد لمفتاح الإجابة — نفس الدالة اللي شاشة المراجعة بتستخدمها على العميل */
+ import { normalizeCorrectKey } from '@/lib/correct-key'
+ import { gradeFallbackDecisive, quickSmartMatch } from '@/lib/smart-grader'
+@@ -412,6 +414,8 @@ export async function POST(request) {
+             modelAnswer: wa.modelAnswer,
+             acceptedAnswers: wa.acceptedAnswers,
+             maxPoints: wa.points,
++            /* (و44) النص الكامل — الجدول المكتوب بالكيبورد يتحسب مع الرسمة */
++            studentText: answerText,
+           })
+           if (gradeData && !gradeData.needsGrading) {
+             return Object.assign({}, wa, {
+@@ -558,10 +562,10 @@ export async function POST(request) {
+       /* (2026-و25) — إصلاح جذري لشكوى «بيديه كله غلط»: النداءات المتوازية
+          (Promise.all) كانت بتبعت N طلبات Gemini في نفس اللحظة على مفتاح واحد
+          مجاني → 429 rate limit لكل النداءات → فولباك حاسم → similarity أقل من
+-         0.55 → صفر «كله غلط». الحل: تسلسل النداءات (نداء واحد في المرة) —
+-         callGemini نفسها بتتداول المفاتيح/الموديلز على 429، وcallGrader عملت
+-         له backoff صريح (1.5s ثم 4s) — فالتسلسل بيخلي النداءات متباعدة
+-         ومتشبعلش حد الـ RPM.
++         0.55 → صفر «كله غلط». الحل كان التسلسل.
++         (2026-و44) طلب المستر «تسرع التصحيح»: رجعنا للتوازي **بحد أقصى اتنين**
++         مع تأخير بداية متدرج (runGradePool) — بيسرّع التصحيح ~1.8x من غير ما
++         يندفع على المفتاح، وفشل أي سؤال بيفضل معزول زي ما هو.
+          + partial persist: كل سؤال يتصحح يتحفظ فورًا في writingResults
+          (والدرجة تتحديث) — لو التسليم الخلفي اتقطع (serverless timeout) اللي
+          اتصحح مش بيضيع، والباقي بيفضل pending لحد الإصلاح الذاتي يكمّله. */
+@@ -569,6 +573,11 @@ export async function POST(request) {
+       var writingScore = 0
+       var persistPartial = async function() {
+         try {
++          /* إعادة الحساب من القايمة كلها — مش حساسة لترتيب الاكتمال */
++          writingScore = 0
++          for (var s = 0; s < gradedList.length; s++) {
++            writingScore += Number((gradedList[s] && gradedList[s].awardedPoints) || 0)
++          }
+           await db.$executeRawUnsafe(
+             'UPDATE HomeworkResult SET score = ?, writingResults = ? WHERE id = ?',
+             mcqScore + writingScore, JSON.stringify(gradedList), resultId
+@@ -583,16 +592,18 @@ export async function POST(request) {
+           } catch (pErr2) {}
+         }
+       }
+-      for (var gi = 0; gi < writingAnswers.length; gi++) {
+-        try {
+-          var gOne = await gradeOneWriting(writingAnswers[gi])
+-          gradedList[gi] = gOne
+-          writingScore += (gOne.awardedPoints || 0)
+-        } catch (oneErr) {
+-          console.error('[HW BG] grade one writing error:', oneErr)
++      var hwTasks = writingAnswers.map(function (wa: any, gi: number) {
++        return async function () {
++          try {
++            var gOne = await gradeOneWriting(wa)
++            gradedList[gi] = gOne
++          } catch (oneErr) {
++            console.error('[HW BG] grade one writing error:', oneErr)
++          }
++          await persistPartial()
+         }
+-        await persistPartial()
+-      }
++      })
++      await runGradePool(hwTasks, 2, 400)
+       console.log('[HW BG] Grading done for', resultId, '— final score', (mcqScore + writingScore) + '/' + maxScore)
+     }
+ 
+diff --git a/src/app/api/notifications/route.ts b/src/app/api/notifications/route.ts
+new file mode 100644
+index 0000000..ed5d13d
+--- /dev/null
++++ b/src/app/api/notifications/route.ts
+@@ -0,0 +1,64 @@
++// @ts-nocheck
++// ============================================================
++// (2026-و44) /api/notifications — إشعارات الطالب:
++//   GET  ?studentId=…  → آخر 40 إشعار + unreadCount (+ تنظيف القديم)
++//   POST { studentId, action: 'read-all' } → علّم الكل مقروء
++//   POST { studentId, id,  action: 'read' } → علّم واحد مقروء
++// أي فشل بيرجع 200 فاضي — الإشعارات مش سبب لكسر البورتال
++// ============================================================
++import { NextRequest, NextResponse } from 'next/server'
++import { db } from '@/lib/db'
++
++async function ensureTable(): Promise<void> {
++  try {
++    await db.$executeRawUnsafe("CREATE TABLE IF NOT EXISTS Notification (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'general', title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', read INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)")
++    try { await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_notification_student ON Notification(studentId, read)') } catch (e) {}
++  } catch (e) {}
++}
++
++export async function GET(request: NextRequest) {
++  try {
++    var studentId = new URL(request.url).searchParams.get('studentId') || ''
++    if (!studentId) return NextResponse.json({ notifications: [], unreadCount: 0 })
++    await ensureTable()
++    /* تنظيف هادئ: إشعارات أقدم من 60 يوم تشيل نفسها — الجدول ميبقاش ضخم */
++    try { await db.$executeRawUnsafe("DELETE FROM Notification WHERE createdAt < datetime('now', '-60 days')") } catch (e) {}
++    var rows: any = await db.$queryRawUnsafe(
++      'SELECT id, type, title, body, read, createdAt FROM Notification WHERE studentId = ? ORDER BY createdAt DESC LIMIT 40',
++      studentId
++    )
++    var unread: any = await db.$queryRawUnsafe(
++      'SELECT COUNT(*) as c FROM Notification WHERE studentId = ? AND read = 0',
++      studentId
++    )
++    return NextResponse.json({
++      notifications: (rows || []).map(function (r: any) {
++        return { id: r.id, type: r.type, title: r.title, body: r.body, read: !!Number(r.read), createdAt: r.createdAt }
++      }),
++      unreadCount: unread && unread.length ? Number(unread[0].c) || 0 : 0,
++    })
++  } catch (e) {
++    console.error('[notifications] GET error:', e)
++    return NextResponse.json({ notifications: [], unreadCount: 0 })
++  }
++}
++
++export async function POST(request: NextRequest) {
++  try {
++    var body: any = {}
++    try { body = await request.json() } catch (e) {}
++    var studentId = String(body.studentId || '')
++    var action = String(body.action || '')
++    if (!studentId) return NextResponse.json({ ok: false })
++    await ensureTable()
++    if (action === 'read-all') {
++      await db.$executeRawUnsafe('UPDATE Notification SET read = 1, updatedAt = CURRENT_TIMESTAMP WHERE studentId = ?', studentId)
++    } else if (action === 'read' && body.id) {
++      await db.$executeRawUnsafe('UPDATE Notification SET read = 1, updatedAt = CURRENT_TIMESTAMP WHERE studentId = ? AND id = ?', studentId, String(body.id))
++    }
++    return NextResponse.json({ ok: true })
++  } catch (e) {
++    console.error('[notifications] POST error:', e)
++    return NextResponse.json({ ok: false })
++  }
++}
+diff --git a/src/components/BidiText.tsx b/src/components/BidiText.tsx
+new file mode 100644
+index 0000000..86330f6
+--- /dev/null
++++ b/src/components/BidiText.tsx
+@@ -0,0 +1,86 @@
++'use client'
++
++// ============================================================
++// (2026-و44) BidiText — عرض النصوص المختلطة عربي/إنجليزي **مظبوطة**
++// طلب المستر حرفيًا: «الملاحظات بتتكتب بطريقة عشوائية — عاوزها تتكتب
++// صح من اليمين للشمال سواء عربي أو إنجليزي».
++//
++// المشكلة: ملاحظة زي «خلي بالك x = -b/2a هو محور التماثل Axis of symmetry
++// والقيمة 4-» جوه حاوية dir="ltr" بتتقلب حروفها وأرقامها عشوائي
++// (bidi algorithm بيعيد ترتيب المقاطع المحايدة).
++//
++// الحل هنا: بنقسم النص لمقاطع — أي مقطع فيه حروف/أرقام لاتينية
++// بيتعزل جوه <bdi dir="ltr"> (unicode-bidi: isolate) فبيحتفظ بترتيبه
++// الداخلي بالظبط من غير ما يلخبط الجملة العربية حواليه، والجملة كلها
++// بتتمدد من اليمين للشمال.
++// ============================================================
++
++import * as React from 'react'
++import FractionText, { hasMathMarkup } from '@/components/FractionText'
++
++interface BidiSegment { ltr: boolean; t: string }
++
++/* تقسيم النص لمقاطع: مقاطع لاتينية/أرقام (ltr) ومقاطع عربية/محايدة (rtl) */
++function segmentBidi(text: string): BidiSegment[] {
++  var segs: BidiSegment[] = []
++  var buf = ''
++  var bufLtr = false
++  var flush = function () {
++    if (buf !== '') segs.push({ ltr: bufLtr, t: buf })
++    buf = ''
++    bufLtr = false
++  }
++  for (var i = 0; i < text.length; i++) {
++    var ch = text[i]
++    if (ch === '\n') {
++      flush()
++      segs.push({ ltr: false, t: '\n' })
++      continue
++    }
++    var isAlnum = /[A-Za-z0-9]/.test(ch)
++    var isArabic = /[\u0600-\u06FF]/.test(ch)
++    if (isArabic) {
++      /* أول حرف عربي بيقفل أي مقطع لاتيني مفتوح */
++      if (bufLtr) flush()
++      buf += ch
++      continue
++    }
++    if (isAlnum) {
++      if (!bufLtr) { flush(); bufLtr = true }
++      buf += ch
++      continue
++    }
++    /* محايد (علامات/مسافات/رموز رياضة): بيلزق بمقطع لاتيني مفتوح،
++       أو بمقطع عربي عادي — فمش بيكسر الترتيب */
++    buf += ch
++  }
++  flush()
++  return segs
++}
++
++/**
++ * BidiText — مرر له نص الملاحظة/الريأكشن وهو بيرسمه مظبوط اتجاهاته.
++ * الاختياري dir="auto": لو النص أغلبه إنجليزي رياضة هيبقى LTR أساسي.
++ */
++export function BidiText({ text, className, style }: { text: string; className?: string; style?: React.CSSProperties }) {
++  var raw = String(text || '')
++  if (!raw) return null
++  var segs = segmentBidi(raw)
++  return (
++    <span dir="rtl" style={Object.assign({ textAlign: 'right' }, style || {})} className={className}>
++      {segs.map(function (s: BidiSegment, i: number) {
++        var rendered = hasMathMarkup(s.t) ? <FractionText text={s.t} /> : s.t
++        if (s.ltr) {
++          return (
++            <bdi key={i} dir="ltr" style={{ unicodeBidi: 'isolate' }}>
++              {rendered}
++            </bdi>
++          )
++        }
++        return <React.Fragment key={i}>{rendered}</React.Fragment>
++      })}
++    </span>
++  )
++}
++
++export default BidiText
+diff --git a/src/components/admin/AdminDashboard.tsx b/src/components/admin/AdminDashboard.tsx
+index d497bb1..91c7182 100755
+--- a/src/components/admin/AdminDashboard.tsx
++++ b/src/components/admin/AdminDashboard.tsx
+@@ -21,7 +21,7 @@ import {
+   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
+   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
+   Video as VideoIcon,
+-  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen
++  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown
+ } from 'lucide-react'
+ import { AdminComplaints } from './AdminComplaints'
+ import { CMSPanel } from './CMSPanel'
+@@ -42,6 +42,7 @@ import { MathKeyboard } from '@/components/student/MathKeyboard'
+ import { openPdf, renderPageToJpeg } from '@/lib/pdf-pages'
+ /* (2026-و40-w) ورقة العمل: قص رسومات الأسئلة + عرض الجداول/الرسومات في المراجعة */
+ import { ensureFigureUrls } from '@/lib/question-figures'
++import BidiText from '@/components/BidiText'
+ import { WorksheetTableReadonly, WorksheetFigure, parseTableValuesFromText } from '@/components/worksheet/WorksheetParts'
+ /* (2026-و40) الكتب والملازم — تاب مكتبة الكتب للطالب */
+ import { BooksManager } from './BooksManager'
+@@ -2031,7 +2032,7 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
+                                                 {aq.aiExtractedAnswer && (
+                                                   <div className="mt-1 p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40">
+                                                     <p className="text-[9px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">🤖 AI قرأ الإجابة من الصورة:</p>
+-                                                    <p className="text-foreground whitespace-pre-wrap break-words" dir="auto"><FractionText text={aq.aiExtractedAnswer} /></p>
++                                                    <p className="text-foreground whitespace-pre-wrap break-words"><BidiText text={aq.aiExtractedAnswer} /></p>
+                                                     {aq.aiFeedback && (
+                                                       <p className="text-[9px] text-muted-foreground mt-1">التعليق: {aq.aiFeedback}</p>
+                                                     )}
+@@ -3712,6 +3713,11 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+      (ممنوع الاستبدال) مع srcName «الملف الثاني/الثالث/…» على الدفعة الجديدة */
+   const [appendingFile, setAppendingFile] = useState(false)
+   const [fileBatchCount, setFileBatchCount] = useState(0)
++  /* (2026-و44) الكتب المحفوظة في وضع الكتاب — طلب المستر: «الكتاب المضاف باللينك
++     يبقى ثابت في كل مرة — علامة/سهم، لو دوست عليه تظهر صفحات الكتاب» */
++  const [savedBooks, setSavedBooks] = useState<any[]>([])
++  const [savedBooksLoading, setSavedBooksLoading] = useState(false)
++  const [showSavedBooks, setShowSavedBooks] = useState(false)
+ 
+   var resetAll = function() {
+     setStep(1); setExtractType('exam'); setGrade(''); setTitle('')
+@@ -3740,7 +3746,13 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+      3) لو أول ملف → استبدال عادي من غير srcName (سؤال بمصدر واحد بيتعرض «صفحة N» بس) */
+   var finishExtraction = async function (newQs: any[], cropSource: { file?: File | null; doc?: any | null }) {
+     try {
+-      var needCrop = newQs.filter(function (q: any) { return q && q.figure && q.figure.bbox && !q.figure.url }).length
++      /* (و44) العدّاد بيشمل رسومات الاختيارات كمان (optionFigures) */
++      var needCrop = 0
++      newQs.forEach(function (q: any) {
++        if (!q) return
++        if (q.figure && q.figure.bbox && !q.figure.url) needCrop++
++        if (Array.isArray(q.optionFigures)) q.optionFigures.forEach(function (of: any) { if (of && of.bbox && !of.url) needCrop++ })
++      })
+       if (needCrop > 0) {
+         setStatusMsg('جهز الرسومات 0 من ' + needCrop + '…')
+         await ensureFigureUrls(newQs, cropSource || {}, function (done: number, total: number) {
+@@ -4056,6 +4068,53 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+     setBookPdfLoading(false)
+   }
+ 
++  /* (2026-و44) قايمة الكتب المحفوظة (من تاب الكتب والملازم — ملف أو لينك خارجي)
++     اللينك الخارجي بيمر من /api/books/proxy (pdf.js مش بيوصل للينكات بسبب CORS) */
++  var loadSavedBooks = async function () {
++    setSavedBooksLoading(true)
++    try {
++      var r = await fetch('/api/books', { cache: 'no-store' })
++      var j = await r.json()
++      setSavedBooks(j.books || [])
++    } catch (e) { /* صامت */ }
++    setSavedBooksLoading(false)
++  }
++  var openSavedBook = async function (b: any) {
++    if (bookPdfLoading) return
++    setBookPdfLoading(true)
++    try {
++      var blob: Blob | null = null
++      if (b.sourceUrl) {
++        var res = await fetch('/api/books/proxy?url=' + encodeURIComponent(b.sourceUrl), { cache: 'no-store' })
++        if (!res.ok) {
++          var je: any = null
++          try { je = await res.json() } catch (e) {}
++          throw new Error((je && je.error) || 'مقدرتش أجيب الكتاب من اللينك — اتأكد إن اللينك شغال')
++        }
++        blob = await res.blob()
++      } else if (b.filePath) {
++        var res2 = await fetch(b.filePath, { cache: 'no-store' })
++        if (!res2.ok) throw new Error('مقدرتش أجيب ملف الكتاب')
++        blob = await res2.blob()
++      } else {
++        throw new Error('الكتاب ده من غير ملف ولا لينك')
++      }
++      var file = new File([blob], (b.title || 'book') + '.pdf', { type: 'application/pdf' })
++      setBookFile(file)
++      setBookName(b.title || '')
++      var opened = await openPdf(file)
++      bookDocRef.current = opened.doc
++      setBookNumPages(opened.numPages)
++      setBookFrom(1)
++      setBookTo(Math.min(opened.numPages, 30))
++      toast.success('اتفتح «' + (b.title || 'الكتاب') + '» — ' + opened.numPages + ' صفحة — حدد الصفحات واضغط استخراج من الصفحات')
++      setShowSavedBooks(false)
++    } catch (e: any) {
++      toast.error(e && e.message ? e.message : 'حصلت مشكلة في فتح الكتاب')
++    }
++    setBookPdfLoading(false)
++  }
++
+   /* مفتاح منع التكرار: نص السؤال مطبّع (فراغات/ترقيم/طول 120) */
+   var bookQuestionKey = function(q: any) {
+     return String((q && (q.question || q.q)) || '').toLowerCase().replace(/\s+/g, ' ').replace(/[^\u0600-\u06FFa-z0-9]/g, '').substring(0, 120)
+@@ -4306,6 +4365,31 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+                 {bookFile ? bookFile.name : 'اختر ملف الكتاب (PDF)'}
+               </Button>
+             </div>
++            {/* (2026-و44) الكتب المحفوظة — سهم يفتح قايمة الكتب المضافة من تاب
++               «الكتب والملازم» (ملف أو لينك) — دوست على الكتاب يفتح وتحدد صفحاته */}
++            <div className="space-y-1.5">
++              <button type="button" onClick={function () { var next = !showSavedBooks; setShowSavedBooks(next); if (next && savedBooks.length === 0 && !savedBooksLoading) loadSavedBooks() }} className="w-full flex items-center justify-between rounded-md border border-sky-300/60 bg-white/70 dark:bg-transparent px-3 py-2 text-sm font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-100/60 dark:hover:bg-sky-900/30 transition-colors cursor-pointer">
++                <span>📚 الكتب المحفوظة {savedBooks.length > 0 ? '(' + savedBooks.length + ')' : ''} — دوس على الكتاب يفتح على طول</span>
++                <ChevronDown className={'h-4 w-4 transition-transform' + (showSavedBooks ? ' rotate-180' : '')} />
++              </button>
++              {showSavedBooks && (
++                <div className="max-h-60 overflow-y-auto custom-scrollbar rounded-md border border-border">
++                  {savedBooksLoading ? (
++                    <div className="flex items-center justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
++                  ) : savedBooks.length === 0 ? (
++                    <p className="text-xs text-muted-foreground text-center py-4 px-3">مفيش كتب محفوظة — ضيف الكتب من تاب «الكتب والملازم» بالملف أو باللينك وهتلاقيها هنا ثابتة</p>
++                  ) : savedBooks.map(function (b: any) {
++                    var srcLabel = b.sourceUrl ? '🔗 لينك خارجي' : (b.filePath ? '📄 ملف محفوظ' : '')
++                    return (
++                      <button key={b.id} type="button" onClick={function () { openSavedBook(b) }} className="w-full text-right px-3 py-2 border-b border-border/50 last:border-0 hover:bg-muted/60 transition-colors cursor-pointer">
++                        <p className="text-xs font-bold truncate">📕 {b.title}</p>
++                        <p className="text-[10px] text-muted-foreground">{srcLabel}{b.grade ? ' — ' + b.grade : ''}</p>
++                      </button>
++                    )
++                  })}
++                </div>
++              )}
++            </div>
+             {bookFile && <p className="text-xs text-muted-foreground text-center">{(bookFile.size / 1024 / 1024).toFixed(1)} MB</p>}
+             {bookNumPages > 0 && <p className="text-xs text-center font-medium text-sky-600 dark:text-sky-400">عدد صفحات الكتاب: {bookNumPages}</p>}
+             <div className="grid grid-cols-2 gap-2">
+@@ -4467,17 +4551,24 @@ function AIExtractionPanel({ onRefresh }: { onRefresh: () => void }) {
+                       {(q.options || []).map(function(opt, oi) {
+                         /* (و43) صورة الاختيار المرفوعة (optionFigures[i] = { url }) */
+                         var ofImg = q.optionFigures && q.optionFigures[oi]
++                        /* (و44) الاختيار ده فيه رسمة من الملف (bbox) ولسه متلقطتش → تنبيه واضح */
++                        var ofMissing = !!(q.optionFigures && q.optionFigures[oi] && q.optionFigures[oi].bbox && !q.optionFigures[oi].url)
+                         return (
+                           <div key={oi} className="space-y-1">
+                             <div className="flex items-center gap-1.5">
+                               <button type="button" className={"w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors " + (q.correct === oi ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30 hover:border-primary/50')} onClick={function() { updateQuestion(qi, 'correct', oi) }}>{String.fromCharCode(65 + oi)}</button>
+                               <Input value={opt} onChange={function(e) { updateQuestion(qi, 'option_' + oi, e.target.value) }} placeholder={"اختيار " + (oi + 1)} className="h-8 text-xs" />
+-                              {/* (و43) زرار رفع صورة للاختيار — الاختيار اللي هو صورة في الملف الأصلي */}
+-                              <label title="ارفع صورة للاختيار" className="shrink-0 h-8 px-1.5 inline-flex items-center justify-center rounded-md border border-border text-[11px] cursor-pointer hover:bg-muted transition-colors">
++                              {/* (و43) زرار رفع صورة للاختيار — الاختيار اللي هو صورة في الملف الأصلي
++                                 (و44) الاختيار الناقص رسمته بيبقى كهرماني بنبض عشان المستر يشوفه فورًا */}
++                              <label title={ofMissing ? 'الاختيار ده صورة في الملف الأصلي — ارفع صورته عشان تظهر للطالب' : 'ارفع صورة للاختيار'}
++                                className={"shrink-0 h-8 px-1.5 inline-flex items-center justify-center rounded-md border text-[11px] cursor-pointer transition-colors " + (ofMissing ? 'border-amber-500 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 animate-pulse font-bold' : 'border-border hover:bg-muted')}>
+                                 📷
+                                 <input type="file" accept="image/*" hidden onChange={function(e) { var f = e.target.files && e.target.files[0]; e.target.value = ''; uploadOptionFigure(qi, oi, f) }} />
+                               </label>
+                             </div>
++                            {ofMissing && (
++                              <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400">⚠ الاختيار ده صورة في الملف الأصلي — دوس 📷 وارفع صورته</p>
++                            )}
+                             {ofImg && ofImg.url && (
+                               <span className="relative inline-flex pr-6">
+                                 {/* eslint-disable-next-line @next/next/no-img-element */}
+diff --git a/src/components/landing/AuthPages.tsx b/src/components/landing/AuthPages.tsx
+index 1379db0..e15dad0 100755
+--- a/src/components/landing/AuthPages.tsx
++++ b/src/components/landing/AuthPages.tsx
+@@ -131,6 +131,7 @@ export function LoginView() {
+   var store = useAppStore()
+   var setView = store.setView
+   var setCurrentStudent = store.setCurrentStudent
++  var setCurrentParent = store.setCurrentParent
+   var setShowAdminLogin = store.setShowAdminLogin
+   var phoneState = useState('')
+   var studentPhone = phoneState[0]
+@@ -202,6 +203,31 @@ export function LoginView() {
+         if (normPhoneClient(students[i].phone) === typedPhone) { student = students[i]; break }
+       }
+       if (!student) {
++        /* (2026-و44) طلب المستر: «تسجيل ولي الأمر يبقى في نفس صفحة تسجيل الدخول —
++           لو كتب رقم التليفون والباسورد بتاعه يخش على طول» — الدخول كطالب بيتجرب
++           الأول، ولو فشل بنجرب الدخول كولي أمر من نفس الصفحة */
++        try {
++          var pRes = await fetch('/api/parents/login', {
++            method: 'POST',
++            headers: { 'Content-Type': 'application/json' },
++            body: JSON.stringify({ phone: studentPhone.trim(), password: normPasswordInput(studentPassword) }),
++          })
++          var pData = await pRes.json()
++          if (pRes.ok && pData && pData.success && pData.parent && pData.parent.id) {
++            var pStu = pData.parent.student
++            setCurrentParent({
++              id: pData.parent.id,
++              name: pData.parent.name || 'ولي أمر',
++              phone: pData.parent.phone,
++              studentId: pData.parent.studentId,
++              student: pStu ? { id: pStu.id, name: pStu.name, grade: pStu.grade, status: pStu.status, isPaidAccess: !!pStu.isPaidAccess } : null,
++            })
++            setView('parent-portal')
++            toast.success('أهلاً بيك 👋 — بتتابع حساب ' + ((pStu && pStu.name) || 'ابنك'))
++            setStudentPassword('')
++            return
++          }
++        } catch (pErr) { /* مش ولي أمر — نكمل برسالة الخطأ العادية */ }
+         /* (2026-و37) رسالة مفصولة حسب السبب الحقيقي — بدل «الباسورد أو الرقم غلط»
+            الموحّدة اللي كانت بتلخبط الطالب الصح: مين فيهم الغلط؟ */
+         if (data && data.reason === 'not_found') {
+diff --git a/src/components/parent/ParentPortal.tsx b/src/components/parent/ParentPortal.tsx
+index 3dd4576..062d21d 100644
+--- a/src/components/parent/ParentPortal.tsx
++++ b/src/components/parent/ParentPortal.tsx
+@@ -23,6 +23,7 @@ import { useAppStore } from '@/stores/app-store'
+ import { UserCheck, Loader2, RefreshCw, LogOut, BookOpenCheck, ClipboardList, AlertCircle, TrendingUp, MonitorPlay, ChevronDown } from 'lucide-react'
+ import { toast } from 'sonner'
+ import FractionText, { hasMathMarkup } from '@/components/FractionText'
++import BidiText from '@/components/BidiText'
+ 
+ interface ResultRow {
+   id: string
+@@ -136,7 +137,7 @@ function ResultList({ rows, icon, emptyMsg, type, answersOpen, openId, detailFor
+                           {qq.kind === 'writing' && qq.feedback && (
+                             <div className="rounded-lg bg-muted/60 p-2 mt-1">
+                               <p className="text-[11px] font-bold mb-0.5 flex items-center gap-1"><span>📝</span> ملاحظة المصحح الذكي:</p>
+-                              <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="auto">{qq.feedback}</p>
++                              <p className="text-xs text-foreground whitespace-pre-wrap break-words"><BidiText text={qq.feedback} /></p>
+                             </div>
+                           )}
+                         </div>
+@@ -165,8 +166,11 @@ export function ParentPortal() {
+   var loading = ld[0]
+   var setLoading = ld[1]
+ 
+-  /* (2026-و39) حالة إجابات الابن: التوجل + الصف المفتوح + كاش التفاصيل */
+-  var saState = useState(false)
++  /* (2026-و39) حالة إجابات الابن: التوجل + الصف المفتوح + كاش التفاصيل
++     (2026-و44) طلب المستر: «لو داس على اسم الامتحان أو الواجب يشوف درجته
++     كاملة والإجابات بتاعته» — الصروف بقت قابلة للفتح **على طول** من غير
++     ما يدوس اسم الابن الأول */
++  var saState = useState(true)
+   var showAnswers = saState[0]
+   var setShowAnswers = saState[1]
+   var openState = useState('')
+diff --git a/src/components/student/FigurePointEditor.tsx b/src/components/student/FigurePointEditor.tsx
+new file mode 100644
+index 0000000..aabc03c
+--- /dev/null
++++ b/src/components/student/FigurePointEditor.tsx
+@@ -0,0 +1,168 @@
++'use client'
++
++// ============================================================
++// (2026-و44) FigurePointEditor — «حط نقط على الرسمة» — طلب المستر:
++//   «نخلي حاجة أسهل: الرسمة مش محلولة الطالب يقدر يحل عليها — يختار
++//    مكان النقط والمكان اللي يدوس عليه تحط فيه نقطة … وبعد كده يعمل
++//    للرسمة (صورة) — طريقتين متاحين: نقط أو صورة من الكشكول»
++//
++// الفكرة الذكية: الطالب يدوس على الرسمة في الأماكن اللي عايز يحط فيها
++// نقط → بنرسم النقط دي على نسخة من صورة الرسمة (canvas) → نرفع الصورة
++// المركبة → بنضيف ماركر «[📷 صورة مرفقة: …]» لإجابته زي الصورة الملتقطة
++// بالظبط — فالمصحح الذكي بيشوف الرسمة بنقط الطالب وبيحكم عليها
++// (بالتسامح المعتاد: نقطة قريبة = صح — STEP 6.8 في المصحح).
++// ============================================================
++
++import * as React from 'react'
++import { chunkedUpload } from '@/lib/chunked-upload'
++import { Loader2, MousePointerClick, Send, X } from 'lucide-react'
++import { toast } from 'sonner'
++
++interface PlacedPoint { x: number; y: number } // نسب 0..1 من الرسمة
++
++export function FigurePointEditor({ figureUrl, questionLabel, onAttached, onClose }: {
++  figureUrl: string
++  questionLabel?: string
++  onAttached: (markerText: string) => void
++  onClose: () => void
++}) {
++  var ptsState = React.useState<PlacedPoint[]>([])
++  var pts = ptsState[0]
++  var setPts = ptsState[1]
++  var busyState = React.useState(false)
++  var busy = busyState[0]
++  var setBusy = busyState[1]
++  var wrapRef = React.useRef<HTMLDivElement | null>(null)
++
++  /* تحويل ضغطة على الرسمة لإحداثيات نسبية 0..1 */
++  var handleClick = function (e: React.MouseEvent<HTMLDivElement>) {
++    if (busy) return
++    var wrap = wrapRef.current
++    if (!wrap) return
++    var rect = wrap.getBoundingClientRect()
++    var x = (e.clientX - rect.left) / Math.max(1, rect.width)
++    var y = (e.clientY - rect.top) / Math.max(1, rect.height)
++    x = Math.min(1, Math.max(0, x))
++    y = Math.min(1, Math.max(0, y))
++    /* دوس قريب من نقطة موجودة (≥18px) = شيلها بدل ما تضيف غيرها */
++    var threshold = 18 / Math.max(1, Math.min(rect.width, rect.height))
++    var hitIdx = -1
++    for (var i = 0; i < pts.length; i++) {
++      var dx = pts[i].x - x
++      var dy = pts[i].y - y
++      if (Math.sqrt(dx * dx + dy * dy) <= threshold) { hitIdx = i; break }
++    }
++    if (hitIdx >= 0) setPts(pts.filter(function (_, k) { return k !== hitIdx }))
++    else setPts(pts.concat([{ x: x, y: y }]))
++  }
++
++  /* تركيب الصورة النهائية: الرسمة الأصلية + نقط الطالب مرسومة عليها */
++  var composeAndAttach = async function () {
++    if (busy) return
++    if (pts.length === 0) {
++      toast.error('حط نقطة واحدة على الأقل الأول — دوس على مكان النقطة على الرسمة')
++      return
++    }
++    setBusy(true)
++    try {
++      var img = new Image()
++      img.src = figureUrl
++      await new Promise<void>(function (res, rej) {
++        img.onload = function () { res() }
++        img.onerror = function () { rej(new Error('مقدرتش أحمّل صورة الرسمة')) }
++      })
++      var w = img.naturalWidth || img.width || 800
++      var h = img.naturalHeight || img.height || 600
++      var canvas = document.createElement('canvas')
++      canvas.width = w; canvas.height = h
++      var ctx = canvas.getContext('2d')
++      if (!ctx) throw new Error('canvas غير مدعم')
++      ctx.fillStyle = '#ffffff'
++      ctx.fillRect(0, 0, w, h)
++      ctx.drawImage(img, 0, 0, w, h)
++      /* نقط الطالب — دوائر كحلية بحد أبيض واضح زي ما المعلم بيعلم بجابه */
++      var r = Math.max(5, Math.round(Math.min(w, h) * 0.018))
++      for (var i = 0; i < pts.length; i++) {
++        var cx = Math.round(pts[i].x * w)
++        var cy = Math.round(pts[i].y * h)
++        ctx.beginPath()
++        ctx.arc(cx, cy, r, 0, Math.PI * 2)
++        ctx.fillStyle = '#1e3a8a'
++        ctx.fill()
++        ctx.lineWidth = Math.max(2, Math.round(r * 0.35))
++        ctx.strokeStyle = '#ffffff'
++        ctx.stroke()
++      }
++      var blob = await new Promise<Blob | null>(function (res) {
++        canvas.toBlob(function (b) { res(b) }, 'image/jpeg', 0.85)
++      })
++      if (!blob) throw new Error('مقدرتش أجهز الصورة')
++      var file = new File([blob], 'points-' + Date.now() + '.jpg', { type: 'image/jpeg' })
++      var up = await chunkedUpload(file, 'homework-answers')
++      if (!up || !up.filePath) throw new Error('فشل رفع الصورة — جرب تاني')
++      toast.success('النقط اتسجلت على الرسمة ✓ هتترفع مع إجابتك')
++      onAttached('\n[📷 صورة مرفقة: ' + up.filePath + ']\n')
++      onClose()
++    } catch (e: any) {
++      toast.error(e && e.message ? e.message : 'حصلت مشكلة — جرب تاني')
++    }
++    setBusy(false)
++  }
++
++  return (
++    <div className="mt-2 rounded-xl border-2 border-sky-300 bg-sky-50/70 dark:bg-sky-950/20 dark:border-sky-800 p-3 space-y-2">
++      <div className="flex items-center justify-between gap-2 flex-wrap">
++        <p className="text-[11px] font-bold text-sky-800 dark:text-sky-300 flex items-center gap-1.5">
++          <MousePointerClick className="h-3.5 w-3.5" />
++          حط نقط على الرسمة{questionLabel ? ' — ' + questionLabel : ''} — دوس على المكان وربع هتتحط نقطة، ودوس عليها تاني لو عايز تشيلها
++        </p>
++        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="إغلاق">
++          <X className="h-4 w-4" />
++        </button>
++      </div>
++      <div
++        ref={wrapRef}
++        onClick={handleClick}
++        className="relative inline-block max-w-full cursor-crosshair select-none"
++        role="application"
++        aria-label="اضغط على الرسمة لتحديد النقط"
++      >
++        {/* eslint-disable-next-line @next/next/no-img-element */}
++        <img src={figureUrl} alt="رسمة السؤال — دوس عليها لتحط النقط" className="max-w-full max-h-80 rounded-lg border border-slate-300 dark:border-slate-700 bg-white object-contain pointer-events-none" />
++        {pts.map(function (p, i) {
++          return (
++            <span
++              key={i}
++              className="absolute rounded-full bg-blue-900 border-2 border-white shadow-md pointer-events-none"
++              style={{
++                width: 14,
++                height: 14,
++                left: 'calc(' + (p.x * 100) + '% - 7px)',
++                top: 'calc(' + (p.y * 100) + '% - 7px)',
++              }}
++              aria-label={'نقطة ' + (i + 1)}
++            />
++          )
++        })}
++      </div>
++      <div className="flex items-center gap-2">
++        <button
++          type="button"
++          disabled={busy || pts.length === 0}
++          onClick={composeAndAttach}
++          className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-bold disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
++        >
++          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
++          {busy ? 'بيجهز الصورة…' : 'ثبّت النقط وارفعها'}
++        </button>
++        {pts.length > 0 && (
++          <button type="button" onClick={function () { setPts([]) }} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer">
++            امسح كل النقط ({pts.length})
++          </button>
++        )}
++      </div>
++    </div>
++  )
++}
++
++export default FigurePointEditor
+diff --git a/src/components/student/NotificationsBell.tsx b/src/components/student/NotificationsBell.tsx
+new file mode 100644
+index 0000000..93df3c3
+--- /dev/null
++++ b/src/components/student/NotificationsBell.tsx
+@@ -0,0 +1,144 @@
++'use client'
++
++// ============================================================
++// (2026-و44) NotificationsBell — جرس الإشعارات للطالب
++// طلب المستر: «لما الأدمن يرد على الطالب يجيله إشعار إن الشكوى اتحلت …
++//   في الكتب والملازم لو اتضافت حاجة يظهر له إشعار … أي حاجة يتضاف
++//   تظهر له إشعار للطالب»
++// بيدور كل دقيقة على /api/notifications + بادج بالعدد غير المقروء +
++// لستة منسدلة (أقصى ارتفاع مع سكرول) + «علّم الكل مقروء».
++// ============================================================
++
++import * as React from 'react'
++import { Bell, CheckCheck } from 'lucide-react'
++import { toast } from 'sonner'
++
++interface NotifItem {
++  id: string
++  type: string
++  title: string
++  body: string
++  read: boolean
++  createdAt: string
++}
++
++var TYPE_ICONS: Record<string, string> = {
++  complaint_reply: '💬',
++  book: '📕',
++  exam: '📝',
++  homework: '📚',
++  announcement: '📣',
++  general: '🔔',
++}
++
++export function NotificationsBell({ studentId }: { studentId: string }) {
++  var openState = React.useState(false)
++  var open = openState[0]
++  var setOpen = openState[1]
++  var itemsState = React.useState<NotifItem[]>([])
++  var items = itemsState[0]
++  var setItems = itemsState[1]
++  var unreadState = React.useState(0)
++  var unread = unreadState[0]
++  var setUnread = unreadState[1]
++  var boxRef = React.useRef<HTMLDivElement | null>(null)
++
++  var load = React.useCallback(async function () {
++    if (!studentId) return
++    try {
++      var res = await fetch('/api/notifications?studentId=' + encodeURIComponent(studentId), { cache: 'no-store' })
++      var json = await res.json()
++      if (res.ok) {
++        setItems(json.notifications || [])
++        setUnread(Number(json.unreadCount) || 0)
++      }
++    } catch (e) { /* صامت — الإشعارات مش سبب لكسر حاجة */ }
++  }, [studentId])
++
++  React.useEffect(function () {
++    if (!studentId) return
++    load()
++    var t = setInterval(load, 60000)
++    return function () { clearInterval(t) }
++  }, [studentId, load])
++
++  /* اقفال المنسدلة بالضغط بره */
++  React.useEffect(function () {
++    if (!open) return
++    var onDoc = function (e: MouseEvent) {
++      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false)
++    }
++    document.addEventListener('mousedown', onDoc)
++    return function () { document.removeEventListener('mousedown', onDoc) }
++  }, [open])
++
++  var markAll = async function () {
++    try {
++      await fetch('/api/notifications', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ studentId: studentId, action: 'read-all' }),
++      })
++      setItems(function (prev) { return prev.map(function (n) { return Object.assign({}, n, { read: true }) }) })
++      setUnread(0)
++      toast.success('تمام — كل الإشعارات اتقريت ✓')
++    } catch (e) { /* صامت */ }
++  }
++
++  if (!studentId) return null
++
++  return (
++    <div className="relative" ref={boxRef}>
++      <button
++        type="button"
++        onClick={function () { setOpen(!open); if (!open) load() }}
++        className="relative inline-flex items-center justify-center h-9 w-9 rounded-lg hover:bg-muted transition-colors cursor-pointer"
++        aria-label={'الإشعارات' + (unread > 0 ? ' — عندك ' + unread + ' إشعار جديد' : '')}
++      >
++        <Bell className="h-4.5 w-4.5" />
++        {unread > 0 && (
++          <span className="absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
++            {unread > 9 ? '9+' : unread}
++          </span>
++        )}
++      </button>
++      {open && (
++        <div className="absolute left-0 top-full mt-2 z-50 w-[min(92vw,360px)] rounded-xl border border-border bg-card shadow-xl overflow-hidden">
++          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/40">
++            <p className="text-xs font-bold">الإشعارات {unread > 0 ? '(' + unread + ' جديد)' : ''}</p>
++            {unread > 0 && (
++              <button type="button" onClick={markAll} className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer">
++                <CheckCheck className="h-3.5 w-3.5" /> علّم الكل مقروء
++              </button>
++            )}
++          </div>
++          <div className="max-h-96 overflow-y-auto custom-scrollbar">
++            {items.length === 0 ? (
++              <p className="text-xs text-muted-foreground text-center py-6">مفيش إشعارات لسه — أول ما المستر يبعت حاجة هتلاقيها هنا</p>
++            ) : (
++              items.map(function (n: NotifItem) {
++                return (
++                  <div key={n.id} className={'px-3 py-2.5 border-b border-border/60 last:border-0 ' + (n.read ? 'opacity-70' : 'bg-primary/5')}>
++                    <div className="flex items-start gap-2">
++                      <span className="shrink-0 text-sm mt-0.5">{TYPE_ICONS[n.type] || '🔔'}</span>
++                      <div className="min-w-0 flex-1">
++                        <p className={'text-xs leading-snug break-words ' + (n.read ? 'text-foreground' : 'font-bold text-foreground')}>{n.title}</p>
++                        {n.body && <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">{n.body}</p>}
++                        <p className="text-[10px] text-muted-foreground mt-1">
++                          {new Date(n.createdAt).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
++                        </p>
++                      </div>
++                      {!n.read && <span className="shrink-0 h-2 w-2 rounded-full bg-red-500 mt-1.5" />}
++                    </div>
++                  </div>
++                )
++              })
++            )}
++          </div>
++        </div>
++      )}
++    </div>
++  )
++}
++
++export default NotificationsBell
+diff --git a/src/components/student/StudentPortal.tsx b/src/components/student/StudentPortal.tsx
+index 8b2a4d8..9b7c1c4 100755
+--- a/src/components/student/StudentPortal.tsx
++++ b/src/components/student/StudentPortal.tsx
+@@ -22,6 +22,11 @@ import { SecurePlayerModal } from '@/components/student/SecurePlayerModal'
+ import { StudentComplaints } from '@/components/student/StudentComplaints'
+ import { BooksTab } from '@/components/student/BooksTab'
+ import { FractionText } from '@/components/FractionText'
++import BidiText from '@/components/BidiText'
++/* (2026-و44) «حط نقط على الرسمة» — طلب المستر: حل الرسمة بضغطة على المكان أو صورة من الكشكول */
++import { FigurePointEditor } from '@/components/student/FigurePointEditor'
++/* (2026-و44) جرس الإشعارات + بادج المجتمع — أي حاجة جديدة توصل للطالب */
++import { NotificationsBell } from '@/components/student/NotificationsBell'
+ import { normalizeCorrectKey } from '@/lib/correct-key'
+ /* (2026-و40-w) ورقة العمل: جداول قابلة للكتابة + رسومات مقصوصة + تجميع صفحات المصدر */
+ import {
+@@ -69,6 +74,52 @@ export function StudentPortal() {
+   const grade = currentStudent?.grade || ''
+   const studentId = currentStudent?.id || ''
+ 
++  /* ===== (2026-و44) بادج «المجتمع» — طلب المستر: «لو جه أكتر كل رسالة
++     يجيله إشعار فوق على القسم» — بنقارن آخر رسالة (id) بآخر واحد شافه
++     (localStorage) — وبنفتح التاب بيسجل إنه شاف. بيدور كل 60 ثانية. */
++  const [communityNewCount, setCommunityNewCount] = useState(0)
++  const communitySeenKey = 'mg_lastSeenCommunity_' + (grade || 'all')
++  useEffect(function () {
++    if (!grade || !studentId) return
++    var alive = true
++    var check = async function () {
++      try {
++        var r = await fetch('/api/discussions?grade=' + encodeURIComponent(grade) + '&pageSize=1', { cache: 'no-store' })
++        var j = await r.json()
++        var latest = j && j.discussions && j.discussions[0] ? String(j.discussions[0].id) : ''
++        if (!alive) return
++        if (latest) {
++          var seen = ''
++          try { seen = localStorage.getItem(communitySeenKey) || '' } catch (e) {}
++          if (seen && latest !== seen) {
++            /* جاب رسايل جديدة بعد آخر زيارة */
++            setCommunityNewCount(1)
++          } else if (!seen) {
++            /* أول مرة — مننبّهش بالغباء، بنسجل بس */
++            try { localStorage.setItem(communitySeenKey, latest) } catch (e) {}
++          }
++        }
++      } catch (e) {}
++    }
++    check()
++    var t = setInterval(check, 60000)
++    return function () { alive = false; clearInterval(t) }
++  }, [grade, studentId, communitySeenKey])
++  /* فتح تاب المجتمع = اتشاف */
++  useEffect(function () {
++    if (activeTab !== 'discussions' || !grade) return
++    setCommunityNewCount(0)
++    var markSeen = async function () {
++      try {
++        var r = await fetch('/api/discussions?grade=' + encodeURIComponent(grade) + '&pageSize=1', { cache: 'no-store' })
++        var j = await r.json()
++        var latest = j && j.discussions && j.discussions[0] ? String(j.discussions[0].id) : ''
++        if (latest) { try { localStorage.setItem(communitySeenKey, latest) } catch (e) {} }
++      } catch (e) {}
++    }
++    markSeen()
++  }, [activeTab, grade, communitySeenKey])
++
+   useEffect(() => {
+     if (!grade || !studentId) return
+     let cancelled = false
+@@ -338,10 +389,14 @@ export function StudentPortal() {
+           <h1 className="font-bold text-sm sm:text-base truncate">{currentStudent?.name?.split(' ')[0]}</h1>
+           <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">{grade}</Badge>
+         </div>
+-        <Button variant="ghost" size="sm" onClick={logout} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+-          <LogOut className="h-4 w-4 ml-1" />
+-          <span className="hidden sm:inline">خروج</span>
+-        </Button>
++        <div className="flex items-center gap-2">
++          {/* (2026-و44) جرس الإشعارات — رد الشكوى/الكتب/الامتحانات/الواجبات/الإعلانات */}
++          <NotificationsBell studentId={studentId} />
++          <Button variant="ghost" size="sm" onClick={logout} className="text-destructive hover:text-destructive hover:bg-destructive/10">
++            <LogOut className="h-4 w-4 ml-1" />
++            <span className="hidden sm:inline">خروج</span>
++          </Button>
++        </div>
+       </div>
+ 
+       {/* Tab Bar */}
+@@ -356,6 +411,10 @@ export function StudentPortal() {
+           >
+             <tab.icon className="h-4 w-4" />
+             {tab.label}
++            {/* (2026-و44) بادج رسايل جديدة فوق على القسم — طلب المستر حرفيًا */}
++            {tab.id === 'discussions' && communityNewCount > 0 && (
++              <span className="ml-1 min-w-[16px] h-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] font-bold inline-flex items-center justify-center">جديد</span>
++            )}
+           </button>
+         ))}
+       </div>
+@@ -753,6 +812,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+   /* (2026-و40-w) جداول ورقة العمل: قيم الطالب في الخانات — مفتاحها displayIdx
+      (وضع ورقة العمل بيتعرض بالترتيب الأصلي — displayIdx = origIdx) */
+   const [hwTableAnswers, setHwTableAnswers] = useState<Record<string, Record<number, string[][]>>>({})
++  /* (2026-و44) محرر النقط على الرسمة — مفتاحه hw:<id>:<displayIdx> */
++  const [pointsEditorFor, setPointsEditorFor] = useState<string>('')
+ 
+   /* ===== (2026-و37) مسودة الواجب المحفوظة تلقائيًا — زي الامتحان بالظبط:
+      أي reload أثناء كتابة الحل (أو رفع الورقة) ما يضيعش إجابات الطالب */
+@@ -1188,7 +1249,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                               <p className={'text-xs font-bold mb-1 flex items-center gap-1.5 ' + (wa.isCorrect ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400')}>
+                                 <span>📝</span> ملاحظة المصحح الذكي:
+                               </p>
+-                              <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words" style={{ textAlign: 'right' }}><FractionText text={wa.aiFeedback || wa.feedback} /></p>
++                              <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words"><BidiText text={wa.aiFeedback || wa.feedback} /></p>
+                             </div>
+                           )}
+                           <div className="space-y-1">
+@@ -1406,7 +1467,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                           <p className={'text-xs font-bold mb-1 flex items-center gap-1.5 ' + (writingAns.isCorrect === true ? 'text-emerald-700 dark:text-emerald-400' : writingAns.isCorrect === false ? 'text-red-700 dark:text-red-400' : 'text-foreground')}>
+                             <span>📝</span> ملاحظة المصحح الذكي:
+                           </p>
+-                          <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words" style={{ textAlign: 'right' }}><FractionText text={writingAns.aiFeedback || writingAns.feedback} /></p>
++                          <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words" style={{ textAlign: 'right' }}><BidiText text={writingAns.aiFeedback || writingAns.feedback} /></p>
+                         </div>
+                       </div>
+                     )}
+@@ -1497,7 +1558,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                         <div className="pl-8 mt-1">
+                           <div className="p-2.5 rounded-xl border-2 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700">
+                             <p className="text-xs font-bold mb-1 text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5"><span>🤖</span> ملاحظة المصحح الذكي — ليه الإجابة دي:</p>
+-                            <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words"><FractionText text={nt} /></p>
++                            <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words"><BidiText text={nt} /></p>
+                           </div>
+                         </div>
+                       )
+@@ -1808,6 +1869,29 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                                     />
+                                   )}
+                                   {q.figure && <WorksheetFigure figure={q.figure} />}
++                                  {qIsWriting && q.figure && q.figure.url && (
++                                    /* (2026-و44) «حط نقط على الرسمة» — الطريقة الأولى: يدوس على مكان النقطة،
++                                       والثانية: يصور الحل من الكشكول — الاتنين متاحين والمصحح بيحكم بالاتنين */
++                                    <div className="mt-1">
++                                      <button type="button" onClick={function () { setPointsEditorFor(pointsEditorFor === 'hw:' + hw.id + ':' + displayIdx ? '' : 'hw:' + hw.id + ':' + displayIdx) }} className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline underline-offset-2 cursor-pointer">
++                                        🖱 حط نقط على الرسمة (أو صوّرها من الكشكول 📷)
++                                      </button>
++                                      {pointsEditorFor === 'hw:' + hw.id + ':' + displayIdx && (
++                                        <FigurePointEditor
++                                          figureUrl={q.figure.url}
++                                          onAttached={function (marker: string) {
++                                            setHwAnswers(function (prev) {
++                                              var a = { ...prev }
++                                              var cur = typeof a[hw.id]?.[displayIdx] === 'string' ? (a[hw.id][displayIdx] as string) : ''
++                                              a[hw.id] = { ...(a[hw.id] || {}), [displayIdx]: (cur + marker).trim() }
++                                              return a
++                                            })
++                                          }}
++                                          onClose={function () { setPointsEditorFor('') }}
++                                        />
++                                      )}
++                                    </div>
++                                  )}
+                                   {qIsWriting ? (
+                                     <div dir="ltr">
+                                       <MathKeyboard
+@@ -1901,6 +1985,10 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                   {/* (2026-و40-w) وضع ورقة العمل بيعرض المقالي جوه صفحاته — القسم القديم مقفول عليه */}
+                   {!isWorksheet && hasWriting && (
+                     <div className="space-y-4">
++                      {/* (2026-و44) رسالة قصيرة فوق الحل — طلب المستر حرفيًا */}
++                      <p className="text-[11px] font-bold text-sky-700 dark:text-sky-300 rounded-lg border border-sky-300/60 bg-sky-50/70 dark:bg-sky-950/30 dark:border-sky-800/60 px-3 py-2">
++                        ✏️ السؤال اللي فيه رسمة: اعمل الرسمة في كشكولك وصوّرها وارفع الصورة 📷 — أو دوس «حط نقط على الرسمة» على طول. والجدول اكتبه هنا بالكيبورد عادي — الاتنين بيحتسبوا في التصحيح.
++                      </p>
+                       {hasMCQ && <div className="border-t pt-3"><p className="text-xs font-semibold text-amber-600 dark:text-amber-400">الأسئلة المقالية:</p></div>}
+                       {displayWriting.map(function(q: any, wi: number) {
+                         var displayIdx = displayMcq.length + wi
+@@ -1912,6 +2000,30 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                               <span className="text-muted-foreground text-xs ml-2">({pts} pts)</span>
+                               <Badge variant="outline" className="text-[9px] ml-2 border-amber-500/40 text-amber-600">Writing</Badge>
+                             </p>
++                            {q.figure && <div dir="rtl" className="pt-1"><WorksheetFigure figure={q.figure} /></div>}
++                            {q.figure && q.figure.url && (
++                              /* (2026-و44) «حط نقط على الرسمة» — بدل ما تصور من الكشكول،
++                                 دوس على المكان وهنرفع الرسمة بنقطك للمصحح الذكي */
++                              <div dir="rtl" className="mt-1">
++                                <button type="button" onClick={function () { setPointsEditorFor(pointsEditorFor === 'hw:' + hw.id + ':' + displayIdx ? '' : 'hw:' + hw.id + ':' + displayIdx) }} className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline underline-offset-2 cursor-pointer">
++                                  🖱 حط نقط على الرسمة (أو صوّرها من الكشكول 📷)
++                                </button>
++                                {pointsEditorFor === 'hw:' + hw.id + ':' + displayIdx && (
++                                  <FigurePointEditor
++                                    figureUrl={q.figure.url}
++                                    onAttached={function (marker: string) {
++                                      setHwAnswers(function (prev) {
++                                        var a = { ...prev }
++                                        var cur = typeof a[hw.id]?.[displayIdx] === 'string' ? (a[hw.id][displayIdx] as string) : ''
++                                        a[hw.id] = { ...(a[hw.id] || {}), [displayIdx]: (cur + marker).trim() }
++                                        return a
++                                      })
++                                    }}
++                                    onClose={function () { setPointsEditorFor('') }}
++                                  />
++                                )}
++                              </div>
++                            )}
+                             <div dir="ltr">
+                               <MathKeyboard
+                                 value={typeof hwAnswers[hw.id]?.[displayIdx] === 'string' ? (hwAnswers[hw.id]?.[displayIdx] as string) : ''}
+@@ -2138,6 +2250,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+   const [submitting, setSubmitting] = useState(false)
+   /* 2026-و20 — ممنوع تسليم الامتحان لحد ما صور ورقة الحل توصل كاملة */
+   const [examPhotoBusy, setExamPhotoBusy] = useState(false)
++  /* (2026-و44) محرر النقط على الرسمة في الامتحان — displayIdx المفتوح أو -1 */
++  const [examPointsEditor, setExamPointsEditor] = useState<number>(-1)
+   const [examQuestions, setExamQuestions] = useState<any[]>([])
+   const [examShuffleMap, setExamShuffleMap] = useState<number[]>([])
+   const [examSubmitted, setExamSubmitted] = useState(false)
+@@ -2757,7 +2871,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                             if (nt) return (
+                               <div className="mt-1 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25">
+                                 <p className="text-[11px] font-bold text-emerald-600 mb-0.5">🤖 ملاحظة المصحح الذكي — ليه الإجابة دي:</p>
+-                                <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words"><FractionText text={nt} /></p>
++                                <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words"><BidiText text={nt} /></p>
+                               </div>
+                             )
+                             if (examMcqNotesLoading) return (
+@@ -2810,7 +2924,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                             <p className={'text-xs font-bold mb-1 flex items-center gap-1.5 ' + (w.isCorrect ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400')}>
+                               <span>📝</span> ملاحظة المصحح الذكي:
+                             </p>
+-                            <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words" style={{ textAlign: 'right' }}><FractionText text={w.feedback} /></p>
++                            <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words"><BidiText text={w.feedback} /></p>
+                           </div>
+                         )}
+                         <p className="text-xs text-foreground whitespace-pre-wrap break-words" dir="auto">إجابتك: <FractionText text={w.answer || '(فارغ)'} /></p>
+@@ -2971,6 +3085,23 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                           </div>
+                         )}
+                         {q.figure && <WorksheetFigure figure={q.figure} />}
++                        {qIsWriting && q.figure && q.figure.url && !examTimeUp && (
++                          /* (2026-و44) «حط نقط على الرسمة» — طريقتين: نقط على الشاشة أو صورة من الكشكول */
++                          <div dir="rtl" className="mt-1">
++                            <button type="button" onClick={function () { setExamPointsEditor(examPointsEditor === displayIdx ? -1 : displayIdx) }} className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline underline-offset-2 cursor-pointer">
++                              🖱 حط نقط على الرسمة (أو صوّرها من الكشكول 📷)
++                            </button>
++                            {examPointsEditor === displayIdx && (
++                              <FigurePointEditor
++                                figureUrl={q.figure.url}
++                                onAttached={function (marker: string) {
++                                  setWritingAnswers(function (prev) { return { ...prev, [displayIdx]: ((prev[displayIdx] || '') + marker).trim() } })
++                                }}
++                                onClose={function () { setExamPointsEditor(-1) }}
++                              />
++                            )}
++                          </div>
++                        )}
+                         {qIsWriting ? (
+                           <div
+                             dir="ltr"
+@@ -3063,6 +3194,10 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+         {/* Writing Section */}
+         {!isWorksheetExam && writingQs.length > 0 && (
+           <div className="space-y-3">
++            {/* (2026-و44) رسالة قصيرة فوق الحل — طلب المستر حرفيًا */}
++            <p className="text-[11px] font-bold text-sky-700 dark:text-sky-300 rounded-lg border border-sky-300/60 bg-sky-50/70 dark:bg-sky-950/30 dark:border-sky-800/60 px-3 py-2">
++              ✏️ السؤال اللي فيه رسمة: اعمل الرسمة في كشكولك وصوّرها وارفع الصورة 📷 — أو دوس «حط نقط على الرسمة» على طول. والجدول اكتبه هنا بالكيبورد عادي — الاتنين بيحتسبوا في التصحيح.
++            </p>
+             {mcqQs.length > 0 && <div className="border-t pt-3"><p className="text-xs font-semibold text-amber-600 dark:text-amber-400">الأسئلة المقالية:</p></div>}
+             {writingQs.map(function(item, wi) {
+               var q = item.q
+@@ -3079,6 +3214,24 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                     </p>
+                     {/* (25-b2) عند انتهاء الوقت: منع تعديل نهائي — pointer-events +
+                         قفل الكيبورد على الـ MathKeyboard من غير لمس الملف بتاعه */}
++                    {q.figure && <WorksheetFigure figure={q.figure} />}
++                    {q.figure && q.figure.url && !examTimeUp && (
++                      /* (2026-و44) «حط نقط على الرسمة» — طريقتين متاحين */
++                      <div dir="rtl" className="mt-1">
++                        <button type="button" onClick={function () { setExamPointsEditor(examPointsEditor === displayIdx ? -1 : displayIdx) }} className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline underline-offset-2 cursor-pointer">
++                          🖱 حط نقط على الرسمة (أو صوّرها من الكشكول 📷)
++                        </button>
++                        {examPointsEditor === displayIdx && (
++                          <FigurePointEditor
++                            figureUrl={q.figure.url}
++                            onAttached={function (marker: string) {
++                              setWritingAnswers(function (prev) { return { ...prev, [displayIdx]: ((prev[displayIdx] || '') + marker).trim() } })
++                            }}
++                            onClose={function () { setExamPointsEditor(-1) }}
++                          />
++                        )}
++                      </div>
++                    )}
+                     <div
+                       dir="ltr"
+                       className={examTimeUp ? 'pointer-events-none select-none opacity-60' : ''}
+diff --git a/src/lib/ai-image-grader.ts b/src/lib/ai-image-grader.ts
+index 21c07ed..44d9faa 100644
+--- a/src/lib/ai-image-grader.ts
++++ b/src/lib/ai-image-grader.ts
+@@ -347,6 +347,9 @@ export async function gradeImageAnswer(params: {
+   modelAnswer?: string
+   acceptedAnswers?: string[]
+   maxPoints?: number
++  /* (و44) النص المكتوب اللي جاي مع الصورة (مثلا «الجدول: صف 1: 5، 3») —
++     السؤال بخطوتين: جدول على المنصة + رسمة مصورة — الاتنين بيحتسبوا */
++  studentText?: string
+ }): Promise<{
+   extractedAnswer: string
+   finalAnswer?: string
+@@ -420,6 +423,13 @@ export async function gradeImageAnswer(params: {
+   if (modelAnswer) {
+     prompt += 'MODEL SOLUTION:\n' + repairCorruptMath(modelAnswer) + '\n'
+   }
++  /* (و44) الجزء المكتوب بالكيبورد جاي مع الصورة — سؤال بخطوتين (جدول + رسمة):
++     الطالب حل الجدول على المنصة وصوّر الرسمة — الاتنين بيحتسبوا في نفس الدرجة */
++  var typedPart = String((params as any).studentText || '').replace(/\[📷[^\]]*\]/g, '').trim()
++  if (typedPart) {
++    prompt += 'TYPED PART (the student also wrote this part ON THE PLATFORM with the keyboard, e.g. table values):\n' + repairCorruptMath(typedPart) + '\n'
++    prompt += 'IMPORTANT: the final verdict must evaluate BOTH the typed part AND the drawing/photo TOGETHER as one submission — typed values matching the model earn their share, the drawn/graphed part earns the rest. Do NOT fail a correct typed table just because the drawing is approximate, and do NOT ignore the typed part because a photo exists.\n\n'
++  }
+   prompt += acceptedStr + '\n\n'
+   prompt += 'The student attached a PHOTO that is supposed to show THEIR OWN handwritten or typed solution to the question above.\n\n'
+   prompt += 'Follow these steps EXACTLY:\n'
+@@ -437,9 +447,16 @@ export async function gradeImageAnswer(params: {
+   prompt += 'STEP 6.6 — READ HANDWRITING CAREFULLY (the worst failure is grading a CORRECT answer as wrong because you misread a digit): read every handwritten digit with FULL attention (4 vs 9, 1 vs 7, 5 vs 3, 0 vs 6, 2 vs 7). Re-read the final answer TWICE before deciding. If the final value you read equals the model value → it is CORRECT, full stop.\n'
+   /* (2026-و39) طلب المستر: التصحيح يفهم إجابة الطالب كأنها رسالة شات — نفس قاعدة smart-grader في الواجب النصي */
+   prompt += 'STEP 6.7 — CHAT-LIKE ANSWER UNDERSTANDING (2026-و39 — mandatory): the answer in the photo may be written like a CHAT MESSAGE: short, colloquial, incomplete, no formal math notation ("يعني 8", "الناتج ٢", "x تساوي 4", "هو 8 صح"). Judge the MEANING and the final VALUE, never the wording or format. If the wording differs from the model answer but the value/meaning is the same → CORRECT with full points; colloquial fillers (يعني/بص/تقريبا), missing punctuation or casual phrasing NEVER make a correct value wrong. If a phrase is ambiguous, pick the most plausible mathematical reading that matches the model answer before deciding wrong.\n'
++  /* (و44) طلب المستر الحرفي: الطالب بيرسم في كشكول من غير مربعات/خطوط —
++     التصحيح بيكون بالنقط القريبة وشكل الرسمة، مش بمطابقة ملّيمترية */
++  prompt += 'STEP 6.8 — HAND-DRAWN GRAPHS / FIGURES (2026-و44 — mandatory, judged like a human teacher): the student usually draws in a plain notebook WITHOUT grid lines, so the drawing will be approximate by nature. Grade the drawing by CLOSENESS, not by precision:\n'
++  prompt += '   • A plotted POINT is correct if it sits NEAR the expected location (roughly within one grid cell of where it should be — close enough that a teacher looking at it says "the point is right, just slightly off").\n'
++  prompt += '   • A curve/line/parabola is correct if the SHAPE is right (opens the same way, passes near the same points, axis of symmetry roughly in the right place) even if wobbly or not perfectly scaled.\n'
++  prompt += '   • A triangle/shape is correct if it matches the required type and labeled measurements approximately.\n'
++  prompt += '   • Missing grid lines, faint marks, uneven spacing, slight tilt or offset — NEVER make a correct drawing wrong. Only fail the drawing when a point/shape is CLEARLY in the wrong place or the figure is fundamentally different from what the question asked.\n\n'
+   prompt += 'STEP 7 — ALWAYS give a definite verdict (isCorrect true or false). Only say onTopic=false when the photo truly contains NO student work at all.\n\n'
+   prompt += 'awardedPoints: an integer from 0 to ' + maxPoints + '. HARD RULE — no partial credit: if isCorrect=true then awardedPoints MUST be exactly ' + maxPoints + ' (NEVER deduct for messy/hard-to-read/unfinished-looking steps when the final answer is right); if isCorrect=false then awardedPoints MUST be 0.\n\n'
+-  prompt += 'FEEDBACK STYLE (2026-و24 + 2026-و30 — the teacher wants STRONG teacher-style notes like a real chat with the student): LANGUAGE IS MANDATORY — write the feedback in عامية مصرية بسيطة (Egyptian COLLOQUIAL Arabic) — ممنوع منعًا باتًا الفصحى (لا «حدث/ثم/قمت ب/خطأ في») — use «بص، خلي بالك، اللي حصل إن، طبّق تاني، برافو، مش، عشان» talking DIRECTLY to the student (استخدم «إنت») — 2–3 short sentences. Correct → praise + say WHAT he did right (the method/rule + the final value): «برافو عليك! تبسيطك للأسس صح ووصلت للناتج بالظبط.» Wrong → (1) WHERE exactly the mistake happened (which step/rule), (2) the correct approach, (3) the correct final answer: «بص يا بطل، اللي حصل إنك في الخطوة التانية ضربت الأس غلط — الضرب بيجمّع الأسس a^6 × a^2 = a^8 مش a^4، خلي بالك وطبّق القاعدة تاني والصح a^4 b^6.» NEVER generic (ممنوع «إجابة غلط» لوحدها) وNEVER فصحى.\n\nMATH NOTATION IN FEEDBACK (2026-و33 — mandatory, the platform renders these as real symbols for the student):\n' + NOTATION_RULES + '\n\nENGLISH MATH TERMS IN FEEDBACK (2026-و34 — mandatory, the teacher wants the platform lesson terms):\n' + ENGLISH_TERMS_RULE + '\n\n'
++  prompt += 'FEEDBACK STYLE (2026-و24 + 2026-و30 — the teacher wants STRONG teacher-style notes like a real chat with the student): LANGUAGE IS MANDATORY — write the feedback in عامية مصرية بسيطة (Egyptian COLLOQUIAL Arabic) — ممنوع منعًا باتًا الفصحى (لا «حدث/ثم/قمت ب/خطأ في») — use «بص، خلي بالك، اللي حصل إن، طبّق تاني، برافو، مش، عشان» talking DIRECTLY to the student (استخدم «إنت») — 2–3 short sentences. Correct → praise + say WHAT he did right (the method/rule + the final value): «برافو عليك! تبسيطك للأسس صح ووصلت للناتج بالظبط.» Wrong → (1) WHERE exactly the mistake happened (which step/rule), (2) the correct approach, (3) the correct final answer: «بص يا بطل، اللي حصل إنك في الخطوة التانية ضربت الأس غلط — الضرب بيجمّع الأسس a^6 × a^2 = a^8 مش a^4، خلي بالك وطبّق القاعدة تاني والصح a^4 b^6.» NEVER generic (ممنوع «إجابة غلط» لوحدها) وNEVER فصحى. (و44) BIDI ORDER RULE — mandatory: اكتب كل ملاحظة كجمل عربية متصلة من اليمين للشمال، وكل مقطع إنجليزي أو معادلة حطه بين قوسين ( ) في نص الجملة (مثال: «المحور هو (x = -1) والقيمة (f(-1) = 4)») — ممنوع تبدأ الجملة بمقطع إنجليزي أو تخلي المعادلة تقطع الجملة العربية.\n\nMATH NOTATION IN FEEDBACK (2026-و33 — mandatory, the platform renders these as real symbols for the student):\n' + NOTATION_RULES + '\n\nENGLISH MATH TERMS IN FEEDBACK (2026-و34 — mandatory, the teacher wants the platform lesson terms):\n' + ENGLISH_TERMS_RULE + '\n\n'
+   prompt += 'Respond with ONLY this JSON — no markdown, no extra text:\n'
+   prompt += '{"onTopic": true, "extractedAnswer": "the student\'s own work, max 3 short lines", "finalAnswer": "only the final boxed/last value", "answerSource": "boxed", "isCorrect": true, "awardedPoints": ' + maxPoints + ', "confidence": "high", "feedback": "ملاحظة بالعامية المصرية للطالب: ليه صح أو ليه غلط — كأنك بتكلمه بجد (جملتين كحد أقصى)"}\n'
+ 
+diff --git a/src/lib/ensure-schema.ts b/src/lib/ensure-schema.ts
+index 40e1a74..763cd50 100644
+--- a/src/lib/ensure-schema.ts
++++ b/src/lib/ensure-schema.ts
+@@ -37,6 +37,8 @@ export var SCHEMA_TABLES = [
+   // (2026-و40) الكتب والملازم — مكتبة PDF للطالب (تاب أدمن + تاب طالب)
+   // (و43) sourceUrl: لينك خارجي للكتب الكبيرة — من غير تخزين الملف في قاعدة البيانات
+   'CREATE TABLE IF NOT EXISTS Book (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT \'\', filePath TEXT NOT NULL DEFAULT \'\', fileName TEXT NOT NULL DEFAULT \'\', sourceUrl TEXT NOT NULL DEFAULT \'\', fileType TEXT NOT NULL DEFAULT \'application/pdf\', sizeBytes INTEGER NOT NULL DEFAULT 0, grade TEXT NOT NULL DEFAULT \'\', createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL)',
++  // (2026-و44) الإشعارات — رد الشكوى/الكتب الجديدة/امتحانات وواجبات جديدة
++  'CREATE TABLE IF NOT EXISTS Notification (id TEXT PRIMARY KEY, studentId TEXT NOT NULL, type TEXT NOT NULL DEFAULT \'general\', title TEXT NOT NULL, body TEXT NOT NULL DEFAULT \'\', read INTEGER NOT NULL DEFAULT 0, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+ ]
+ 
+ var SCHEMA_COLUMNS = [
+@@ -166,9 +168,11 @@ export var SCHEMA_INDEXES = [
+   'CREATE INDEX IF NOT EXISTS idx_vgs_video ON VideoGroupSchedule(videoId)',
+   'CREATE INDEX IF NOT EXISTS idx_vgs_group ON VideoGroupSchedule(groupId)',
+   'CREATE INDEX IF NOT EXISTS idx_parent_student ON Parent(studentId)',
++  'CREATE INDEX IF NOT EXISTS idx_notification_student ON Notification(studentId, read)',
++  'CREATE INDEX IF NOT EXISTS idx_notification_created ON Notification(createdAt)',
+ ]
+ 
+-export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book']
++export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homework', 'Exam', 'ExamResult', 'Announcement', 'Discussion', 'SiteConfig', 'Media', 'VideoProgress', 'GalleryImage', 'Payment', 'VideoAccess', 'Complaint', 'Parent', 'Book', 'Notification']
+ 
+ /* (2026-و38) مفتاح البصمة اتبدل — البصمة القديمة كانت اتخزنت على الإنتاج
+  * بعد ما كود و37 نزل (والجدول وقتها مش معمول لسه في CORE_TABLES فالترميم
+@@ -183,7 +187,10 @@ export var CORE_TABLES = ['Admin', 'Student', 'StudentActivity', 'Video', 'Homew
+  * دخل SCHEMA_TABLES + SCHEMA_COLUMNS، وتغيير المفتاح بيضمن إن أول ريكوست
+  * بعد النشر يعمل الفحص الكامل وينفذ ALTER TABLE إضافة العمود على Turso
+  * حتى لو الجدول نفسه موجود من و40 (درس حادثة و38/و40). */
+-var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w43'
++/* (و44) مفتاح البصمة اتبدّل تالت — جدول Notification (الإشعارات) دخل
++ * SCHEMA_TABLES + CORE_TABLES — نفس درس و38/و40: من غير تغيير المفتاح
++ * الجدول الجديد عمرك ما بيتعمل على Turso بعد النشر. */
++var SCHEMA_HASH_KEY = 'schema_heal_hash_v2_w44'
+ 
+ /* ============================================================
+  * 2026-و23 — **إصلاح بطء المنصة** (طلب المستر: «المنصة بطيئة، تسجيل
+diff --git a/src/lib/grade-pool.ts b/src/lib/grade-pool.ts
+new file mode 100644
+index 0000000..9a8f87f
+--- /dev/null
++++ b/src/lib/grade-pool.ts
+@@ -0,0 +1,34 @@
++// ============================================================
++// (2026-و44) runGradePool — تشغيل مهام التصحيح بتوازي صغير ومتحكم فيه
++//
++// طلب المستر: «تسرع لي عمليات التصحيح شوية».
++// الدرس التاريخي (و25): نداءات AI كتير متوازية على نفس المفتاح = 429
++// = فولباك كله غلط. الحل هنا: **اتنين بس** مع تأخير بسيط بين بداية
++// كل عامل — تسريع ~1.8x على امتحان فيه كام سؤال مقالي/صور، ومفيش ضغط
++// على المفتاح، وفشل أي سؤال بيفضل معزول بفولباكه الخاص (زي ما هو).
++// ============================================================
++
++export async function runGradePool(
++  tasks: (() => Promise<void>)[],
++  concurrency?: number,
++  staggerMs?: number
++): Promise<void> {
++  var n = Math.max(1, Math.min(4, concurrency || 2))
++  var stagger = typeof staggerMs === 'number' ? staggerMs : 400
++  var next = 0
++  var worker = async function (w: number) {
++    /* تأخير بداية كل عامل عن اللي قبله — منع الاندفاع على المفتاح */
++    if (w > 0) {
++      try { await new Promise(function (r) { setTimeout(r, stagger * w) }) } catch (e) {}
++    }
++    while (true) {
++      var my = next
++      next = my + 1
++      if (my >= tasks.length) return
++      try { await tasks[my]() } catch (e) { /* كل مهمة بتتعامل مع فشلها بنفسها */ }
++    }
++  }
++  var workers: Promise<void>[] = []
++  for (var w = 0; w < n; w++) workers.push(worker(w))
++  await Promise.all(workers)
++}
+diff --git a/src/lib/mcq-notes.ts b/src/lib/mcq-notes.ts
+index b452410..b55820d 100644
+--- a/src/lib/mcq-notes.ts
++++ b/src/lib/mcq-notes.ts
+@@ -55,6 +55,10 @@ function buildNotesPrompt(items: McqNoteItem[]): string {
+   lines.push('')
+   lines.push('ممنوع منعًا باتًا الفصحى — كلام عادي زي ما بتتكلم مع طالب في السادس/الإعدادي: بص، خلي بالك، اللي حصل إن، طبّق تاني، برافو.')
+   lines.push('ممنوع تطول — الملاحظة سطر لسطرين كحد أقصى لكل سؤال.')
++  /* (2026-و44) طلب المستر: «الملاحظات بتتكتب بطريقة عشوائية — عاوزها تتكتب
++     صح من اليمين للشمال سواء عربي أو إنجليزي» — قاعدة ترتيب إلزامية:
++     جملة عربية متصلة والمقاطع الإنجليزية/المعادلات بين قوسين وسط الجملة */
++  lines.push('(و44) قاعدة ترتيب إلزامية: اكتب جملة عربية متصلة، وكل مقطع إنجليزي أو معادلة بين قوسين ( ) وسط الجملة — مثال: «المحور هو (x = -1) والقيمة (f(-1) = 4)» — ممنوع تبدأ بالإنجليزي أو تقطّع الجملة العربية.')
+   lines.push('')
+   lines.push('ردك لازم يكون JSON فقط من غير أي كلام تاني: مصفوفة نصوص بنفس عدد وترتيب الأسئلة بالظبط.')
+   lines.push('مثال للشكل: ["برافو الفكرة إنك..., بس اللي حصل إنك...، الصح \\frac{3}{4} لأن...", "..."]')
+diff --git a/src/lib/notify.ts b/src/lib/notify.ts
+new file mode 100644
+index 0000000..5d0a8a5
+--- /dev/null
++++ b/src/lib/notify.ts
+@@ -0,0 +1,94 @@
++// ============================================================
++// (2026-و44) مكتبة الإشعارات — طلب المستر حرفيًا:
++//   «لما الأدمن يرد على الطالب يجيله إشعار إن الشكوى دي اتحلت …
++//    وفي الكتب والملازم لو اتضافت حاجة يظهر له إشعار …
++//    أي حاجة يتضاف تظهر له إشعار للطالب»
++// ============================================================
++// insert بسيط ومتسامح — أي فشل في الإشعار **مابيبوّظش** العملية الأساسية
++// (الرد على الشكوى/إضافة الكتاب/…) — بنلقط الخطأ بسجلوه وبس.
++// ============================================================
++import { db } from '@/lib/db'
++
++function nid(): string {
++  return 'ntf' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
++}
++
++/** إشعار لطالب واحد */
++export async function notifyStudent(studentId: string, type: string, title: string, body?: string): Promise<void> {
++  if (!studentId) return
++  try {
++    await db.$executeRawUnsafe(
++      'INSERT INTO Notification (id, studentId, type, title, body, read, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
++      nid(), studentId, type, String(title || '').slice(0, 160), String(body || '').slice(0, 500)
++    )
++  } catch (e) {
++    try {
++      await db.$executeRawUnsafe(
++        "INSERT INTO Notification (id, studentId, type, title, body, read, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
++        nid(), studentId, type, String(title || '').slice(0, 160), String(body || '').slice(0, 500)
++      )
++    } catch (e2) {
++      console.error('[notify] insert failed (ignored):', e2)
++    }
++  }
++}
++
++/**
++ * إشعار لمجموعة طلاب — بالids مباشرة أو بالصف (grade).
++ * grade فاضي أو '*' = كل الطلاب المفعّلين.
++ * الجدول مش موجود بعد (نشر جديد) → فشل صامت — مفيش مشكلة.
++ */
++export async function notifyStudents(opts: {
++  studentIds?: string[]
++  grade?: string
++  type: string
++  title: string
++  body?: string
++}): Promise<void> {
++  try {
++    var ids: string[] = Array.isArray(opts.studentIds) ? opts.studentIds.filter(Boolean) : []
++    if (ids.length === 0 && opts.grade) {
++      try {
++        var rows: any = await db.$queryRawUnsafe(
++          "SELECT id FROM Student WHERE status IN ('approved','paid') AND grade = ?",
++          opts.grade
++        )
++        ids = (rows || []).map(function (r: any) { return String(r.id) })
++      } catch (eG) {
++        try {
++          var rows2: any = await db.$queryRawUnsafe(
++            "SELECT id FROM Student WHERE status IN ('approved','paid')"
++          )
++          ids = (rows2 || []).map(function (r: any) { return String(r.id) })
++        } catch (eG2) { ids = [] }
++      }
++    }
++    if (ids.length === 0 && !opts.grade) {
++      try {
++        var all: any = await db.$queryRawUnsafe("SELECT id FROM Student WHERE status IN ('approved','paid')")
++        ids = (all || []).map(function (r: any) { return String(r.id) })
++      } catch (eA) { ids = [] }
++    }
++    /* INSERT مجمّع على دفعات — سريع ومفيش N نداءات */
++    var CHUNK = 40
++    for (var i = 0; i < ids.length; i += CHUNK) {
++      var slice = ids.slice(i, i + CHUNK)
++      var values: string[] = []
++      var args: any[] = []
++      for (var k = 0; k < slice.length; k++) {
++        values.push('(?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)')
++        args.push(nid(), slice[k], opts.type, String(opts.title || '').slice(0, 160), String(opts.body || '').slice(0, 500))
++      }
++      try {
++        await db.$executeRawUnsafe(
++          'INSERT INTO Notification (id, studentId, type, title, body, read, createdAt, updatedAt) VALUES ' + values.join(', '),
++          ...args
++        )
++      } catch (eB) {
++        console.error('[notifyStudents] batch insert failed (ignored):', eB)
++      }
++    }
++  } catch (e) {
++    console.error('[notifyStudents] failed (ignored):', e)
++  }
++}
+diff --git a/src/lib/question-figures.ts b/src/lib/question-figures.ts
+index 99a470d..cffc074 100644
+--- a/src/lib/question-figures.ts
++++ b/src/lib/question-figures.ts
+@@ -64,6 +64,9 @@ async function sourceToCanvas(src: { kind: 'bitmap'; bitmap: ImageBitmap } | { k
+ /**
+  * التأكد إن كل figure.url معباية: لكل سؤال فيه figure.bbox ومن غير url
+  * بنقص الرسمة من صفحة المصدر ونرفعها ونعبي figure.url بالمسار.
++ * (و44) كمان بنقص رسومات الاختيارات (optionFigures[i].bbox) أوتوماتيك —
++ * ده كان سبب «الاختيارات اللي فيها رسومات ما بتتضيفش» — القص كان
++ * بيتعامل مع رسمة السؤال بس!
+  * onProgress(done, total) — لتوست «جهز الرسومات X من Y…».
+  */
+ export async function ensureFigureUrls(
+@@ -71,10 +74,17 @@ export async function ensureFigureUrls(
+   source: FigureCropSource,
+   onProgress?: (done: number, total: number) => void
+ ): Promise<void> {
+-  var targets: any[] = []
++  /* هدف القص: { q, kind: 'q' | 'of', oi? } — رسمة سؤال أو رسمة اختيار */
++  var targets: { q: any; kind: 'q' | 'of'; oi?: number }[] = []
+   if (Array.isArray(questions)) {
+     questions.forEach(function (q: any) {
+-      if (q && q.figure && q.figure.bbox && !q.figure.url) targets.push(q)
++      if (!q) return
++      if (q.figure && q.figure.bbox && !q.figure.url) targets.push({ q: q, kind: 'q' })
++      if (Array.isArray(q.optionFigures)) {
++        q.optionFigures.forEach(function (of: any, oi: number) {
++          if (of && of.bbox && !of.url) targets.push({ q: q, kind: 'of', oi: oi })
++        })
++      }
+     })
+   }
+   var total = targets.length
+@@ -131,11 +141,13 @@ export async function ensureFigureUrls(
+ 
+   var done = 0
+   for (var i = 0; i < targets.length; i++) {
+-    var q = targets[i]
++    var tgt = targets[i]
++    var q = tgt.q
+     try {
+-      var bbox = sanitizeBbox(q.figure.bbox)
++      var fig = tgt.kind === 'q' ? q.figure : (q.optionFigures[tgt.oi || 0] || null)
++      var bbox = sanitizeBbox(fig && fig.bbox)
+       if (!bbox) { done++; if (onProgress) onProgress(done, total); continue }
+-      var page = parseInt(String(q.figure.page || q.sourcePage || 1), 10) || 1
++      var page = parseInt(String((fig && fig.page) || q.sourcePage || 1), 10) || 1
+       var pageCanvas = await getPageCanvas(page)
+       if (!pageCanvas) { done++; if (onProgress) onProgress(done, total); continue }
+ 
+@@ -165,7 +177,14 @@ export async function ensureFigureUrls(
+       var asFile = new File([blob], 'figure_q' + (i + 1) + '.jpg', { type: 'image/jpeg' })
+       var up = await chunkedUpload(asFile, 'exam-figures')
+       if (up && up.filePath && /^\/api\/files\//.test(up.filePath)) {
+-        q.figure.url = up.filePath
++        if (tgt.kind === 'q') {
++          q.figure.url = up.filePath
++        } else {
++          var ofs = Array.isArray(q.optionFigures) ? q.optionFigures : []
++          while (ofs.length <= (tgt.oi || 0)) ofs.push(null)
++          ofs[tgt.oi || 0] = Object.assign({}, ofs[tgt.oi || 0] || {}, { url: up.filePath, bbox: fig.bbox, page: fig.page })
++          q.optionFigures = ofs
++        }
+       }
+     } catch (eFig) {
+       /* فشل سؤال واحد مش بيوقف الباقي — bbox بيفضل موجود */

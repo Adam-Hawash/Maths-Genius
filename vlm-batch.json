@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1. Subduction zone cross-section, cartoon, yes, no, yes\n2. Plate boundary types, cartoon, yes, no, yes\n3. Parts of a volcano, cartoon, yes, no, yes\n4. Rock cycle, realistic, no, no, yes\n5. Circulatory system (simplified), cartoon, yes, no, yes\n6. Circulatory system (detailed heart/lungs), cartoon, yes, no, yes",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789937148,
+  "id": "20260921044536343dcfbe69d240c2",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260921044536343dcfbe69d240c2",
+  "usage": {
+    "completion_tokens": 95,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 17548,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 17643
+  }
+}

@@ -1,0 +1,1927 @@
+diff --git a/src/app/api/ai/assistant/route.ts b/src/app/api/ai/assistant/route.ts
+deleted file mode 100644
+index 1de076a..0000000
+--- a/src/app/api/ai/assistant/route.ts
++++ /dev/null
+@@ -1,342 +0,0 @@
+-// @ts-nocheck
+-import { NextResponse } from 'next/server'
+-import { db } from '@/lib/db'
+-import { callGemini, callGeminiStream, hasGeminiKey } from '@/lib/gemini'
+-import ZAI from 'z-ai-web-dev-sdk'
+-/* (2026-و33) منقّي الرموز المشترك — نفس المكتبة اللي بتنضّف ملاحظات المصحح */
+-import { sanitizeMathText, ENGLISH_TERMS_RULE } from '@/lib/math-sanitize'
+-
+-export const runtime = 'nodejs'
+-export const maxDuration = 60
+-
+-/* ------------------------------------------------------------
+- * المساعد الذكي — محرك مزدوج عشان الردود متبقاش بسيطة/غريبة:
+- *  1) ZAI (z-ai-web-dev-sdk) — أساسي للنصوص: مفيش مفاتيح، ردود قوية دايمًا.
+- *  2) Gemini — أساسي للصور (vision مثبت) واحتياطي للنصوص.
+- * كل محرك لو فشل بيجرب التاني تلقائيًا قبل ما نقول "المساعد مشغول".
+- *
+- * جديد: تاريخ المحادثة (history) — المساعد بقى فاكر الكلام اللي فات
+- * فالطالب مش محتاج يعيد كل حاجة من الأول كل رسالة.
+- * ------------------------------------------------------------ */
+-var MAX_IMAGES = 4
+-var MAX_B64_LENGTH = 7000000 // ~5MB binary after base64
+-var DATA_URL_RE = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/
+-var MAX_HISTORY = 10 // آخر 10 رسائل (5 أدوار) بتبني سياق المحادثة
+-/* (و45) حارس طول الرسالة — طلب الحزمة: مفيش رسالة أطول من 2000 حرف */
+-var MAX_MESSAGE = 2000
+-
+-/* ============================================================
+- * الشكاوى التلقائية — لو الطالب قال للمساعد إن فيه مشكلة، الشكوى
+- * بتتسجل في قسم الشكاوي تلقائي وبتوصل للمستر.
+- *  1) المصدر الأساسي: وسم [[شكوى: ...]] اللي المساعد بيكتبه في آخر رده.
+- *  2) احتياطي: كلمات مشاكل قوية واضحة في رسالة الطالب نفسها.
+- * ============================================================ */
+-var COMPLAINT_MARKER_RE = /\[\[شكوى[:：]([\s\S]*?)\]\]/
+-var HARD_ISSUE_RE = /(فيديو|الفيديو|الفيدو|الوتيو)[^\n]{0,30}(مش ?(بيفتح|شغال|راضي|باين|موجود|نازل)|ما ?بيفتح|مقفول)|مش ?شغال|مش ?راضي ?(ي?فتح)?|مش ?باين|مش ?نازل|مش ?موجود|الباسورد مش|كلمة السر مش|الحساب (اتقفل|مقفول|اتسرق)|اتسرق حسابي|عاوز ?كلم ?المستر|عايز ?كلم ?المستر|مطلوب ?المستر|شكوى/
+-
+-function extractComplaint(text: string): { clean: string; summary: string } {
+-  var m = COMPLAINT_MARKER_RE.exec(text || '')
+-  var clean = String(text || '').replace(COMPLAINT_MARKER_RE, '').replace(/\n{3,}/g, '\n\n').trim()
+-  return { clean: clean, summary: m ? String(m[1] || '').trim().slice(0, 300) : '' }
+-}
+-
+-/* (2026-و33) منقّي رموز الرياضيات اتنقل للمكتبة المشتركة src/lib/math-sanitize.ts
+-   (sanitizeMathText مستورد فوق) — بيتنفذ على رد الموديل قبل العرض
+-   فالطالب ما يشوفش غير رموز المنصة النضيفة: كسور رأسية وأُس وجُذور */
+-
+-async function logAutoComplaint(studentId: string, studentMessage: string, summary: string) {
+-  try {
+-    if (!summary) return
+-    var name = '', phone = '', grade = ''
+-    if (studentId) {
+-      var rows = await db.$queryRawUnsafe('SELECT name, phone, grade FROM Student WHERE id = ? LIMIT 1', studentId)
+-      if (rows && rows.length > 0) { name = String(rows[0].name || ''); phone = String(rows[0].phone || ''); grade = String(rows[0].grade || '') }
+-    }
+-    var id = 'cmp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+-    try {
+-      await db.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS Complaint (
+-        id TEXT PRIMARY KEY, studentId TEXT DEFAULT '', studentName TEXT DEFAULT '', phone TEXT DEFAULT '',
+-        grade TEXT DEFAULT '', message TEXT NOT NULL, summary TEXT DEFAULT '', source TEXT NOT NULL DEFAULT 'student',
+-        status TEXT NOT NULL DEFAULT 'new', reply TEXT DEFAULT '', reviewedAt DATETIME,
+-        createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`)
+-    } catch (e) {}
+-    await db.$executeRawUnsafe(
+-      `INSERT INTO Complaint (id, studentId, studentName, phone, grade, message, summary, source, status, reply, createdAt, updatedAt)
+-       VALUES (?, ?, ?, ?, ?, ?, ?, 'ai', 'new', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+-      id, studentId, name, phone, grade,
+-      String(studentMessage || '').slice(0, 4000), String(summary).slice(0, 300)
+-    )
+-    console.log('[AI Assistant] complaint auto-logged for', name || studentId, ':', summary)
+-  } catch (e: any) {
+-    console.error('[AI Assistant] logAutoComplaint failed:', String((e && e.message) || e))
+-  }
+-}
+-
+-function buildImageParts(images: string[]): any[] {
+-  var parts: any[] = []
+-  if (!Array.isArray(images)) return parts
+-  for (var i = 0; i < images.length && parts.length < MAX_IMAGES; i++) {
+-    var src = typeof images[i] === 'string' ? images[i] : ''
+-    var m = DATA_URL_RE.exec(src)
+-    if (!m) continue
+-    var data = m[2].replace(/\s/g, '')
+-    if (!data || data.length > MAX_B64_LENGTH) continue
+-    parts.push({ inlineData: { mimeType: m[1], data: data } })
+-  }
+-  return parts
+-}
+-
+-/* تاريخ المحادثة اللي بيبعته الواجهة: [{role, content}] */
+-function buildHistory(rawHistory: any): any[] {
+-  var out: any[] = []
+-  if (!Array.isArray(rawHistory)) return out
+-  var clean = rawHistory.filter(function (h: any) {
+-    return h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string' && h.content.trim()
+-  })
+-  var start = Math.max(0, clean.length - MAX_HISTORY)
+-  for (var i = start; i < clean.length; i++) {
+-    out.push({ role: clean[i].role, content: String(clean[i].content).slice(0, 4000) })
+-  }
+-  return out
+-}
+-
+-/* (و45) هل النداء ده لشخصية شيرين؟ */
+-function isSherinePersona(persona: string): boolean {
+-  return String(persona || '').trim() === 'sherine'
+-}
+-
+-/* ===== البرومبت الأساسي — أقوى بكتير: شخصية ثابتة + ردود نضيفة =====
+- * (و45) شخصية «شيرين» — مدرّبة الرياضيات الشخصية (persona: 'sherine'):
+- * نفس القواعد الرياضية والرموز والمصطلحات بالظبط، بس الشخصية بقى بنت مصرية
+- * ودودة بتشرح بالعامية البسيطة وتشجّع الطالب — بدل «المساعد الذكي» الجاف. */
+-function buildSystemPrompt(platformName: string, subjectLine: string, persona: string): string {
+-  var isSherine = String(persona || '').trim() === 'sherine'
+-  var assistantName = isSherine ? 'شيرين' : 'المساعد الذكي'
+-  var opener = isSherine
+-    ? 'أنتي "شيرين" — مدرّبة الرياضيات الشخصية والودودة في ' + platformName + '. ' + subjectLine
+-    : 'أنت "' + assistantName + '" الرسمي لـ' + platformName + '. ' + subjectLine
+-  return [
+-    opener,
+-    '',
+-    '## شخصيتك وقواعد الكتابة (أهم حاجة):',
+-    isSherine
+-      ? '- إنتي شيرين: بتتكلمي عامية مصرية دافية وقريبة من الطالب («يلا بينا»، «برافو عليك»، «بص يا بطل») — وممنوع نهائيًا حروف متلخبطة أو كلام مش مفهوم أو فصحى جافة.'
+-      : '- بتكتب عربي مصري سليم وواضح ومقروء — ممنوع نهائيًا تكلمات مش موجودة في العربي أو حروف متلخبطة أو كلام مش مفهوم.',
+-    isSherine
+-      ? '- لو مش متأكدة من حاجة، قولي ببساطة: «مش متأكدة، اسأل المستر في الحصة» — بدل ما تخترعي معلومة.'
+-      : '- لو مش عارف أو مش متأكد، قول ببساطة: "مش متأكد، اسأل المستر في الحصة" — بدل ما تخترع معلومة.',
+-    '- ردودك قصيرة ومنظمة: نقاط أو خطوات مرقمة لما الموضوع يستحق، وإيموجي بسيط (✅ 💡 📚) من غير مبالغة.',
+-    '- ممنوع تبدأ ردك بترحيب طويل كل مرة — ادخل في الجواب على طول.',
+-    '',
+-    '## قاعدة كتابة الرموز الرياضية (أهم قاعدة في الكلام كله — طلب المستر حرفيًا):',
+-    '- إنت بتكتب في منصة ليها عارض رياضيات خاص بيحوّل أوامر LaTeX لرموز حقيقية (كسور رأسية وأُس فوق الرقم وجذر بخط فوقه). عشان كده:',
+-    '- ممنوع منعًا باتًا علامات الدولار $ أو $$ حوالين أي رمز — دي بتظهر للطالب كحروف خام ووخة. اكتب الرمز لوحده على طول.',
+-    '- ممنوع منعًا باتًا أي ماركداون: لا **نص** ولا *نص* ولا # ولا شرطات ماركداون — النجوم بتظهر للطالب زي ما هي.',
+-    '- الكسر اكتبه: \\frac{فوق}{تحت} — مثال: \\frac{3}{4} هيظهر كسر رأسي حقيقي. ممنوع تكتب 3/4 ولا "$\\frac{3}{4}$".',
+-    '- الأُس اكتبه: 2^{3} أو x^{2} — هيظهر الرقم فوق الرقم حقيقي. الجذر اكتبه: \\sqrt{5} وجذر تكعيبي \\sqrt[3]{8}.',
+-    '- الضرب × والقسمة ÷ والزاوية ° وال pi دايمًا بالرموز مش بالكلمات.',
+-    '- قبل ما تبعت الرد راجع نفسك: لو لقيت $ أو ** أو \\ .. \\ في كلامك يبقى فيه غلط — شيلهم.',
+-    '',
+-    '## قاعدة المصطلحات الإنجليزي (طلب المستر — زي دروس المنصة بالظبط):',
+-    ...ENGLISH_TERMS_RULE.split('\n'),
+-    '',
+-    '## معلومات عنك وعن المنصة:',
+-    '- اسمك: ' + assistantName + (isSherine ? ' — صاحبة الطالب في الرياضيات، شغالة 24 ساعة.' : '. وأنت جزء من المنصة نفسها — شغال 24 ساعة.'),
+-    '- بتساعد الطلاب في: شرح أي جزئية رياضيات، مراجعة حل الواجبات من الصور، أسئلة الامتحانات، وتنظيم المذاكرة.',
+-    '- المنصة فيها: فيديوهات الشرح، واجبات، امتحانات، نقاط وتقييمات، ومناقشات.',
+-    '',
+-    '## قواعد الرياضيات:',
+-    '- لما تحل مسألة: اكتب الخطوات بالترتيب خطوة خطوة، وبعدين الإجابة النهائية واضحة.',
+-    '- اشرح بذكاء: قول للطالب عمل إيه، وليه الخطوة دي بتيجي كده، وليه الاختيار الصح هو الصح — مش بس "الإجابة C" من غير سبب.',
+-    '- راجع حسابك قبل ما تكتب النتيجة — الدقة أهم من السرعة.',
+-    '',
+-    '## قاعدة الواجبات والصور (مهم جدًا):',
+-    '- الصورة فيها حل الطالب بخط يده؟ لكل سؤال بالترتيب: اكتب "إجابتك:" ونصه زي ما هو بالظبط بدون تعديل ← ثم "الإجابة الصحيحة:" ← ثم صح أو غلط وليه في سطر واحد قصير.',
+-    '- الصورة فيها أسئلة بدون حل؟ ممنوع نهائيًا تحل أو تديله الإجابات جاهزة! قول له بالظبط: "جرب تحل الأول وابعتلي إجاباتك (نص أو صورة) وأنا هقارن إجابتك بالإجابة الصحيحة سؤال بسؤال 📝".',
+-    '- مش عارف يبدأ؟ تلميحة صغيرة واحدة 💡 بدون الإجابة النهائية واطلب منه يحاول تاني.',
+-    '- الصورة مش رياضيات؟ ساعده عادي وباختصار.',
+-    '',
+-    '## قاعدة الشكاوى والمشاكل التقنية (مهمة جدًا):',
+-    '- لو الطالب قال أو واضح إن فيه مشكلة في المنصة نفسها — فيديو مش بيفتح أو مش شغال، واجب/امتحان مش باين أو مش نازل، حساب مقفول أو باسورد مش شغال، مشكلة في المشتريات أو الفلوس، أو أي عطل تقني أو شكوى من حاجة — واسيه بجد في كلامك، وقل له إن شكواه اتسجلت للمستر هيشوفها بإذن الله.',
+-    '- وبعدها في **آخر ردك** اكتب في سطر لوحده الوسم ده للنظام بالظبط (مرة واحدة بس ولو فيه مشكلة حقيقية بس):',
+-    '[[شكوى: وصف قصير للمشكلة في أقل من 15 كلمة]]',
+-    '- متكتبش الوسم ده أبدًا لو الطالب بس بيسأل سؤال دراسي عادي أو يستفسر — بس لو فيه مشكلة حقيقية اكتبه من غير تفريط.',
+-  ].join('\n')
+-}
+-
+-/* ===== ZAI — محرك أساسي للنصوص ===== */
+-async function zaiChat(systemPrompt: string, history: any[], userContent: any, timeoutMs: number): Promise<{ ok: boolean; text: string; error?: string }> {
+-  var tid: any = null
+-  try {
+-    var zai = await ZAI.create()
+-    var msgs: any[] = [{ role: 'assistant', content: systemPrompt }]
+-    for (var i = 0; i < history.length; i++) msgs.push({ role: history[i].role, content: history[i].content })
+-    msgs.push({ role: 'user', content: userContent })
+-    tid = setTimeout(function () { throw new Error('timeout') }, timeoutMs)
+-    var completion = await zai.chat.completions.create({
+-      messages: msgs,
+-      thinking: { type: 'disabled' },
+-    })
+-    clearTimeout(tid)
+-    var text = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || ''
+-    text = String(text || '').trim()
+-    if (!text) return { ok: false, text: '', error: 'empty reply' }
+-    return { ok: true, text: text }
+-  } catch (e: any) {
+-    if (tid) try { clearTimeout(tid) } catch (e2) {}
+-    return { ok: false, text: '', error: String((e && e.message) || e) }
+-  }
+-}
+-
+-export async function POST(request: Request) {
+-  try {
+-    var body = await request.json()
+-    var message = (body.message || '').trim()
+-    var context = body.context || {}
+-    var persona = String(body.persona || '') /* (و45) 'sherine' = شخصية شيرين */
+-    var useStream = body.stream !== false
+-    var imageParts = buildImageParts(body.images)
+-    var history = buildHistory(body.history)
+-
+-    if (!message && imageParts.length === 0) {
+-      return NextResponse.json({ error: 'مفيش رسالة' }, { status: 400 })
+-    }
+-
+-    /* (و45) حارس الطول — رسالة أطول من الحد مرفوضة برسالة عربية ودودة */
+-    if (message.length > MAX_MESSAGE) {
+-      return NextResponse.json({ error: 'الرسالة طويلة أوي 😅 اكتبلي سؤالك في ' + MAX_MESSAGE + ' حرف أو أقل وهرد عليك فورًا.' }, { status: 400 })
+-    }
+-
+-    // الصور اتبعتت لكن كلها غير صالحة → نقول للطالب بوضوح
+-    var sentImages = Array.isArray(body.images) ? body.images.length : 0
+-    if (sentImages > 0 && imageParts.length === 0) {
+-      return NextResponse.json({ reply: 'الصور اللي بعتها مش مقبولة 😅 جرب تبعت صورة PNG أو JPG عادية.' })
+-    }
+-
+-    var systemPrompt = buildSystemPrompt(
+-      'منصة Math Genius (مستر وائل خضير)',
+-      isSherinePersona(persona) ? 'مدرّبة رياضيات شاطرة بتشرح بالعامية وبتساعد الطلاب في الـ Math.' : 'مدرّب رياضيات شاطر بيساعد الطلاب في الـ Math.',
+-      persona
+-    )
+-    if (context.page) systemPrompt += '\nالصفحة اللي الطالب واقف فيها: ' + context.page
+-    if (context.studentId) {
+-      try {
+-        var student = await db.$queryRawUnsafe('SELECT name, grade, phone FROM Student WHERE id = ? LIMIT 1', context.studentId)
+-        if (student && student.length > 0) systemPrompt += '\nاسم الطالب: ' + (student[0].name || '') + ' — الصف: ' + (student[0].grade || '') + ' (خاطبه باسمه لو مناسب)'
+-      } catch (e) {}
+-    }
+-
+-    if (!message && imageParts.length > 0) {
+-      message = 'شوف الصور دي وساعدني فيها.'
+-    }
+-
+-    // ---------- نجرب المحركات بالترتيب ونرجّع أول واحد ينجح ----------
+-    var timeoutMs = imageParts.length > 0 ? 50000 : 35000
+-
+-    // **النصوص: ZAI الأول (مفيش مفاتيح ورده قوية) → Gemini احتياطي**
+-    // **الصور: Gemini الأول (vision مثبت) → ZAI احتياطي**
+-    var engines: Array<() => Promise<{ ok: boolean; text: string; error?: string }>> = []
+-    if (imageParts.length > 0) {
+-      var geminiParts = imageParts.concat([{ text: systemPrompt + '\n\nرسالة الطالب: ' + message }])
+-      engines.push(function () {
+-        return callGemini({ parts: geminiParts, generationConfig: { temperature: 0.3, maxOutputTokens: 4096 }, timeoutMs: timeoutMs, thinking: 'low' })
+-      })
+-      engines.push(function () {
+-        var content: any[] = [{ type: 'text', text: message }]
+-        for (var i = 0; i < body.images.length && content.length <= MAX_IMAGES; i++) {
+-          if (DATA_URL_RE.test(String(body.images[i]))) content.push({ type: 'image_url', image_url: { url: body.images[i] } })
+-        }
+-        return zaiChat(systemPrompt, history, content, timeoutMs)
+-      })
+-    } else {
+-      // **طلب المستر (2026-و7): Gemini 3.6 هو الأساسي في النصوص كمان —
+-      // المفتاح موجود في Vercel → Environment Variables (GEMINI_API_KEYS)
+-      // ولو المفتاح مش متظبط أو الحصة خلصت، ZAI بيفضل شبكة أمان**
+-      if (hasGeminiKey()) {
+-        engines.push(function () {
+-          return callGemini({ parts: [{ text: systemPrompt + '\n\nرسالة الطالب: ' + message }], generationConfig: { temperature: 0.3, maxOutputTokens: 4096 }, timeoutMs: timeoutMs, thinking: 'low' })
+-        })
+-      }
+-      engines.push(function () { return zaiChat(systemPrompt, history, message, timeoutMs) })
+-    }
+-
+-    // ---------- SSE STREAMING ----------
+-    if (useStream) {
+-      var encoder = new TextEncoder()
+-      var stream = new ReadableStream({
+-        async start(controller) {
+-          var closed = false
+-          var send = function (obj: any) {
+-            if (closed) return
+-            try { controller.enqueue(encoder.encode('data: ' + JSON.stringify(obj) + '\n\n')) } catch (e) {}
+-          }
+-          var result: any = null
+-          var lastErr = ''
+-          for (var ei = 0; ei < engines.length; ei++) {
+-            try {
+-              var r = await engines[ei]()
+-              if (r && r.ok && r.text) { result = r; break }
+-              lastErr = (r && r.error) || 'failed'
+-              console.error('[AI Assistant] engine ' + ei + ' failed:', lastErr)
+-            } catch (e: any) {
+-              lastErr = String((e && e.message) || e)
+-              console.error('[AI Assistant] engine ' + ei + ' threw:', lastErr)
+-            }
+-          }
+-          if (result) {
+-            // تسجيل الشكوى التلقائية لو المساعد اكتشف مشكلة (وسم أو كلمات قوية)
+-            var complaintInfo = extractComplaint(result.text)
+-            result.text = sanitizeMathText(complaintInfo.clean)
+-            var autoSummary = complaintInfo.summary || (HARD_ISSUE_RE.test(message) ? ('مشكلة من كلام الطالب: ' + message.slice(0, 120)) : '')
+-            if (autoSummary) { try { await logAutoComplaint(String(context.studentId || ''), message, autoSummary) } catch (e) {} }
+-
+-            // بنبعت الرد كقطع صغيرة (typewriter) — نفس شكل الاستريمينج الحقيقي
+-            var chars = Array.from(result.text)
+-            var idx = 0
+-            await new Promise<void>(function (resolve) {
+-              var step = function () {
+-                if (closed) { resolve(); return }
+-                if (idx >= chars.length) { send({ done: true }); resolve(); return }
+-                var chunk = chars.slice(idx, idx + 5).join('')
+-                idx += 5
+-                send({ delta: chunk })
+-                setTimeout(step, 8)
+-              }
+-              step()
+-            })
+-          } else {
+-            var busyMsg = 'المساعد مشغول دلوقتي جداً، جرب تاني بعد شوية 🙏'
+-            if (lastErr.indexOf('429') >= 0) busyMsg = 'الحصة اليومية للمساعد الذكي خلصت، جرب بكرة أو بعدين بشوية 🙏'
+-            send({ error: busyMsg })
+-          }
+-          try { closed = true; controller.close() } catch (e) {}
+-        },
+-      })
+-      return new Response(stream, {
+-        headers: {
+-          'Content-Type': 'text/event-stream; charset=utf-8',
+-          'Cache-Control': 'no-cache, no-transform',
+-          'Connection': 'keep-alive',
+-          'X-Accel-Buffering': 'no',
+-        },
+-      })
+-    }
+-
+-    // ---------- legacy JSON path (stream === false) ----------
+-    for (var ei2 = 0; ei2 < engines.length; ei2++) {
+-      try {
+-        var r2 = await engines[ei2]()
+-        if (r2 && r2.ok && r2.text) {
+-          var ci = extractComplaint(r2.text)
+-          r2.text = sanitizeMathText(ci.clean)
+-          var autoSummary2 = ci.summary || (HARD_ISSUE_RE.test(message) ? ('مشكلة من كلام الطالب: ' + message.slice(0, 120)) : '')
+-          if (autoSummary2) { try { await logAutoComplaint(String(context.studentId || ''), message, autoSummary2) } catch (e) {} }
+-          return NextResponse.json({ reply: r2.text })
+-        }
+-      } catch (e) {}
+-    }
+-    return NextResponse.json({ reply: 'المساعد مشغول دلوقتي جداً، جرب تاني بعد شوية 🙏' })
+-  } catch (error) {
+-    return NextResponse.json({ reply: 'المساعد مشغول دلوقتي جداً، جرب تاني بعد شوية 🙏' })
+-  }
+-}
+diff --git a/src/app/api/ai/extract-and-save/route.ts b/src/app/api/ai/extract-and-save/route.ts
+index afaa7d9..2ebfcf5 100755
+--- a/src/app/api/ai/extract-and-save/route.ts
++++ b/src/app/api/ai/extract-and-save/route.ts
+@@ -59,16 +59,31 @@ export async function POST(request) {
+       return NextResponse.json({ error: 'No questions to save' }, { status: 400 })
+     }
+ 
++    /* (و46) سؤال اختياراته صور/رسومات (optionFigures) = اختياري **مطلقًا مقالي** —
++       طلب المستر الحرفي: «الأسئلة اللي فيها اختيارات على شكل رسم ما بتتضافش…
++       عايز الرسمة تكون شكلها صغير عشان الطالب يقدر يختار». قبل كده الحرس
++       كان شايف الاختيارات كلها N/A فبيحوّل السؤال مقالي ويتمسح الاختيارات
++       — فالطالب كان يلاقي السؤال من غير أي اختيارات خالص! */
++    function serverHasVisualOptions(q: any): boolean {
++      if (!q || typeof q !== 'object' || !Array.isArray(q.optionFigures)) return false
++      return q.optionFigures.some(function (ofg: any) {
++        return ofg && typeof ofg === 'object' && ((typeof ofg.url === 'string' && ofg.url) || ofg.bbox)
++      })
++    }
++
+     /* 2026-و11 — حرس سيرفر: ممنوع تسجيل أي سؤال اختياري من غير إجابة مؤكدة
+        — «ما تكونش بالحر» — العميل كان بيفلتر بس، وده بيقفل التجاوز نهائيًا */
+     var unanswered: number[] = []
+     questions.forEach(function(q: any, i: number) {
+       var isWriting = q.type === 'writing' || q.type === 'essay'
++      /* (و46) رسومات الاختيارات → اختياري دايمًا حتي لو النصوص كلها N/A */
++      var hasVisual = serverHasVisualOptions(q)
++      if (hasVisual) isWriting = false
+       if (!isWriting && Array.isArray(q.options)) {
+         var allNA = q.options.length > 0 && q.options.every(function(o: any) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+-        if (allNA) isWriting = true
++        if (allNA && !hasVisual) isWriting = true
+       }
+-      if (!isWriting && (!q.options || q.options.length === 0)) isWriting = true
++      if (!isWriting && (!q.options || q.options.length === 0) && !hasVisual) isWriting = true
+       if (!isWriting) {
+         var c = typeof q.correct === 'number' ? q.correct : -99
+         if (c < 0 || c > 3) unanswered.push(i + 1)
+@@ -124,11 +139,15 @@ export async function POST(request) {
+     var dbQuestions = questions.map(function(q) {
+       var questionText = q.question || q.q || ''
+       var isWriting = q.type === 'writing' || q.type === 'essay'
++      /* (و46) رسومات الاختيارات → اختياري دايمًا + الاختيارات بتتفضل موجودة
++         (ممتلية بنفس عدد الرسومات) عشان الطالب يلاقي حاجة يدوس عليها */
++      var hasVisual = serverHasVisualOptions(q)
++      if (hasVisual) isWriting = false
+       if (!isWriting && Array.isArray(q.options)) {
+         var allNA = q.options.length > 0 && q.options.every(function(o) { return !o || o === 'N/A' || o === 'لا يوجد' || String(o).trim() === '' })
+-        if (allNA) isWriting = true
++        if (allNA && !hasVisual) isWriting = true
+       }
+-      if (!isWriting && (!q.options || q.options.length === 0)) {
++      if (!isWriting && (!q.options || q.options.length === 0) && !hasVisual) {
+         isWriting = true
+       }
+       var pts = (typeof q.points === 'number' && q.points > 0) ? q.points : (isWriting ? 5 : 1)
+@@ -144,10 +163,13 @@ export async function POST(request) {
+           acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : [],
+         }, ws)
+       }
+-      var opts = Array.isArray(q.options) ? q.options.slice(0, 4) : ['N/A', 'N/A', 'N/A', 'N/A']
+-      while (opts.length < 4) { opts.push('N/A') }
++      var opts = Array.isArray(q.options) ? q.options.slice(0, 4) : []
++      /* (و46) سؤال الرسومات: نملأ الاختيارات بنفس عدد الرسومات على الأقل —
++         نص فاضي = الاختيار صورة بس (الطالب يشوف الرسمة الصغيرة ويختارها) */
++      var minOpts = hasVisual && Array.isArray(q.optionFigures) ? q.optionFigures.length : 0
++      while (opts.length < Math.max(4, minOpts)) { opts.push('') }
+       var correctIdx = typeof q.correct === 'number' ? q.correct : 0
+-      if (correctIdx < 0 || correctIdx > 3) { correctIdx = 0 }
++      if (correctIdx < 0 || correctIdx >= opts.length) { correctIdx = 0 }
+       return Object.assign({
+         type: 'mcq',
+         question: questionText,
+diff --git a/src/app/api/discussions/route.ts b/src/app/api/discussions/route.ts
+index e065913..eeba15a 100755
+--- a/src/app/api/discussions/route.ts
++++ b/src/app/api/discussions/route.ts
+@@ -1,6 +1,8 @@
+ 
+ import { NextRequest, NextResponse } from 'next/server'
+ import { db } from '@/lib/db'
++/* (و46) إشعار الطلاب — طلب المستر: «في المجتمع لو حد بعت رسالة يجي له إشعار» */
++import { notifyStudents } from '@/lib/notify'
+ 
+ export async function GET(request: NextRequest) {
+   try {
+@@ -63,6 +65,19 @@ export async function POST(request: NextRequest) {
+       },
+     })
+ 
++    /* (و46) رد المستر في المجتمع → إشعار جرس لكل طلاب الصف ده
++       (insert متسامح — أي فشل ما يبوّظش إرسال الرسالة) */
++    if (isAdminReply) {
++      try {
++        await notifyStudents({
++          grade: String(grade || ''),
++          type: 'community',
++          title: '💬 المستر ردّ في المجتمع',
++          body: String(content || '').slice(0, 200),
++        })
++      } catch (nE) { /* صامت */ }
++    }
++
+     return NextResponse.json({ message: 'Discussion created', discussion }, { status: 201 })
+   } catch (error) {
+     console.error('Discussion create error:', error)
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index c7023ae..6e7f177 100755
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -4,7 +4,6 @@ import "./globals.css";
+ import { Toaster } from "@/components/ui/toaster";
+ import { Toaster as SonnerToaster } from "@/components/ui/sonner";
+ import { ThemeProvider } from "@/components/theme-provider";
+-import { AIAssistant } from "@/components/student/AIAssistant";
+ import { RecordingGuard } from "@/components/RecordingGuard";
+ 
+ const geistSans = Geist({
+@@ -80,7 +79,7 @@ export default async function RootLayout({
+         style={{ fontFamily: "Cairo, sans-serif" }}
+       >
+         <ThemeProvider>{children}</ThemeProvider>
+-        <AIAssistant />
++        {/* (و46) المساعد الذكي اتشال بالكامل — طلب المستر: «شيلها يا حبيبي خالص» */}
+         {/* حماية عامة من التسجيل/التصوير + أدوات المطوّر في كل الصفحات */}
+         <RecordingGuard />
+         <Toaster />
+diff --git a/src/components/admin/AdminDashboard.tsx b/src/components/admin/AdminDashboard.tsx
+index 3cf10e8..0655e5d 100755
+--- a/src/components/admin/AdminDashboard.tsx
++++ b/src/components/admin/AdminDashboard.tsx
+@@ -202,6 +202,43 @@ export function AdminDashboard() {
+     return function () { alive = false; clearInterval(t) }
+   }, [])
+ 
++  /* ===== (و46) بادج «المجتمعات» — طلب المستر: «في المجتمع لو حد بعت رسالة
++     يجي له إشعار» — رسايل الطلاب الجديدة (بعد آخر فتح للمجتمع) بتظهر كعداد
++     على التاب — وفتح التاب بيسجل إنها اتشافت. بيدور كل 60 ثانية. */
++  const [newCommunityCount, setNewCommunityCount] = useState(0)
++  const adminCommunitySeenKey = 'mg_admin_community_seen'
++  useEffect(function () {
++    var alive = true
++    var check = async function () {
++      try {
++        var r = await fetch('/api/discussions?pageSize=100', { cache: 'no-store' })
++        var j = await r.json()
++        var list: any[] = Array.isArray(j && j.discussions) ? j.discussions : []
++        if (!alive) return
++        var seen = ''
++        try { seen = localStorage.getItem(adminCommunitySeenKey) || '' } catch (e) {}
++        if (adminTab === 'community') {
++          /* التاب مفتوح دلوقتي = كله اتشاف */
++          try { localStorage.setItem(adminCommunitySeenKey, new Date().toISOString()) } catch (e) {}
++          setNewCommunityCount(0)
++          return
++        }
++        if (!seen) { try { localStorage.setItem(adminCommunitySeenKey, new Date().toISOString()) } catch (e) {} return }
++        var seenTime = new Date(seen).getTime()
++        if (isNaN(seenTime)) return
++        var n = list.filter(function (d: any) {
++          if (!d || d.isAdminReply || d.studentId === 'admin') return false
++          var t = new Date(d.createdAt || '').getTime()
++          return isFinite(t) && t > seenTime
++        }).length
++        setNewCommunityCount(n)
++      } catch (e) { /* صامت */ }
++    }
++    check()
++    var t2 = setInterval(check, 60000)
++    return function () { alive = false; clearInterval(t2) }
++  }, [adminTab])
++
+   const fetchStats = async () => {
+     try {
+       const res = await fetch('/api/stats')
+@@ -320,7 +357,7 @@ export function AdminDashboard() {
+             {/* (2026-و38) تحليلات الأسئلة — أكتر سؤال الطلاب غلطت فيه + أساميهم — طلب المستر */}
+             <TabsTrigger value="item-analytics" className="text-xs sm:text-sm gap-1 text-violet-600 dark:text-violet-400"><PieChart className="h-4 w-4" /><span className="hidden sm:inline">تحليلات الأسئلة</span></TabsTrigger>
+             <TabsTrigger value="announcements" className="text-xs sm:text-sm gap-1"><Megaphone className="h-4 w-4" /><span className="hidden sm:inline">الإعلانات</span></TabsTrigger>
+-            <TabsTrigger value="community" className="text-xs sm:text-sm gap-1"><MessageSquare className="h-4 w-4" /><span className="hidden sm:inline">المجتمعات</span></TabsTrigger>
++            <TabsTrigger value="community" className="text-xs sm:text-sm gap-1"><MessageSquare className="h-4 w-4" /><span className="hidden sm:inline">المجتمعات</span>{newCommunityCount > 0 && <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold">{newCommunityCount > 99 ? '99+' : newCommunityCount}</span>}</TabsTrigger>
+             <TabsTrigger value="activity" className="text-xs sm:text-sm gap-1"><Activity className="h-4 w-4" /><span className="hidden sm:inline">المتابعة</span></TabsTrigger>
+             <TabsTrigger value="gallery" className="text-xs sm:text-sm gap-1"><Camera className="h-4 w-4" /><span className="hidden sm:inline">معرض الصور</span></TabsTrigger>
+             <TabsTrigger value="cms" className="text-xs sm:text-sm gap-1"><Settings className="h-4 w-4" /><span className="hidden sm:inline">المحتوى</span></TabsTrigger>
+diff --git a/src/components/admin/QuestionsEditor.tsx b/src/components/admin/QuestionsEditor.tsx
+index 63ffe65..e56f26e 100644
+--- a/src/components/admin/QuestionsEditor.tsx
++++ b/src/components/admin/QuestionsEditor.tsx
+@@ -21,6 +21,8 @@ import { Badge } from '@/components/ui/badge'
+ import { Loader2, Plus, Trash2, Save } from 'lucide-react'
+ import { FractionText } from '@/components/FractionText'
+ import { repairCorruptMath } from '@/lib/math-text'
++/* (و46) رفع صورة اختيار من المحرر نفسه — نفس مسار شاشة الاستخراج */
++import { chunkedUpload } from '@/lib/chunked-upload'
+ 
+ export interface EditableQuestion {
+   type: string
+@@ -30,6 +32,19 @@ export interface EditableQuestion {
+   points: number
+   modelAnswer: string
+   acceptedAnswers: string[]
++  /* (و46) رسومات الاختيارات + رسمة السؤال — كانت بتتمسح عند أي فتح وحفظ
++     من المحرر ده (ده كان سبب «باجي أحفظه ما بيتظهرش برضه») */
++  optionFigures?: any[]
++  figure?: any
++}
++
++/** (و46) هل السؤال ده اختياراته صور/رسومات؟ — نفس قاعدة question-figures بس من غير
++ *  أي اعتماديات عشان المحرر — السؤال ده مبيتحولش مقالي أبدًا */
++export function editorHasVisualOptions(q: any): boolean {
++  if (!q || typeof q !== 'object' || !Array.isArray(q.optionFigures)) return false
++  return q.optionFigures.some(function (ofg: any) {
++    return ofg && typeof ofg === 'object' && ((typeof ofg.url === 'string' && ofg.url) || ofg.bbox)
++  })
+ }
+ 
+ export function parseQuestionsRaw(raw: any): EditableQuestion[] {
+@@ -38,10 +53,21 @@ export function parseQuestionsRaw(raw: any): EditableQuestion[] {
+     if (!Array.isArray(arr)) return []
+     return arr.map(function (q: any) {
+       var isWriting = q.type === 'writing' || q.type === 'essay'
++      /* (و46) رسومات الاختيارات → اختياري دايمًا حتي لو النصوص كلها فاضية/N/A */
++      var hasVisual = editorHasVisualOptions(q)
++      if (hasVisual) isWriting = false
+       var options = Array.isArray(q.options) ? q.options.slice(0, 4) : []
+       while (options.length < 4) options.push('')
+       var allNA = options.length > 0 && options.every(function (o: string) { return !o || o === 'N/A' || o === 'لا يوجد' })
+-      if (!isWriting && (!Array.isArray(q.options) || q.options.length === 0 || allNA)) isWriting = true
++      if (!isWriting && (!Array.isArray(q.options) || q.options.length === 0 || allNA) && !hasVisual) isWriting = true
++      /* (و46) رسومات الاختيارات ورسمة السؤال بتتفضل زي ما هي (pass-through) */
++      var ofPass: any[] | undefined = undefined
++      if (hasVisual) {
++        ofPass = (q.optionFigures as any[]).slice(0, 4)
++        while (ofPass.length < 4) ofPass.push(null)
++      }
++      var figPass: any = undefined
++      if (q.figure && typeof q.figure === 'object' && (q.figure.url || q.figure.bbox)) figPass = q.figure
+       // heal JSON-corrupted math ("rac{", control chars) on load —
+       // a simple open+save in this dialog permanently repairs the stored text
+       return {
+@@ -52,6 +78,8 @@ export function parseQuestionsRaw(raw: any): EditableQuestion[] {
+         points: typeof q.points === 'number' && q.points > 0 ? q.points : (isWriting ? 5 : 1),
+         modelAnswer: repairCorruptMath(String(q.modelAnswer || q.answer || '')),
+         acceptedAnswers: Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers.map(function (a) { return repairCorruptMath(String(a)) }) : [],
++        optionFigures: ofPass,
++        figure: figPass,
+       }
+     })
+   } catch (e) {
+@@ -102,6 +130,43 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
+     })
+   }
+ 
++  /* (و46) رفع صورة اختيار من جوه المحرر — optionFigures[i] = { url } */
++  const uploadOptionFigure = async function (qi: number, oi: number, f: File | null) {
++    if (!f) return
++    try {
++      var up = await chunkedUpload(f, 'exam-figures')
++      if (up && up.filePath && /^\/api\/files\//.test(up.filePath)) {
++        setQuestions(function (prev) {
++          return prev.map(function (q, i) {
++            if (i !== qi) return q
++            var ofs = Array.isArray(q.optionFigures) ? q.optionFigures.slice() : ['', '', '', ''].map(function () { return null })
++            while (ofs.length < 4) ofs.push(null)
++            ofs[oi] = { url: up.filePath }
++            return Object.assign({}, q, { optionFigures: ofs, type: q.type === 'writing' ? 'mcq' : q.type })
++          })
++        })
++        toast.success('صورة الاختيار اتضافت — هتظهر للطالب صغيرة جنب حرف الاختيار')
++      } else {
++        toast.error('فشل رفع صورة الاختيار — جرب تاني')
++      }
++    } catch (e) {
++      toast.error('فشل رفع صورة الاختيار — جرب تاني')
++    }
++  }
++
++  /* (و46) إزالة صورة اختيار من المحرر */
++  const removeOptionFigure = function (qi: number, oi: number) {
++    setQuestions(function (prev) {
++      return prev.map(function (q, i) {
++        if (i !== qi) return q
++        var ofs = Array.isArray(q.optionFigures) ? q.optionFigures.slice() : ['', '', '', ''].map(function () { return null })
++        ofs[oi] = null
++        var anyLeft = ofs.some(function (o: any) { return o && (o.url || o.bbox) })
++        return Object.assign({}, q, { optionFigures: anyLeft ? ofs : undefined })
++      })
++    })
++  }
++
+   const removeQuestion = function (qi: number) {
+     setQuestions(function (prev) { return prev.filter(function (_, i) { return i !== qi }) })
+   }
+@@ -121,16 +186,24 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
+             points: q.points || 5,
+             modelAnswer: q.modelAnswer || '',
+             acceptedAnswers: q.acceptedAnswers.filter(function (a) { return a.trim() }),
++            /* (و46) رسمة السؤال بتتفضل — مكانها مش بيتلمس */
++            figure: q.figure || undefined,
+           }
+         }
+-        return {
++        var base: any = {
+           type: 'mcq',
+           question: q.question,
+           options: q.options.map(function (o) { return o.trim() }),
+           correct: q.correct,
+           points: q.points || 1,
+           modelAnswer: q.modelAnswer || '',
++          figure: q.figure || undefined,
++        }
++        /* (و46) رسومات الاختيارات بتتفضل في الحفظ — دايمًا بمحاذاة الاختيارات */
++        if (Array.isArray(q.optionFigures) && q.optionFigures.some(function (o: any) { return o && (o.url || o.bbox) })) {
++          base.optionFigures = q.optionFigures
+         }
++        return base
+       })
+       var res = await fetch(apiPath + '/' + itemId, {
+         method: 'PUT',
+@@ -214,26 +287,44 @@ export function QuestionsEditorDialog({ open, onOpenChange, title, apiPath, item
+                 {!isWriting && (
+                   <div className="grid grid-cols-2 gap-1.5">
+                     {q.options.map(function (opt, oi) {
++                      /* (و46) صورة الاختيار بتظهر هنا (صغيرة) — والزرار 📷 يرفعها لو ناقصة */
++                      var ofImg = q.optionFigures && q.optionFigures[oi]
+                       return (
+-                        <div key={oi} className="flex items-center gap-1.5">
+-                          <input
+-                            type="radio"
+-                            name={'correct-' + itemId + '-' + qi}
+-                            checked={q.correct === oi}
+-                            onChange={function () { update(qi, { correct: oi }) }}
+-                            className="accent-emerald-600"
+-                            title="الإجابة الصحيحة"
+-                          />
+-                          <Input
+-                            value={opt}
+-                            onChange={function (e) {
+-                              var newOpts = q.options.slice()
+-                              newOpts[oi] = e.target.value
+-                              update(qi, { options: newOpts })
+-                            }}
+-                            className="h-8 text-xs"
+-                            placeholder={'اختيار ' + String.fromCharCode(65 + oi)}
+-                          />
++                        <div key={oi} className="space-y-1">
++                          <div className="flex items-center gap-1.5">
++                            <input
++                              type="radio"
++                              name={'correct-' + itemId + '-' + qi}
++                              checked={q.correct === oi}
++                              onChange={function () { update(qi, { correct: oi }) }}
++                              className="accent-emerald-600"
++                              title="الإجابة الصحيحة"
++                            />
++                            <Input
++                              value={opt}
++                              onChange={function (e) {
++                                var newOpts = q.options.slice()
++                                newOpts[oi] = e.target.value
++                                update(qi, { options: newOpts })
++                              }}
++                              className="h-8 text-xs"
++                              placeholder={'اختيار ' + String.fromCharCode(65 + oi)}
++                            />
++                            <label
++                              title="رفع صورة للاختيار (اختياري — لما الاختيار نفسه رسمة)"
++                              className="shrink-0 h-8 px-1.5 inline-flex items-center justify-center rounded-md border border-border text-[11px] cursor-pointer transition-colors hover:bg-muted"
++                            >
++                              📷
++                              <input type="file" accept="image/*" hidden onChange={function (e) { var f = e.target.files && e.target.files[0]; e.target.value = ''; uploadOptionFigure(qi, oi, f) }} />
++                            </label>
++                          </div>
++                          {ofImg && ofImg.url && (
++                            <span className="relative inline-flex pr-6">
++                              {/* eslint-disable-next-line @next/next/no-img-element */}
++                              <img src={ofImg.url} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="h-10 rounded border border-border bg-white object-contain" />
++                              <button type="button" title="إزالة صورة الاختيار" onClick={function () { removeOptionFigure(qi, oi) }} className="absolute top-0 right-0 h-4 w-4 rounded-full bg-destructive text-white text-[9px] leading-none flex items-center justify-center">✕</button>
++                            </span>
++                          )}
+                         </div>
+                       )
+                     })}
+diff --git a/src/components/student/AIAssistant.tsx b/src/components/student/AIAssistant.tsx
+deleted file mode 100644
+index 867cfb7..0000000
+--- a/src/components/student/AIAssistant.tsx
++++ /dev/null
+@@ -1,441 +0,0 @@
+-'use client'
+-
+-import { useState, useRef, useEffect } from 'react'
+-import { Send, X, Sparkles, Loader2, ImagePlus } from 'lucide-react'
+-import { toast } from 'sonner'
+-/* (2026-و33) طلب المستر: المساعد يكتب برموز المنصة اللي بتظهر للطلاب —
+-   نفس العارض بتاع الأسئلة (كسور رأسية + أُس حقيقي + جذر) بدل LaTeX خام */
+-import { FractionText } from '@/components/FractionText'
+-
+-interface Message {
+-  role: 'user' | 'assistant'
+-  content: string
+-  images?: string[]
+-}
+-
+-interface PendingImage {
+-  id: string
+-  dataUrl: string
+-}
+-
+-var MAX_IMAGES = 3 // per message (client side)
+-
+-/* Read an image file and downscale it to max 1280px JPEG so the
+-   request payload stays small — IMAGES ONLY. */
+-async function fileToDataUrl(file: File): Promise<string> {
+-  var dataUrl = await new Promise<string>(function (resolve, reject) {
+-    var reader = new FileReader()
+-    reader.onload = function () { resolve(String(reader.result)) }
+-    reader.onerror = function () { reject(new Error('read')) }
+-    reader.readAsDataURL(file)
+-  })
+-  try {
+-    var img = await new Promise<HTMLImageElement>(function (resolve, reject) {
+-      var im = document.createElement('img')
+-      im.onload = function () { resolve(im) }
+-      im.onerror = function () { reject(new Error('decode')) }
+-      im.src = dataUrl
+-    })
+-    var maxDim = 1280
+-    var w = img.naturalWidth || img.width
+-    var h = img.naturalHeight || img.height
+-    if (!w || !h) return dataUrl
+-    if (w > maxDim || h > maxDim) {
+-      var k = Math.min(maxDim / w, maxDim / h)
+-      w = Math.round(w * k)
+-      h = Math.round(h * k)
+-    }
+-    var canvas = document.createElement('canvas')
+-    canvas.width = w
+-    canvas.height = h
+-    var ctx = canvas.getContext('2d')
+-    if (!ctx) return dataUrl
+-    ctx.drawImage(img, 0, 0, w, h)
+-    return canvas.toDataURL('image/jpeg', 0.85)
+-  } catch (e) {
+-    return dataUrl
+-  }
+-}
+-
+-export function AIAssistant() {
+-  const [open, setOpen] = useState(false)
+-  const [messages, setMessages] = useState<Message[]>([
+-    {
+-      role: 'assistant',
+-      content: 'أهلاً بك 👋 أنا المساعد الذكي بتاع منصة Math Genius. اسألني عن أي حاجة في الماث، ولو عندك واجب: جرب تحل الأول وصوّر حلك وابعتلي الصورة — هوريك إجابتك زي ما كتبتها وأقارنها بالإجابة الصحيحة سؤال بسؤال 📸',
+-    },
+-  ])
+-  const [input, setInput] = useState('')
+-  const [loading, setLoading] = useState(false)
+-  const [waiting, setWaiting] = useState(false) // sent, no first token yet
+-  const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
+-  const messagesEndRef = useRef<HTMLDivElement>(null)
+-  const inputRef = useRef<HTMLInputElement>(null)
+-  const fileRef = useRef<HTMLInputElement>(null)
+-  // مرجع دايمًا بيشاور على آخر رسائل — عشان نبعت تاريخ المحادثة للسيرفر
+-  const messagesRef = useRef<Message[]>([])
+-  useEffect(function () { messagesRef.current = messages }, [messages])
+-
+-  useEffect(() => {
+-    if (messagesEndRef.current) {
+-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+-    }
+-  }, [messages, open, loading])
+-
+-  useEffect(() => {
+-    if (open && inputRef.current) {
+-      setTimeout(() => inputRef.current?.focus(), 100)
+-    }
+-  }, [open])
+-
+-  const handlePickImages = async function (e: React.ChangeEvent<HTMLInputElement>) {
+-    var files = e.target.files
+-    if (!files || files.length === 0) return
+-    var room = MAX_IMAGES - pendingImages.length
+-    var list: File[] = []
+-    for (var i = 0; i < files.length && list.length < Math.max(0, room); i++) list.push(files[i])
+-    if (files.length > list.length) toast.error('أقصى عدد صور في الرسالة الواحدة هو ' + MAX_IMAGES)
+-    var added: PendingImage[] = []
+-    for (var j = 0; j < list.length; j++) {
+-      var f = list[j]
+-      if (!f.type || f.type.indexOf('image/') !== 0) {
+-        toast.error('مسموح بالصور فقط: ' + f.name)
+-        continue
+-      }
+-      if (f.size > 10 * 1024 * 1024) {
+-        toast.error('الصورة كبيرة جداً (الحد الأقصى 10MB): ' + f.name)
+-        continue
+-      }
+-      try {
+-        var dataUrl = await fileToDataUrl(f)
+-        added.push({ id: Date.now() + '-' + j, dataUrl: dataUrl })
+-      } catch (err) {
+-        toast.error('مش قادر أفتح الصورة: ' + f.name)
+-      }
+-    }
+-    if (added.length > 0) setPendingImages(function (prev) { return prev.concat(added) })
+-    e.target.value = ''
+-  }
+-
+-  const removePendingImage = function (id: string) {
+-    setPendingImages(function (prev) { return prev.filter(function (p) { return p.id !== id }) })
+-  }
+-
+-  const sendMessage = async () => {
+-    var msg = input.trim()
+-    var imgs = pendingImages.map(function (p) { return p.dataUrl })
+-    if ((!msg && imgs.length === 0) || loading) return
+-
+-    setInput('')
+-    setPendingImages([])
+-    // user message + empty assistant placeholder (the streaming target)
+-    setMessages(function (prev) {
+-      return [...prev, { role: 'user', content: msg, images: imgs.length > 0 ? imgs : undefined }, { role: 'assistant', content: '' }]
+-    })
+-    setLoading(true)
+-    setWaiting(true)
+-
+-    // Get current page context
+-    var page = typeof window !== 'undefined' ? window.location.pathname : ''
+-    var studentId = ''
+-    try {
+-      var stored = localStorage.getItem('current-student')
+-      if (stored) {
+-        var parsed = JSON.parse(stored)
+-        if (parsed && parsed.state && parsed.state.currentStudent) {
+-          studentId = parsed.state.currentStudent.id || ''
+-        }
+-      }
+-    } catch (e) {}
+-
+-    // Inactivity timeout: abort only when NO new token arrives for a while
+-    // (tokens keep resetting it, so a long answer is never cut off)
+-    var controller = new AbortController()
+-    var inactivityMs = imgs.length > 0 ? 60000 : 45000
+-    var inactivityTimer: any = null
+-    var armInactivity = function () {
+-      if (inactivityTimer) clearTimeout(inactivityTimer)
+-      inactivityTimer = setTimeout(function () { try { controller.abort() } catch (e) {} }, inactivityMs)
+-    }
+-    armInactivity()
+-
+-    var gotFirst = false
+-    var fillAssistant = function (text: string) {
+-      setMessages(function (prev) {
+-        var copy = prev.slice()
+-        for (var i = copy.length - 1; i >= 0; i--) {
+-          if (copy[i].role === 'assistant') { copy[i] = { role: 'assistant', content: text }; break }
+-        }
+-        return copy
+-      })
+-    }
+-    var appendDelta = function (d: string) {
+-      if (!gotFirst) { gotFirst = true; setWaiting(false) }
+-      armInactivity()
+-      setMessages(function (prev) {
+-        var copy = prev.slice()
+-        for (var i = copy.length - 1; i >= 0; i--) {
+-          if (copy[i].role === 'assistant') { copy[i] = { role: 'assistant', content: copy[i].content + d }; break }
+-        }
+-        return copy
+-      })
+-    }
+-
+-    try {
+-      // تاريخ المحادثة: آخر 8 رسائل (من غير placeholder المساعد الفاضي الأخير)
+-      var historyForApi = (function () {
+-        var arr = messagesRef.current.slice(0, -1).filter(function (m) { return m.content && m.content.trim() })
+-        return arr.slice(-8).map(function (m) { return { role: m.role, content: m.content } })
+-      })()
+-      var res = await fetch('/api/ai/assistant', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({
+-          message: msg || 'شوف الصور دي وساعدني فيها.',
+-          images: imgs.length > 0 ? imgs : undefined,
+-          history: historyForApi,
+-          context: { page: page, studentId: studentId },
+-          stream: true,
+-        }),
+-        signal: controller.signal,
+-      })
+-
+-      var ctype = res.headers.get('content-type') || ''
+-      if (!res.ok || ctype.indexOf('text/event-stream') < 0) {
+-        // legacy JSON / error response
+-        var jdata: any = null
+-        try { jdata = await res.json() } catch (e) {}
+-        var reply = (jdata && (jdata.reply || jdata.error)) || 'مش قادر أرد دلوقتي. حاول تاني 🙏'
+-        fillAssistant(reply)
+-      } else {
+-        // ---- SSE stream: append tokens as they arrive ----
+-        var reader = res.body ? res.body.getReader() : null
+-        if (!reader) throw new Error('no stream body')
+-        var decoder = new TextDecoder()
+-        var buf = ''
+-        var errMsg = ''
+-        while (true) {
+-          var chunk = await reader.read()
+-          if (chunk.done) break
+-          buf += decoder.decode(chunk.value, { stream: true })
+-          var lines = buf.split('\n')
+-          buf = lines.pop() || ''
+-          for (var li = 0; li < lines.length; li++) {
+-            var line = lines[li].trim()
+-            if (!line || line.indexOf('data:') !== 0) continue
+-            var payload = line.slice(5).trim()
+-            if (!payload) continue
+-            if (payload === '[DONE]') continue
+-            try {
+-              var ev = JSON.parse(payload)
+-              if (ev.delta) appendDelta(ev.delta)
+-              else if (ev.error) errMsg = String(ev.error)
+-            } catch (e) {}
+-          }
+-        }
+-        if (errMsg) {
+-          setMessages(function (prev) {
+-            var copy = prev.slice()
+-            for (var i = copy.length - 1; i >= 0; i--) {
+-              if (copy[i].role === 'assistant') {
+-                var base = copy[i].content
+-                copy[i] = { role: 'assistant', content: base ? base + '\n\n' + errMsg : errMsg }
+-                break
+-              }
+-            }
+-            return copy
+-          })
+-        }
+-      }
+-    } catch (e) {
+-      var aborted = (e as any) && (e as any).name === 'AbortError'
+-      setMessages(function (prev) {
+-        var copy = prev.slice()
+-        for (var i = copy.length - 1; i >= 0; i--) {
+-          if (copy[i].role === 'assistant') {
+-            var base = copy[i].content
+-            if (base) {
+-              // partial answer already streamed — keep it, just note the cut
+-              if (aborted) copy[i] = { role: 'assistant', content: base + '\n\n(الرد اتقطع — ابعت أي سؤال عشان نكمل 🙏)' }
+-            } else {
+-              copy[i] = { role: 'assistant', content: aborted ? 'الرد اتأخر جداً فاتقطع. جرب تاني 🙏' : 'حصلت مشكلة في الاتصال. حاول تاني 🙏' }
+-            }
+-            break
+-          }
+-        }
+-        return copy
+-      })
+-    }
+-    if (inactivityTimer) clearTimeout(inactivityTimer)
+-    setWaiting(false)
+-    setLoading(false)
+-  }
+-
+-  return (
+-    <>
+-      {/* Floating Button */}
+-      <button
+-        type="button"
+-        onClick={() => setOpen(!open)}
+-        className="fixed bottom-5 right-5 z-50 h-14 w-14 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-lg hover:scale-105 transition-transform flex items-center justify-center"
+-        style={{ boxShadow: '0 4px 20px rgba(139, 92, 246, 0.4)' }}
+-        title="مساعد ذكي"
+-        aria-label="مساعد ذكي"
+-      >
+-        {open ? <X className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
+-      </button>
+-
+-      {/* Chat Window */}
+-      {open && (
+-        <div className="fixed bottom-24 right-5 z-50 w-[calc(100vw-2.5rem)] sm:w-[400px] max-w-[400px] max-h-[500px] flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+-          {/* Header */}
+-          <div className="bg-gradient-to-r from-purple-500 to-blue-500 text-white p-3 flex items-center gap-2 shrink-0">
+-            <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+-              <Sparkles className="h-4 w-4" />
+-            </div>
+-            <div className="flex-1 min-w-0">
+-              <p className="font-bold text-sm">المساعد الذكي</p>
+-              <p className="text-[10px] opacity-90">اسألني أي حاجة أو ابعت صورة حلك للمقارنة 📸</p>
+-            </div>
+-            <button
+-              type="button"
+-              onClick={() => setOpen(false)}
+-              className="h-8 w-8 rounded-full hover:bg-white/20 flex items-center justify-center transition-colors"
+-            >
+-              <X className="h-4 w-4" />
+-            </button>
+-          </div>
+-
+-          {/* Messages */}
+-          <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar" style={{ minHeight: '250px', maxHeight: '350px' }}>
+-            {messages.map(function (msg, i) {
+-              var isUser = msg.role === 'user'
+-              var showCursor = !isUser && loading && !waiting && i === messages.length - 1
+-              return (
+-                <div key={i} className={'flex ' + (isUser ? 'justify-start' : 'justify-end')}>
+-                  <div
+-                    className={
+-                      'max-w-[85%] p-2.5 rounded-2xl text-sm whitespace-pre-wrap break-words ' +
+-                      (isUser
+-                        ? 'bg-primary text-primary-foreground rounded-tl-none'
+-                        : 'bg-muted text-foreground rounded-tr-none')
+-                    }
+-                    dir="auto"
+-                  >
+-                    {msg.images && msg.images.length > 0 && (
+-                      <div className="flex flex-wrap gap-1.5 mb-1.5">
+-                        {msg.images.map(function (src, ii) {
+-                          return (
+-                            // eslint-disable-next-line @next/next/no-img-element
+-                            <img
+-                              key={ii}
+-                              src={src}
+-                              alt="صورة مرفقة"
+-                              className="w-24 h-24 object-cover rounded-lg border border-white/20 cursor-default"
+-                              draggable={false}
+-                            />
+-                          )
+-                        })}
+-                      </div>
+-                    )}
+-                    {/* (2026-و33) ردود المساعد بتترسم بعارض رياضيات المنصة نفسه —
+-                        \frac بيبقى كسر رأسي و^ أُس و\sqrt جذر — وإيدي رسايل الطالب عادية */}
+-                    {isUser ? msg.content : <FractionText text={msg.content} />}
+-                    {showCursor && <span className="inline-block w-2 h-3.5 bg-muted-foreground/50 animate-pulse rounded-sm align-middle" aria-hidden="true" />}
+-                  </div>
+-                </div>
+-              )
+-            })}
+-            {loading && waiting && (
+-              <div className="flex justify-end">
+-                <div className="bg-muted text-foreground p-2.5 rounded-2xl rounded-tr-none flex items-center gap-2">
+-                  <Loader2 className="h-4 w-4 animate-spin" />
+-                  <span className="text-xs">بيفكر...</span>
+-                </div>
+-              </div>
+-            )}
+-            <div ref={messagesEndRef} />
+-          </div>
+-
+-          {/* Pending images preview */}
+-          {pendingImages.length > 0 && (
+-            <div className="px-3 pt-2 bg-card shrink-0">
+-              <div className="flex flex-wrap gap-2">
+-                {pendingImages.map(function (img) {
+-                  return (
+-                    <div key={img.id} className="relative">
+-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+-                      <img
+-                        src={img.dataUrl}
+-                        alt="صورة جاهزة للإرسال"
+-                        className="w-16 h-16 object-cover rounded-lg border border-border"
+-                        draggable={false}
+-                      />
+-                      <button
+-                        type="button"
+-                        aria-label="حذف الصورة"
+-                        onClick={function () { removePendingImage(img.id) }}
+-                        className="absolute -top-1.5 -left-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow"
+-                      >
+-                        <X className="h-3 w-3" />
+-                      </button>
+-                    </div>
+-                  )
+-                })}
+-              </div>
+-            </div>
+-          )}
+-
+-          {/* Input */}
+-          <div className="p-3 border-t border-border bg-card shrink-0">
+-            <div className="flex items-center gap-2">
+-              {/* Attach image (images only) */}
+-              <input
+-                ref={fileRef}
+-                type="file"
+-                accept="image/*"
+-                multiple
+-                className="hidden"
+-                onChange={handlePickImages}
+-              />
+-              <button
+-                type="button"
+-                aria-label="إرفاق صورة"
+-                title="ابعت صورة مسألة"
+-                disabled={loading || pendingImages.length >= MAX_IMAGES}
+-                onClick={function () { if (fileRef.current) fileRef.current.click() }}
+-                className="h-10 w-10 rounded-full border border-input bg-background text-muted-foreground hover:text-primary hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors shrink-0"
+-              >
+-                <ImagePlus className="h-5 w-5" />
+-              </button>
+-              <input
+-                ref={inputRef}
+-                type="text"
+-                value={input}
+-                onChange={function (e) { setInput(e.target.value) }}
+-                onKeyDown={function (e) {
+-                  if (e.key === 'Enter' && !e.shiftKey) {
+-                    e.preventDefault()
+-                    sendMessage()
+-                  }
+-                }}
+-                placeholder="اكتب سؤالك أو ابعت صورة حلك..."
+-                disabled={loading}
+-                className="flex-1 h-10 px-3 rounded-full bg-background border border-input text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+-                maxLength={500}
+-              />
+-              <button
+-                type="button"
+-                onClick={sendMessage}
+-                disabled={loading || (!input.trim() && pendingImages.length === 0)}
+-                className="h-10 w-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors shrink-0"
+-              >
+-                <Send className="h-4 w-4" />
+-              </button>
+-            </div>
+-          </div>
+-        </div>
+-      )}
+-    </>
+-  )
+-}
+diff --git a/src/components/student/FigurePointEditor.tsx b/src/components/student/FigurePointEditor.tsx
+deleted file mode 100644
+index 097755c..0000000
+--- a/src/components/student/FigurePointEditor.tsx
++++ /dev/null
+@@ -1,171 +0,0 @@
+-'use client'
+-
+-// ============================================================
+-// (2026-و44) FigurePointEditor — «حط نقط على الرسمة» — طلب المستر:
+-//   «نخلي حاجة أسهل: الرسمة مش محلولة الطالب يقدر يحل عليها — يختار
+-//    مكان النقط والمكان اللي يدوس عليه تحط فيه نقطة … وبعد كده يعمل
+-//    للرسمة (صورة) — طريقتين متاحين: نقط أو صورة من الكشكول»
+-//
+-// الفكرة الذكية: الطالب يدوس على الرسمة في الأماكن اللي عايز يحط فيها
+-// نقط → بنرسم النقط دي على نسخة من صورة الرسمة (canvas) → نرفع الصورة
+-// المركبة → بنضيف ماركر «[📷 صورة مرفقة: …]» لإجابته زي الصورة الملتقطة
+-// بالظبط — فالمصحح الذكي بيشوف الرسمة بنقط الطالب وبيحكم عليها
+-// (بالتسامح المعتاد: نقطة قريبة = صح — STEP 6.8 في المصحح).
+-// ============================================================
+-
+-import * as React from 'react'
+-import { chunkedUpload } from '@/lib/chunked-upload'
+-import { Loader2, MousePointerClick, Send, X } from 'lucide-react'
+-import { toast } from 'sonner'
+-
+-interface PlacedPoint { x: number; y: number } // نسب 0..1 من الرسمة
+-
+-export function FigurePointEditor({ figureUrl, questionLabel, onAttached, onClose }: {
+-  figureUrl: string
+-  questionLabel?: string
+-  onAttached: (markerText: string) => void
+-  onClose: () => void
+-}) {
+-  var ptsState = React.useState<PlacedPoint[]>([])
+-  var pts = ptsState[0]
+-  var setPts = ptsState[1]
+-  var busyState = React.useState(false)
+-  var busy = busyState[0]
+-  var setBusy = busyState[1]
+-  var wrapRef = React.useRef<HTMLDivElement | null>(null)
+-
+-  /* تحويل ضغطة على الرسمة لإحداثيات نسبية 0..1 */
+-  var handleClick = function (e: React.MouseEvent<HTMLDivElement>) {
+-    if (busy) return
+-    var wrap = wrapRef.current
+-    if (!wrap) return
+-    var rect = wrap.getBoundingClientRect()
+-    var x = (e.clientX - rect.left) / Math.max(1, rect.width)
+-    var y = (e.clientY - rect.top) / Math.max(1, rect.height)
+-    x = Math.min(1, Math.max(0, x))
+-    y = Math.min(1, Math.max(0, y))
+-    /* دوس قريب من نقطة موجودة (≥18px) = شيلها بدل ما تضيف غيرها */
+-    var threshold = 18 / Math.max(1, Math.min(rect.width, rect.height))
+-    var hitIdx = -1
+-    for (var i = 0; i < pts.length; i++) {
+-      var dx = pts[i].x - x
+-      var dy = pts[i].y - y
+-      if (Math.sqrt(dx * dx + dy * dy) <= threshold) { hitIdx = i; break }
+-    }
+-    if (hitIdx >= 0) setPts(pts.filter(function (_, k) { return k !== hitIdx }))
+-    else setPts(pts.concat([{ x: x, y: y }]))
+-  }
+-
+-  /* تركيب الصورة النهائية: الرسمة الأصلية + نقط الطالب مرسومة عليها */
+-  var composeAndAttach = async function () {
+-    if (busy) return
+-    if (pts.length === 0) {
+-      toast.error('حط نقطة واحدة على الأقل الأول — دوس على مكان النقطة على الرسمة')
+-      return
+-    }
+-    setBusy(true)
+-    try {
+-      var img = new Image()
+-      img.src = figureUrl
+-      await new Promise<void>(function (res, rej) {
+-        img.onload = function () { res() }
+-        img.onerror = function () { rej(new Error('مقدرتش أحمّل صورة الرسمة')) }
+-      })
+-      var w = img.naturalWidth || img.width || 800
+-      var h = img.naturalHeight || img.height || 600
+-      var canvas = document.createElement('canvas')
+-      canvas.width = w; canvas.height = h
+-      var ctx = canvas.getContext('2d')
+-      if (!ctx) throw new Error('canvas غير مدعم')
+-      ctx.fillStyle = '#ffffff'
+-      ctx.fillRect(0, 0, w, h)
+-      ctx.drawImage(img, 0, 0, w, h)
+-      /* نقط الطالب — دوائر كحلية بحد أبيض واضح زي ما المعلم بيعلم بجابه */
+-      var r = Math.max(5, Math.round(Math.min(w, h) * 0.018))
+-      for (var i = 0; i < pts.length; i++) {
+-        var cx = Math.round(pts[i].x * w)
+-        var cy = Math.round(pts[i].y * h)
+-        ctx.beginPath()
+-        ctx.arc(cx, cy, r, 0, Math.PI * 2)
+-        ctx.fillStyle = '#1e3a8a'
+-        ctx.fill()
+-        ctx.lineWidth = Math.max(2, Math.round(r * 0.35))
+-        ctx.strokeStyle = '#ffffff'
+-        ctx.stroke()
+-      }
+-      var blob = await new Promise<Blob | null>(function (res) {
+-        canvas.toBlob(function (b) { res(b) }, 'image/jpeg', 0.85)
+-      })
+-      if (!blob) throw new Error('مقدرتش أجهز الصورة')
+-      var file = new File([blob], 'points-' + Date.now() + '.jpg', { type: 'image/jpeg' })
+-      var up = await chunkedUpload(file, 'homework-answers')
+-      if (!up || !up.filePath) throw new Error('فشل رفع الصورة — جرب تاني')
+-      toast.success('النقط اتسجلت على الرسمة ✓ هتترفع مع إجابتك')
+-      onAttached('\n[📷 صورة مرفقة: ' + up.filePath + ']\n')
+-      onClose()
+-    } catch (e: any) {
+-      toast.error(e && e.message ? e.message : 'حصلت مشكلة — جرب تاني')
+-    }
+-    setBusy(false)
+-  }
+-
+-  return (
+-    <div className="mt-2 rounded-xl border-2 border-sky-300 bg-sky-50/70 dark:bg-sky-950/20 dark:border-sky-800 p-3 space-y-2">
+-      <div className="flex items-center justify-between gap-2 flex-wrap">
+-        <p className="text-[11px] font-bold text-sky-800 dark:text-sky-300 flex items-center gap-1.5">
+-          <MousePointerClick className="h-3.5 w-3.5" />
+-          حط نقط على الرسمة{questionLabel ? ' — ' + questionLabel : ''} — دوس على المكان وربع هتتحط نقطة، ودوس عليها تاني لو عايز تشيلها
+-        </p>
+-        <p className="text-[10px] text-sky-700/80 dark:text-sky-400/80 w-full">
+-          متقلقش من الدقة — المصحح بيفهم الرسم: المهم مكان النقطة يكون منطقي على الرسمة (مش بالملّيمتر) 👌
+-        </p>
+-        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="إغلاق">
+-          <X className="h-4 w-4" />
+-        </button>
+-      </div>
+-      <div
+-        ref={wrapRef}
+-        onClick={handleClick}
+-        className="relative inline-block max-w-full cursor-crosshair select-none"
+-        role="application"
+-        aria-label="اضغط على الرسمة لتحديد النقط"
+-      >
+-        {/* eslint-disable-next-line @next/next/no-img-element */}
+-        <img src={figureUrl} alt="رسمة السؤال — دوس عليها لتحط النقط" className="max-w-full max-h-80 rounded-lg border border-slate-300 dark:border-slate-700 bg-white object-contain pointer-events-none" />
+-        {pts.map(function (p, i) {
+-          return (
+-            <span
+-              key={i}
+-              className="absolute rounded-full bg-blue-900 border-2 border-white shadow-md pointer-events-none"
+-              style={{
+-                width: 14,
+-                height: 14,
+-                left: 'calc(' + (p.x * 100) + '% - 7px)',
+-                top: 'calc(' + (p.y * 100) + '% - 7px)',
+-              }}
+-              aria-label={'نقطة ' + (i + 1)}
+-            />
+-          )
+-        })}
+-      </div>
+-      <div className="flex items-center gap-2">
+-        <button
+-          type="button"
+-          disabled={busy || pts.length === 0}
+-          onClick={composeAndAttach}
+-          className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-bold disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+-        >
+-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+-          {busy ? 'بيجهز الصورة…' : 'ثبّت النقط وارفعها'}
+-        </button>
+-        {pts.length > 0 && (
+-          <button type="button" onClick={function () { setPts([]) }} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer">
+-            امسح كل النقط ({pts.length})
+-          </button>
+-        )}
+-      </div>
+-    </div>
+-  )
+-}
+-
+-export default FigurePointEditor
+diff --git a/src/components/student/SherineChat.tsx b/src/components/student/SherineChat.tsx
+deleted file mode 100644
+index c488d70..0000000
+--- a/src/components/student/SherineChat.tsx
++++ /dev/null
+@@ -1,261 +0,0 @@
+-'use client'
+-
+-// ============================================================
+-// (2026-و45) SherineChat — شيرين: المساعدة الشخصية للطالب
+-// طلب الحزمة: شات عائم زراره تحت على الشمال، لوحة RTL باسم شيرين،
+-// الرسايل بسكرول (max-h)، حقول إدخال + إرسال، نقط تحميل، المحادثة
+-// محفوظة في localStorage ('sherine_chat') + زرار مسح، وكل أهداف
+-// اللمس 44px على الأقل — وبتكلم /api/ai/assistant بشخصية 'sherine'.
+-// ملاحظة: المساعد الذكي القديم (AIAssistant) عائم تحت على اليمين —
+-// الاتنين مالهمش تعارض في المكان ولا في الشخصية.
+-// ============================================================
+-
+-import * as React from 'react'
+-import { Send, X, Trash2, Sparkles } from 'lucide-react'
+-import { toast } from 'sonner'
+-import { useAppStore } from '@/stores/app-store'
+-import { FractionText } from '@/components/FractionText'
+-
+-interface ChatMessage {
+-  role: 'user' | 'assistant'
+-  content: string
+-}
+-
+-var STORAGE_KEY = 'sherine_chat'
+-var MAX_STORED = 60 // بنحفظ آخر 60 رسالة بس في الجهاز
+-var MAX_HISTORY_SENT = 10 // آخر 10 رسائل للسيرفر (نفس حد المسار)
+-
+-var GREETING = 'أهلاً بيك 👋 أنا شيرين — مساعدتك الشخصية في الرياضيات.\nاسألني أي حاجة مش فاهمها في الدروس، أو اكتبلي مسألة وحنا نحلها مع بعض خطوة بخطوة 🌟'
+-
+-function loadStored(): ChatMessage[] {
+-  try {
+-    var raw = localStorage.getItem(STORAGE_KEY)
+-    if (!raw) return []
+-    var parsed = JSON.parse(raw)
+-    if (parsed && Array.isArray(parsed.messages)) {
+-      return parsed.messages
+-        .filter(function (m: any) { return m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim() })
+-        .slice(-MAX_STORED)
+-    }
+-  } catch (e) { /* التخزين التالف مش سبب لكسر حاجة */ }
+-  return []
+-}
+-
+-function saveStored(messages: ChatMessage[]) {
+-  try {
+-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, messages: messages.slice(-MAX_STORED) }))
+-  } catch (e) { /* ممتلئ أو ممنوع — صامت */ }
+-}
+-
+-/* نقط التحميل — 3 نقط بتنط بأوقات متأخرة */
+-function LoadingDots() {
+-  return (
+-    <span className="inline-flex items-center gap-1 py-1.5" aria-label="شيرين بتكتب">
+-      <span className="h-1.5 w-1.5 rounded-full bg-primary/70 animate-bounce" style={{ animationDelay: '0ms' }} />
+-      <span className="h-1.5 w-1.5 rounded-full bg-primary/70 animate-bounce" style={{ animationDelay: '150ms' }} />
+-      <span className="h-1.5 w-1.5 rounded-full bg-primary/70 animate-bounce" style={{ animationDelay: '300ms' }} />
+-    </span>
+-  )
+-}
+-
+-export function SherineChat() {
+-  const { currentStudent } = useAppStore()
+-  const [open, setOpen] = React.useState(false)
+-  const [messages, setMessages] = React.useState<ChatMessage[]>([{ role: 'assistant', content: GREETING }])
+-  const [input, setInput] = React.useState('')
+-  const [sending, setSending] = React.useState(false)
+-  const [restored, setRestored] = React.useState(false)
+-  const messagesEndRef = React.useRef<HTMLDivElement | null>(null)
+-  const inputRef = React.useRef<HTMLInputElement | null>(null)
+-
+-  /* استرجاع المحادثة مرة واحدة بعد أول رندر (عشان مش نكسر الهيدريشن) */
+-  React.useEffect(function () {
+-    var stored = loadStored()
+-    if (stored.length > 0) setMessages(stored)
+-    setRestored(true)
+-  }, [])
+-
+-  /* حفظ كل تغيير بعد الاسترجاع */
+-  React.useEffect(function () {
+-    if (!restored) return
+-    saveStored(messages)
+-  }, [messages, restored])
+-
+-  /* سكرول لآخر رسالة */
+-  React.useEffect(function () {
+-    if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+-  }, [messages, open, sending])
+-
+-  /* فوكس على خانة الكتابة لما الشات يفتح */
+-  React.useEffect(function () {
+-    if (open && inputRef.current) {
+-      var t = setTimeout(function () { if (inputRef.current) inputRef.current.focus() }, 120)
+-      return function () { clearTimeout(t) }
+-    }
+-  }, [open])
+-
+-  var send = async function () {
+-    var text = input.trim()
+-    if (!text || sending) return
+-    if (text.length > 2000) {
+-      toast.error('الرسالة طويلة أوي — اكتبيها في 2000 حرف أو أقل 😅')
+-      return
+-    }
+-    var userMsg: ChatMessage = { role: 'user', content: text }
+-    var history = messages
+-      .filter(function (m) { return m.role === 'user' || m.role === 'assistant' })
+-      .filter(function (m) { return m.content !== GREETING })
+-      .slice(-MAX_HISTORY_SENT)
+-      .map(function (m) { return { role: m.role, content: m.content } })
+-
+-    setMessages(function (prev) { return prev.concat([userMsg]) })
+-    setInput('')
+-    setSending(true)
+-    try {
+-      var res = await fetch('/api/ai/assistant', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({
+-          message: text,
+-          persona: 'sherine',
+-          stream: false,
+-          history: history,
+-          context: { studentId: currentStudent?.id || '', page: 'student-portal' },
+-        }),
+-      })
+-      var data: any = null
+-      try { data = await res.json() } catch (e) { data = null }
+-      if (res.ok && data && data.reply) {
+-        setMessages(function (prev) { return prev.concat([{ role: 'assistant', content: String(data.reply) }]) })
+-      } else {
+-        var errMsg = (data && data.error) ? String(data.error) : 'شيرين مشغولة شوية دلوقتي — جرب تاني بعد لحظة 🙏'
+-        setMessages(function (prev) { return prev.concat([{ role: 'assistant', content: errMsg }]) })
+-      }
+-    } catch (e) {
+-      setMessages(function (prev) { return prev.concat([{ role: 'assistant', content: 'حصلت مشكلة في الاتصال — اتأكد إن النت شغال وجرب تاني 🙏' }]) })
+-    }
+-    setSending(false)
+-  }
+-
+-  var clearChat = function () {
+-    setMessages([{ role: 'assistant', content: GREETING }])
+-    try { localStorage.removeItem(STORAGE_KEY) } catch (e) {}
+-    toast.success('اتمسحت المحادثة — نبدأ من الأول 🌟')
+-  }
+-
+-  /* من غير طالب مسجل دخول — مفيش شيرين */
+-  if (!currentStudent) return null
+-
+-  return (
+-    <>
+-      {/* الزرار العائم — تحت على الشمال (المساعد الذكي على اليمين) */}
+-      {!open && (
+-        <button
+-          type="button"
+-          onClick={function () { setOpen(true) }}
+-          className="fixed bottom-5 left-5 z-50 h-14 w-14 rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-white shadow-lg hover:scale-105 transition-transform flex items-center justify-center cursor-pointer"
+-          aria-label="افتح شات شيرين — المساعدة الشخصية في الرياضيات"
+-        >
+-          <Sparkles className="h-6 w-6" />
+-        </button>
+-      )}
+-
+-      {open && (
+-        <div
+-          dir="rtl"
+-          className="fixed bottom-24 left-5 z-50 w-[calc(100vw-2.5rem)] sm:w-[380px] max-w-[380px] flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
+-          role="dialog"
+-          aria-label="شات شيرين — المساعدة الشخصية في الرياضيات"
+-        >
+-          {/* الهيدر */}
+-          <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gradient-to-l from-pink-500/15 to-rose-500/10 border-b border-border">
+-            <div className="flex items-center gap-2 min-w-0">
+-              <span className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-white flex items-center justify-center">
+-                <Sparkles className="h-4 w-4" />
+-              </span>
+-              <div className="min-w-0">
+-                <p className="text-sm font-bold leading-tight">شيرين</p>
+-                <p className="text-[10px] text-muted-foreground leading-tight">مساعدتك الشخصية في الرياضيات — بترد فورًا 🌟</p>
+-              </div>
+-            </div>
+-            <div className="flex items-center gap-1 shrink-0">
+-              <button
+-                type="button"
+-                onClick={clearChat}
+-                className="h-11 w-11 rounded-lg inline-flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+-                aria-label="مسح المحادثة وابدأ من جديد"
+-                title="مسح المحادثة"
+-              >
+-                <Trash2 className="h-4 w-4" />
+-              </button>
+-              <button
+-                type="button"
+-                onClick={function () { setOpen(false) }}
+-                className="h-11 w-11 rounded-lg inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+-                aria-label="اقفل الشات"
+-                title="اقفل"
+-              >
+-                <X className="h-5 w-5" />
+-              </button>
+-            </div>
+-          </div>
+-
+-          {/* الرسايل — max-h مع سكرول */}
+-          <div className="max-h-[380px] min-h-[180px] overflow-y-auto custom-scrollbar px-3 py-3 space-y-2.5">
+-            {messages.map(function (m, i) {
+-              var isUser = m.role === 'user'
+-              return (
+-                <div key={i} className={'flex ' + (isUser ? 'justify-end' : 'justify-start')}>
+-                  <div
+-                    className={
+-                      'max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words ' +
+-                      (isUser
+-                        ? 'bg-primary text-primary-foreground rounded-br-md'
+-                        : 'bg-muted text-foreground rounded-bl-md')
+-                    }
+-                  >
+-                    {isUser ? m.content : <FractionText text={m.content} />}
+-                  </div>
+-                </div>
+-              )
+-            })}
+-            {sending && (
+-              <div className="flex justify-start">
+-                <div className="bg-muted rounded-2xl rounded-bl-md px-3 py-1.5">
+-                  <LoadingDots />
+-                </div>
+-              </div>
+-            )}
+-            <div ref={messagesEndRef} />
+-          </div>
+-
+-          {/* خانة الكتابة + الإرسال */}
+-          <div className="border-t border-border p-2 flex items-center gap-2">
+-            <input
+-              ref={inputRef}
+-              value={input}
+-              onChange={function (e) { setInput(e.target.value) }}
+-              onKeyDown={function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+-              placeholder="اكتب سؤالك لشيرين…"
+-              className="flex-1 h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+-              maxLength={2000}
+-              disabled={sending}
+-              aria-label="اكتب رسالتك لشيرين"
+-            />
+-            <button
+-              type="button"
+-              onClick={send}
+-              disabled={sending || !input.trim()}
+-              className="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 text-white inline-flex items-center justify-center shadow disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity cursor-pointer"
+-              aria-label="ابعت الرسالة"
+-            >
+-              <Send className="h-4 w-4 -scale-x-100" />
+-            </button>
+-          </div>
+-        </div>
+-      )}
+-    </>
+-  )
+-}
+-
+-export default SherineChat
+diff --git a/src/components/student/StudentPortal.tsx b/src/components/student/StudentPortal.tsx
+index b73346e..4c3a225 100755
+--- a/src/components/student/StudentPortal.tsx
++++ b/src/components/student/StudentPortal.tsx
+@@ -23,15 +23,32 @@ import { StudentComplaints } from '@/components/student/StudentComplaints'
+ import { BooksTab } from '@/components/student/BooksTab'
+ import { FractionText } from '@/components/FractionText'
+ import BidiText from '@/components/BidiText'
+-/* (2026-و44) «حط نقط على الرسمة» — طلب المستر: حل الرسمة بضغطة على المكان أو صورة من الكشكول */
+-import { FigurePointEditor } from '@/components/student/FigurePointEditor'
+ /* (2026-و44) جرس الإشعارات + بادج المجتمع — أي حاجة جديدة توصل للطالب */
+ import { NotificationsBell } from '@/components/student/NotificationsBell'
+-/* (2026-و45) شيرين — المساعدة الشخصية العائمة (تحت على الشمال) */
+-import { SherineChat } from '@/components/student/SherineChat'
+ import { normalizeCorrectKey } from '@/lib/correct-key'
+ /* (و45) تصنيف موحّد: سؤال له اختيارات صور/رسومات = اختياري مش مقالي */
+ import { isWritingQuestion } from '@/lib/question-figures'
++
++/* ============================================================
++ * (و46) قايمة اختيارات موحّدة للعرض — طلب المستر:
++ *   «عايز الرسمة تكون شكلها صغير عشان الطالب يقدر يختار — هي مش موجودة أصلًا»
++ * 1) لو options فاضية (سؤال رسومات اتحول مقالي في بيانات قديمة) بنبني
++ *    القايمة من optionFigures نفسها — الطالب يلاقي الاختيارات قدامه.
++ * 2) لو الاختيار نصه فاضي/N/A ومعاه صورة → النص بيتخفى والرسمة الصغيرة هي الاختيار.
++ * ============================================================ */
++function mcqChoiceList(q: any): { text: string; figUrl: string }[] {
++  var opts = q && Array.isArray(q.options) ? q.options : []
++  var figs = q && Array.isArray(q.optionFigures) ? q.optionFigures : []
++  var n = Math.max(opts.length, figs.length)
++  var out: { text: string; figUrl: string }[] = []
++  for (var i = 0; i < n; i++) {
++    var t = String(opts[i] == null ? '' : opts[i])
++    var f = figs[i] && figs[i].url ? String(figs[i].url) : ''
++    var isPlaceholder = t.trim() === '' || t === 'N/A' || t === 'لا يوجد'
++    out.push({ text: f && isPlaceholder ? '' : t, figUrl: f })
++  }
++  return out
++}
+ /* (2026-و40-w) ورقة العمل: جداول قابلة للكتابة + رسومات مقصوصة + تجميع صفحات المصدر */
+ import {
+   WorksheetQuestionBadge, WorksheetPageChip, WorksheetTableEditable, WorksheetTableReadonly,
+@@ -40,14 +57,7 @@ import {
+ } from '@/components/worksheet/WorksheetParts'
+ 
+ export function StudentPortal() {
+-  return (
+-    <>
+-      <StudentPortalInner />
+-      {/* (2026-و45) شيرين — مركّبة مرة واحدة فوق البورتال كله (الداشبورد + الشوز)،
+-         بتقفل نفسها لو مفيش طالب مسجل */}
+-      <SherineChat />
+-    </>
+-  )
++  return <StudentPortalInner />
+ }
+ 
+ function StudentPortalInner() {
+@@ -827,8 +837,6 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+   /* (2026-و40-w) جداول ورقة العمل: قيم الطالب في الخانات — مفتاحها displayIdx
+      (وضع ورقة العمل بيتعرض بالترتيب الأصلي — displayIdx = origIdx) */
+   const [hwTableAnswers, setHwTableAnswers] = useState<Record<string, Record<number, string[][]>>>({})
+-  /* (2026-و44) محرر النقط على الرسمة — مفتاحه hw:<id>:<displayIdx> */
+-  const [pointsEditorFor, setPointsEditorFor] = useState<string>('')
+ 
+   /* ===== (2026-و37) مسودة الواجب المحفوظة تلقائيًا — زي الامتحان بالظبط:
+      أي reload أثناء كتابة الحل (أو رفع الورقة) ما يضيعش إجابات الطالب */
+@@ -1878,29 +1886,6 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                                     />
+                                   )}
+                                   {q.figure && <WorksheetFigure figure={q.figure} />}
+-                                  {qIsWriting && q.figure && q.figure.url && (
+-                                    /* (2026-و44) «حط نقط على الرسمة» — الطريقة الأولى: يدوس على مكان النقطة،
+-                                       والثانية: يصور الحل من الكشكول — الاتنين متاحين والمصحح بيحكم بالاتنين */
+-                                    <div className="mt-1">
+-                                      <button type="button" onClick={function () { setPointsEditorFor(pointsEditorFor === 'hw:' + hw.id + ':' + displayIdx ? '' : 'hw:' + hw.id + ':' + displayIdx) }} className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline underline-offset-2 cursor-pointer">
+-                                        🖱 حط نقط على الرسمة (أو صوّرها من الكشكول 📷)
+-                                      </button>
+-                                      {pointsEditorFor === 'hw:' + hw.id + ':' + displayIdx && (
+-                                        <FigurePointEditor
+-                                          figureUrl={q.figure.url}
+-                                          onAttached={function (marker: string) {
+-                                            setHwAnswers(function (prev) {
+-                                              var a = { ...prev }
+-                                              var cur = typeof a[hw.id]?.[displayIdx] === 'string' ? (a[hw.id][displayIdx] as string) : ''
+-                                              a[hw.id] = { ...(a[hw.id] || {}), [displayIdx]: (cur + marker).trim() }
+-                                              return a
+-                                            })
+-                                          }}
+-                                          onClose={function () { setPointsEditorFor('') }}
+-                                        />
+-                                      )}
+-                                    </div>
+-                                  )}
+                                   {qIsWriting ? (
+                                     <div dir="ltr">
+                                       <MathKeyboard
+@@ -1921,7 +1906,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                                     </div>
+                                   ) : (
+                                     <div className="space-y-1.5">
+-                                      {(q.options || []).map(function(opt: string, oi: number) {
++                                      {/* (و46) قايمة الاختيارات الموحدة — رسومات الاختيارات بتظهر صغيرة */}
++                                      {mcqChoiceList(q).map(function(ch: { text: string; figUrl: string }, oi: number) {
+                                         var isSelected = myAnswers[displayIdx] === oi
+                                         return (
+                                           <button
+@@ -1933,11 +1919,11 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                                             )}
+                                             style={{ textAlign: 'left' }}
+                                           >
+-                                            <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span><FractionText text={opt} />
+-                                            {(q.optionFigures && q.optionFigures[oi] && q.optionFigures[oi].url) && (
+-                                              /* (و43) صورة الاختيار — الاختيارات اللي هي رسومات في الملف الأصلي */
++                                            <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{ch.text ? <FractionText text={ch.text} /> : null}
++                                            {ch.figUrl && (
++                                              /* (و46) صورة الاختيار — شكل صغير واضح عشان الطالب يختار */
+                                               /* eslint-disable-next-line @next/next/no-img-element */
+-                                              <img src={q.optionFigures[oi].url} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block w-full max-h-24 rounded border border-border bg-white object-contain" />
++                                              <img src={ch.figUrl} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block max-h-24 w-auto max-w-full rounded border border-border bg-white object-contain" />
+                                             )}
+                                           </button>
+                                         )
+@@ -1962,7 +1948,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                           <div key={'mcq-' + di} className="space-y-2 rounded-lg p-2" dir="ltr">
+                             <p className="font-medium text-sm whitespace-pre-wrap break-words" style={{ textAlign: 'left' }}>{di + 1}. <FractionText text={q.question || q.q} /> <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'pt' : 'pts'})</span></p>
+                             <div className="space-y-1.5">
+-                              {(q.options || []).map(function(opt: string, oi: number) {
++                              {/* (و46) قايمة الاختيارات الموحدة — رسومات الاختيارات بتظهر صغيرة */}
++                              {mcqChoiceList(q).map(function(ch: { text: string; figUrl: string }, oi: number) {
+                                 var isSelected = myAnswers[di] === oi
+                                 return (
+                                   <button
+@@ -1974,11 +1961,11 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                                     )}
+                                     style={{ textAlign: 'left' }}
+                                   >
+-                                    <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span><FractionText text={opt} />
+-                                    {(q.optionFigures && q.optionFigures[oi] && q.optionFigures[oi].url) && (
+-                                      /* (و43) صورة الاختيار — الاختيارات اللي هي رسومات في الملف الأصلي */
++                                    <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{ch.text ? <FractionText text={ch.text} /> : null}
++                                    {ch.figUrl && (
++                                      /* (و46) صورة الاختيار — شكل صغير واضح عشان الطالب يختار */
+                                       /* eslint-disable-next-line @next/next/no-img-element */
+-                                      <img src={q.optionFigures[oi].url} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block w-full max-h-24 rounded border border-border bg-white object-contain" />
++                                      <img src={ch.figUrl} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block max-h-24 w-auto max-w-full rounded border border-border bg-white object-contain" />
+                                     )}
+                                   </button>
+                                 )
+@@ -1996,7 +1983,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                     <div className="space-y-4">
+                       {/* (2026-و44) رسالة قصيرة فوق الحل — طلب المستر حرفيًا */}
+                       <p className="text-[11px] font-bold text-sky-700 dark:text-sky-300 rounded-lg border border-sky-300/60 bg-sky-50/70 dark:bg-sky-950/30 dark:border-sky-800/60 px-3 py-2">
+-                        ✏️ السؤال اللي فيه رسمة: اعمل الرسمة في كشكولك وصوّرها وارفع الصورة 📷 — أو دوس «حط نقط على الرسمة» على طول. والجدول اكتبه هنا بالكيبورد عادي — الاتنين بيحتسبوا في التصحيح.
++                        ✏️ السؤال اللي فيه رسمة: اعمل الرسمة في كشكولك وصوّرها وارفع الصورة 📷. والجدول اكتبه هنا بالكيبورد عادي — الاتنين بيحتسبوا في التصحيح.
+                       </p>
+                       {hasMCQ && <div className="border-t pt-3"><p className="text-xs font-semibold text-amber-600 dark:text-amber-400">الأسئلة المقالية:</p></div>}
+                       {displayWriting.map(function(q: any, wi: number) {
+@@ -2010,29 +1997,6 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
+                               <Badge variant="outline" className="text-[9px] ml-2 border-amber-500/40 text-amber-600">Writing</Badge>
+                             </p>
+                             {q.figure && <div dir="rtl" className="pt-1"><WorksheetFigure figure={q.figure} /></div>}
+-                            {q.figure && q.figure.url && (
+-                              /* (2026-و44) «حط نقط على الرسمة» — بدل ما تصور من الكشكول،
+-                                 دوس على المكان وهنرفع الرسمة بنقطك للمصحح الذكي */
+-                              <div dir="rtl" className="mt-1">
+-                                <button type="button" onClick={function () { setPointsEditorFor(pointsEditorFor === 'hw:' + hw.id + ':' + displayIdx ? '' : 'hw:' + hw.id + ':' + displayIdx) }} className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline underline-offset-2 cursor-pointer">
+-                                  🖱 حط نقط على الرسمة (أو صوّرها من الكشكول 📷)
+-                                </button>
+-                                {pointsEditorFor === 'hw:' + hw.id + ':' + displayIdx && (
+-                                  <FigurePointEditor
+-                                    figureUrl={q.figure.url}
+-                                    onAttached={function (marker: string) {
+-                                      setHwAnswers(function (prev) {
+-                                        var a = { ...prev }
+-                                        var cur = typeof a[hw.id]?.[displayIdx] === 'string' ? (a[hw.id][displayIdx] as string) : ''
+-                                        a[hw.id] = { ...(a[hw.id] || {}), [displayIdx]: (cur + marker).trim() }
+-                                        return a
+-                                      })
+-                                    }}
+-                                    onClose={function () { setPointsEditorFor('') }}
+-                                  />
+-                                )}
+-                              </div>
+-                            )}
+                             <div dir="ltr">
+                               <MathKeyboard
+                                 value={typeof hwAnswers[hw.id]?.[displayIdx] === 'string' ? (hwAnswers[hw.id]?.[displayIdx] as string) : ''}
+@@ -2259,8 +2223,6 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+   const [submitting, setSubmitting] = useState(false)
+   /* 2026-و20 — ممنوع تسليم الامتحان لحد ما صور ورقة الحل توصل كاملة */
+   const [examPhotoBusy, setExamPhotoBusy] = useState(false)
+-  /* (2026-و44) محرر النقط على الرسمة في الامتحان — displayIdx المفتوح أو -1 */
+-  const [examPointsEditor, setExamPointsEditor] = useState<number>(-1)
+   const [examQuestions, setExamQuestions] = useState<any[]>([])
+   const [examShuffleMap, setExamShuffleMap] = useState<number[]>([])
+   const [examSubmitted, setExamSubmitted] = useState(false)
+@@ -3094,23 +3056,6 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                           </div>
+                         )}
+                         {q.figure && <WorksheetFigure figure={q.figure} />}
+-                        {qIsWriting && q.figure && q.figure.url && !examTimeUp && (
+-                          /* (2026-و44) «حط نقط على الرسمة» — طريقتين: نقط على الشاشة أو صورة من الكشكول */
+-                          <div dir="rtl" className="mt-1">
+-                            <button type="button" onClick={function () { setExamPointsEditor(examPointsEditor === displayIdx ? -1 : displayIdx) }} className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline underline-offset-2 cursor-pointer">
+-                              🖱 حط نقط على الرسمة (أو صوّرها من الكشكول 📷)
+-                            </button>
+-                            {examPointsEditor === displayIdx && (
+-                              <FigurePointEditor
+-                                figureUrl={q.figure.url}
+-                                onAttached={function (marker: string) {
+-                                  setWritingAnswers(function (prev) { return { ...prev, [displayIdx]: ((prev[displayIdx] || '') + marker).trim() } })
+-                                }}
+-                                onClose={function () { setExamPointsEditor(-1) }}
+-                              />
+-                            )}
+-                          </div>
+-                        )}
+                         {qIsWriting ? (
+                           <div
+                             dir="ltr"
+@@ -3132,7 +3077,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                           </div>
+                         ) : (
+                           <div className="space-y-2">
+-                            {(q.options || []).map((opt: string, oi: number) => (
++                            {/* (و46) قايمة الاختيارات الموحدة — رسومات الاختيارات بتظهر صغيرة */}
++                            {mcqChoiceList(q).map((ch: { text: string; figUrl: string }, oi: number) => (
+                               <button
+                                 key={oi}
+                                 disabled={examTimeUp}
+@@ -3142,11 +3088,11 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                                 }`}
+                                 style={{ textAlign: 'left' }}
+                               >
+-                                <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span><FractionText text={opt} />
+-                                {(q.optionFigures && q.optionFigures[oi] && q.optionFigures[oi].url) && (
+-                                  /* (و43) صورة الاختيار — الاختيارات اللي هي رسومات في الملف الأصلي */
++                                <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{ch.text ? <FractionText text={ch.text} /> : null}
++                                {ch.figUrl && (
++                                  /* (و46) صورة الاختيار — شكل صغير واضح عشان الطالب يختار */
+                                   /* eslint-disable-next-line @next/next/no-img-element */
+-                                  <img src={q.optionFigures[oi].url} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block w-full max-h-24 rounded border border-border bg-white object-contain" />
++                                  <img src={ch.figUrl} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block max-h-24 w-auto max-w-full rounded border border-border bg-white object-contain" />
+                                 )}
+                               </button>
+                             ))}
+@@ -3174,7 +3120,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                   <CardContent className="p-4 space-y-3">
+                     <p className="font-medium text-sm" style={{ textAlign: 'left' }}>{mi + 1}. <FractionText text={qText} /> <span className="text-muted-foreground text-xs">({pts} {pts === 1 ? 'درجة' : 'درجات'})</span></p>
+                     <div className="space-y-2">
+-                      {(q.options || []).map((opt: string, oi: number) => (
++                      {/* (و46) قايمة الاختيارات الموحدة — رسومات الاختيارات بتظهر صغيرة */}
++                      {mcqChoiceList(q).map((ch: { text: string; figUrl: string }, oi: number) => (
+                         <button
+                           key={oi}
+                           disabled={examTimeUp}
+@@ -3184,11 +3131,11 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                           }`}
+                           style={{ textAlign: 'left' }}
+                         >
+-                          <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span><FractionText text={opt} />
+-                          {(q.optionFigures && q.optionFigures[oi] && q.optionFigures[oi].url) && (
+-                            /* (و43) صورة الاختيار — الاختيارات اللي هي رسومات في الملف الأصلي */
++                          <span className="mr-2 font-bold">{String.fromCharCode(65 + oi)}.</span>{ch.text ? <FractionText text={ch.text} /> : null}
++                          {ch.figUrl && (
++                            /* (و46) صورة الاختيار — شكل صغير واضح عشان الطالب يختار */
+                             /* eslint-disable-next-line @next/next/no-img-element */
+-                            <img src={q.optionFigures[oi].url} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block w-full max-h-24 rounded border border-border bg-white object-contain" />
++                            <img src={ch.figUrl} alt={'صورة الاختيار ' + String.fromCharCode(65 + oi)} className="mt-1 block max-h-24 w-auto max-w-full rounded border border-border bg-white object-contain" />
+                           )}
+                         </button>
+                       ))}
+@@ -3205,7 +3152,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+           <div className="space-y-3">
+             {/* (2026-و44) رسالة قصيرة فوق الحل — طلب المستر حرفيًا */}
+             <p className="text-[11px] font-bold text-sky-700 dark:text-sky-300 rounded-lg border border-sky-300/60 bg-sky-50/70 dark:bg-sky-950/30 dark:border-sky-800/60 px-3 py-2">
+-              ✏️ السؤال اللي فيه رسمة: اعمل الرسمة في كشكولك وصوّرها وارفع الصورة 📷 — أو دوس «حط نقط على الرسمة» على طول. والجدول اكتبه هنا بالكيبورد عادي — الاتنين بيحتسبوا في التصحيح.
++              ✏️ السؤال اللي فيه رسمة: اعمل الرسمة في كشكولك وصوّرها وارفع الصورة 📷. والجدول اكتبه هنا بالكيبورد عادي — الاتنين بيحتسبوا في التصحيح.
+             </p>
+             {mcqQs.length > 0 && <div className="border-t pt-3"><p className="text-xs font-semibold text-amber-600 dark:text-amber-400">الأسئلة المقالية:</p></div>}
+             {writingQs.map(function(item, wi) {
+@@ -3224,23 +3171,6 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
+                     {/* (25-b2) عند انتهاء الوقت: منع تعديل نهائي — pointer-events +
+                         قفل الكيبورد على الـ MathKeyboard من غير لمس الملف بتاعه */}
+                     {q.figure && <WorksheetFigure figure={q.figure} />}
+-                    {q.figure && q.figure.url && !examTimeUp && (
+-                      /* (2026-و44) «حط نقط على الرسمة» — طريقتين متاحين */
+-                      <div dir="rtl" className="mt-1">
+-                        <button type="button" onClick={function () { setExamPointsEditor(examPointsEditor === displayIdx ? -1 : displayIdx) }} className="text-[11px] font-bold text-sky-700 dark:text-sky-300 hover:underline underline-offset-2 cursor-pointer">
+-                          🖱 حط نقط على الرسمة (أو صوّرها من الكشكول 📷)
+-                        </button>
+-                        {examPointsEditor === displayIdx && (
+-                          <FigurePointEditor
+-                            figureUrl={q.figure.url}
+-                            onAttached={function (marker: string) {
+-                              setWritingAnswers(function (prev) { return { ...prev, [displayIdx]: ((prev[displayIdx] || '') + marker).trim() } })
+-                            }}
+-                            onClose={function () { setExamPointsEditor(-1) }}
+-                          />
+-                        )}
+-                      </div>
+-                    )}
+                     <div
+                       dir="ltr"
+                       className={examTimeUp ? 'pointer-events-none select-none opacity-60' : ''}
