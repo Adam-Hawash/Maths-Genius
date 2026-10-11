@@ -525,9 +525,9 @@ function StudentPortalInner() {
     { id: 'homework', label: T('الواجبات', 'Homework'), icon: ClipboardList },
     { id: 'exams', label: T('الامتحانات', 'Exams'), icon: FileText },
     /* (2026-و66) المولد الذكي — طلب المستر: تاب «اتدرب أكتر» */
-    { id: 'practice', label: T('اتدرب أكتر', 'Practice'), icon: Target },
+    { id: 'practice', label: 'Practice', icon: Target },
     /* (2026-و66) ساحة التحدي — جروبات + تحدي المستر + فلاش كاردز */
-    { id: 'arena', label: T('ساحة التحدي', 'Arena'), icon: Swords },
+    { id: 'arena', label: 'Arena', icon: Swords },
     /* (2026-و40) الكتب والملازم — مكتبة PDF الطالب يفتحها/يحملها */
     { id: 'books', label: T('الكتب والملازم', 'Books'), icon: BookOpen },
     { id: 'announcements', label: T('التنبيهات', 'Alerts'), icon: Megaphone },
@@ -657,6 +657,8 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
   // (2026-ف — رجعة نظام الجدولة القديم زي ما كان بالظبط)
   const [videoSchedules, setVideoSchedules] = useState<Record<string, any>>({})
   const [hiddenVideoIds, setHiddenVideoIds] = useState<Set<string>>(new Set())
+  // (2026-ز13) الدروس المخفية كاملة عن الطالب
+  const [hiddenGroupKeys, setHiddenGroupKeys] = useState<Set<string>>(new Set())
   const [activeLessonVideo, setActiveLessonVideo] = useState<VideoType | null>(null)
   /* (2026-و106) صفحة الدرس — مودال أجزاء الدرس المتعدد بالترتيب */
   const [activeLessonGroup, setActiveLessonGroup] = useState<{ title: string; parts: VideoType[] } | null>(null)
@@ -706,6 +708,15 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         setHiddenVideoIds(new Set(data.hiddenVideoIds || []))
       })
       .catch(function() {})
+  }, [studentId])
+
+  // (2026-ز13) الدروس المخفية كاملة عن الطالب ده
+  useEffect(() => {
+    if (!studentId) return
+    fetch('/api/lesson-hide?studentId=' + studentId)
+      .then(function (r) { return r.json() })
+      .then(function (data) { setHiddenGroupKeys(new Set(data.hiddenGroupKeys || [])) })
+      .catch(function () {})
   }, [studentId])
 
   // Check if video is locked for this student (scheduled but not yet unlocked)
@@ -772,13 +783,13 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
     orderedVideos.forEach(function (v) {
       if (hiddenVideoIds.has(v.id)) return
       var k = String((v as any).groupKey || '')
-      if (!k || groupInserted[k]) return
+      if (!k || groupInserted[k] || hiddenGroupKeys.has(k)) return
       groupInserted[k] = true
       var parts = (byKey[k] || []).slice().sort(function (a, b) { return (Number((a as any).orderIndex) || 0) - (Number((b as any).orderIndex) || 0) })
       items.push({ type: 'group', key: k, title: parts[0] ? parts[0].title : k, grade: parts[0] ? parts[0].grade : '', price: parts[0] ? Number(parts[0].price || 0) : 0, parts: parts })
     })
     return items
-  }, [orderedVideos, hiddenVideoIds])
+  }, [orderedVideos, hiddenVideoIds, hiddenGroupKeys])
 
   /* القفل التسلسلي — قواعد المستر المحدّثة (مع الترتيب اليدوي ▲▼):
      1) الفيديو بيتقفل بس لو فيه فيديو **قبله في الترتيب** لسه مخلصش
