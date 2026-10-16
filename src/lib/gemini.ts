@@ -360,6 +360,7 @@ export async function callGemini(opts: {
   generationConfig?: any
   timeoutMs?: number          // per-attempt timeout (default 30000)
   fastFailFirstMs?: number    // optional shorter timeout for the very first attempt
+  budgetMs?: number           // (ز17) ميزانية كلية لكل الموديلات/المفاتيح — فوقها نسلّم للمحرك الاحتياطي فورًا
   thinking?: 'low' | 'off' | 'default'
 }): Promise<GeminiResult> {
   var keys = getGeminiApiKeys()
@@ -373,6 +374,12 @@ export async function callGemini(opts: {
   var lastError = ''
   var sawQuota = false
   var attemptIndex = 0
+  /* (ز17) ساعة الميزانية: بدء العد من أول محاولة — لو الموديلات بتلف ومفش حد بيرد
+     بنوقف بدل ما نخلي الطالب مستني ٣٥ ثانية على كل محاولة فاشلة */
+  var budgetStart = Date.now()
+  function budgetExceeded(): boolean {
+    return !!opts.budgetMs && (Date.now() - budgetStart) > opts.budgetMs
+  }
 
   // background refresh (cached 10 min) — never awaited on the fast path
   var discoveryPromise = discoverModels()
@@ -387,6 +394,8 @@ export async function callGemini(opts: {
       }
       for (var mi = 0; mi < models.length; mi++) {
         for (var ki = 0; ki < keys.length; ki++) {
+          /* (ز17) الميزانية خلصت؟ اخرج فورًا وسلّم للمحرك التالي (ZAI) بدل التلف الطويل */
+          if (budgetExceeded()) return null
           attemptIndex++
           var t = timeoutMs
           if (attemptIndex === 1 && opts.fastFailFirstMs) t = opts.fastFailFirstMs
@@ -536,6 +545,8 @@ export async function streamGemini(opts: {
   parts: any[]
   generationConfig?: any
   timeoutMs?: number
+  fastFailFirstMs?: number    // (ز17) مهلة قصيرة للمحاولة الأولى فقط — موديل مَيّت ما يبقاش فخ
+  budgetMs?: number           // (ز17) ميزانية كلية قبل التسليم للمحرك الاحتياطي
   thinking?: 'low' | 'off' | 'default'
   onDelta?: (delta: string) => void
 }): Promise<GeminiResult> {
@@ -548,6 +559,11 @@ export async function streamGemini(opts: {
   var thinkingMode = opts.thinking || 'low'
   var lastError = ''
   var sawQuota = false
+  /* (ز17) ساعة الميزانية للستريم — نفس منطق callGemini */
+  var budgetStart = Date.now()
+  function budgetExceeded(): boolean {
+    return !!opts.budgetMs && (Date.now() - budgetStart) > opts.budgetMs
+  }
 
   var discoveryPromise = discoverModels()
   var staticModels = await getStaticChain()
@@ -555,7 +571,12 @@ export async function streamGemini(opts: {
   var tryList = async function (models: string[]): Promise<GeminiResult | null> {
     for (var mi = 0; mi < models.length; mi++) {
       for (var ki = 0; ki < keys.length; ki++) {
-        var result = await streamAttempt(models[mi], keys[ki], opts.parts, generationConfig, timeoutMs, thinkingMode, opts.onDelta)
+        /* (ز17) الميزانية خلصت؟ اخرج فورًا — ZAI بياخد الباقي */
+        if (budgetExceeded()) return null
+        var t = timeoutMs
+        var attemptIsFirst = (mi === 0 && ki === 0)
+        if (attemptIsFirst && opts.fastFailFirstMs) t = opts.fastFailFirstMs
+        var result = await streamAttempt(models[mi], keys[ki], opts.parts, generationConfig, t, thinkingMode, opts.onDelta)
         if (result.ok) {
           /* (و77) نجاح → احفظ الموديل الشغال للكولد ستارت الجاي (بدون انتظار) */
           try { cacheSet('working_model', models[mi]) } catch (e) {}

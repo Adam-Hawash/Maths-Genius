@@ -9,7 +9,8 @@ import { sanitizeMathText, ENGLISH_TERMS_RULE } from '@/lib/math-sanitize'
 import { logAssistantUse, countAssistantUses, assistantPenaltyFor } from '@/lib/assistant-log'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+/* (ز17) 30 بدل 60: أقصى عمر للطلب — استهلاك Vercel أقل ورد أسرع (الميزانيات تحت بتضمن الفشل السريع قبل كده) */
+export const maxDuration = 30
 
 /* ------------------------------------------------------------
  * المساعد الذكي — محرك مزدوج عشان الردود متبقاش بسيطة/غريبة:
@@ -140,6 +141,42 @@ async function zaiChat(systemPrompt: string, history: any[], userContent: any, t
   }
 }
 
+/* (ز17) حارس استهلاك — حد الرسايل لكل طالب: 20 رسالة / 5 دقايق (كاش في الذاكرة،
+ * من غير جداول جديدة — بيمنع اللوبات والعبث اللي بيحرق حدود Vercel) */
+var RATE_LIMIT = 20
+var RATE_WINDOW_MS = 5 * 60 * 1000
+var rateHits: any = {}
+function rateLimitKey(req: Request, studentId: string): string {
+  var ip = ''
+  try {
+    ip = String((req.headers && (req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip'))) || '').split(',')[0].trim()
+  } catch (e) {}
+  return String(studentId || 'anon') + '|' + ip
+}
+function checkRateLimit(req: Request, studentId: string): { ok: boolean; waitSec: number } {
+  var key = rateLimitKey(req, studentId)
+  var now = Date.now()
+  var entry = rateHits[key]
+  if (!entry || now - entry.start > RATE_WINDOW_MS) {
+    rateHits[key] = { start: now, count: 1 }
+    /* تنظيف دوري خفيف للذاكرة */
+    var staleKeys = Object.keys(rateHits)
+    if (staleKeys.length > 5000) {
+      for (var i = 0; i < staleKeys.length; i++) {
+        var e = rateHits[staleKeys[i]]
+        if (!e || now - e.start > RATE_WINDOW_MS) delete rateHits[staleKeys[i]]
+      }
+    }
+    return { ok: true, waitSec: 0 }
+  }
+  entry.count++
+  if (entry.count > RATE_LIMIT) {
+    var waitSec = Math.ceil((entry.start + RATE_WINDOW_MS - now) / 1000)
+    return { ok: false, waitSec: waitSec }
+  }
+  return { ok: true, waitSec: 0 }
+}
+
 export async function POST(request: Request) {
   try {
     var body = await request.json()
@@ -149,6 +186,12 @@ export async function POST(request: Request) {
     var useStream = body.stream !== false
     var imageParts = buildImageParts(body.images)
     var history = buildHistory(body.history)
+
+    /* (ز17) حارس الاستهلاك — قبل أي داتابيز أو محرك AI */
+    var rate = checkRateLimit(request, String(context.studentId || ''))
+    if (!rate.ok) {
+      return NextResponse.json({ error: 'بص يا بطل، بعت رسايل كتير في وقت قصير 😅 استنى ' + Math.max(rate.waitSec, 10) + ' ثانية وجرب تاني.' }, { status: 429 })
+    }
 
     if (!message && imageParts.length === 0) {
       return NextResponse.json({ error: 'مفيش رسالة' }, { status: 400 })
@@ -198,7 +241,10 @@ export async function POST(request: Request) {
     }
 
     // ---------- نجرب المحركات بالترتيب ونرجّع أول واحد ينجح ----------
-    var timeoutMs = imageParts.length > 0 ? 50000 : 35000
+    /* (ز17) مهل أقصر + ميزانية كلية لكل محرك — الرد بيبقى واصل أسرع بكتير:
+       - نصوص: مهلة 22 ثانية، الميزانية 15 ثانية قبل التسليم لـ ZAI، وأول محاولة 9 ثواني فشل سريع
+       - صور: مهلة 40 ثانية، الميزانية 32 ثانية (الفحص محتاج وقت أطول) */
+    var timeoutMs = imageParts.length > 0 ? 40000 : 22000
 
     // **النصوص: Gemini الأول (استريم حقيقي — أول حرف بيوصله وهو نازل من الموديل)
     // → ZAI احتياطي (مفيش مفاتيح ورده قوية)
@@ -210,7 +256,7 @@ export async function POST(request: Request) {
     if (imageParts.length > 0) {
       var geminiParts = imageParts.concat([{ text: systemPrompt + '\n\nرسالة الطالب: ' + message }])
       engines.push(function () {
-        return callGemini({ parts: geminiParts, generationConfig: { temperature: 0.3, maxOutputTokens: 4096 }, timeoutMs: timeoutMs, thinking: 'low' })
+        return callGemini({ parts: geminiParts, generationConfig: { temperature: 0.3, maxOutputTokens: 4096 }, timeoutMs: timeoutMs, budgetMs: 32000, thinking: 'low' })
       })
       engines.push(function () {
         var content: any[] = [{ type: 'text', text: message }]
@@ -227,8 +273,11 @@ export async function POST(request: Request) {
         engines.push(function () {
           return streamGemini({
             parts: [{ text: systemPrompt + '\n\nرسالة الطالب: ' + message }],
-            generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
+            /* (ز17) 2048 بدل 4096: رد الشات مش محتاج أكتر — إكمال أسرع واستهلاك أقل */
+            generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
             timeoutMs: timeoutMs,
+            fastFailFirstMs: 9000,
+            budgetMs: 15000,
             thinking: 'low',
             onDelta: function (t: string) { if (sseForward) sseForward(t) },
           })
