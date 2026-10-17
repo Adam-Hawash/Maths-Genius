@@ -5212,3 +5212,19 @@ Work Log:
 Stage Summary:
 - المستر دلوقتي بيدخل من بوابتين بنفس البيانات: تسجيل الدخول العادي (01118411148 / Zicolainmath2026) → يتحوّل تلقائي لدخول المشرفين → نفس الرقم ونفس الباسورد → لوحة التحكم. ولو قاعدة الإنتاج لسه فيها بيانات قديمة، أول دخول بالبيانات الجديدة بيظبطها لوحدها
 - مواعيد السنتر بقت نظيفة من البرايفت: الحصص البرايفت عايشة في قسم خاص بيفتح بكلمة صغيرة خافتة «حصص برايفت» تحت خالص الصفحة — بمواعيدها وأيامها ومراحلها زي ما المستر كتبها بالظبط — واللوحة والبيانات ما اتلمستش (أي تعديل مستقبلي من اللوحة بيشتغل عادي، ولما يكتب «برايفت» جنب أي صف هيتمشيل تلقائيًا للقسم)
+
+---
+Task ID: ز22-ب
+Agent: Z.ai Code (subagent)
+Task: ز22 على Maths-Genius — مشغل يوتيوب الأصلي (ز21) + بلوكات الوقف العلوية (ز22) + الفيديو اللي بفلوس اختياري صامت
+
+Work Log:
+- git status نضيف من الأول → git pull origin main = Already up to date (مفيش stash ولا تعارض)
+- نسخ المشغل المرجعي من Zicola-Math (ز21+ز22+ص3) إلى src/app/api/player/[ticket]/route.ts + sed للبراند Zicola In Math → Math Genius — التحقق: «Zicola In Math»=0، «Math Genius»=13، ytShareHi=4، controls=1=4 (كلها فوق المطلوب)
+- باتش جراحي على src/lib/video-guard.ts (ملف المنصة نفسه مش نسخ Zicola): (أ) price: true اتضاف على select بتاع db.video.findMany جوه checkSequentialUnlock (الحقول التانية زي ما هي) — (ب) كود الاختياري الصامت اتحط في حلقة بحث الحاجز بعد if (!isYT && !isFile) continue وقبل فحص ratioOf مباشرة — ملاحظة شكل: حلقة المنصة for (let i = 0; i < idx; i++) ومش فيها سطر const prog = await db.videoProgress.findUnique( (النسب متجمعينة مسبقًا في ratioOf) — فالكود اتحط في الموقع المكافئ منطقيًا بنفس الكود الحرفي المطلوب
+- باتش جراحي على src/components/student/StudentPortal.tsx: بنية المنصة مختلفة عن Zicola — مفيش prevVideoMap خالص، وlockedMap مجرد إسقاط بولياني من seqInfoMap، والمنطق التسلسلي كله جوه seqInfoMap (سلسلة chain + بحث blocker) — فالمنطق اترجم على مكانه الحقيقي: (أ) chain بقى شايل paidNoAccess لكل عقدة (Number(v.price)||0)>0 && !approvedVideoIds.has(v.id) — نفس شرط الباتش حرفيًا — (ب) في بحث blocker اتضاف: if (chain[j].paidNoAccess) continue // (ز22) اختياري صامت — يعني الفيديو اللي بفلوس من غير وصول عمره ما يبقى حاجز لللي بعده (مكافئ if (trackable && !paidNoAccess) prevTrackable = v.id) — (ج) approvedVideoIds اتضافت لـ deps بتاع seqInfoMap (هو موجود في السكوب — prop بتاع VideosTab) — lockedMap نفسه ما اتلمسش (بيورث التغيير تلقائي) — مفيش «اختياري» مكتوبة في أي واجهة
+- bun install + prisma generate (الساندبوكس اتصفر — node_modules كانت فاضية) ثم tsc حقيقي: 35 خطأ بعد = 35 قبل بالظبط وقويمتين متطابقتين (الفرق الوحيد إزاحة سطر 2900→2906 بسبب تعليقاتي) — صفر أخطاء جديدة
+
+Stage Summary:
+- الملفات المتغيرة: src/app/api/player/[ticket]/route.ts (مشغل Zicola ببراند Math Genius — ز21+ز22+ص3 كاملين) + src/lib/video-guard.ts (سيرفر: الفيديو المسعّر من غير VideoAccess ولا دفعة معتمدة ما يقفش الترتيب + price في select) + src/components/student/StudentPortal.tsx (كلاينت: نفس القاعدة في seqInfoMap/chain + dep approvedVideoIds) + worklog.md
+- شوفر التحقق: tsc 35=35 باسلين — grep المشغل: Zicola In Math=0 / Math Genius=13 / ytShareHi=4 / controls=1=4 — Commit+Push على main بعد التسليم ده

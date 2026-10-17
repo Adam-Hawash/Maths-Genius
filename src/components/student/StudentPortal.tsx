@@ -816,12 +816,17 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
        بتقفل فيديوهات على طالب شافها كلها. لو النسب ما وصلتش، الفتح بيبقى
        مسموح في الواجهة والسيرفر (video-ticket) هو اللي بيحكم بجد */
     if (!progressLoaded) return {} as Record<string, { blockerPct: number }>
-    var chain: { id: string }[] = []
+    var chain: { id: string; paidNoAccess: boolean }[] = []
     lessons.forEach(function (item) {
       var arr: VideoType[] = item.type === 'group' ? item.parts : [item.video]
       arr.forEach(function (v) {
         var k = videoKindOf(v)
-        if (k === 'youtube' || k === 'file') chain.push({ id: v.id })
+        /* (ز22) الاختياري الصامت: الفيديو اللي بفلوس والطالب مالوش وصول له
+           (مفيش دفعة معتمدة/منحة) ما بيحسبش في السلسلة — ما يمنعش اللي بعده
+           (طلب المستر: «الفيديو اللي بفلوس ده يكون اختياري عادي بس متكتبش
+           ان هو اختياري — لو الطالب مشافش الفيديو الفيديو اللي بعده يتفتح»)
+           — نفس قاعدة السيرفر في video-guard بالظبط */
+        if (k === 'youtube' || k === 'file') chain.push({ id: v.id, paidNoAccess: (Number(v.price) || 0) > 0 && !approvedVideoIds.has(v.id) })
       })
     })
     var completedOf = function (id: string) { return (mergedProgress[id] || 0) >= 99 }
@@ -836,6 +841,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
       var blockerIdx = -1
       for (var j = 0; j < i; j++) {
         if (j <= frontierIdx) continue // قبل حد الطالب — عمره ما يترجع له
+        if (chain[j].paidNoAccess) continue // (ز22) اختياري صامت — ما يمنعش اللي بعده
         if (!completedOf(chain[j].id)) { blockerIdx = j; break }
       }
       if (blockerIdx >= 0) {
@@ -845,7 +851,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
       }
     }
     return map
-  }, [lessons, mergedProgress, seqLockEnabled, progressLoaded])
+  }, [lessons, mergedProgress, seqLockEnabled, progressLoaded, approvedVideoIds])
 
   const lockedMap = useMemo(function () {
     var map: Record<string, boolean> = {}

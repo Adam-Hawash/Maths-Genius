@@ -238,7 +238,7 @@ export async function checkSequentialUnlock(
     const gradeVideos = await db.video.findMany({
       where: { grade: video.grade },
       orderBy: [{ sortIndex: 'asc' }, { orderIndex: 'asc' }, { createdAt: 'asc' }],
-      select: { id: true, title: true, url: true, filePath: true, fileType: true },
+      select: { id: true, title: true, url: true, filePath: true, fileType: true, price: true },
     })
     /* (2026-و67) فيديوهات المجموعات: الفيديو الموجّه لمجموعات والطالب مش منهم
        (أو لسه موعده مجاه) **مش ظاهر عنده أصلاً** في قايمته — فممنوع يكون شرط
@@ -331,6 +331,21 @@ export async function checkSequentialUnlock(
       const isYT = Boolean(getYouTubeId(v.url || ''))
       const isFile = Boolean(v.filePath || v.fileType)
       if (!isYT && !isFile) continue // لينك خارجي — مش قابل للتتبع، نتخطاه
+      /* (ز22) الفيديو اللي بفلوس والطالب مالوش وصول له — اختياري صامت
+         (طلب المستر: «الفيديو اللي بفلوس ده يكون اختياري عادي بس متكتبش
+         ان هو اختياري — لو الطالب مشافش الفيديو الفيديو اللي بعده يتفتح»):
+         مفيش VideoAccess ولا دفعة معتمدة → نتخطاه، الترتيب ما يقفش بياه */
+      if (v.price && Number(v.price) > 0) {
+        const acc = await db.videoAccess.findUnique({
+          where: { videoId_studentId: { videoId: v.id, studentId: String(studentId) } },
+        }).catch(() => null)
+        if (!acc) {
+          const pay = await db.payment.findFirst({
+            where: { studentId: String(studentId), videoId: v.id, status: 'approved' },
+          }).catch(() => null)
+          if (!pay) continue
+        }
+      }
       if ((ratioOf[v.id] || 0) < SEQ_UNLOCK_RATIO) {
         blockerFound = true
         break
