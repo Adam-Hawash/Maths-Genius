@@ -229,9 +229,11 @@ export async function POST(request: NextRequest) {
         }
       }
       if (!inherited) {
-        const agg = await db.video.aggregate({ _max: { sortIndex: true }, where: { grade: gradeWhere(String(grade)) } })
-        const maxSort = Number((agg._max && (agg._max as { sortIndex: number | null }).sortIndex) || 0)
-        if (maxSort > 0) newSortIndex = maxSort + 1
+        /* (2026-ز19 — طلب المستر الحرفي): «اعكسها خليها بالعكس» — رجّعنا ز11:
+           الجديد بياخد أصغر رقم ترتيب (minSort-1) فبيطلع أول القايمة. */
+        const agg = await db.video.aggregate({ _min: { sortIndex: true }, where: { grade: gradeWhere(String(grade)) } })
+        const minSort = Number((agg._min && (agg._min as { sortIndex: number | null }).sortIndex) || 0)
+        newSortIndex = minSort - 1
       }
     } catch {}
 
