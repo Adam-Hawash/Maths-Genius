@@ -861,6 +861,17 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
   // فتح أي درس (يوتيوب أو ملف مرفوع): بنطلب تذكرة تشغيل واحدة الاستخدام
   // من /api/video-ticket — مفيش أي YouTube ID أو رابط ملف بيرجع للصفحة.
   // المشغل نفسه بيتفتح من /api/player/[ticket] على السيرفر.
+  /* (2026-ص2) ملاحظة المستر على الدرس — بتظهر للطالب أول ما يفتح الدرس
+     في مودال «ملاحظة خد بالك» وزرار تمام أزرق (طلب المستر الحرفي).
+     بعد تمام مش بتظهر تاني — ولو المستر عدل الملاحظة بتظهر مرة جديدة.
+     للدرس المتعدد (groupKey): المفتاح على الدرس كله مش على كل جزء */
+  const [pendingNote, setPendingNote] = useState<{ video: VideoType; text: string; key: string; stamp: string } | null>(null)
+  const noteSkipRef = useRef(false)
+  const noteStampOf = function (text: string) {
+    var h = 0
+    for (var i = 0; i < text.length; i++) { h = ((h * 31) + text.charCodeAt(i)) | 0 }
+    return String(h) + ':' + text.length
+  }
   const openPlayModal = (video: VideoType) => {
     // قفل التسلسل: فيه درس قبله في الترتيب لسه مخلصش → منع + رسالة عامة من غير أسماء (2026-ص2)
     var seqInfo = seqInfoMap[video.id]
@@ -868,6 +879,20 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
       toast.error('الفيديو ده هيتفتح أول ما تشوف الدرس اللي قبله كامل (100%) — الدرس اللي قبله مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 })
       return
     }
+    /* (2026-ص2) ملاحظة المستر الأول — لو الدرس عليه ملاحظة والطالب مش
+       شافها (أو المستر عدلها) → مودال الملاحظة الأول وبعد تمام يفتح الفيديو */
+    var noteVal = String((video as any).note || '').trim()
+    if (noteVal && !noteSkipRef.current) {
+      var nk = 'mg_note_seen__' + String((video as any).groupKey || video.id)
+      var nstamp = noteStampOf(noteVal)
+      var seen = ''
+      try { seen = window.localStorage.getItem(nk) || '' } catch (e) {}
+      if (seen !== nstamp) {
+        setPendingNote({ video: video, text: noteVal, key: nk, stamp: nstamp })
+        return
+      }
+    }
+    noteSkipRef.current = false
     fetch('/api/video-ticket?videoId=' + video.id + '&studentId=' + encodeURIComponent(studentId || ''))
       .then(function (r) {
         return r.json().then(function (d) { return { ok: r.ok, d: d } })
@@ -881,6 +906,16 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         }
       })
       .catch(function () { toast.error('حصل خطأ في تشغيل الفيديو') })
+  }
+
+  /* (2026-ص2) زرار تمام في مودال الملاحظة — بيسجل إنها اتشافت ويفتح الدرس */
+  const confirmNote = () => {
+    if (!pendingNote) return
+    try { window.localStorage.setItem(pendingNote.key, pendingNote.stamp) } catch (e) {}
+    var v = pendingNote.video
+    setPendingNote(null)
+    noteSkipRef.current = true
+    openPlayModal(v)
   }
 
   if (videos.length === 0) return <EmptyState message="لا توجد دروس حالياً" />
@@ -1157,6 +1192,33 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
       </div>
 
       {/* المشغل الآمن — تذكرة واحدة الاستخدام، مفيش أي لينك في الصفحة */}
+      {/* (2026-ص2) مودال ملاحظة المستر — أول ما الطالب يفتح الدرس: «ملاحظة
+          خد بالك...» + زرار تمام أزرق تحت (طلب المستر الحرفي). بعد تمام
+          مش بتظهر تاني ولو المستر عدل الملاحظة بتظهر مرة جديدة */}
+      {pendingNote && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85" dir="rtl">
+          <div className="w-full max-w-md rounded-2xl bg-white text-gray-900 shadow-2xl overflow-hidden border border-white/20">
+            <div className="px-5 pt-5 pb-3 text-center bg-sky-50 border-b border-sky-100">
+              <div className="text-3xl mb-1" aria-hidden="true">📝</div>
+              <h3 className="text-lg font-extrabold text-sky-800">ملاحظة من المستر</h3>
+              <p className="text-[11px] text-sky-700/80 mt-0.5 font-bold">ملاحظة خد بالك — دي ملاحظة مهمة على الدرس ده</p>
+            </div>
+            <div className="px-5 py-4 max-h-[45vh] overflow-y-auto custom-scrollbar">
+              <p className="text-sm leading-8 whitespace-pre-wrap text-center font-bold text-gray-800">{pendingNote.text}</p>
+            </div>
+            <div className="px-5 pb-5 pt-1">
+              <button
+                type="button"
+                className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold text-base transition-colors shadow-lg"
+                onClick={confirmNote}
+                onTouchEnd={function (e) { e.preventDefault(); confirmNote() }}
+              >
+                تمام
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {activeLessonVideo && (activeLessonVideo as any).playTicket && (
         <SecurePlayerModal
           ticket={(activeLessonVideo as any).playTicket}
