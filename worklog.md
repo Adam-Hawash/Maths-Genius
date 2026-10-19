@@ -5228,3 +5228,32 @@ Work Log:
 Stage Summary:
 - الملفات المتغيرة: src/app/api/player/[ticket]/route.ts (مشغل Zicola ببراند Math Genius — ز21+ز22+ص3 كاملين) + src/lib/video-guard.ts (سيرفر: الفيديو المسعّر من غير VideoAccess ولا دفعة معتمدة ما يقفش الترتيب + price في select) + src/components/student/StudentPortal.tsx (كلاينت: نفس القاعدة في seqInfoMap/chain + dep approvedVideoIds) + worklog.md
 - شوفر التحقق: tsc 35=35 باسلين — grep المشغل: Zicola In Math=0 / Math Genius=13 / ytShareHi=4 / controls=1=4 — Commit+Push على main بعد التسليم ده
+
+---
+Task ID: ز23
+Agent: Z.ai Code (Main)
+Task: تطبيق قاعدة المستر على منصة مستر وائل (Maths-Genius — المنصة الأصلية) — إصلاح فيديوهات الآيفون (خطأ 153) + نظام ملاحظات الدروس + حد الطلاب 1000
+
+Work Log:
+- المستودع انعمله clone جديد (Maths-Genius-wael محليًا) على آخر main (3c168d5 ز19) | إصلاح المشغل (ز21 architecture — الملف مطابق لشريف إلا البراندنج): IS_IOS + hideYtSurface/showYtSurface + حارس الموت المفاجئ ytFatalCheck + على iOS من غير سكالر بمقاس حقيقي
+- نظام الملاحظات: schema (note + noteUpdatedAt) + ensure-schema + PATCH البصمة + زرار «📝 ملاحظة» على الدرس المتعدد (كل الأجزاء) والفيديو المستقل + بادج + مودال الطالب بزرار تمام أزرق + pageSize 1000 (البحث MG-1 موجود أصلًا)
+- التحقق: prisma validate ✓ + tsc صفر أخطاء جديدة (خطأ assistant pre-existing موجود في origin/main نفسه) | commit 179d157 | Vercel: **success** | الإنتاج maths-genius.com HTTP 200
+
+Stage Summary:
+- كل المنصات الخمسة (وائل/شريف/شعبان/صبري/القائد) عليها نفس إصلاح الآيفون 153 + نظام الملاحظات — دفعات مؤكدة success على Vercel للجميع
+
+---
+Task ID: Z-26
+Agent: Z.ai Code (Main)
+Task: منصة مستر وائل (Maths Genius) — تحكم الطالب الكامل في الشريط الزمني (سحب/تقديم/ترجيع/وقت معاينة) + علامة copy-link/unlisted الشكلية (طلب المستر — نفس التعديل في كل المنصات)
+
+Work Log:
+- ز24 (): مشغل يوتيوب + مشغل الملفات — الشريط بقى قابل للسحب بالإصبع/الماوس (Pointer Events + setPointerCapture + touch-action:none) بمساحة لمس مكبرة (8px فوق وتحت) — فقاعة معاينة بتعرض الوقت أثناء السحب + مقبض بيكبر أثناء السحب + seekTo(t,false) أثناء السحب و seekTo(t,true) عند الإفلات (throttle 250ms)
+- زرارين ±10 ثواني (تقديم/ترجيع) جنب زرار التشغيل — بعد القفزة الكنترولز تفضل ظاهرة 3 ثواني عشان الطالب يشوف الوقت الجديد
+- الوقت المعروض أثناء السحب بياخد من إصبع الطالب مش من المشغل (guard في البولنج) — والمقبض/الفقاعة بيختفوا عند الإفلات
+- النسبة المحفوظة cumulative (max) — الرجوع للور مش بينزل نسبة المشاهدة المحفوظة للطالب
+- علامة copy-link + unlisted الشكلية جوه الباتش العلوي (زي منصة شعبان) — الطبقة كلها pointer-events-none: شكل بس، ممنوعة تصمّل حاجة ولا تنسخ أي لينك
+- الحمايات كلها زي ما هي: click-catch overlay + درع علوي + باتشات 🔒 + منع كليك يمين/اختصارات + ووترمارك
+
+Stage Summary:
+- الطلاب دلوقتي يقدروا يرجّعوا ويجروا الفيديو من الشريط ويشوفوا الوقت في كل لحظة + علامة الشكل الإعلاني غير الشغالة موجودة في المنصة دي زي باقي المنصات
