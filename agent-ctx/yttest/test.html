@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>YT Quality Test</title>
+<style>
+  body{background:#111;color:#fff;font-family:sans-serif;margin:10px}
+  .row{display:inline-block;margin:6px;vertical-align:top}
+  .lbl{font-size:11px;color:#ffd54f;max-width:400px;word-break:break-all;white-space:normal}
+  .frame{position:relative;overflow:hidden;background:#000}
+  iframe{border:0}
+</style>
+</head>
+<body>
+<div id="results">loading...</div>
+<div id="players"></div>
+<script>
+var VID='YE7VzlLtp-4'; // Big Buck Bunny 1080p
+// n: label, cw/ch: display size, iw/ih: iframe internal layout size, scaled: CSS transform
+var CASES=[
+  {n:'phone390-natural', cw:390, ch:219, iw:390, ih:219},
+  {n:'mid640-natural',   cw:640, ch:360, iw:640, ih:360},
+  {n:'big1280-natural',  cw:1280,ch:720, iw:1280,ih:720},
+  {n:'phone390-scaled-from1280', cw:390, ch:219, iw:1280, ih:720, scaled:true},
+  {n:'mid640-scaled-from1280',   cw:640, ch:360, iw:1280, ih:720, scaled:true},
+  {n:'big1280-scaled-from640',   cw:1280,ch:720, iw:640, ih:360, scaled:true}
+];
+var players=[];window.PLAYERS=players;
+function build(){
+  var holder=document.getElementById('players');
+  for(var i=0;i<CASES.length;i++){
+    (function(c,idx){
+      var row=document.createElement('div'); row.className='row';
+      var lab=document.createElement('div'); lab.className='lbl'; lab.id='lbl_'+idx; lab.textContent=c.n+': waiting...';
+      var frame=document.createElement('div'); frame.className='frame';
+      frame.style.width=c.cw+'px'; frame.style.height=c.ch+'px';
+      var host=document.createElement('div'); host.id='host_'+idx;
+      if(c.scaled){
+        host.style.width=c.iw+'px'; host.style.height=c.ih+'px';
+        host.style.transformOrigin='top left';
+        host.style.transform='scale('+(c.cw/c.iw)+')';
+      } else { host.style.width=c.cw+'px'; host.style.height=c.ch+'px'; }
+      frame.appendChild(host); row.appendChild(frame); row.appendChild(lab); holder.appendChild(row);
+      var p=new YT.Player('host_'+idx,{
+        width:c.iw, height:c.ih, videoId:VID,
+        playerVars:{autoplay:1,mute:1,controls:1,rel:0,playsinline:1,iv_load_policy:3,cc_load_policy:0,hl:'ar',enablejsapi:1},
+        events:{onReady:function(e){ try{e.target.mute();e.target.playVideo();}catch(err){} }}
+      });
+      players.push({p:p,c:c,idx:idx});
+    })(CASES[i],i);
+  }
+  setTimeout(collect, 8000);
+  setInterval(collect, 6000);
+}
+function collect(){
+  var out=[];
+  for(var i=0;i<players.length;i++){
+    var r=players[i];
+    var lv='',q='',st='';
+    try{ lv=(r.p.getAvailableQualityLevels()||[]).join(','); }catch(e){ lv='ERR:'+e; }
+    try{ q=String(r.p.getPlaybackQuality()||''); }catch(e){}
+    try{ st=String(r.p.getPlayerState()); }catch(e){}
+    out.push(r.c.n+' => levels=['+lv+'] cur='+q+' st='+st);
+    var el=document.getElementById('lbl_'+r.idx);
+    if(el) el.textContent=r.c.n+' => ['+lv+'] cur='+q;
+  }
+  var res=document.getElementById('results');
+  res.textContent='RESULTS|'+out.join(' || ');
+  document.title='TESTDONE';
+}
+var tag=document.createElement('script'); tag.src='https://www.youtube.com/iframe_api';
+document.head.appendChild(tag);
+window.onYouTubeIframeAPIReady=build;
+</script>
+</body>
+</html>

@@ -29,8 +29,22 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        {/* (2026-Z32) PWA — manifest + أيقونات iOS + تسجيل Service Worker من أول تحميل
+            (من غير كده كروم مش بيعتبر المنصة قابلة للتثبيت وزرار «التطبيق» بيطلع
+            تعليمات يدوية بدل نافذة التثبيت الرسمية) */}
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}}catch(e){}",
+          }}
+        />
+      </body>
     </html>
   );
 }

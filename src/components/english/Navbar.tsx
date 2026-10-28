@@ -11,6 +11,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+/* (2026-Z32) زرار تثبيت المنصة كتطبيق — نافذة التثبيت الرسمية بضغطة واحدة */
+import { InstallAppButton } from "@/components/english/InstallAppButton";
 
 const LINKS = [
   { href: "#home", label: "Home" },
@@ -106,6 +108,12 @@ export function Navbar() {
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
             English Made Easy
           </span>
+          {/* (2026-Z32) زرار التطبيق — ديسكتوب */}
+          <InstallAppButton
+            variant="outline"
+            label="App"
+            className="h-9 rounded-full px-4 font-semibold"
+          />
           <Button
             size="sm"
             onClick={() => setToast("The student portal is coming soon.")}
@@ -155,6 +163,10 @@ export function Navbar() {
                   {l.label}
                 </a>
               ))}
+              {/* (2026-Z32) زرار التطبيق — قايمة الموبايل */}
+              <div className="[&_button]:w-full [&_button]:justify-center [&_button]:min-h-[44px]">
+                <InstallAppButton variant="outline" label="Install App" />
+              </div>
               <Button
                 onClick={() => setToast("The student portal is coming soon.")}
                 className="mt-3 rounded-xl bg-[#7C3AED] font-semibold text-white hover:bg-[#6D28D9]"

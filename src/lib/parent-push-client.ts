@@ -233,8 +233,10 @@ export async function disableParentPush(parentId: string): Promise<boolean> {
   }
 }
 
-/** إشعار تجريبي — بيبعت من السيرفر لأجهزة ولي الأمر المشتركة */
-export async function sendTestParentPush(parentId: string): Promise<{ ok: boolean; message?: string }> {
+/** إشعار تجريبي — بيبعت من السيرفر لأجهزة ولي الأمر المشتركة
+    (2026-ز32) بيرجّع sent كمان — عشان الواجهة تفرّق بين «اتبعت فعلًا»
+    و«مفيش أجهزة متسجلة على الحساب» وتوجّه ولي الأمر للإجراء الصح */
+export async function sendTestParentPush(parentId: string): Promise<{ ok: boolean; sent: number; message?: string }> {
   try {
     var res = await fetch('/api/push/test', {
       method: 'POST',
@@ -243,8 +245,9 @@ export async function sendTestParentPush(parentId: string): Promise<{ ok: boolea
       body: JSON.stringify({ parentId: parentId }),
     })
     var json = await res.json()
-    return { ok: !!(json && json.ok), message: String((json && json.message) || '') }
+    var sentN = json && typeof json.sent === 'number' ? json.sent : -1
+    return { ok: !!(json && json.ok), sent: sentN, message: String((json && json.message) || '') }
   } catch (e) {
-    return { ok: false, message: '' }
+    return { ok: false, sent: -1, message: '' }
   }
 }

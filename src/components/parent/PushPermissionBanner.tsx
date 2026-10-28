@@ -142,8 +142,15 @@ export default function PushPermissionBanner({ parentId }: { parentId: string })
     setTestBusy(true)
     var r = await sendTestParentPush(parentId)
     setTestBusy(false)
-    if (r.ok && r.message) toast.success(r.message, { duration: 6000 })
-    else toast.error('مفيش إشعار وصل — اتأكد إن التفعيل مكتوب «مفعّلة» وجرب تاني')
+    /* (2026-ز32) التفريق بين «الإشعار اتقدم فعلاً» و«مفيش أجهزة متسجلة» —
+       لو مفيش أجهزة يبقى التفعيل من الجهاز ده مكتملش، والتوجيه الصح: إعادة تفعيل من هنا */
+    if (r.ok && typeof r.sent === 'number' && r.sent > 0) {
+      toast.success(r.message || 'اتبعت الإشعار — بص على شاشة موبايلك 📱', { duration: 6000 })
+    } else if (r.ok) {
+      toast.warning('مفيش جهاز متسجل على الحساب ده لسه — الإشعارات بتيجي على الجهاز اللي اتفعّل منها بس. اضغط «إيقاف» ثم «سماح بالتنبيهات» من الجهاز ده ووافق على إذن المتصفح، وبعدها جرب الإشعار التجريبي هيوصلك فورًا', { duration: 12000 })
+    } else {
+      toast.error('مفيش إشعار وصل — اتأكد إن التفعيل مكتوب «مفعّلة» وجرب تاني')
+    }
   }, [parentId, testBusy])
 
   var dismiss = useCallback(function () {
