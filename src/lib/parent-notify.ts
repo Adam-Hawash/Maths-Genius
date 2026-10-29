@@ -107,6 +107,66 @@ export const PARENT_PUSH_SUBMIT_EXAM_BODY = 'الطالب/ة {student} سلّم 
 export const PARENT_PUSH_SUBMIT_HOMEWORK_BODY = 'الطالب/ة {student} سلّم واجب «{title}» — التصحيح جاري وإشعار الدرجة جاي'
 
 /* ============================================================
+   (Z-30) قوالب **إشعار الإسناد الجديد** — طلب المستر الحرفي:
+   «يجي رسالة لولي الأمر إن ابنه عليه واجب أو امتحان» — أول ما
+   الأدمن ينزل واجب/امتحان جديد، ولي الأمر يوصله إشعار فورًا.
+   ============================================================ */
+export const PARENT_ASSIGN_EXAM_TEMPLATE = [
+  '📢 امتحان جديد لابنك — منصة Maths Genius',
+  'الطالب/ة: {student}',
+  'اتضاف امتحان جديد: «{title}»',
+  '',
+  'شجّع ابنك يدخل المنصة ويحل الامتحان بدري قبل ميعاده.',
+  'Mr.Wael Khodair',
+].join('\n')
+
+export const PARENT_ASSIGN_HOMEWORK_TEMPLATE = [
+  '📚 واجب جديد لابنك — منصة Maths Genius',
+  'الطالب/ة: {student}',
+  'اتضاف واجب جديد: «{title}»',
+  '',
+  'شجّع ابنك يدخل المنصة ويحل الواجب بدري قبل ميعاد التسليم.',
+  'Mr.Wael Khodair',
+].join('\n')
+
+export const PARENT_PUSH_ASSIGN_EXAM_TITLE = '📢 امتحان جديد لابنك — Math Genius'
+export const PARENT_PUSH_ASSIGN_HOMEWORK_TITLE = '📚 واجب جديد لابنك — Math Genius'
+export const PARENT_PUSH_ASSIGN_EXAM_BODY = 'الطالب/ة {student} عليه امتحان جديد: «{title}» — شجّعه يحله بدري'
+export const PARENT_PUSH_ASSIGN_HOMEWORK_BODY = 'الطالب/ة {student} عليه واجب جديد: «{title}» — شجّعه يحله بدري'
+
+/* ============================================================
+   (Z-30) قوالب **تذكير الـ 24 ساعة** — طلب المستر الحرفي:
+   «لو عدى 24 ساعة على الواجب أو الامتحان يجي يشعر لولي الأمر
+   والطالب إن في واجب لسه مسلّمش ولازم يتسلم»
+   ============================================================ */
+export const PARENT_REMIND_EXAM_TEMPLATE = [
+  '⏰ تذكير — امتحان لسه متحلّش — منصة Maths Genius',
+  'الطالب/ة: {student}',
+  'امتحان «{title}» عليه أكتر من 24 ساعة ولسه متحلّش',
+  '',
+  'لزم يحل الامتحان ويسلّمه — تقدر تتابع من حساب ولي الأمر.',
+  'Mr.Wael Khodair',
+].join('\n')
+
+export const PARENT_REMIND_HOMEWORK_TEMPLATE = [
+  '⏰ تذكير — واجب لسه مسلّمش — منصة Maths Genius',
+  'الطالب/ة: {student}',
+  'الواجب «{title}» عليه أكتر من 24 ساعة ولسه مسلّمش',
+  '',
+  'لازم يتسلم في أقرب وقت — تقدر تتابع من حساب ولي الأمر.',
+  'Mr.Wael Khodair',
+].join('\n')
+
+export const PARENT_PUSH_REMIND_EXAM_TITLE = '⏰ امتحان لسه متحلّش — Math Genius'
+export const PARENT_PUSH_REMIND_HOMEWORK_TITLE = '⏰ واجب لسه مسلّمش — Math Genius'
+export const PARENT_PUSH_REMIND_EXAM_BODY = 'الطالب/ة {student} لسه ما حلّش امتحان «{title}» من أكتر من 24 ساعة — لزم يتسلم'
+export const PARENT_PUSH_REMIND_HOMEWORK_BODY = 'الطالب/ة {student} لسه ما سلمّش واجب «{title}» من أكتر من 24 ساعة — لازم يتسلم'
+
+/* (Z-30) إشعار الطالب الداخلي للتذكير — بيتكتب في جدول Notification */
+export const STUDENT_REMIND_HOMEWORK_TITLE = '⏰ تذكير: واجب «{title}» لسه مسلّمش — لازم يتسلم في أقرب وقت'
+export const STUDENT_REMIND_EXAM_TITLE = '⏰ تذكير: امتحان «{title}» لسه متحلّش — لازم تدخل وتسلّمه'
+
+/* ============================================================
    (2026-و91) أيقونة الإشعار الخارجي بطلب المستر: «الاشعار يكون
    بالصورة بتاعة المنصة — صورة الفافيكون بتاعة المستر» — بدل الجرس
    الأصفر. بنقرا favicon_url من إعدادات المنصة (نفس الصورة اللي جنب
@@ -369,5 +429,75 @@ export async function notifyParentsOfSubmission(opts: { studentId: string; kind:
     await dispatchParentNotice(targets, studentName, message, payload)
   } catch (e) {
     console.error('[parent-notify] submission notify failed (ignored):', e)
+  }
+}
+
+/* ============================================================
+   (Z-30) إشعار ولي الأمر عند **إسناد واجب/امتحان جديد** — طلب المستر:
+   «يجي رسالة لولي الأمر إن ابنه عليه واجب أو امتحان».
+   بيتنادى من POST /api/homework و /api/exams بعد الإسناد (fire-and-forget
+   جوه after()) — لكل طالب مستهدف: بنجمع أرقام أولياء أموره ونكتب صف
+   داخلي + Web Push. أي فشل = لوج بس — الإسناد مش بيتأثر أبدًا.
+   ============================================================ */
+function fillTpl(tpl: string, studentName: string, title: string): string {
+  return String(tpl)
+    .split('{student}').join(String(studentName || 'الطالب'))
+    .split('{title}').join(String(title || ''))
+}
+
+export async function notifyParentsOfAssignment(opts: { studentId: string; kind: 'exam' | 'homework'; title: string }): Promise<void> {
+  try {
+    if (!opts || !opts.studentId) return
+    await ensureParentNotificationsTable()
+
+    var stu: any = await db.$queryRawUnsafe('SELECT name, parentPhone FROM Student WHERE id = ? LIMIT 1', String(opts.studentId))
+    stu = stu || []
+    if (!stu.length) return
+    var studentName = String(stu[0].name || '')
+
+    var targets = await collectParentTargets(String(opts.studentId), String(stu[0].parentPhone || ''))
+    if (!targets.length) return
+
+    var tpl = opts.kind === 'exam' ? PARENT_ASSIGN_EXAM_TEMPLATE : PARENT_ASSIGN_HOMEWORK_TEMPLATE
+    var pTitle = opts.kind === 'exam' ? PARENT_PUSH_ASSIGN_EXAM_TITLE : PARENT_PUSH_ASSIGN_HOMEWORK_TITLE
+    var pBody = opts.kind === 'exam' ? PARENT_PUSH_ASSIGN_EXAM_BODY : PARENT_PUSH_ASSIGN_HOMEWORK_BODY
+    var message = fillTpl(tpl, studentName, opts.title)
+    var icon = '/push-icon.png'
+    try { icon = await resolveParentPushIcon() } catch (e) {}
+    var payload = { title: String(pTitle), body: fillTpl(pBody, studentName, opts.title), url: '/#parent-login', tag: 'parent-assign-' + opts.kind, icon: icon }
+    await dispatchParentNotice(targets, studentName, message, payload)
+  } catch (e) {
+    console.error('[parent-notify] assignment notify failed (ignored):', e)
+  }
+}
+
+/* ============================================================
+   (Z-30) تذكير 24 ساعة — لولي الأمر (صف داخلي + Web Push)
+   بيتنادى من /api/cron/homework-reminders للطلاب اللي عدى على
+   واجبهم/امتحانهم 24 ساعة من غير تسليم.
+   ============================================================ */
+export async function notifyParentOfPendingReminder(opts: { studentId: string; kind: 'exam' | 'homework'; title: string }): Promise<void> {
+  try {
+    if (!opts || !opts.studentId) return
+    await ensureParentNotificationsTable()
+
+    var stu: any = await db.$queryRawUnsafe('SELECT name, parentPhone FROM Student WHERE id = ? LIMIT 1', String(opts.studentId))
+    stu = stu || []
+    if (!stu.length) return
+    var studentName = String(stu[0].name || '')
+
+    var targets = await collectParentTargets(String(opts.studentId), String(stu[0].parentPhone || ''))
+    if (!targets.length) return
+
+    var tpl = opts.kind === 'exam' ? PARENT_REMIND_EXAM_TEMPLATE : PARENT_REMIND_HOMEWORK_TEMPLATE
+    var pTitle = opts.kind === 'exam' ? PARENT_PUSH_REMIND_EXAM_TITLE : PARENT_PUSH_REMIND_HOMEWORK_TITLE
+    var pBody = opts.kind === 'exam' ? PARENT_PUSH_REMIND_EXAM_BODY : PARENT_PUSH_REMIND_HOMEWORK_BODY
+    var message = fillTpl(tpl, studentName, opts.title)
+    var icon = '/push-icon.png'
+    try { icon = await resolveParentPushIcon() } catch (e) {}
+    var payload = { title: String(pTitle), body: fillTpl(pBody, studentName, opts.title), url: '/#parent-login', tag: 'parent-remind-' + opts.kind, icon: icon }
+    await dispatchParentNotice(targets, studentName, message, payload)
+  } catch (e) {
+    console.error('[parent-notify] reminder notify failed (ignored):', e)
   }
 }

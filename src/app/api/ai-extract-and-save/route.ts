@@ -9,8 +9,6 @@
 // ============================================================
 
 import { NextResponse } from 'next/server'
-/* (S-4a — توحيد الصفوف) المرجع الموحد */
-import { storeGrade } from '@/lib/grade-names'
 import { db, safeWrite } from '@/lib/db'
 import { repairModelJson, repairCorruptMath } from '@/lib/math-text'
 import { callGemini as callGeminiCentral, hasGeminiKey } from '@/lib/gemini'
@@ -198,8 +196,7 @@ export async function POST(request) {
         return db.exam.create({
           data: {
             title: title.trim(),
-            /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
-            grade: storeGrade(grade),
+            grade: grade,
             content: extractedQuestions.length + ' questions extracted by AI',
             questions: questionsStr,
             passScore: 50
@@ -211,7 +208,7 @@ export async function POST(request) {
         return db.homework.create({
           data: {
             title: title.trim(),
-            grade: storeGrade(grade),
+            grade: grade,
             content: extractedQuestions.length + ' questions extracted by AI',
             questions: questionsStr
           }

@@ -5,8 +5,7 @@ export async function GET() {
   try {
     // Fetch core stats that always exist
     var coreStats = await Promise.all([
-      /* (2026-ز12) المرفوض اتحذف من المنصة — مش بيعد في الإجمالي */
-      db.student.count({ where: { status: { notIn: ['rejected', 'refused'] } } }),
+      db.student.count(),
       db.student.count({ where: { status: 'pending' } }),
       db.student.count({ where: { status: 'approved' } }),
       db.video.count(),

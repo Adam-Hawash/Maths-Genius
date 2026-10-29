@@ -2,5 +2,11 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/cron/homework-reminders?key=MG-rm2026-9f4kz27",
+      "schedule": "0 18 * * *"
+    }
+  ]
 }

@@ -9,8 +9,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { isAdmin } from '@/lib/video-guard'
 import { notifyStudents } from '@/lib/notify'
-/* (S-4a — توحيد الصفوف) المرجع الموحد: كتابة = storeGrade */
-import { storeGrade } from '@/lib/grade-names'
 
 export const runtime = 'nodejs'
 
@@ -107,16 +105,14 @@ export async function POST(request: NextRequest) {
             sourceUrl: sourceUrl,
             fileType: 'application/pdf',
             sizeBytes: 0,
-            /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد */
-            grade: storeGrade(String(grade || '')),
+            grade: String(grade || ''),
             usage: usage,
           },
         })
       })
       /* (و44) إشعار للطلاب: كتاب جديد اتضاف */
       /* (و45) await — الإشعار بيتكتب قبل الرد */
-      try { await notifyStudents({ /* (S-4a — توحيد الصفوف) إشعار بالاسم المعتمد */
-            grade: storeGrade(String(grade || '')), type: 'book', title: '📕 كتاب جديد اتضاف: ' + String(title).trim(), body: String(description || '').slice(0, 200) || 'تقدر تفتحه أو تحمله من تاب الكتب والملازم' }) } catch (nE) {}
+      try { await notifyStudents({ grade: String(grade || ''), type: 'book', title: '📕 كتاب جديد اتضاف: ' + String(title).trim(), body: String(description || '').slice(0, 200) || 'تقدر تفتحه أو تحمله من تاب الكتب والملازم' }) } catch (nE) {}
       return NextResponse.json({ message: 'تم إضافة الكتاب باللينك الخارجي', book: linkBook }, { status: 201 })
     }
 
@@ -136,8 +132,7 @@ export async function POST(request: NextRequest) {
           fileName: String(fileName || ''),
           fileType: String(fileType || 'application/pdf'),
           sizeBytes: sizeNum,
-          /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد */
-          grade: storeGrade(String(grade || '')),
+          grade: String(grade || ''),
           usage: usage,
         },
       })
@@ -145,8 +140,7 @@ export async function POST(request: NextRequest) {
 
     /* (و44) إشعار للطلاب: كتاب جديد اتضاف */
     /* (و45) await — الإشعار بيتكتب قبل الرد */
-      try { await notifyStudents({ /* (S-4a — توحيد الصفوف) إشعار بالاسم المعتمد */
-            grade: storeGrade(String(grade || '')), type: 'book', title: '📕 كتاب جديد اتضاف: ' + String(title).trim(), body: String(description || '').slice(0, 200) || 'تقدر تفتحه أو تحمله من تاب الكتب والملازم' }) } catch (nE) {}
+      try { await notifyStudents({ grade: String(grade || ''), type: 'book', title: '📕 كتاب جديد اتضاف: ' + String(title).trim(), body: String(description || '').slice(0, 200) || 'تقدر تفتحه أو تحمله من تاب الكتب والملازم' }) } catch (nE) {}
 
     return NextResponse.json({ message: 'تم إضافة الكتاب', book }, { status: 201 })
   } catch (error: any) {

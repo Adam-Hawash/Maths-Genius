@@ -1,78 +1,64 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { isAdminRequest } from "@/lib/admin-auth";
 
-import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-/* (S-4a — توحيد الصفوف) المرجع الموحد: كتابة = storeGrade */
-import { storeGrade } from '@/lib/grade-names'
-
-// GET /api/announcements/[id] - جلب إعلان بالمعرف
-export async function GET(
-  _request: NextRequest,
+/** تعديل إعلان — للمشرف فقط */
+export async function PUT(
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!isAdminRequest(req)) {
+    return NextResponse.json({ error: "غير مصرّح" }, { status: 401 });
+  }
   try {
-    const { id } = await params
-    const announcement = await db.announcement.findUnique({ where: { id } })
+    const { id } = await params;
+    const body = await req.json().catch(() => ({}));
+    const title = String(body?.title ?? "").trim();
+    const text = String(body?.body ?? "").trim();
+    const important = Boolean(body?.important);
 
-    if (!announcement) {
-      return NextResponse.json({ error: 'الإعلان غير موجود' }, { status: 404 })
+    if (!title || !text) {
+      return NextResponse.json(
+        { error: "العنوان والنص مطلوبان" },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ announcement })
-  } catch (error) {
-    console.error('فشل جلب الإعلان:', error)
-    return NextResponse.json({ error: 'حدث خطأ في السيرفر' }, { status: 500 })
-  }
-}
-
-// PUT /api/announcements/[id] - تحديث الإعلان
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const body = await request.json()
-    const { title, content, grade } = body
-
-    const existing = await db.announcement.findUnique({ where: { id } })
+    const existing = await db.announcement.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json({ error: 'الإعلان غير موجود' }, { status: 404 })
+      return NextResponse.json({ error: "الإعلان غير موجود" }, { status: 404 });
     }
 
     const announcement = await db.announcement.update({
       where: { id },
-      data: {
-        ...(title && { title }),
-        ...(content && { content }),
-        /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */ ...(grade && { grade: storeGrade(grade) }),
-      },
-    })
-
-    return NextResponse.json({ message: 'تم تحديث الإعلان بنجاح', announcement })
-  } catch (error) {
-    console.error('تحديث الإعلانفشل:', error)
-    return NextResponse.json({ error: 'حدث خطأ في السيرفر' }, { status: 500 })
+      data: { title, body: text, important },
+    });
+    return NextResponse.json({ ok: true, announcement });
+  } catch {
+    return NextResponse.json(
+      { error: "تعذّر حفظ التعديل" },
+      { status: 500 }
+    );
   }
 }
 
-// DELETE /api/announcements/[id] - حذف الإعلان
+/** حذف إعلان — للمشرف فقط */
 export async function DELETE(
-  _request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!isAdminRequest(req)) {
+    return NextResponse.json({ error: "غير مصرّح" }, { status: 401 });
+  }
   try {
-    const { id } = await params
-
-    const existing = await db.announcement.findUnique({ where: { id } })
+    const { id } = await params;
+    const existing = await db.announcement.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json({ error: 'الإعلان غير موجود' }, { status: 404 })
+      return NextResponse.json({ error: "الإعلان غير موجود" }, { status: 404 });
     }
-
-    await db.announcement.delete({ where: { id } })
-
-    return NextResponse.json({ message: 'تم حذف الإعلان بنجاح' })
-  } catch (error) {
-    console.error('حذف الإعلانفشل:', error)
-    return NextResponse.json({ error: 'حدث خطأ في السيرفر' }, { status: 500 })
+    await db.announcement.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "تعذّر الحذف" }, { status: 500 });
   }
 }

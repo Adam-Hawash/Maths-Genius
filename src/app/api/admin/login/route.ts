@@ -4,10 +4,6 @@ import { db, safeWrite } from '@/lib/db'
 
 export var maxDuration = 10
 
-/* (2026-ص4-ر) بيانات المشرف الرئيسية — رجّعناها زي ما كانت الأصل:
-   math genius / wael2026# — طلب المستر: «ماث جينيس ما تلعبش في الباسورد بتاعتها»
-   لو صف القاعدة اتزامن بالبيانات القديمة الغلط → أول دخول بالبيانات الأصلية
-   بيرجّع صف القاعدة عليها (مصدر حقيقة واحد) */
 var DEFAULT_EMAIL = 'math genius'
 var DEFAULT_PASSWORD = 'wael2026#'
 var ADMIN_NAME = 'Mr.Wael Khodair'
@@ -48,18 +44,7 @@ export async function POST(request) {
       })
     } else {
       if (cleanEmail !== squash(admin.email) || cleanPassword !== squash(admin.password)) {
-        /* (2026-ص4-ر) بيانات القاعدة مختلفة → اللي بيكتب البيانات الأصلية بيدخل
-           ومزامنة صف القاعدة عليها — وغير كده رفض زي ما هو */
-        if (cleanEmail !== squash(DEFAULT_EMAIL) || cleanPassword !== squash(DEFAULT_PASSWORD)) {
-          return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
-        }
-        var synced = await safeWrite(function() {
-          return db.admin.update({
-            where: { id: admin.id },
-            data: { email: DEFAULT_EMAIL, password: DEFAULT_PASSWORD },
-          })
-        })
-        if (synced) admin = synced
+        return NextResponse.json({ error: 'البريد أو كلمة المرور غلط' }, { status: 401 })
       }
     }
 

@@ -23,10 +23,6 @@
 // الرد {ok,code,reason} + التوصيل 423 في مسارَي التسليم زي ما هما بالظبط.
 // ============================================================
 import { db, withRetry } from '@/lib/db'
-import { gradeVariants, normalizeGrade } from '@/lib/grade-names'
-/* (2026-ص2) مفتاح قفل التسلسل الموحد — نفس مفتاح الفيديوهات بالظبط:
-   لوحة التحكم بتقفله مرة واحدة → دروس/واجبات/امتحانات كله موحد */
-import { isSequenceLockEnabled } from '@/lib/video-guard'
 /* (2026-و67) أسئلة الطالب الفعلية — نفس الدالة اللي بتقرأ شاشة الأدمن/التسليم،
    عشان امتحانات النماذج (أ/ب) تتتبع صح: سلسلة الحارس لازم تطابق حرفيًا
    اللي الطالب شايفه في قايمته (القايمة بترجع أسئلة نموذجه هو) */
@@ -80,8 +76,24 @@ async function rowExists(table: 'ExamResult' | 'HomeworkResult', studentId: stri
    /api/homework و /api/exams (مش في lib مشترك — لو اتعدلت هناك لازم تتعدل هنا)
    عشان السلسلة السيرفرية تطابق قايمة الطالب بنفس منطق المطابقة الضبابية */
 function normalizeGradeSeq(grade: string): string {
-  /* (S-4a — توحيد الصفوف) تفويض للمرجع الموحد — النسخة المحلية القديمة كانت بتقص أسماء الابتدائي */
-  return normalizeGrade(grade)
+  if (!grade) return ''
+  var g = grade.trim()
+  g = g.replace(/^الصف\s+/i, '')
+  g = g.replace(/الاعدادي/gi, 'إعدادي')
+  g = g.replace(/الإعدادي/gi, 'إعدادي')
+  g = g.replace(/البكالوريا/gi, 'بكالوريا')
+  g = g.replace(/بكالوريا/gi, 'بكالوريا')
+  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
+  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
+  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
+  if (g.includes('الرابع')) g = 'الرابع'
+  if (g.includes('الخامس')) g = 'الخامس'
+  if (g.includes('السادس')) g = 'السادس'
+  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
+  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
+  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
+  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
+  return g
 }
 
 /* (2026-و40) قراءة قايمة الاستهداف — نفس parseTargetIds في مسارَي القايمة */
@@ -142,14 +154,12 @@ async function loadVisibleChain(
        (hasQuestions=false على الخام) والحارس كان بيرجع لامتحان أقدم — فبيقفل
        طالب سلّم فعلاً. على العميل نفس الامتحان بيتتبّع عادي (أسئلة نموذجه
        واصلة ليه) → سلسلتين مختلفتين = قفل كاذب. */
-    /* (2026-ص3) مطابقة تساوي حرفية لكل صيغ نفس الصف — LIKE بأول كلمة كانت
-       بتخلّي سلسلة «أولى بكالوريا» تحتسب عناصر «أولى إعدادي» */
-    var gv = gradeVariants(grade)
-    var gvPh = gv.map(function () { return '?' }).join(', ')
     rows = await withRetry(function () {
-      var sql = 'SELECT id, title, questions, scheduledAt, targetStudentIds, targetGroupIds' + (kind === 'exam' ? ', models, modelMode, fixedModel' : '') + ' FROM ' + table +
-        ' WHERE grade IN (' + gvPh + ') ORDER BY createdAt ASC'
-      return (db as any).$queryRawUnsafe.apply(null, [sql].concat(gv))
+      return (db as any).$queryRawUnsafe(
+        'SELECT id, title, questions, scheduledAt, targetStudentIds, targetGroupIds' + (kind === 'exam' ? ', models, modelMode, fixedModel' : '') + ' FROM ' + table +
+        ' WHERE grade = ? OR grade = ? OR grade LIKE ? ORDER BY createdAt ASC',
+        grade, normalized, '%' + firstWord + '%'
+      )
     }, 3, 300) as any[]
   } catch (e) {
     console.warn('[SequentialGuard] chain load failed — failing OPEN (' + table + '):', e)
@@ -205,8 +215,6 @@ export async function checkHwSequential(
   studentId: string | null | undefined
 ): Promise<SeqCheckResult> {
   if (!studentId) return { ok: true }
-  /* (2026-ص2) المفتاح الموحد من اللوحة — مطفي = مفيش قفل تسلسل على أي واجب */
-  try { if (!(await isSequenceLockEnabled())) return { ok: true } } catch (e) {}
   try {
     var hw: any = null
     try {
@@ -234,8 +242,7 @@ export async function checkHwSequential(
         return {
           ok: false,
           code: 423,
-          // (2026-ص2) رسالة عامة من غير أسماء — طلب المستر
-          reason: 'الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله',
+          reason: 'الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله' + (prev.title ? ' — "' + prev.title + '"' : ''),
         }
       }
       break // أقرب واجب قبله قابل للتسليم اتسلّم → الواجب ده مفتوح
@@ -254,8 +261,6 @@ export async function checkExamSequential(
   studentId: string | null | undefined
 ): Promise<SeqCheckResult> {
   if (!studentId) return { ok: true }
-  /* (2026-ص2) المفتاح الموحد من اللوحة — مطفي = مفيش قفل تسلسل على أي امتحان */
-  try { if (!(await isSequenceLockEnabled())) return { ok: true } } catch (e) {}
   try {
     var exam: any = null
     try {
@@ -283,8 +288,7 @@ export async function checkExamSequential(
         return {
           ok: false,
           code: 423,
-          // (2026-ص2) رسالة عامة من غير أسماء — طلب المستر
-          reason: 'الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله',
+          reason: 'الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله' + (prev.title ? ' — "' + prev.title + '"' : ''),
         }
       }
       break

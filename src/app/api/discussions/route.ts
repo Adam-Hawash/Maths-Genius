@@ -3,8 +3,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 /* (و46) إشعار الطلاب — طلب المستر: «في المجتمع لو حد بعت رسالة يجي له إشعار» */
 import { notifyStudents } from '@/lib/notify'
-/* (S-4a — توحيد الصفوف) المرجع الموحد: قراءة = gradeWhere، كتابة = storeGrade */
-import { gradeWhere, storeGrade } from '@/lib/grade-names'
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,8 +14,7 @@ export async function GET(request: NextRequest) {
     const pageSize = parseInt(searchParams.get('pageSize') || '20')
 
     const where: Record<string, unknown> = {}
-    /* (S-4a — توحيد الصفوف) كل صيغ نفس الصف مع بعض */
-    if (grade) where.grade = gradeWhere(grade)
+    if (grade) where.grade = grade
     if (studentId) where.studentId = studentId
     if (keyword) {
       where.OR = [
@@ -62,8 +59,7 @@ export async function POST(request: NextRequest) {
       data: {
         studentId: studentId || 'admin',
         studentName: studentName || 'Mr.Wael Khodair',
-        /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
-        grade: storeGrade(grade),
+        grade,
         content,
         isAdminReply: isAdminReply || false,
       },
@@ -74,7 +70,7 @@ export async function POST(request: NextRequest) {
     if (isAdminReply) {
       try {
         await notifyStudents({
-          grade: storeGrade(String(grade || '')),
+          grade: String(grade || ''),
           type: 'community',
           title: '💬 المستر ردّ في المجتمع',
           body: String(content || '').slice(0, 200),

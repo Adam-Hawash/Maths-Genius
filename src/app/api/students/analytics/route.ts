@@ -1,9 +1,26 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { gradeVariants, normalizeGrade } from '@/lib/grade-names'
 
 // Normalize grade names
+function normalizeGrade(grade: string): string {
+  if (!grade) return ''
+  var g = grade.trim()
+  g = g.replace(/^الصف\s+/i, '')
+  g = g.replace(/الاعدادي/gi, 'إعدادي').replace(/الإعدادي/gi, 'إعدادي')
+  g = g.replace(/البكالوريا/gi, 'بكالوريا')
+  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
+  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
+  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
+  if (g.includes('الرابع')) g = 'الرابع'
+  if (g.includes('الخامس')) g = 'الخامس'
+  if (g.includes('السادس')) g = 'السادس'
+  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
+  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
+  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
+  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
+  return g
+}
 
 // GET /api/students/analytics?grade=X - Get all students in grade with aggregated analytics
 export async function GET(request: NextRequest) {
@@ -21,8 +38,11 @@ export async function GET(request: NextRequest) {
     // Get all active students in this grade (approved or paid) with fuzzy matching
     const students = await db.student.findMany({
       where: {
-        /* (2026-ص3) مطابقة تساوي حرفية — مفيش contains بأول كلمة */
-        grade: { in: gradeVariants(grade) },
+        OR: [
+          { grade: grade },
+          { grade: normalizedGrade },
+          { grade: { contains: normalizedGrade.split(' ')[0] } },
+        ],
         status: { in: ['approved', 'paid'] }
       },
       orderBy: { name: 'asc' },
@@ -43,8 +63,11 @@ export async function GET(request: NextRequest) {
     // Get all videos for this grade (with fuzzy matching)
     const gradeVideos = await db.video.findMany({
       where: {
-        /* (2026-ص3) مطابقة تساوي حرفية — مفيش contains بأول كلمة */
-        grade: { in: gradeVariants(grade) }
+        OR: [
+          { grade: grade },
+          { grade: normalizedGrade },
+          { grade: { contains: normalizedGrade.split(' ')[0] } },
+        ]
       },
       select: { id: true, title: true },
     })
@@ -54,8 +77,11 @@ export async function GET(request: NextRequest) {
     // Get all exams for this grade (with fuzzy matching)
     const gradeExams = await db.exam.findMany({
       where: {
-        /* (2026-ص3) مطابقة تساوي حرفية — مفيش contains بأول كلمة */
-        grade: { in: gradeVariants(grade) }
+        OR: [
+          { grade: grade },
+          { grade: normalizedGrade },
+          { grade: { contains: normalizedGrade.split(' ')[0] } },
+        ]
       },
       select: { id: true, title: true, passScore: true },
     })
@@ -64,8 +90,11 @@ export async function GET(request: NextRequest) {
     // Get all homework for this grade (with fuzzy matching)
     const gradeHomework = await db.homework.findMany({
       where: {
-        /* (2026-ص3) مطابقة تساوي حرفية — مفيش contains بأول كلمة */
-        grade: { in: gradeVariants(grade) }
+        OR: [
+          { grade: grade },
+          { grade: normalizedGrade },
+          { grade: { contains: normalizedGrade.split(' ')[0] } },
+        ]
       },
       select: { id: true, title: true },
     })

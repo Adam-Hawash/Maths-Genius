@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { makeLibsqlClient, ensureSchema } from '@/lib/ensure-schema'
-/* (S-4a — توحيد الصفوف) المرجع الموحد: قراءة = gradeWhere، كتابة = storeGrade */
-import { gradeWhere, storeGrade } from '@/lib/grade-names'
 
 // ============================================================
 // نظام ربط الجهاز — إصدار 5 (البساطة نفسها)
@@ -231,7 +229,7 @@ export async function GET(request: NextRequest) {
         var st = (student as any).status
         if (st === 'rejected' || st === 'refused') {
           return NextResponse.json(
-            { students: [], deviceBlocked: false, error: '❌ Your account has been rejected from the platform. If you have any questions, contact the teacher' },
+            { students: [], deviceBlocked: false, error: '❌ الحساب بتاعك مرفوض من المنصة. لو عندك استفسار تواصل مع المستر' },
             { status: 403 }
           )
         }
@@ -365,14 +363,8 @@ export async function GET(request: NextRequest) {
 
     // ===== قائمة الطلاب (لوحة التحكم) =====
     var where: Record<string, unknown> = {}
-    /* (S-4a — توحيد الصفوف) كل صيغ نفس الصف مع بعض */
-    if (grade) where.grade = gradeWhere(grade)
+    if (grade) where.grade = grade
     if (status) where.status = status
-    /* (2026-ز12 — طلب المستر): الطالب المرفوض = اتحذف من المنصة —
-       مش بيظهر في أي قايمة عادية للأدمن (بيظهر بس لو اتطلب
-       status=rejected صراحة زي تاب «مرفوض»)، ومحاولات دخوله أو
-       تسجيله من جديد بترد عليه «حسابك مرفوض من المنصة» */
-    else where.status = { notIn: ['rejected', 'refused'] }
     if (keyword) {
       where.OR = [
         { name: { contains: keyword } },
@@ -444,7 +436,24 @@ export async function POST(request: NextRequest) {
     var name = body.name || ''
     var phone = body.phone || ''
     var grade = body.grade || ''
-    var status = body.status || 'pending'
+    /* (Z-30) القبول التلقائي للطلاب — طلب المستر (كل المنصات):
+       لو مفيش status صريح في الطلب → نقرأ إعداد student_auto_approve من
+       إعدادات المنصة (افتراضي مفعّل '1'):
+         - مفعّل → الطالب يتسجل 'approved' على طول ويدخل المنصة فورًا
+         - مقفول → الوضع القديم 'pending' ويستنى موافقة الأدمن
+       الأدمن يتحكم فيه من الإعدادات (شاشة إعدادات الحساب) */
+    var status = body.status || ''
+    var autoApproved = false
+    if (!status) {
+      try {
+        var autoRows: any = await db.$queryRawUnsafe("SELECT value FROM SiteConfig WHERE key = 'student_auto_approve' LIMIT 1")
+        var autoOn = !(autoRows && autoRows.length && String(autoRows[0] && autoRows[0].value) === '0')
+        status = autoOn ? 'approved' : 'pending'
+      } catch (eCfg) {
+        status = 'approved' /* لو قراءة الإعداد فشلت — القبول التلقائي هو الافتراضي */
+      }
+    }
+    autoApproved = status === 'approved'
     var parentName = body.parentName || body.fatherName || ''
     var parentPhone = body.parentPhone || body.motherPhone || ''
     var password = body.password || ''
@@ -476,17 +485,8 @@ export async function POST(request: NextRequest) {
     // لو الرقم متسجل قبل كده → رسالة عربية ودودة فورًا — عمرها ما يوصل
     // للطالب أي خطأ تقني (زي SQLite UNIQUE اللي ظهر على الموبايل)
     try {
-      var dup = await db.student.findFirst({ where: { phone }, select: { id: true, status: true } })
+      var dup = await db.student.findFirst({ where: { phone }, select: { id: true } })
       if (dup) {
-        /* (2026-ز12 — طلب المستر): المرفوض لو حاول يسجل تاني بنفس الرقم
-           → رسالة الرفض الصريحة زي الدخول بالظبط */
-        var dupSt = String((dup as any).status || '')
-        if (dupSt === 'rejected' || dupSt === 'refused') {
-          return NextResponse.json(
-            { error: '❌ Your account has been rejected from the platform. If you have any questions, contact the teacher' },
-            { status: 403 }
-          )
-        }
         return NextResponse.json(
           { error: '⚠️ الرقم ده متسجل قبل كده في المنصة — لو الحساب ده بتاعك اعمل تسجيل دخول عادي بالرقم وكلمة السر، ولو نسيت كلمة السر أو قابلتك أي مشكلة اكتبها في قسم الشكاوي' },
           { status: 409 }
@@ -502,8 +502,7 @@ export async function POST(request: NextRequest) {
         data: {
           name: name,
           phone: phone,
-          /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
-          grade: storeGrade(grade),
+          grade: grade,
           status: status,
           parentName: parentName,
           parentPhone: parentPhone,
@@ -531,7 +530,7 @@ export async function POST(request: NextRequest) {
 
     try {
       await db.studentActivity.create({
-        data: { studentId: student.id, action: 'registered', details: 'Registered as ' + grade },
+        data: { studentId: student.id, action: 'registered', details: 'Registered as ' + grade + (autoApproved ? ' — قبول تلقائي فوري' : ' — في انتظار المراجعة') },
       })
     } catch (_) {}
 

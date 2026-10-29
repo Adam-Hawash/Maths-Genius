@@ -23,17 +23,37 @@
    ============================================================ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { gradeVariants, normalizeGrade } from '@/lib/grade-names'
 
 /* توحيد أسماء الصفوف — نفس منطق /api/students/analytics بالظبط */
+function normalizeGrade(grade: string): string {
+  if (!grade) return ''
+  var g = grade.trim()
+  g = g.replace(/^الصف\s+/i, '')
+  g = g.replace(/الاعدادي/gi, 'إعدادي').replace(/الإعدادي/gi, 'إعدادي')
+  g = g.replace(/البكالوريا/gi, 'بكالوريا')
+  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
+  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
+  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
+  if (g.includes('الرابع')) g = 'الرابع'
+  if (g.includes('الخامس')) g = 'الخامس'
+  if (g.includes('السادس')) g = 'السادس'
+  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
+  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
+  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
+  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
+  return g
+}
 
 /* مطابقة صف بعنصر (فيديو/امتحان/واجب) — نفس سماحية analytics:
    نفس الاسم بعد التوحيد، أو أول كلمة من صف الطالب جوه اسم العنصر */
 function gradeMatches(itemGrade: string, studentGrade: string): boolean {
   if (!itemGrade || !studentGrade) return false
   if (itemGrade === studentGrade) return true
-  /* (2026-ص3) تساوي حرفي على صيغ نفس الصف — مفيش أول كلمة */
-  return gradeVariants(studentGrade).indexOf(itemGrade) !== -1
+  var ni = normalizeGrade(itemGrade)
+  var ns = normalizeGrade(studentGrade)
+  if (ni === ns) return true
+  var first = ns.split(' ')[0]
+  return !!first && itemGrade.indexOf(first) !== -1
 }
 
 /* نسبة المشاهدة — زي ما بتتحسب في progress API */
@@ -192,14 +212,13 @@ export async function GET(request: NextRequest) {
 
       var studentsRaw
       if (gradeFilter) {
-        /* (2026-ص3) مطابقة تساوي حرفية — مفيش LIKE بأول كلمة */
-        var gv = gradeVariants(gradeFilter)
-        var gvPh = gv.map(function () { return '?' }).join(', ')
+        var ng = normalizeGrade(gradeFilter)
+        var fw = ng.split(' ')[0]
         studentsRaw = await db.$queryRawUnsafe(
           `SELECT id, name, phone, grade, status FROM Student
-           WHERE status IN ('approved','paid') AND grade IN (` + gvPh + `)
+           WHERE status IN ('approved','paid') AND (grade = ? OR grade = ? OR grade LIKE ?)
            ORDER BY name`,
-          ...gv
+          gradeFilter, ng, '%' + fw + '%'
         ) || []
       } else {
         studentsRaw = await db.$queryRawUnsafe(

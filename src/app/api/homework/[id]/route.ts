@@ -2,8 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { isAdmin } from '@/lib/video-guard'
-/* (S-4a — توحيد الصفوف) المرجع الموحد: كتابة = storeGrade */
-import { storeGrade } from '@/lib/grade-names'
 import { collectMediaIds, deleteMediaByIds, examHomeworkMediaTexts } from '@/lib/media-cleanup'
 
 /* (25-ب1) جدولة الظهور — defensive ALTER بنفس نمط المشروع (ممنوع db:push) */
@@ -138,7 +136,7 @@ export async function PUT(
       data: {
         ...(title && { title }),
         ...(content && { content }),
-        /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */ ...(grade && { grade: storeGrade(grade) }),
+        ...(grade && { grade }),
         ...(questions !== undefined && { questions: typeof questions === 'string' ? questions : JSON.stringify(questions) }),
       },
     })

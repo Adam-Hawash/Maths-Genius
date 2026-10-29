@@ -18,7 +18,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { ArrowUpToLine, CalendarClock, CalendarPlus, ChevronDown, ChevronUp, Clock, GraduationCap, Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import { CalendarClock, CalendarPlus, Clock, GraduationCap, Loader2, Plus, Save, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { gradesFromConfig, useAppStore, type GradeItem } from '@/stores/app-store'
@@ -118,16 +118,10 @@ function parseSchedule(siteConfig: { [key: string]: string } | null | undefined)
 // أو نفس مكانه) بنرجّع { from, to } لنشرها على كل البيانات
 function detectRenames(originals: GradeItem[], current: GradeItem[]): Array<{ from: string; to: string }> {
   var renames: Array<{ from: string; to: string }> = []
-  /* (ز15) الصف اللي اسمه موجود في الأصل مش rename — اتنقل مكانه بس */
-  var originalArs: Record<string, boolean> = {}
-  for (var z = 0; z < originals.length; z++) originalArs[(originals[z].ar || '').trim()] = true
-  var currentArs: Record<string, boolean> = {}
-  for (var c = 0; c < current.length; c++) currentArs[(current[c].ar || '').trim()] = true
   for (var i = 0; i < current.length; i++) {
     var nu = current[i]
     var newAr = (nu.ar || '').trim()
     if (!newAr) continue
-    if (originalArs[newAr]) continue
     var oldMatch: GradeItem | null = null
     for (var j = 0; j < originals.length; j++) {
       var ol = originals[j]
@@ -135,13 +129,7 @@ function detectRenames(originals: GradeItem[], current: GradeItem[]): Array<{ fr
       var sameEn = nu.en.trim() !== '' && ol.en === nu.en.trim()
       if (sameShort || sameEn) { oldMatch = ol; break }
     }
-    /* (ز15) المطابقة بالمكان بس لو العدد ثابت والاسم القديم اختفى من
-       القايمة الحالية — عشان إضافة صف في الأول أو الترتيب ما يترجموش
-       غلط كـ«تغيير اسم» لصف قديم ويتنشر على الداتا */
-    if (!oldMatch && originals.length === current.length && i < originals.length) {
-      var posOld = originals[i]
-      if ((posOld.ar || '').trim() && currentArs[(posOld.ar || '').trim()] !== true) oldMatch = posOld
-    }
+    if (!oldMatch && i < originals.length) oldMatch = originals[i]
     var oldAr = oldMatch ? (oldMatch.ar || '').trim() : ''
     if (oldAr && oldAr !== newAr) {
       var dup = false
@@ -175,7 +163,7 @@ export function GradesSchedulePanel() {
   useEffect(function () {
     if (configLoaded || configFetchStarted) return
     setConfigFetchStarted(true)
-    fetch('/api/config?fresh=' + Date.now())
+    fetch('/api/config')
       .then(function (r) { return r.json() })
       .then(function (data) {
         useAppStore.getState().setSiteConfig(data || {})
@@ -213,28 +201,6 @@ export function GradesSchedulePanel() {
     gradesDirtyRef.current = true
     setGrades(function (prev) {
       return prev.concat([{ ar: '', en: '', emoji: '🎓', short: '' }])
-    })
-  }
-
-  /* (ز15) إضافة صف في أول القايمة — طلب المستر: «خليني أقدر أضيف حاجة في الأول» */
-  function addGradeAtTop() {
-    gradesDirtyRef.current = true
-    setGrades(function (prev) {
-      return [{ ar: '', en: '', emoji: '🎓', short: '' }].concat(prev)
-    })
-  }
-
-  /* (ز15) ترتيب الصفوف يدويًا — اللي فوق في اللوحة بيظهر الأول في كل المنصة */
-  function moveGrade(idx: number, dir: -1 | 1) {
-    gradesDirtyRef.current = true
-    setGrades(function (prev) {
-      var j = idx + dir
-      if (j < 0 || j >= prev.length) return prev
-      var next = prev.slice()
-      var tmp = next[idx]
-      next[idx] = next[j]
-      next[j] = tmp
-      return next
     })
   }
 
@@ -432,10 +398,7 @@ export function GradesSchedulePanel() {
               <GraduationCap className="h-5 w-5" />
               الصفوف الدراسية | Grades
             </span>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" className="min-h-[36px]" onClick={addGradeAtTop} title="الصف الجديد يظهر أول القايمة في كل المنصة">
-                <ArrowUpToLine className="h-4 w-4 ml-1" />إضافة صف في الأول
-              </Button>
+            <div className="flex gap-2">
               <Button variant="outline" size="sm" className="min-h-[36px]" onClick={addGrade}>
                 <Plus className="h-4 w-4 ml-1" />إضافة صف
               </Button>
@@ -486,26 +449,6 @@ export function GradesSchedulePanel() {
                   title="الكود القصير"
                   className="w-20 min-h-[38px]"
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 shrink-0 text-muted-foreground hover:bg-muted"
-                  onClick={function () { moveGrade(idx, -1) }}
-                  disabled={idx === 0}
-                  title="تحريك الصف لفوق"
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 shrink-0 text-muted-foreground hover:bg-muted"
-                  onClick={function () { moveGrade(idx, 1) }}
-                  disabled={idx === grades.length - 1}
-                  title="تحريك الصف لتحت"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
                 <Button
                   variant="ghost"
                   size="icon"

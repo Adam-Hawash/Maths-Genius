@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { notifyStudents } from '@/lib/notify'
+import { notifyParentsOfAssignment } from '@/lib/parent-notify'
 import { isAdmin } from '@/lib/video-guard'
 /* (2026-و55) إخفاء إجابات الـ AI في الجداول عن الطالب — تنظيف سيرفري */
 import { questionsJsonForStudent } from '@/lib/table-sanitize'
@@ -29,9 +30,31 @@ function parseTargetIds(raw: unknown): string[] {
 
 // Normalize grade names so old and new naming conventions match
 // e.g. "الصف الثالث الاعدادي" == "تالتة إعدادي" == "الصف الثالث الإعدادي"
-/* (S-4a — توحيد الصفوف) المرجع الموحد بدل النسخة المحلية المكسورة —
-   النسخة المحلية القديمة كانت بتقص «الخامسة الابتدائي» لـ«الخامس» */
-import { gradeVariants, storeGrade } from '@/lib/grade-names'
+function normalizeGrade(grade: string): string {
+  if (!grade) return ''
+  var g = grade.trim()
+  // Remove "الصف " prefix
+  g = g.replace(/^الصف\s+/i, '')
+  // Normalize إعدادي variants
+  g = g.replace(/الاعدادي/gi, 'إعدادي')
+  g = g.replace(/الإعدادي/gi, 'إعدادي')
+  // Normalize بكالوريا variants
+  g = g.replace(/البكالوريا/gi, 'بكالوريا')
+  g = g.replace(/بكالوريا/gi, 'بكالوريا')
+  // Map old names to new
+  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
+  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
+  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
+  if (g.includes('الرابع')) g = 'الرابع'
+  if (g.includes('الخامس')) g = 'الخامس'
+  if (g.includes('السادس')) g = 'السادس'
+  // Add إعدادي/بكالوريا suffix
+  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
+  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
+  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
+  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
+  return g
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,11 +73,15 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {}
     if (grade) {
-      /* (2026-ص3) مطابقة تساوي حرفية لكل صيغ نفس الصف — مفيش contains بأول
-         كلمة: كانت بتخلّي «تالتة إعدادي» تلحق «تالتة بكالوريا» والعكس */
+      // Fuzzy grade matching: normalize both sides
+      const normalizedGrade = normalizeGrade(grade)
       where.OR = [
-        { grade: { in: gradeVariants(grade) } },
+        { grade: grade },                                    // exact match
+        { grade: normalizedGrade },                           // normalized match
+        { grade: { contains: normalizedGrade.split(' ')[0] } }, // contains first word (e.g. "تالتة")
       ]
+      // Also match if the homework grade contains the normalized grade's first word
+      // This handles cases like "تالتة إعدادي" matching "الصف الثالث الاعدادي"
     }
     if (keyword) {
       where.OR = where.OR ? [...(where.OR as unknown[]), { title: { contains: keyword } }] : [{ title: { contains: keyword } }]
@@ -168,17 +195,40 @@ export async function POST(request: NextRequest) {
 
     const homework = await safeWrite(function () {
       return db.homework.create({
-        data: { title, content: content || '', /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */ grade: storeGrade(grade), filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '', questions: questions || '', scheduledAt: scheduledDate, targetStudentIds: targetIds, targetGroupIds: targetGids },
+        data: { title, content: content || '', grade, filePath: filePath || '', fileType: fileType || '', thumbnail: thumbnail || '', answerKeyPath: answerKeyPath || '', answerKeyType: answerKeyType || '', questions: questions || '', scheduledAt: scheduledDate, targetStudentIds: targetIds, targetGroupIds: targetGids },
       })
     })
 
     /* (و44) إشعار للطلاب المستهدفين: واجب جديد */
+    var assignIds: string[] = []
     try {
       var nIds: string[] = []
       try { var tp = JSON.parse(targetIds); if (Array.isArray(tp)) nIds = tp.filter(Boolean) } catch (e) {}
+      assignIds = nIds.slice()
       /* (و45) await — الإشعار بيتكتب قبل الرد */
-        try { await notifyStudents({ studentIds: nIds, grade: storeGrade(String(grade || '')), type: 'homework', title: '📚 واجب جديد: ' + String(title), body: 'دخل من تاب الواجبات وسلّمه قبل ميعاده' }) } catch (nE) {}
+        try { await notifyStudents({ studentIds: nIds, grade: String(grade || ''), type: 'homework', title: '📚 واجب جديد: ' + String(title), body: 'دخل من تاب الواجبات وسلّمه قبل ميعاده' }) } catch (nE) {}
     } catch (nE) {}
+
+    /* (Z-30) إشعار أولياء الأمور بالإسناد الجديد — طلب المستر: «يجي رسالة
+       لولي الأمر إن ابنه عليه واجب» — fire-and-forget جوه after() عشان
+       الرد ما يستنيش إرسال الـ pushes. لو مفيش استهداف محدد → كل طلاب
+       الصف المستهدف أولياء أمورهم بياخدوا الإشعار برضه (نفس جمهور notifyStudents) */
+    var hwGrade = String(grade || '')
+    var hwTitle = String(title || '')
+    after(async function () {
+      try {
+        var ids = assignIds.slice()
+        if (!ids.length && hwGrade) {
+          try {
+            var gRows: any = await db.$queryRawUnsafe("SELECT id FROM Student WHERE status IN ('approved','paid') AND grade = ?", hwGrade)
+            ids = (gRows || []).map(function (r: any) { return String(r.id) })
+          } catch (eG) {}
+        }
+        for (var pi = 0; pi < ids.length; pi++) {
+          await notifyParentsOfAssignment({ studentId: ids[pi], kind: 'homework', title: hwTitle })
+        }
+      } catch (eA) { console.error('[homework] parent assignment notify failed (ignored):', eA) }
+    })
 
     return NextResponse.json({ message: 'Homework added', homework }, { status: 201 })
   } catch (error: any) {
