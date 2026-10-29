@@ -23,6 +23,8 @@ async function ensureExamFeatureColumns() {
   try { await db.$executeRawUnsafe("ALTER TABLE Exam ADD COLUMN targetStudentIds TEXT DEFAULT ''") } catch (e) {}
   /* (2026-و29) استهداف المجموعات — نفس النمط: JSON array بids المجموعات */
   try { await db.$executeRawUnsafe("ALTER TABLE Exam ADD COLUMN targetGroupIds TEXT DEFAULT ''") } catch (e) {}
+  /* (2026-و115) نهاية مدة الامتحان */
+  try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN endsAt DATETIME') } catch (e) {}
 })()
   }
   await _examColsReady
@@ -47,25 +49,15 @@ function parseTargetIds(raw: unknown): string[] {
   try { var p = JSON.parse(String(raw || '[]')); return Array.isArray(p) ? p : [] } catch (e) { return [] }
 }
 
+/* (2026-و115) نهاية مدة الامتحان — طلب المستر: بعد نهاية المدة الطالب يشوف
+   رسالة «مدة الامتحان خلصت» لمدة يومين، وبعدهم الامتحان يختفي تلقائيًا من
+   قايمة الطلاب. البيانات تفضل في الداتابيز عشان النتايج القديمة متبوظش */
+var EXAM_END_GRACE_MS = 2 * 24 * 60 * 60 * 1000
+
 // Normalize grade names so old and new naming conventions match
-function normalizeGrade(grade: string): string {
-  if (!grade) return ''
-  var g = grade.trim()
-  g = g.replace(/^الصف\s+/i, '')
-  g = g.replace(/الاعدادي/gi, 'إعدادي').replace(/الإعدادي/gi, 'إعدادي')
-  g = g.replace(/البكالوريا/gi, 'بكالوريا')
-  if (g.includes('أولى') || g.includes('اولى') || g.includes('الأول')) g = 'أولى'
-  if (g.includes('تانية') || g.includes('الثاني')) g = 'تانية'
-  if (g.includes('تالتة') || g.includes('الثالث')) g = 'تالتة'
-  if (g.includes('الرابع')) g = 'الرابع'
-  if (g.includes('الخامس')) g = 'الخامس'
-  if (g.includes('السادس')) g = 'السادس'
-  if (g === 'أولى' && grade.includes('عداد')) g = 'أولى إعدادي'
-  if (g === 'تانية' && grade.includes('عداد')) g = 'تانية إعدادي'
-  if (g === 'تالتة' && grade.includes('عداد')) g = 'تالتة إعدادي'
-  if (g === 'أولى' && grade.includes('كالور')) g = 'أولى بكالوريا'
-  return g
-}
+/* (S-4a — توحيد الصفوف) المرجع الموحد بدل النسخة المحلية المكسورة —
+   النسخة المحلية القديمة كانت بتقص «الخامسة الابتدائي» لـ«الخامس» */
+import { gradeVariants, storeGrade } from '@/lib/grade-names'
 
 // ============================================================
 // توزيع النماذج العشوائي (طلب المستر): لما الامتحان يكون فيه نماذج كتير
@@ -133,11 +125,10 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {}
     if (grade) {
-      const normalizedGrade = normalizeGrade(grade)
+      /* (2026-ص3) مطابقة تساوي حرفية لكل صيغ نفس الصف — مفيش contains بأول
+         كلمة: كانت بتخلّي امتحان «أولى بكالوريا» يظهر لـ«أولى إعدادي» */
       where.OR = [
-        { grade: grade },
-        { grade: normalizedGrade },
-        { grade: { contains: normalizedGrade.split(' ')[0] } },
+        { grade: { in: gradeVariants(grade) } },
       ]
     }
     if (keyword) {
@@ -147,7 +138,11 @@ export async function GET(request: NextRequest) {
        لأي طلب مش من أدمن (الطالب/الزائر) — هو بس اللي يشوفها (ببادج مجدول).
        الفلتر الافتراضي = أمان: لو مفيش إثبات أدمن الرد نضيف. */
     if (!admin) {
-      where.AND = [{ OR: [{ scheduledAt: null }, { scheduledAt: { lte: new Date() } }] }]
+      where.AND = [
+        { OR: [{ scheduledAt: null }, { scheduledAt: { lte: new Date() } }] },
+        /* (2026-و115) الامتحان اللي عدت مدته + مهلة اليومين → مش بينزل للطلاب خالص */
+        { OR: [{ endsAt: null }, { endsAt: { gt: new Date(Date.now() - EXAM_END_GRACE_MS) } }] },
+      ]
     }
 
     const [exams, total] = await Promise.all([
@@ -189,6 +184,27 @@ export async function GET(request: NextRequest) {
     // المستر) — وإلا الامتحان زي ما هو
     let outExams = studentId ? visibleExams.map(function (e: any) { return applyModelForStudent(e, studentId) }) : visibleExams
 
+    /* (2026-و115) المدة عدّت (لسه في مهلة اليومين) → flag ended + تفريغ أي
+       محتوى أسئلة/ملفات — الطالب يشوف رسالة «مدة الامتحان خلصت» بس ومفيش
+       أي تسريب لمحتوى الامتحان بعد قفله */
+    if (!admin) {
+      var nowEndMs = Date.now()
+      outExams = (outExams as any[]).map(function (e: any) {
+        if (!e || !e.endsAt) return e
+        var endMs = new Date(e.endsAt).getTime()
+        if (isNaN(endMs) || nowEndMs < endMs) return e
+        return Object.assign({}, e, {
+          ended: true,
+          questions: '',
+          models: '',
+          filePath: '',
+          fileType: '',
+          answerKeyPath: '',
+          answerKeyType: '',
+        })
+      })
+    }
+
     /* (2026-و55) للطالب (مش أدمن): الجداول اللي الـ AI مجاوبها كله بتتفضى —
        الطالب هو اللي يكتب فيها، والقيم الأصلية بتفضل في الداتابيز للإدمن */
     if (!admin) {
@@ -205,9 +221,13 @@ export async function GET(request: NextRequest) {
     /* (25-ب1) للأدمن بس: بادج «مجدول» — العناصر اللي موعدها في المستقبل
        بترجع مع flag scheduled: true عشان اللوحة تعرضها بوضوح */
     if (admin) {
+      var nowAdmMs = Date.now()
       outExams = (outExams as any[]).map(function (e: any) {
-        var isScheduled = e && e.scheduledAt ? new Date(e.scheduledAt).getTime() > Date.now() : false
-        return { ...e, scheduled: isScheduled }
+        var isScheduled = e && e.scheduledAt ? new Date(e.scheduledAt).getTime() > nowAdmMs : false
+        /* (2026-و115) بادجات المدة للأدمن: expired = المدة خلصت، ended = لسه في مهلة اليومين */
+        var endMsAdm = e && e.endsAt ? new Date(e.endsAt).getTime() : 0
+        var expiredAdm = !!endMsAdm && nowAdmMs >= endMsAdm
+        return { ...e, scheduled: isScheduled, expired: expiredAdm, ended: expiredAdm && nowAdmMs < endMsAdm + EXAM_END_GRACE_MS }
       })
     }
 
@@ -222,7 +242,7 @@ export async function POST(request: NextRequest) {
   try {
     await ensureExamFeatureColumns()
     const body = await request.json()
-    const { title, content, grade, filePath, fileType, questions, models, modelMode, fixedModel, passScore, answerKeyPath, answerKeyType, thumbnail, showResult, timeLimitMin, scheduledAt, targetStudentIds, targetGroupIds } = body
+    const { title, content, grade, filePath, fileType, questions, models, modelMode, fixedModel, passScore, answerKeyPath, answerKeyType, thumbnail, showResult, timeLimitMin, scheduledAt, endsAt, targetStudentIds, targetGroupIds } = body
 
     if (!title || !grade) {
       return NextResponse.json({ error: 'Title and grade are required' }, { status: 400 })
@@ -242,6 +262,15 @@ export async function POST(request: NextRequest) {
     var timeLimit = parseInt(String(timeLimitMin === undefined || timeLimitMin === null || timeLimitMin === '' ? '0' : timeLimitMin), 10)
     if (isNaN(timeLimit) || timeLimit < 0) timeLimit = 0
 
+    /* (2026-و115) نهاية المدة (ISO string أو null = بدون نهاية) */
+    var endsDate: Date | null = null
+    if (endsAt) {
+      try {
+        var ed115 = new Date(String(endsAt))
+        if (!isNaN(ed115.getTime())) endsDate = ed115
+      } catch (e) {}
+    }
+
     /* (2026-و26) استهداف الطلاب: array ids → JSON string (فاضي = الكل) */
     var targetIds = normalizeTargetIds(targetStudentIds)
     if (targetIds === undefined) targetIds = '[]'
@@ -254,7 +283,8 @@ export async function POST(request: NextRequest) {
         data: {
           title,
           content: content || '',
-          grade,
+          /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
+          grade: storeGrade(grade),
           filePath: filePath || '',
           fileType: fileType || '',
           answerKeyPath: answerKeyPath || '',
@@ -268,6 +298,7 @@ export async function POST(request: NextRequest) {
           showResult: showResult === true || showResult === 'true' || showResult === 1,
           timeLimitMin: timeLimit,
           scheduledAt: scheduledDate,
+          endsAt: endsDate,
           targetStudentIds: targetIds,
           targetGroupIds: targetGids,
         },
@@ -281,7 +312,7 @@ export async function POST(request: NextRequest) {
       try { var tp = JSON.parse(targetIds); if (Array.isArray(tp)) nIds = tp.filter(Boolean) } catch (e) {}
       assignIds = nIds.slice()
       /* (و45) await — الإشعار بيتكتب قبل الرد */
-        try { await notifyStudents({ studentIds: nIds, grade: String(grade || ''), type: 'exam', title: '📝 امتحان جديد: ' + String(title), body: 'دخل من تاب الامتحانات وحل دلوقتي' }) } catch (nE) {}
+        try { await notifyStudents({ studentIds: nIds, grade: storeGrade(String(grade || '')), type: 'exam', title: '📝 امتحان جديد: ' + String(title), body: 'دخل من تاب الامتحانات وحل دلوقتي' }) } catch (nE) {}
     } catch (nE) {}
 
     /* (Z-30) إشعار أولياء الأمور بالإسناد الجديد — طلب المستر: «يجي رسالة

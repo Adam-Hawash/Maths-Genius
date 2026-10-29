@@ -9,6 +9,8 @@
 // ملاحظة: الشكاوى تظهر للطالب **بس** اللي كتبها، وللأدمن كلها.
 // ============================================================
 import { NextResponse } from 'next/server'
+/* (S-4a — توحيد الصفوف) المرجع الموحد: كتابة = storeGrade */
+import { storeGrade } from '@/lib/grade-names'
 import { db, safeWrite } from '@/lib/db'
 import { ensureDeviceMessageTables } from '@/lib/device-messages'
 
@@ -126,7 +128,7 @@ export async function POST(request: Request) {
       return db.$executeRawUnsafe(
         `INSERT INTO Complaint (id, studentId, studentName, phone, grade, message, summary, source, status, reply, deviceId, createdAt, updatedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', '', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        id, studentId, studentName, phone, grade, message, summary, source, deviceId
+        id, studentId, studentName, phone, /* (S-4a — توحيد الصفوف) الكتابة بالاسم المعتمد */ storeGrade(grade), message, summary, source, deviceId
       )
     })
 

@@ -1,48 +1,73 @@
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { isAdminRequest } from "@/lib/admin-auth";
 
-/** قائمة الإعلانات — عامة (للصفحة الرئيسية) */
-export async function GET() {
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { notifyStudents } from '@/lib/notify'
+/* (S-4a — توحيد الصفوف) المرجع الموحد: قراءة = gradeWhere، كتابة = storeGrade */
+import { gradeWhere, storeGrade } from '@/lib/grade-names'
+
+// GET /api/announcements - جلب كل الإعلانات
+export async function GET(request: NextRequest) {
   try {
-    const announcements = await db.announcement.findMany({
-      orderBy: { createdAt: "desc" },
-    });
-    return NextResponse.json({ announcements });
-  } catch {
-    return NextResponse.json(
-      { error: "تعذّر تحميل الإعلانات" },
-      { status: 500 }
-    );
+    const { searchParams } = new URL(request.url)
+    const grade = searchParams.get('grade')
+    const keyword = searchParams.get('keyword')
+    const page = parseInt(searchParams.get('page') || '1')
+    const pageSize = parseInt(searchParams.get('pageSize') || '20')
+
+    const where: Record<string, unknown> = {}
+    /* (S-4a — توحيد الصفوف) كل صيغ نفس الصف مع بعض */
+    if (grade) where.grade = gradeWhere(grade)
+    if (keyword) {
+      where.OR = [
+        { title: { contains: keyword } },
+      ]
+    }
+
+    const [announcements, total] = await Promise.all([
+      db.announcement.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      db.announcement.count({ where }),
+    ])
+
+    return NextResponse.json({
+      announcements,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    })
+  } catch (error) {
+    console.error('فشل جلب الإعلانات:', error)
+    return NextResponse.json({ error: 'حدث خطأ في السيرفر' }, { status: 500 })
   }
 }
 
-/** إضافة إعلان — للمشرف فقط */
-export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "غير مصرّح" }, { status: 401 });
-  }
+// POST /api/announcements - إنشاء الإعلان
+export async function POST(request: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const title = String(body?.title ?? "").trim();
-    const text = String(body?.body ?? "").trim();
-    const important = Boolean(body?.important);
+    const body = await request.json()
+    const { title, content, grade } = body
 
-    if (!title || !text) {
-      return NextResponse.json(
-        { error: "العنوان والنص مطلوبان" },
-        { status: 400 }
-      );
+    if (!title || !content || !grade) {
+      return NextResponse.json({ error: 'العنوان والمحتوى والصف مطلوبين' }, { status: 400 })
     }
 
     const announcement = await db.announcement.create({
-      data: { title, body: text, important },
-    });
-    return NextResponse.json({ ok: true, announcement });
-  } catch {
-    return NextResponse.json(
-      { error: "تعذّر حفظ الإعلان" },
-      { status: 500 }
-    );
+      /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
+      data: { title, content, grade: storeGrade(grade) },
+    })
+
+    /* (و44) إشعار للطلاب: إعلان جديد */
+    /* (و45) await — الإشعار بيتكتب قبل الرد */
+      try { await notifyStudents({ grade: storeGrade(String(grade || '')), type: 'announcement', title: '📣 إعلان جديد: ' + String(title), body: String(content || '').slice(0, 200) }) } catch (nE) {}
+
+    return NextResponse.json({ message: 'تم إنشاء الإعلان بنجاح', announcement }, { status: 201 })
+  } catch (error) {
+    console.error('فشل إنشاء الإعلان:', error)
+    return NextResponse.json({ error: 'حدث خطأ في السيرفر' }, { status: 500 })
   }
 }

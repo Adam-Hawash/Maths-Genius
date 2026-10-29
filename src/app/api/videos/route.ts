@@ -11,6 +11,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { isAdmin, getStudentAnyStatus, safeThumb, getYouTubeId, mediaIdFromPath, ensureVideoTable } from '@/lib/video-guard'
+/* (S-4a — توحيد الصفوف) المرجع الموحد: قراءة = gradeWhere (كل الصيغ)، كتابة = storeGrade (الاسم المعتمد) */
+import { gradeWhere, storeGrade } from '@/lib/grade-names'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -45,7 +47,9 @@ export async function GET(request: NextRequest) {
     const student = admin ? null : await getStudentAnyStatus(studentId)
 
     const where: Record<string, unknown> = {}
-    if (grade) where.grade = grade
+    /* (S-4a — توحيد الصفوف) كل صيغ نفس الصف مع بعض — الفيديو المخزن
+       «الخامس» ظاهر لطلب «خمسة ابتدائي» والعكس — من غير أي تسريب لصف تاني */
+    if (grade) where.grade = gradeWhere(grade)
     if (keyword) {
       where.OR = [
         { title: { contains: keyword } },
@@ -204,14 +208,33 @@ export async function POST(request: NextRequest) {
       return errOut('لازم لينك فيديو (يوتيوب أو أي موقع) أو ملف فيديو مرفوع — دوس واحدة منهم الأول', 400)
     }
 
-    /* (2026-ص) لو الصف ده مرتب يدويًا (فيه sortIndex > 0) — الفيديو الجديد
-       بيتمسك في الآخر (maxSort+1) عشان مايقفزش أول القايمة. الصف اللي مالوش
-       ترتيب يدوي بيفضل زي ما هو (0 = الأحدث أولًا). */
+    /* (2026-ز14 — طلب المستر): رجّعنا الترتيب الزمني زي ما كان —
+       «أنا نزلت الدرس الأول وبعده الدرس الثاني، فالدرس الثاني يجي بعد الأول».
+       الفيديو/الدرس الجديد بيتمسك في الآخر (maxSort+1) لو الصف مرتب يدويًا،
+       ولو الصف مالوش ترتيب يدوي بيفضل 0 والترتيب بيبقى زمني (الأقدم أولًا).
+       أما جزء جديد بيتركب على درس موجود (groupKey) فبياخد ترتيب درسه
+       عشان الدرس مايتنقلش من مكانه والأجزاء تفضل متسلسلة جواه. */
     let newSortIndex = 0
     try {
-      const agg = await db.video.aggregate({ _max: { sortIndex: true }, where: { grade: String(grade) } })
-      const maxSort = Number((agg._max && (agg._max as { sortIndex: number | null }).sortIndex) || 0)
-      if (maxSort > 0) newSortIndex = maxSort + 1
+      let inherited = false
+      if (finalGroupKey && !isMulti) {
+        const grpPart = await db.video.findFirst({
+          where: { groupKey: finalGroupKey },
+          orderBy: { sortIndex: 'asc' },
+          select: { sortIndex: true },
+        })
+        if (grpPart && Number(grpPart.sortIndex) !== 0) {
+          newSortIndex = Number(grpPart.sortIndex) || 0
+          inherited = true
+        }
+      }
+      if (!inherited) {
+        /* (2026-ز19 — طلب المستر الحرفي): «اعكسها خليها بالعكس» — رجّعنا ز11:
+           الجديد بياخد أصغر رقم ترتيب (minSort-1) فبيطلع أول القايمة. */
+        const agg = await db.video.aggregate({ _min: { sortIndex: true }, where: { grade: gradeWhere(String(grade)) } })
+        const minSort = Number((agg._min && (agg._min as { sortIndex: number | null }).sortIndex) || 0)
+        newSortIndex = minSort - 1
+      }
     } catch {}
 
     /* (و45) الصورة المصغرة الأوتوماتيكية — لو الأدمن ماحطش صورة وفيه لينك
@@ -234,7 +257,8 @@ export async function POST(request: NextRequest) {
           data: {
             title: String(title).trim(),
             url: finalUrl,
-            grade,
+            /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */
+            grade: storeGrade(grade),
             filePath: filePath || '',
             fileType: fileType || '',
             thumbnail: finalThumb,

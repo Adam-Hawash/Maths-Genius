@@ -40,48 +40,48 @@ import type { PracticeQuestion } from '@/lib/question-gen'
 
 // (2026-و66) رسائل التحميل المصرية — بتتغير كل 3 ثواني أثناء التوليد
 var LOADING_MSGS = [
-  'المولد الذكي بيحلل طلبك…',
-  'بيجهز {n} أسئلة بأرقام مختلفة…',
-  'بيكتب الحل خطوة بخطوة…',
-  'لسه شوية وبجهز الخدع…',
+  'The smart generator is analyzing your request…',
+  'Preparing {n} questions with different numbers…',
+  'Writing the step-by-step solution…',
+  'Almost there — getting the tricks ready…',
 ]
 
 // (2026-و66) المواضيع السريعة — الضغطة تملا الصندوق باقتراح جاهز للمولد
 // (2026-و68) التلميحات بقت إنجليزي — لأن المولد بيطلع الأسئلة بالإنجليزي
 var QUICK_TOPICS = [
-  { label: 'معادلات', hint: 'Linear and quadratic equations — solve for x' },
-  { label: 'كسور', hint: 'Adding and subtracting fractions' },
-  { label: 'نسبة مئوية', hint: 'Percentage of a number and percentage change' },
-  { label: 'فيثاغورس', hint: 'Pythagorean theorem' },
-  { label: 'مساحة ومحيط', hint: 'Area and perimeter of rectangles, triangles and circles' },
-  { label: 'أسس وجذور', hint: 'Laws of exponents and square roots' },
-  { label: 'المتوسط الحسابي', hint: 'Arithmetic mean (average)' },
-  { label: 'سرعة وزمن', hint: 'Speed, distance and time' },
+  { label: 'Equations', hint: 'Linear and quadratic equations — solve for x' },
+  { label: 'Fractions', hint: 'Adding and subtracting fractions' },
+  { label: 'Percentages', hint: 'Percentage of a number and percentage change' },
+  { label: 'Pythagoras', hint: 'Pythagorean theorem' },
+  { label: 'Area & perimeter', hint: 'Area and perimeter of rectangles, triangles and circles' },
+  { label: 'Exponents & roots', hint: 'Laws of exponents and square roots' },
+  { label: 'Average (mean)', hint: 'Arithmetic mean (average)' },
+  { label: 'Speed & time', hint: 'Speed, distance and time' },
 ]
 
 // (2026-و66) مميزات المولد — تظهر في الحالة الفاضية قبل أول توليد
 var FEATURES = [
   {
     icon: Dices,
-    title: 'أرقام جديدة كل مرة',
-    desc: 'كل توليد بيطلع أسئلة فريدة بنفس المهارة — تمرين مايخلصش',
+    title: 'New numbers every time',
+    desc: 'Every generation produces unique questions with the same skill — practice that never runs out',
     cls: 'border-violet-500/30 bg-violet-500/15 text-violet-600 dark:text-violet-400',
   },
   {
     icon: ListOrdered,
-    title: 'حل خطوة بخطوة',
-    desc: 'كل سؤال معاه الحل مفصّل زي ما المستر بيشرح على السبورة',
+    title: 'Step-by-step solutions',
+    desc: 'Every question comes with a full worked solution, explained like the teacher does on the board',
     cls: 'border-teal-500/30 bg-teal-500/15 text-teal-600 dark:text-teal-400',
   },
   {
     icon: Lightbulb,
-    title: 'خدع حل سريعة',
-    desc: 'خدعة المستر في كل سؤال تخليك تحل في نص الوقت بالظبط',
+    title: 'Quick solving tricks',
+    desc: 'A teacher\'s trick for every question so you solve in half the time',
     cls: 'border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400',
   },
 ]
 
-var AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩']
+var AR_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
 /* ---------- أدوات مساعدة ---------- */
 
@@ -97,9 +97,9 @@ function toArNum(n: number): string {
 // Easy=زمردي / Medium=عنبري / Hard=وردي
 function diffBadgeClass(difficulty: string): string {
   var s = String(difficulty || '')
-  if (s.indexOf('سهل') !== -1 || s.toLowerCase() === 'easy') return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-  if (s.indexOf('صعب') !== -1 || s.toLowerCase() === 'hard') return 'border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-400'
-  if (s.indexOf('متوسط') !== -1 || s.toLowerCase() === 'medium') return 'border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400'
+  if (s.indexOf('Easy') !== -1 || s.toLowerCase() === 'easy') return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+  if (s.indexOf('Hard') !== -1 || s.toLowerCase() === 'hard') return 'border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-400'
+  if (s.indexOf('Medium') !== -1 || s.toLowerCase() === 'medium') return 'border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400'
   return 'border-teal-500/30 bg-teal-500/15 text-teal-600 dark:text-teal-400'
 }
 
@@ -179,7 +179,7 @@ function QuestionCardItem(props: {
 
               {/* البادجات + زر الحل */}
               <div className='flex flex-wrap items-center gap-2'>
-                <Badge className={diffBadgeClass(q.difficulty)}>{q.difficulty || 'متوسط'}</Badge>
+                <Badge className={diffBadgeClass(q.difficulty)}>{q.difficulty || 'Medium'}</Badge>
                 {q.topic ? (
                   <Badge variant='outline' className='max-w-48 truncate'>
                     {q.topic}
@@ -194,7 +194,7 @@ function QuestionCardItem(props: {
                   className='h-8 gap-1.5 text-teal-600 hover:bg-teal-500/10 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300'
                 >
                   {open ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
-                  {open ? 'اخفي الحل' : 'شوف الحل 👁'}
+                  {open ? 'Hide solution' : 'Show solution 👁'}
                 </Button>
               </div>
 
@@ -215,7 +215,7 @@ function QuestionCardItem(props: {
                         <div className='flex items-start gap-2.5'>
                           <CheckCircle2 className='mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400' />
                           <div className='min-w-0'>
-                            <p className='text-xs font-semibold text-emerald-700 dark:text-emerald-400'>الإجابة:</p>
+                            <p className='text-xs font-semibold text-emerald-700 dark:text-emerald-400'>Answer:</p>
                             <p dir='ltr' className='break-words text-left text-base font-bold text-emerald-700 dark:text-emerald-300'>
                               <FractionText text={q.answer} />
                             </p>
@@ -227,7 +227,7 @@ function QuestionCardItem(props: {
                       <div className='rounded-lg border bg-muted/40 p-3'>
                         <p className='mb-2.5 flex items-center gap-1.5 text-xs font-bold text-muted-foreground'>
                           <ListOrdered className='h-4 w-4' />
-                          الحل خطوة بخطوة
+                          Step-by-step solution
                         </p>
                         <ol className='space-y-2.5'>
                           {(q.steps || []).map(function (st, si) {
@@ -249,7 +249,7 @@ function QuestionCardItem(props: {
                       {q.trick ? (
                         <div className='rounded-lg border border-amber-500/30 bg-amber-500/10 p-3'>
                           <p dir='ltr' className='break-words text-left text-sm leading-relaxed text-amber-700 dark:text-amber-300'>
-                            <span className='font-bold'>💡 خدعة المستر:</span> <FractionText text={q.trick} />
+                            <span className='font-bold'>💡 Teacher's trick:</span> <FractionText text={q.trick} />
                           </p>
                         </div>
                       ) : null}
@@ -308,11 +308,11 @@ export function PracticeGenerator({ grade }: { grade: string }) {
     var clean = String(rawTopic || '').trim()
     var img = image
     if (!clean && !img) {
-      toast.error('اكتب الفكرة أو المعادلة… أو ارفع صورة معادلة ✍️')
+      toast.error('Write an idea or an equation… or upload an equation photo ✍️')
       return
     }
     if (clean.length > 1200) clean = clean.slice(0, 1200)
-    lastTopicRef.current = clean || 'صورة معادلة'
+    lastTopicRef.current = clean || 'equation photo'
     setLoading(true)
     setError(null)
     setQuestions([])
@@ -328,22 +328,22 @@ export function PracticeGenerator({ grade }: { grade: string }) {
       var data: PracticeResponse | null = null
       try { data = await res.json() } catch (e) { data = null }
       if (!res.ok || !data || !data.ok) {
-        throw new Error((data && data.error) || 'المولد مشغول دلوقتي — جرب تاني')
+        throw new Error((data && data.error) || 'The generator is busy right now — try again')
       }
       var qs: PracticeQuestion[] = Array.isArray(data.questions) ? data.questions : []
       if (qs.length === 0) {
-        throw new Error('مقدرتش أولّد أسئلة على الطلب ده — جرب تكتبه بطريقة تانية')
+        throw new Error('Couldn\'t generate questions for that prompt — try writing it a different way')
       }
       // ضمان وجود id لكل سؤال — للتحكم في فتح/قفل الحلول
       qs = qs.map(function (q, i) {
         return Object.assign({}, q, { id: String(q.id || 'q-' + i) })
       })
       setQuestions(qs)
-      setResultTopic(clean || 'صورة المعادلة اللي رفعتها 📷')
+      setResultTopic(clean || 'The equation photo you uploaded 📷')
       setSource(data.source === 'local' ? 'local' : 'ai')
-      toast.success('جهزنا ' + toArNum(qs.length) + ' أسئلة — يلا نحل! 🎉')
+      toast.success('We prepared ' + toArNum(qs.length) + ' questions — let\'s go! 🎉')
     } catch (e) {
-      var msg = e instanceof Error && e.message ? e.message : 'حصلت مشكلة — جرب تاني'
+      var msg = e instanceof Error && e.message ? e.message : 'Something went wrong — try again'
       setError(msg)
       toast.error(msg)
     } finally {
@@ -355,16 +355,16 @@ export function PracticeGenerator({ grade }: { grade: string }) {
   const onPickImage = useCallback(async function (f: File | null) {
     if (!f) return
     if (f.type && f.type.indexOf('image/') !== 0) {
-      toast.error('لازم صورة (JPG/PNG) — صوّر المعادلة وابعتها 📷')
+      toast.error('Need an image (JPG/PNG) — snap the equation and send it 📷')
       return
     }
     setImgBusy(true)
     try {
       var dataUrl = await compressImageFile(f)
       setImage(dataUrl)
-      toast.success('الصورة جاهزة — اكتب (أو متكتبش) حاجة ودوس ولّد 🚀')
+      toast.success('Image ready — type (or don\'t) anything and hit generate 🚀')
     } catch (e) {
-      toast.error('مقدرتش أقرا الصورة — جرب صورة تانية')
+      toast.error('Couldn\'t read the image — try another one')
     } finally {
       setImgBusy(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -401,9 +401,9 @@ export function PracticeGenerator({ grade }: { grade: string }) {
                 <Brain className='h-6 w-6 text-violet-600 dark:text-violet-400' />
               </div>
               <div className='min-w-0'>
-                <CardTitle className='text-lg font-bold sm:text-xl'>🧠 اتدرب أكتر — المولد الذكي</CardTitle>
+                <CardTitle className='text-lg font-bold sm:text-xl'>🧠 Practice More — Smart Generator</CardTitle>
                 <CardDescription className='mt-1 text-sm leading-relaxed'>
-                  اكتب أي فكرة أو قانون أو مسألة بتتعب فيها، والمولد هيجهزلك {pCount} أسئلة تدريب بخطوات وخدع
+                  Write any idea, rule, or problem you're stuck on, and the generator will prepare {pCount} practice questions with steps and tricks
                 </CardDescription>
               </div>
             </div>
@@ -418,8 +418,8 @@ export function PracticeGenerator({ grade }: { grade: string }) {
               maxLength={1200}
               disabled={loading}
               dir='auto'
-              placeholder={'اكتب المعادلة أو الفكرة… مثلاً: 6(x - 1) = 18  أو  Pythagoras theorem — أو صوّر المعادلة من الكتاب وارفعها 👇'}
-              aria-label='اكتب الفكرة أو المعادلة اللي عايز تتدرب عليها'
+              placeholder={'Write an equation or an idea… e.g. 6(x - 1) = 18  or  Pythagoras theorem — or snap the equation from your book and upload it 👇'}
+              aria-label='Write the idea or equation you want to practice'
               className='min-h-28 resize-none text-base leading-relaxed md:text-base'
             />
 
@@ -444,16 +444,16 @@ export function PracticeGenerator({ grade }: { grade: string }) {
                 className='h-9 gap-1.5 rounded-full border-violet-500/40 text-violet-600 hover:bg-violet-500/10 hover:text-violet-700 dark:text-violet-400'
               >
                 {imgBusy ? <Loader2 className='h-4 w-4 animate-spin' /> : (image ? <Camera className='h-4 w-4' /> : <ImagePlus className='h-4 w-4' />)}
-                {image ? 'غيّر الصورة' : '📷 ارفع صورة معادلة'}
+                {image ? 'Change image' : '📷 Upload an equation photo'}
               </Button>
               {image ? (
                 <div className='flex items-center gap-2 rounded-full border bg-muted/50 py-1 pe-1 ps-2'>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={image} alt='معاينة صورة المعادلة' className='h-10 w-14 rounded-full object-cover' />
+                  <img src={image} alt='Equation photo preview' className='h-10 w-14 rounded-full object-cover' />
                   <button
                     type='button'
                     onClick={function () { setImage('') }}
-                    aria-label='امسح الصورة'
+                    aria-label='Remove image'
                     className='flex h-6 w-6 items-center justify-center rounded-full bg-rose-500/15 text-rose-600 transition-colors hover:bg-rose-500/25 dark:text-rose-400'
                   >
                     <X className='h-3.5 w-3.5' />
@@ -464,7 +464,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
 
             {/* شيبس المواضيع السريعة — ضغطة تملا الصندوق */}
             <div className='space-y-2'>
-              <p className='text-xs font-semibold text-muted-foreground'>💡 مواضيع سريعة — دوس على أي واحدة واكتبها فورًا:</p>
+              <p className='text-xs font-semibold text-muted-foreground'>💡 Quick topics — tap any one to fill it in instantly:</p>
               <div className='flex flex-wrap gap-2'>
                 {QUICK_TOPICS.map(function (t) {
                   return (
@@ -489,7 +489,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
 
             {/* (و72) عدد الأسئلة — شيبس 5/10/15/20 */}
             <div className='space-y-2'>
-              <p className='text-xs font-semibold text-muted-foreground'>🔢 عدد الأسئلة:</p>
+              <p className='text-xs font-semibold text-muted-foreground'>🔢 Number of questions:</p>
               <div className='flex flex-wrap gap-2'>
                 {[5, 10, 15, 20].map(function (n) {
                   return (
@@ -522,10 +522,10 @@ export function PracticeGenerator({ grade }: { grade: string }) {
                 className='h-12 w-full bg-gradient-to-l from-violet-600 to-teal-600 text-base font-bold text-white shadow-md shadow-violet-500/25 hover:from-violet-600/90 hover:to-teal-600/90 sm:w-auto'
               >
                 {loading && <Loader2 className='h-5 w-5 animate-spin' />}
-                ولّد {pCount} أسئلة 🚀
+                Generate {pCount} questions 🚀
               </Button>
               <span className='text-center text-xs text-muted-foreground sm:text-left'>
-                الأسئلة بتتولد بالإنجليزي — اكتب بأي لغة أو ارفع صورة ✍️
+                Questions are generated in English — write in any language or upload a photo ✍️
               </span>
             </div>
           </CardContent>
@@ -558,7 +558,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
                 <div className='flex items-center gap-1.5 text-sm text-muted-foreground'>
                   <Timer className='h-4 w-4' />
                   <span>
-                    عدّى <span className='font-bold tabular-nums text-teal-600 dark:text-teal-400'>{toArNum(elapsed)}</span> ثانية...
+                    Counting <span className='font-bold tabular-nums text-teal-600 dark:text-teal-400'>{toArNum(elapsed)}</span> seconds...
                   </span>
                 </div>
               </div>
@@ -587,7 +587,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
               </div>
 
               <p className='text-center text-xs text-muted-foreground'>
-                الأسئلة بتتولد بأرقام جديدة وحلول مضمونة — سيبها شغالة وترجعلك شوية 😉
+                Questions are generated with fresh numbers and verified solutions — keep this open and it'll be ready in a moment 😉
               </p>
             </CardContent>
           </Card>
@@ -602,7 +602,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
               <div className='flex h-12 w-12 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/15'>
                 <AlertTriangle className='h-6 w-6 text-rose-600 dark:text-rose-400' />
               </div>
-              <p className='font-bold text-rose-600 dark:text-rose-400'>حصلت مشكلة في التوليد</p>
+              <p className='font-bold text-rose-600 dark:text-rose-400'>Something went wrong while generating</p>
               <p className='max-w-md text-sm leading-relaxed text-muted-foreground'>{error}</p>
               <div className='flex flex-wrap justify-center gap-2 pt-1'>
                 <Button
@@ -611,10 +611,10 @@ export function PracticeGenerator({ grade }: { grade: string }) {
                   className='gap-2 bg-rose-600 text-white hover:bg-rose-600/90'
                 >
                   <RefreshCw className='h-4 w-4' />
-                  جرب تاني 🔄
+                  Try again 🔄
                 </Button>
                 <Button type='button' variant='outline' onClick={resetAll}>
-                  اكتب موضوع تاني
+                  Try another topic
                 </Button>
               </div>
             </CardContent>
@@ -634,16 +634,16 @@ export function PracticeGenerator({ grade }: { grade: string }) {
           <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
             <div className='flex min-w-0 flex-wrap items-center gap-2'>
               <h3 className='font-bold text-lg sm:text-xl'>
-                {toArNum(questions.length)} أسئلة على «
-                <span className='text-teal-600 dark:text-teal-400'>{resultTopic}</span>»
+                {toArNum(questions.length)} questions on "
+                <span className='text-teal-600 dark:text-teal-400'>{resultTopic}</span>"
               </h3>
               {source === 'local' ? (
                 <Badge className='border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'>
-                  ⚡ مولد المنصة الرياضي
+                  ⚡ Platform math generator
                 </Badge>
               ) : (
                 <Badge className='border-violet-500/30 bg-violet-500/15 text-violet-600 dark:text-violet-400'>
-                  ✨ بالذكاء الاصطناعي
+                  ✨ AI-powered
                 </Badge>
               )}
             </div>
@@ -656,10 +656,10 @@ export function PracticeGenerator({ grade }: { grade: string }) {
                 className='gap-1.5 rounded-full'
               >
                 <RefreshCw className='h-4 w-4' />
-                أسئلة جديدة 🔄
+                New questions 🔄
               </Button>
               <Button type='button' variant='ghost' size='sm' onClick={resetAll} className='rounded-full'>
-                موضوع تاني
+                Another topic
               </Button>
             </div>
           </div>
@@ -685,7 +685,7 @@ export function PracticeGenerator({ grade }: { grade: string }) {
       {!loading && !error && !success && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className='space-y-3'>
           <p className='text-center text-sm font-semibold text-muted-foreground'>
-            اكتب فوق أو اختار موضوع سريع — والباقي علينا 👇
+            Write above or pick a quick topic — we'll handle the rest 👇
           </p>
           <div className='grid gap-3 sm:grid-cols-3'>
             {FEATURES.map(function (f) {

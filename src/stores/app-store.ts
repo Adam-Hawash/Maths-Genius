@@ -1,4 +1,7 @@
 import { create } from 'zustand'
+/* (S-4a — توحيد الصفوف) المرجع الموحد لأسماء الصفوف — وظيفة صرفة من غير
+   أي حاجة سيرفر — عشان القايمة المعروضة تتوحّد على الاسم المعتمد الكامل */
+import { normalizeGrade as canonicalGradeName } from '@/lib/grade-names'
 
 export type AppView =
   | 'landing'
@@ -221,32 +224,40 @@ export function gradesFromConfig(siteConfig: SiteConfig | null | undefined): Gra
           if (items[j].ar.trim() !== '') { hasAny = true; break }
         }
         if (hasAny) {
-          /* (و72) دمج رابعة وخمسة ابتدائي: لو قاعدة البيانات (أو تخصيص أدمن قديم)
-             مفيهوش الصفين الجداد — بندخلهم قبل «السادس الابتدائي» (أول القايمة لو
-             مش موجودة) من غير ما نلمس باقي تخصيص الأدمن */
-          var hasG4 = false
-          var hasG5 = false
-          for (var m = 0; m < items.length; m++) {
-            var nm = items[m].ar || ''
-            if (nm === 'رابعة ابتدائي' || nm === 'الصف الرابع الابتدائي') hasG4 = true
-            if (nm === 'خمسة ابتدائي' || nm === 'الصف الخامس الابتدائي') hasG5 = true
-          }
-          if (!hasG4 || !hasG5) {
-            var g4: GradeItem = { ar: 'رابعة ابتدائي', en: 'Grade 4', emoji: '4️⃣', short: 'G4' }
-            var g5: GradeItem = { ar: 'خمسة ابتدائي', en: 'Grade 5', emoji: '5️⃣', short: 'G5' }
-            var insertAt = 0
-            for (var s = 0; s < items.length; s++) {
-              if ((items[s].ar || '').indexOf('السادس') !== -1) { insertAt = s; break }
+          /* (ص123) اتشال حقن «رابعة/خمسة ابتدائي» القديم (و72) — طلب المستر:
+             «اللي موجودة في صفحة الادمن هي اللي تبقى موجودة» — قايمة الصفوف
+             في كل المنصة = grades_data بتاعت الأدمن بالظبط من غير أي إضافة
+             تلقائية من الكود. لو عايز الصفين دول هيضيفهم من لوحة الصفوف. */
+          /* ============================================================
+             (S-4a — توحيد الصفوف — طلب المستر: «ما تخلي البيانات كلها زي بعض»)
+             كل صيغ صفوف الابتدائي بتترجع للاسم المعتمد الكامل + دمج المكرر —
+             «الخامس» و«خمسة ابتدائي» و«الخامسة الابتدائي» بيبقوا صف واحد
+             «خمسة ابتدائي» — فالقوائم المنسدلة بقت أسماء موحدة (مفيش
+             «الخامس، السادس، الرابع» جنب الأسماء الكاملة) والامتحان المضاف
+             لصف بيتطابق مع طالب نفس الصف مهما كانت الصيغة القديمة.
+             دمج عرض بس — مفيش أي كتابة على تخصيص الأدمن في الداتابيز.
+             ============================================================ */
+          var uniSeen: Record<string, boolean> = {}
+          var unified: GradeItem[] = []
+          for (var ui = 0; ui < items.length; ui++) {
+            var uAr = (items[ui].ar || '').trim()
+            if (!uAr) continue
+            var uCanon = canonicalGradeName(uAr) || uAr
+            if (uniSeen[uCanon]) {
+              for (var um = 0; um < unified.length; um++) {
+                if ((canonicalGradeName(unified[um].ar) || unified[um].ar) === uCanon) {
+                  if (!String(unified[um].en || '').trim() && String(items[ui].en || '').trim()) unified[um].en = items[ui].en
+                  if (!String(unified[um].emoji || '').trim() && String(items[ui].emoji || '').trim()) unified[um].emoji = items[ui].emoji
+                  if (!String(unified[um].short || '').trim() && String(items[ui].short || '').trim()) unified[um].short = items[ui].short
+                  break
+                }
+              }
+              continue
             }
-            if (insertAt === 0 && items.length > 0 && (items[0].ar || '').indexOf('السادس') === -1) {
-              /* مفيش سادس في القايمة — ندخلهم في الأول */
-              insertAt = 0
-            }
-            if (!hasG4 && !hasG5) items.splice(insertAt, 0, g4, g5)
-            else if (!hasG4) items.splice(insertAt, 0, g4)
-            else items.splice(insertAt, 0, g5)
+            uniSeen[uCanon] = true
+            unified.push({ ar: uCanon, en: items[ui].en, emoji: items[ui].emoji, short: items[ui].short })
           }
-          return items
+          return unified
         }
       }
     }

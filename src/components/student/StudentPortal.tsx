@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import type { Video as VideoType, Homework, Exam, Announcement, Discussion, ExamResult } from '@/stores/app-store'
 import { MathKeyboard } from '@/components/student/MathKeyboard'
 import { SecurePlayerModal } from '@/components/student/SecurePlayerModal'
+import { ExamResultViewer } from '@/components/student/ExamResultViewer'
 import { StudentComplaints } from '@/components/student/StudentComplaints'
 import { InstallPwaButton } from '@/components/InstallPwaButton'
 import { BooksTab } from '@/components/student/BooksTab'
@@ -129,6 +130,11 @@ function StudentPortalInner() {
   /* (2026-و40) نتايج الامتحانات وصلت **مؤكدة**؟ — القفل التسلسلي للامتحانات
      ممنوع يشتغل قبل تأكيد التحميل (نفس ضمانة الواجبات في HomeworkTab) */
   const [examResultsLoaded, setExamResultsLoaded] = useState(false)
+  /* (2026-ص2-ب) نسب مشاهدة الفيديوهات وصلت **مؤكدة** من السيرفر؟ — علاج
+     «شاف الفيديوهات كلها وبعدين لقيها مقفولة»: لو /api/video-progress فشل
+     أو رد غير سليم، نسب فاضية كانت بتحسب أقفال كاذبة على طالب خلص كل حاجة.
+     نفس ضمانة الواجبات والامتحانات — والسيرفر (video-ticket) هو الفيصل */
+  const [videoProgressLoaded, setVideoProgressLoaded] = useState(false)
 
   const grade = currentStudent?.grade || ''
   const studentId = currentStudent?.id || ''
@@ -218,8 +224,12 @@ function StudentPortalInner() {
       } catch (e) { /* صامت — الشارات مش سبب لكسر حاجة */ }
     }
     check()
-    var t = setInterval(check, 60000)
-    return function () { alive = false; clearInterval(t) }
+    /* (توفير الباك إند — ص8) شارات الجديد مش بتتحدث وانتا في تاب مخفي —
+       أول ما ترجع للتاب بنتحدّث فورًا */
+    var t = setInterval(function () { if (!document.hidden) check() }, 60000)
+    function onVis() { if (!document.hidden) check() }
+    document.addEventListener('visibilitychange', onVis)
+    return function () { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', onVis) }
   /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [studentId, grade, activeTab])
   /* فتح التاب فورًا = صفر الشارة (من غير استنى الدورة) */
@@ -237,6 +247,7 @@ function StudentPortalInner() {
     let cancelled = false
     /* (2026-و40) كل تحميل جديد = الحالة "مش عارفين" تاني لحد ما الرد يتأكد */
     setExamResultsLoaded(false)
+    setVideoProgressLoaded(false)
     ;(async () => {
       try {
         const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes, payRes, accessRes, progressRes, hwResultsRes] = await Promise.all([
@@ -248,10 +259,14 @@ function StudentPortalInner() {
           fetch(`/api/activities?studentId=${studentId}&action=watched_video&pageSize=200`).then(r => r.json()),
           fetch(`/api/payments?studentId=${studentId}&status=approved&pageSize=200`).then(r => r.json()),
           fetch(`/api/video-access?studentId=${studentId}`).then(r => r.json()).catch(() => ({ accesses: [] })),
-          fetch(`/api/video-progress?studentId=${studentId}`).then(r => r.json()).catch(() => ({ progress: [] })),
+          /* (2026-ص2-ب) _progressOk = رد سليم فعلًا (r.ok + JSON مفكوك) —
+             ممنوع نحسب أقفال على نسب ناقصة/فاشلة (علاج القفل الكاذب) */
+          fetch(`/api/video-progress?studentId=${studentId}`).then(function (r) { return r.ok ? r.json().then(function (d) { return Object.assign({}, d, { _progressOk: true }) }) : { progress: [] } }).catch(() => ({ progress: [] })),
           fetch(`/api/homework-results?studentId=${studentId}`).then(r => r.json()).catch(() => ({ results: [] })),
         ])
         if (cancelled) return
+        /* (2026-ص2-ب) الأقفال مسموحة بس بعد تأكيد وصول النسب سليمة */
+        if ((progressRes as any)._progressOk) setVideoProgressLoaded(true)
         const videos = videosRes.videos || []
         const watchedIds = new Set<string>((actRes.activities || []).map((a: any) => a.details?.replace('Watched: ', '')))
         const approvedPayments = payRes.payments || []
@@ -354,6 +369,8 @@ function StudentPortalInner() {
       /* (25-b2) المجدول مستقبليًا مينزلش للطالب من الـ API — لو شوفت scheduledAt
          مستقبلي في بيانات قديمة (كاش) نتجاهله بصمت من أي قايمة للطالب */
       if (isExamScheduledAhead(e)) return false
+      /* (2026-و115) الامتحان اللي خلصت مدته مش بيتحسب في «المطلوب دلوقتي» */
+      if ((e as any).ended) return false
       return !initialData.examResults.find(function (r) { return r.examId === e.id })
     })
     var pendingHomework = pendingHwList.length
@@ -489,7 +506,7 @@ function StudentPortalInner() {
                 {T('بص على الكل', 'See All')}
               </Button>
             </div>
-            <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={initialData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} />
+            <VideosTab videos={initialData.videos} watchedIds={initialData.watchedIds} approvedVideoIds={initialData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={initialData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} progressLoaded={videoProgressLoaded} />
           </div>
 
           {/* Guide modal */}
@@ -508,9 +525,9 @@ function StudentPortalInner() {
     { id: 'homework', label: T('الواجبات', 'Homework'), icon: ClipboardList },
     { id: 'exams', label: T('الامتحانات', 'Exams'), icon: FileText },
     /* (2026-و66) المولد الذكي — طلب المستر: تاب «اتدرب أكتر» */
-    { id: 'practice', label: T('اتدرب أكتر', 'Practice'), icon: Target },
+    { id: 'practice', label: 'Practice', icon: Target },
     /* (2026-و66) ساحة التحدي — جروبات + تحدي المستر + فلاش كاردز */
-    { id: 'arena', label: T('ساحة التحدي', 'Arena'), icon: Swords },
+    { id: 'arena', label: 'Arena', icon: Swords },
     /* (2026-و40) الكتب والملازم — مكتبة PDF الطالب يفتحها/يحملها */
     { id: 'books', label: T('الكتب والملازم', 'Books'), icon: BookOpen },
     { id: 'announcements', label: T('التنبيهات', 'Alerts'), icon: Megaphone },
@@ -570,7 +587,7 @@ function StudentPortalInner() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} />}
+        {activeTab === 'videos' && <VideosTab videos={dashboardData.videos} watchedIds={dashboardData.watchedIds} approvedVideoIds={dashboardData.approvedVideoIds} studentId={studentId} grade={grade} videoProgress={dashboardData.videoProgress} studentStatus={currentStudent?.status} isPaidAccess={currentStudent?.isPaidAccess} studentName={currentStudent?.name || ''} studentPhone={currentStudent?.phone || ''} progressLoaded={videoProgressLoaded} />}
         {activeTab === 'homework' && <HomeworkTab homework={dashboardData.homework} studentId={studentId} completedHwIds={completedHwIds} onHwSubmitted={(id) => setCompletedHwIds(prev => new Set([...prev, id]))} />}
         {activeTab === 'exams' && <ExamsTab exams={dashboardData.exams} results={dashboardData.examResults} completedExamIds={completedExamIds} onExamSubmitted={(id) => setCompletedExamIds(prev => new Set([...prev, id]))} studentId={studentId} resultsLoaded={examResultsLoaded} onGoHome={() => setActiveTab('videos')} />}
         {/* (2026-و66) المولد الذكي — 10 أسئلة تدريب بأي فكرة الطالب يكتبها */}
@@ -627,12 +644,21 @@ function videoKindOf(v: any): 'youtube' | 'file' | 'link' | 'none' {
   return 'none'
 }
 
-function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, videoProgress, studentStatus, isPaidAccess, studentName, studentPhone }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string; videoProgress: Record<string, number>; studentStatus?: string; isPaidAccess?: boolean; studentName?: string; studentPhone?: string }) {
+function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, videoProgress, studentStatus, isPaidAccess, studentName, studentPhone, progressLoaded }: { videos: VideoType[]; watchedIds: Set<string>; approvedVideoIds: Set<string>; studentId: string; grade: string; videoProgress: Record<string, number>; studentStatus?: string; isPaidAccess?: boolean; studentName?: string; studentPhone?: string; progressLoaded: boolean }) {
   const { setView, setPendingPaymentVideo } = useAppStore()
   const [localWatched, setLocalWatched] = useState(watchedIds)
+  /* (2026-ص2) مفتاح قفل التسلسل الموحد من إعدادات المنصة — '0' = التسلسل مطفي لكل الطلبة */
+  const [seqLockEnabled, setSeqLockEnabled] = useState(true)
+  useEffect(function () {
+    fetch('/api/config').then(function (r) { return r.json() }).then(function (d) {
+      setSeqLockEnabled(String((d || {}).video_sequence_lock ?? '1') !== '0')
+    }).catch(function () {})
+  }, [])
   // (2026-ف — رجعة نظام الجدولة القديم زي ما كان بالظبط)
   const [videoSchedules, setVideoSchedules] = useState<Record<string, any>>({})
   const [hiddenVideoIds, setHiddenVideoIds] = useState<Set<string>>(new Set())
+  // (2026-ز13) الدروس المخفية كاملة عن الطالب
+  const [hiddenGroupKeys, setHiddenGroupKeys] = useState<Set<string>>(new Set())
   const [activeLessonVideo, setActiveLessonVideo] = useState<VideoType | null>(null)
   /* (2026-و106) صفحة الدرس — مودال أجزاء الدرس المتعدد بالترتيب */
   const [activeLessonGroup, setActiveLessonGroup] = useState<{ title: string; parts: VideoType[] } | null>(null)
@@ -684,6 +710,15 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
       .catch(function() {})
   }, [studentId])
 
+  // (2026-ز13) الدروس المخفية كاملة عن الطالب ده
+  useEffect(() => {
+    if (!studentId) return
+    fetch('/api/lesson-hide?studentId=' + studentId)
+      .then(function (r) { return r.json() })
+      .then(function (data) { setHiddenGroupKeys(new Set(data.hiddenGroupKeys || [])) })
+      .catch(function () {})
+  }, [studentId])
+
   // Check if video is locked for this student (scheduled but not yet unlocked)
   const isVideoLocked = (videoId: string): { locked: boolean; unlockAt?: Date; schedule?: any } => {
     var sched = videoSchedules[videoId]
@@ -715,9 +750,11 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
     return Object.assign({}, videoProgress, progressOverrides)
   }, [videoProgress, progressOverrides])
 
-  // ترتيب الدروس من الأقدم للأحدث — ده ترتيب نزول الدروس نفسه (الأول في المنهج فوق)
-  // (2026-ص) الترتيب اليدوي للمستر (▲▼ من لوحة التحكم) بيتقدم على التاريخ —
-  // الدروس المرتبة تبقى بترتيبها المحفوظ، والغير مرتبة زي ما كانت (الأقدم أولًا)
+  /* (2026-ز19 — طلب المستر الحرفي): «اعكسها خليها بالعكس» — رجّعنا ز11:
+     «اللي ينزل الجديد يبقى في الاول واللي في الاخر يكون الاقدم» — الفيديو
+     الجديد فوق والقديم تحت. الترتيب اليدوي للمستر (▲▼) لسه بيتقدم على
+     التاريخ، والفيديو الجديد بياخد أصغر رقم ترتيب من السيرفر فبيطلع فوق
+     حتى في الصفوف المرتبة (من غير أي تصفير للسالب — زي ما كان بالظبط). */
   const orderedVideos = useMemo(function () {
     return videos.slice().sort(function (a, b) {
       var sa = Number((a as any).sortIndex) || 0
@@ -725,7 +762,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
       if (sa !== sb) return sa - sb
       var ta = new Date((a as any).createdAt || 0).getTime()
       var tb = new Date((b as any).createdAt || 0).getTime()
-      return ta - tb
+      return tb - ta
     })
   }, [videos])
 
@@ -747,13 +784,13 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
     orderedVideos.forEach(function (v) {
       if (hiddenVideoIds.has(v.id)) return
       var k = String((v as any).groupKey || '')
-      if (!k || groupInserted[k]) return
+      if (!k || groupInserted[k] || hiddenGroupKeys.has(k)) return
       groupInserted[k] = true
       var parts = (byKey[k] || []).slice().sort(function (a, b) { return (Number((a as any).orderIndex) || 0) - (Number((b as any).orderIndex) || 0) })
       items.push({ type: 'group', key: k, title: parts[0] ? parts[0].title : k, grade: parts[0] ? parts[0].grade : '', price: parts[0] ? Number(parts[0].price || 0) : 0, parts: parts })
     })
     return items
-  }, [orderedVideos, hiddenVideoIds])
+  }, [orderedVideos, hiddenVideoIds, hiddenGroupKeys])
 
   /* القفل التسلسلي — قواعد المستر المحدّثة (مع الترتيب اليدوي ▲▼):
      1) الفيديو بيتقفل بس لو فيه فيديو **قبله في الترتيب** لسه مخلصش
@@ -764,35 +801,56 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         — «شاف كل الفيديوهات فاضل ده بس» ⇒ كله يتفتح
      4) نفس القواعد بالظبط مطبقة على السيرفر (video-guard) بنفس الترتيب —
         فمفيش قفل دائري ولا رسالة عن فيديو نفسه مقفول
-     الرسالة بتقول باسم الحاجز نفسه — وده فيديو مفتوح مضمون */
+     (2026-ص2) تغييرات المستر:
+     أ) الرسالة العامة بس — «شوف الدرس اللي قبله» من غير أي أسماء دروس
+        (احنا لعبنا في الترتيب — اسم الدرس ممكن يتغير مكانه فالاسم بيبوظ)
+     ب) سقف الحاجز: الحاجز ممنوع يرجع ورا أبعد فيديو الطالب بدأه —
+        يعني الطالب عمره ما يترجع «يشوف كل الفيديوهات من الأول»
+     ج) مفتاح عام من اللوحة (video_sequence_lock) — لو مطفي: مفيش أي قفل تسلسل
+        لكل الطلبة بنفس الشكل (دروس/واجبات/امتحانات) */
   const seqInfoMap = useMemo(function () {
-    var chain: { id: string; title: string }[] = []
+    if (!seqLockEnabled) return {} as Record<string, { blockerPct: number }>
+    /* (2026-ص2-ب) قبل تأكيد تحميل نسب المشاهدة من السيرفر — مفيش أي قفل
+       (fail-open زي الواجبات والامتحانات بالظبط): النسب الفاضية/الفاشلة كانت
+       بتقفل فيديوهات على طالب شافها كلها. لو النسب ما وصلتش، الفتح بيبقى
+       مسموح في الواجهة والسيرفر (video-ticket) هو اللي بيحكم بجد */
+    if (!progressLoaded) return {} as Record<string, { blockerPct: number }>
+    var chain: { id: string; paidNoAccess: boolean }[] = []
     lessons.forEach(function (item) {
       var arr: VideoType[] = item.type === 'group' ? item.parts : [item.video]
       arr.forEach(function (v) {
         var k = videoKindOf(v)
-        if (k === 'youtube' || k === 'file') chain.push({ id: v.id, title: v.title })
+        /* (ز22) الاختياري الصامت: الفيديو اللي بفلوس والطالب مالوش وصول له
+           (مفيش دفعة معتمدة/منحة) ما بيحسبش في السلسلة — ما يمنعش اللي بعده
+           (طلب المستر: «الفيديو اللي بفلوس ده يكون اختياري عادي بس متكتبش
+           ان هو اختياري — لو الطالب مشافش الفيديو الفيديو اللي بعده يتفتح»)
+           — نفس قاعدة السيرفر في video-guard بالظبط */
+        if (k === 'youtube' || k === 'file') chain.push({ id: v.id, paidNoAccess: (Number(v.price) || 0) > 0 && !approvedVideoIds.has(v.id) })
       })
     })
     var completedOf = function (id: string) { return (mergedProgress[id] || 0) >= 99 }
     var touchedOf = function (id: string) { return (mergedProgress[id] || 0) > 0 }
-    var map: Record<string, { blockerTitle: string; blockerPct: number }> = {}
+    /* سقف الحاجز — أبعد فيديو الطالب بدأه: ممنوع أي قفل يرجع قبل منه */
+    var frontierIdx = -1
+    for (var fi = 0; fi < chain.length; fi++) { if (touchedOf(chain[fi].id)) frontierIdx = fi }
+    var map: Record<string, { blockerPct: number }> = {}
     for (var i = 0; i < chain.length; i++) {
       var node = chain[i]
       if (touchedOf(node.id)) continue // شافه أو بدأه قبل كده → عمره ما يتقفل
       var blockerIdx = -1
       for (var j = 0; j < i; j++) {
+        if (j <= frontierIdx) continue // قبل حد الطالب — عمره ما يترجع له
+        if (chain[j].paidNoAccess) continue // (ز22) اختياري صامت — ما يمنعش اللي بعده
         if (!completedOf(chain[j].id)) { blockerIdx = j; break }
       }
       if (blockerIdx >= 0) {
         map[node.id] = {
-          blockerTitle: chain[blockerIdx].title,
           blockerPct: Math.min(100, Math.round(mergedProgress[chain[blockerIdx].id] || 0)),
         }
       }
     }
     return map
-  }, [lessons, mergedProgress])
+  }, [lessons, mergedProgress, seqLockEnabled, progressLoaded, approvedVideoIds])
 
   const lockedMap = useMemo(function () {
     var map: Record<string, boolean> = {}
@@ -803,13 +861,38 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
   // فتح أي درس (يوتيوب أو ملف مرفوع): بنطلب تذكرة تشغيل واحدة الاستخدام
   // من /api/video-ticket — مفيش أي YouTube ID أو رابط ملف بيرجع للصفحة.
   // المشغل نفسه بيتفتح من /api/player/[ticket] على السيرفر.
+  /* (2026-ص2) ملاحظة المستر على الدرس — بتظهر للطالب أول ما يفتح الدرس
+     في مودال «ملاحظة خد بالك» وزرار تمام أزرق (طلب المستر الحرفي).
+     بعد تمام مش بتظهر تاني — ولو المستر عدل الملاحظة بتظهر مرة جديدة.
+     للدرس المتعدد (groupKey): المفتاح على الدرس كله مش على كل جزء */
+  const [pendingNote, setPendingNote] = useState<{ video: VideoType; text: string; key: string; stamp: string } | null>(null)
+  const noteSkipRef = useRef(false)
+  const noteStampOf = function (text: string) {
+    var h = 0
+    for (var i = 0; i < text.length; i++) { h = ((h * 31) + text.charCodeAt(i)) | 0 }
+    return String(h) + ':' + text.length
+  }
   const openPlayModal = (video: VideoType) => {
-    // قفل التسلسل: فيه فيديو قبله في الترتيب لسه مخلصش → منع + رسالة باسم الفيديو المطلوب
+    // قفل التسلسل: فيه درس قبله في الترتيب لسه مخلصش → منع + رسالة عامة من غير أسماء (2026-ص2)
     var seqInfo = seqInfoMap[video.id]
     if (seqInfo) {
-      toast.error('الفيديو ده هيتفتح أول ما تشوف فيديو «' + seqInfo.blockerTitle + '» كامل (100%) — الفيديو ده مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 })
+      toast.error('الفيديو ده هيتفتح أول ما تشوف الدرس اللي قبله كامل (100%) — الدرس اللي قبله مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 })
       return
     }
+    /* (2026-ص2) ملاحظة المستر الأول — لو الدرس عليه ملاحظة والطالب مش
+       شافها (أو المستر عدلها) → مودال الملاحظة الأول وبعد تمام يفتح الفيديو */
+    var noteVal = String((video as any).note || '').trim()
+    if (noteVal && !noteSkipRef.current) {
+      var nk = 'mg_note_seen__' + String((video as any).groupKey || video.id)
+      var nstamp = noteStampOf(noteVal)
+      var seen = ''
+      try { seen = window.localStorage.getItem(nk) || '' } catch (e) {}
+      if (seen !== nstamp) {
+        setPendingNote({ video: video, text: noteVal, key: nk, stamp: nstamp })
+        return
+      }
+    }
+    noteSkipRef.current = false
     fetch('/api/video-ticket?videoId=' + video.id + '&studentId=' + encodeURIComponent(studentId || ''))
       .then(function (r) {
         return r.json().then(function (d) { return { ok: r.ok, d: d } })
@@ -823,6 +906,16 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
         }
       })
       .catch(function () { toast.error('حصل خطأ في تشغيل الفيديو') })
+  }
+
+  /* (2026-ص2) زرار تمام في مودال الملاحظة — بيسجل إنها اتشافت ويفتح الدرس */
+  const confirmNote = () => {
+    if (!pendingNote) return
+    try { window.localStorage.setItem(pendingNote.key, pendingNote.stamp) } catch (e) {}
+    var v = pendingNote.video
+    setPendingNote(null)
+    noteSkipRef.current = true
+    openPlayModal(v)
   }
 
   if (videos.length === 0) return <EmptyState message="لا توجد دروس حالياً" />
@@ -898,10 +991,10 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                   </div>
                 </div>
               ) : isSeqLocked ? (
-                // مقفول بالتسلسل — قفل + رسالة باسم أول فيديو لازم يتشاف (مفتوح مضمون)
+                // مقفول بالتسلسل — قفل + رسالة عامة من غير أسماء دروس (2026-ص2)
                 <div
                   className="w-full h-full relative cursor-not-allowed select-none"
-                  onClick={function () { toast.error('الفيديو ده هيتفتح أول ما تشوف فيديو «' + (seqInfo ? seqInfo.blockerTitle : 'اللي قبله') + '» كامل (100%) — الفيديو ده مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 }) }}
+                  onClick={function () { toast.error('الفيديو ده هيتفتح أول ما تشوف الدرس اللي قبله كامل (100%) — الدرس اللي قبله مفتوح عندك دلوقتي، كمّله الأول', { duration: 6000 }) }}
                   role="button"
                   aria-label="الفيديو مقفول — شوف الفيديو المطلوب الأول"
                 >
@@ -916,10 +1009,10 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                       <Lock className="h-6 w-6 text-red-400" />
                     </div>
                     <p className="text-white text-xs sm:text-sm font-bold leading-relaxed">
-                      مقفول — لازم تشوف فيديو «{seqInfo ? seqInfo.blockerTitle : 'اللي قبله'}» الأول
+                      مقفول — لازم تشوف الدرس اللي قبله الأول
                     </p>
                     {seqInfo && seqInfo.blockerPct > 0 && (
-                      <p className="text-white/60 text-[10px]">نسبة «{seqInfo.blockerTitle}» دلوقتي: {seqInfo.blockerPct}%</p>
+                      <p className="text-white/60 text-[10px]">نسبة الدرس اللي قبله دلوقتي: {seqInfo.blockerPct}%</p>
                     )}
                   </div>
                 </div>
@@ -1019,13 +1112,17 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
     const firstThumb = (first && (first.thumbnail || (first as any).thumb)) || null
     const allWatched = g.parts.every(function (p) { return localWatched.has(p.id) })
     const anyNeedPay = g.parts.some(function (p) { return (p.price || 0) > 0 && !approvedVideoIds.has(p.id) })
+    /* (ز18) سعر الدرس كله — أول تسديد بيفتح كل الأجزاء، والسعر ظاهر لطلاب المجانية */
+    const groupPaidZ18 = g.parts.some(function (p) { return approvedVideoIds.has(p.id) })
+    const lessonLockedZ18 = anyNeedPay && !groupPaidZ18
+    const pricedPartZ18 = g.parts.find(function (p) { return (p.price || 0) > 0 })
     const avg = Math.round(g.parts.reduce(function (acc, p) { return acc + (mergedProgress[p.id] || 0) }, 0) / Math.max(1, g.parts.length))
     return (
       <Card key={'lesson-' + g.key} className={'overflow-hidden transition-all ' + (allWatched ? 'border-emerald-500/30' : '')}>
         <div className="relative aspect-video bg-black cursor-pointer group/vid" onClick={function () { setActiveLessonGroup({ title: g.title, parts: g.parts }) }} role="button" aria-label={'فتح صفحة الدرس: ' + g.title}>
           {firstThumb ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={firstThumb} alt={g.title} className={'w-full h-full object-cover transition-transform duration-500 group-hover/vid:scale-105 ' + (anyNeedPay ? 'opacity-40 blur-sm' : '')} draggable={false} />
+            <img src={firstThumb} alt={g.title} className={'w-full h-full object-cover transition-transform duration-500 group-hover/vid:scale-105 ' + (lessonLockedZ18 ? 'opacity-40 blur-sm' : '')} draggable={false} />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-black/80 to-black" />
           )}
@@ -1039,6 +1136,10 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
             <Badge className="bg-primary text-white text-[10px] gap-1">
               <MonitorPlay className="h-3 w-3" /> {g.parts.length} فيديوهات
             </Badge>
+            {/* (ز18) سعر الدرس كله يظهر لطلاب المجانية */}
+            {lessonLockedZ18 && pricedPartZ18 && (
+              <Badge className="bg-amber-500 text-white text-[10px] gap-1 font-bold">💰 الدرس كامل {pricedPartZ18.price} ج.م</Badge>
+            )}
             {/* (2026-د) إجمالي مدة الدرس ⏱ */}
             {g.parts.reduce(function (acc: number, p: any) { return acc + (Number(p.durationSec) || 0) }, 0) > 0 && !anyNeedPay && (
               <div className="flex items-center gap-1 rounded-md bg-black/80 border border-white/15 px-1.5 py-0.5 text-white text-[10px] font-bold" dir="ltr">
@@ -1066,9 +1167,16 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1">{g.parts.length} جزء — بيتشافوا بالترتيب من صفحة الدرس</p>
-          <Button size="sm" className="mt-2 w-full h-9 text-xs" onClick={function () { setActiveLessonGroup({ title: g.title, parts: g.parts }) }}>
-            فتح صفحة الدرس ({g.parts.length} أجزاء)
-          </Button>
+          {lessonLockedZ18 && pricedPartZ18 ? (
+            /* (ز18) الدفع للدرس كله — مرة واحدة بتفتح كل الأجزاء */
+            <Button size="sm" className="mt-2 w-full h-9 text-xs bg-amber-500 hover:bg-amber-600 text-white font-bold" onClick={function () { setPendingPaymentVideo({ id: pricedPartZ18.id, title: 'الدرس كامل: ' + g.title, price: Number(pricedPartZ18.price) || 0, grade: g.grade || grade }); setView('student-payment') }}>
+              💰 ادفع الآن وافتح الدرس كله ({pricedPartZ18.price} ج.م)
+            </Button>
+          ) : (
+            <Button size="sm" className="mt-2 w-full h-9 text-xs" onClick={function () { setActiveLessonGroup({ title: g.title, parts: g.parts }) }}>
+              فتح صفحة الدرس ({g.parts.length} أجزاء)
+            </Button>
+          )}
         </CardContent>
       </Card>
     )
@@ -1084,6 +1192,33 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
       </div>
 
       {/* المشغل الآمن — تذكرة واحدة الاستخدام، مفيش أي لينك في الصفحة */}
+      {/* (2026-ص2) مودال ملاحظة المستر — أول ما الطالب يفتح الدرس: «ملاحظة
+          خد بالك...» + زرار تمام أزرق تحت (طلب المستر الحرفي). بعد تمام
+          مش بتظهر تاني ولو المستر عدل الملاحظة بتظهر مرة جديدة */}
+      {pendingNote && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85" dir="rtl">
+          <div className="w-full max-w-md rounded-2xl bg-white text-gray-900 shadow-2xl overflow-hidden border border-white/20">
+            <div className="px-5 pt-5 pb-3 text-center bg-sky-50 border-b border-sky-100">
+              <div className="text-3xl mb-1" aria-hidden="true">📝</div>
+              <h3 className="text-lg font-extrabold text-sky-800">ملاحظة من المستر</h3>
+              <p className="text-[11px] text-sky-700/80 mt-0.5 font-bold">ملاحظة خد بالك — دي ملاحظة مهمة على الدرس ده</p>
+            </div>
+            <div className="px-5 py-4 max-h-[45vh] overflow-y-auto custom-scrollbar">
+              <p className="text-sm leading-8 whitespace-pre-wrap text-center font-bold text-gray-800">{pendingNote.text}</p>
+            </div>
+            <div className="px-5 pb-5 pt-1">
+              <button
+                type="button"
+                className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold text-base transition-colors shadow-lg"
+                onClick={confirmNote}
+                onTouchEnd={function (e) { e.preventDefault(); confirmNote() }}
+              >
+                تمام
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {activeLessonVideo && (activeLessonVideo as any).playTicket && (
         <SecurePlayerModal
           ticket={(activeLessonVideo as any).playTicket}
@@ -1135,7 +1270,9 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                 const pctP = mergedProgress[p.id] || 0
                 const seqLockedP = lockedMap[p.id] === true
                 const seqInfoP = seqInfoMap[p.id]
-                const payLockedP = (p.price || 0) > 0 && !approvedVideoIds.has(p.id)
+                /* (ز18) الدرس اتسدد جزء منه؟ الكل بيفتح — الدفع بيتم للدرس كله */
+                const groupAnyApprovedZ18 = activeLessonGroup.parts.some(function (pp: any) { return approvedVideoIds.has(pp.id) })
+                const payLockedP = !groupAnyApprovedZ18 && (p.price || 0) > 0 && !approvedVideoIds.has(p.id)
                 const watchedP = localWatched.has(p.id)
                 const thumbP = p.thumbnail || (p as any).thumb || null
                 return (
@@ -1158,13 +1295,13 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           {watchedP && <Badge variant="secondary" className="text-[10px] text-emerald-600">تمت المشاهدة</Badge>}
                           {pctP > 0 && !watchedP && <span className="text-[10px] font-bold text-muted-foreground">{pctP}%</span>}
-                          {seqLockedP && <Badge variant="outline" className="text-[10px] text-red-500">مقفول — شوف «{seqInfoP ? seqInfoP.blockerTitle : 'اللي قبله'}» الأول{seqInfoP && seqInfoP.blockerPct > 0 ? ' (' + seqInfoP.blockerPct + '%)' : ''}</Badge>}
+                          {seqLockedP && <Badge variant="outline" className="text-[10px] text-red-500">مقفول — شوف الجزء اللي قبله الأول{seqInfoP && seqInfoP.blockerPct > 0 ? ' (' + seqInfoP.blockerPct + '%)' : ''}</Badge>}
                           {!seqLockedP && payLockedP && <Badge variant="outline" className="text-[10px] text-amber-600">محتاج تسديد {p.price} ج.م</Badge>}
                           {!seqLockedP && !payLockedP && !watchedP && <Badge variant="outline" className="text-[10px] text-emerald-600">جاهز للمشاهدة</Badge>}
                         </div>
                       </div>
                       {payLockedP ? (
-                        <Button size="sm" className="shrink-0 bg-amber-500 hover:bg-amber-600 text-white" onClick={function () { setPendingPaymentVideo({ id: p.id, title: p.title, price: p.price || 0, grade: p.grade || grade }); setView('student-payment') }}>ادفع الآن</Button>
+                        <Button size="sm" className="shrink-0 bg-amber-500 hover:bg-amber-600 text-white" onClick={function () { setPendingPaymentVideo({ id: p.id, title: 'الدرس كامل: ' + (activeLessonGroup.title || p.title), price: p.price || 0, grade: p.grade || grade }); setView('student-payment') }}>ادفع وافتح الدرس كله</Button>
                       ) : seqLockedP ? (
                         <Button size="sm" variant="secondary" className="shrink-0" disabled>مقفول</Button>
                       ) : (
@@ -1211,6 +1348,13 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
 /* ========== HOMEWORK TAB ========== */
 function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { homework: Homework[]; studentId: string; completedHwIds: Set<string>; onHwSubmitted: (hwId: string) => void }) {
   const [expandedHw, setExpandedHw] = useState<string | null>(null)
+  /* (2026-ص2) مفتاح قفل التسلسل الموحد — '0' = مفيش قفل تسلسل على أي واجب */
+  const [seqLockEnabled, setSeqLockEnabled] = useState(true)
+  useEffect(function () {
+    fetch('/api/config').then(function (r) { return r.json() }).then(function (d) {
+      setSeqLockEnabled(String((d || {}).video_sequence_lock ?? '1') !== '0')
+    }).catch(function () {})
+  }, [])
 
   /* ===== (2026-و66) منع الغش في الواجبات — نفس نظام الامتحانات:
      تحذير لطيف 1-2 → خصم من 3 → تسليم تلقائي عند الرابعة ===== */
@@ -1480,6 +1624,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
        (الخريطة فاضية = مفيش حاجة مقفولة) عشان سباق التحميل ما يقفلش
        واجب على طالب سلّمه */
     if (!hwResultsLoaded) return map
+    /* (2026-ص2) التسلسل الموحد مطفي من اللوحة → مفيش أي واجب مقفول */
+    if (!seqLockEnabled) return map
     var prevTrackable: string | null = null
     orderedHw.forEach(function(h) {
       var track = hwTrackable(h)
@@ -1491,25 +1637,14 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
       if (track) prevTrackable = h.id
     })
     return map
-  }, [orderedHw, completedHwIds, hwResultsLoaded])
-
-  // الواجب اللي قبل كل واجب (عشان نعرض اسمه على كارت المقفول)
-  var hwPrevMap = useMemo(function() {
-    var map: Record<string, string> = {}
-    var prevTrackable: string | null = null
-    orderedHw.forEach(function(h) {
-      var track = hwTrackable(h)
-      if (track && prevTrackable) map[h.id] = prevTrackable
-      if (track) prevTrackable = h.id
-    })
-    return map
-  }, [orderedHw])
+  }, [orderedHw, completedHwIds, hwResultsLoaded, seqLockEnabled])
 
   /* Poll the background AI grading until it finishes — then update score + verdicts live */
   const startGradingPoll = (resultId: string, hwId: string) => {
     if (hwPollTimers.current[hwId]) clearInterval(hwPollTimers.current[hwId])
     var tries = 0
     hwPollTimers.current[hwId] = setInterval(async function() {
+      if (document.hidden) return /* (توفير الباك إند — ص8) مفيش نداءات وانتا في تاب مخفي — التقييم بيكمل أول ما ترجع */
       tries++
       if (tries > 45) { clearInterval(hwPollTimers.current[hwId]); delete hwPollTimers.current[hwId]; return }
       try {
@@ -2185,8 +2320,6 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         var isSubmitted = completedHwIds.has(hw.id)
         // مقفول بالتسلسل؟ الواجب اللي قبله لسه متسلمش (زي الفيديوهات — طلب المستر)
         var isHwSeqLocked = hwLockMap[hw.id] === true && !seqOkHwIds.has(hw.id)
-        var prevHwId = hwPrevMap[hw.id]
-        var prevHwTitle = prevHwId ? ((homework.find(function(x) { return x.id === prevHwId }) || ({} as any)).title || '') : ''
         var myAnswers = hwAnswers[hw.id] || {}
         var existingResult = hwResults[hw.id]
 
@@ -2296,7 +2429,32 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                   return
                 }
                 if (isSubmitted) { openHwReview(hw.id); return }
-                setExpandedHw(isExpanded ? null : hw.id)
+                /* (2026-و111) حكم السيرفر قبل فتح الحل — شكوى المستر: الطلاب
+                   «بيحلوا الواجب وبعد كده يسلموه ويدخلوا يلاقيه يقول لهم يعملوه
+                   من الأول». اللستة المحلية ممكن تفوّت تسليم قديم (سباق/خطأ شبكة)
+                   فبنسأل السيرفر مباشرة قبل ما نفتح الحل — لو سلّمه فعلًا نفتح
+                   شاشة المراجعة بالنتيجة فورًا بدل ما يعيد حل الواجب كله ويترفض
+                   عند التسليم. فشل الشبكة → معاودة مرة → بعدها فتح عادي (التسليم
+                   على السيرفر محمي بـ alreadySubmitted على أي حال). */
+                ;(async function() {
+                  var checkData: any = null
+                  for (var hwAttempt = 0; hwAttempt < 2; hwAttempt++) {
+                    try {
+                      var hwChkRes = await fetch('/api/homework-results?studentId=' + encodeURIComponent(studentId) + '&homeworkId=' + encodeURIComponent(hw.id))
+                      var hwChkData = await hwChkRes.json()
+                      if (hwChkData && Array.isArray(hwChkData.results)) { checkData = hwChkData; break }
+                    } catch (e) {}
+                    if (hwAttempt === 0) { try { await new Promise(function(r) { setTimeout(r, 1200) }) } catch (e) {} }
+                  }
+                  if (checkData && checkData.results && checkData.results.length > 0) {
+                    var hwChkRow = checkData.results[0]
+                    setHwResults(function(prev) { return { ...prev, [hw.id]: { score: Number(hwChkRow.score) || 0, maxScore: Number(hwChkRow.maxScore) || 100, resultId: hwChkRow.id } } })
+                    onHwSubmitted(hw.id)
+                    openHwReview(hw.id)
+                    return
+                  }
+                  setExpandedHw(isExpanded ? null : hw.id)
+                })()
               } : undefined}>
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div className={"h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 " + (isHwSeqLocked ? 'bg-red-500/10' : isSubmitted ? 'bg-emerald-500/10' : hasQuestions ? 'bg-emerald-500/10' : 'bg-blue-500/10')}>
@@ -2306,7 +2464,7 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                     <h3 className="font-semibold text-sm">{hw.title}</h3>
                     {isHwSeqLocked && (
                       <p className="text-[11px] text-red-500 font-bold leading-relaxed">
-                        🔒 الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله{prevHwTitle ? ' — "' + prevHwTitle + '"' : ''}
+                        🔒 الواجب ده هيتفتح أول ما تسلّم الواجب اللي قبله
                       </p>
                     )}
                     {hw.content && <p className="text-xs text-muted-foreground line-clamp-2">{hw.content}</p>}
@@ -2723,6 +2881,13 @@ function normalizeExamWritingItems(raw: any): any[] {
 
 /* ========== EXAMS TAB ========== */
 function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId, resultsLoaded, onGoHome }: { exams: Exam[]; results: ExamResult[]; completedExamIds: Set<string>; onExamSubmitted: (examId: string) => void; studentId: string; resultsLoaded?: boolean; onGoHome?: () => void }) {
+  /* (2026-ص2) مفتاح قفل التسلسل الموحد — '0' = مفيش قفل تسلسل على أي امتحان */
+  const [seqLockEnabled, setSeqLockEnabled] = useState(true)
+  useEffect(function () {
+    fetch('/api/config').then(function (r) { return r.json() }).then(function (d) {
+      setSeqLockEnabled(String((d || {}).video_sequence_lock ?? '1') !== '0')
+    }).catch(function () {})
+  }, [])
   const [takingExam, setTakingExam] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [writingAnswers, setWritingAnswers] = useState<Record<number, string>>({})
@@ -2940,6 +3105,8 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
     /* (2026-و40) قبل تأكيد تحميل نتايج الامتحانات — كله مفتوح (بدون 🔒 وبدون منع)
        عشان سباق/فشل التحميل ما يقفلش امتحان على طالب قدمه أصلاً (fail-open) */
     if (resultsLoaded === false) return map
+    /* (2026-ص2) التسلسل الموحد مطفي من اللوحة → مفيش أي امتحان مقفول */
+    if (!seqLockEnabled) return map
     var prevTrackable: string | null = null
     orderedExams.forEach(function(e) {
       var track = false
@@ -2956,22 +3123,7 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
       if (track) prevTrackable = e.id
     })
     return map
-  }, [orderedExams, completedExamIds, results, resultsLoaded])
-
-  var examPrevMap = useMemo(function() {
-    var map: Record<string, string> = {}
-    var prevTrackable: string | null = null
-    orderedExams.forEach(function(e) {
-      var track = false
-      try {
-        var qs = JSON.parse((e as any).questions || '[]')
-        track = Array.isArray(qs) && qs.length > 0
-      } catch (err) { track = false }
-      if (track && prevTrackable) map[e.id] = prevTrackable
-      if (track) prevTrackable = e.id
-    })
-    return map
-  }, [orderedExams])
+  }, [orderedExams, completedExamIds, results, resultsLoaded, seqLockEnabled])
 
   /* ===== (25-b2) دالة التسليم الموحدة — نفس منطق زرار التسليم الأصلي بالظبط
      (نفس mappedAnswers من answers/writingAnswers state) — والعداد التنازلي
@@ -3117,16 +3269,27 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
      + استرجاع المسودة (نفس الأسئلة بنفس الترتيب وبنفس الإجابات) ===== */
   async function handleStartExam(exam: any, parsedQuestions: any[], draft?: any) {
     setCheckingServer(true)
-    try {
-      var checkRes = await fetch('/api/exam-results?studentId=' + studentId + '&examId=' + exam.id)
-      var checkData = await checkRes.json()
-      if (checkData.results && checkData.results.length > 0) {
-        onExamSubmitted(exam.id)
-        setCheckingServer(false)
-        setBlockedExamId(exam.id)
-        return
-      }
-    } catch { /* proceed anyway */ }
+    /* (2026-و111) فحص السيرفر بمعاودة: فشل شبكة لحظي كان بيسيب الامتحان
+       يفتح للحل تاني وبعدها التسليم بيرفض (alreadySubmitted) — دلوقتي
+       محاولة + معاودة واحدة قبل ما نفتح، والتسليم نفسه محمي على السيرفر */
+    var examCheckData: any = null
+    for (var exChkAttempt = 0; exChkAttempt < 2; exChkAttempt++) {
+      try {
+        var checkRes = await fetch('/api/exam-results?studentId=' + studentId + '&examId=' + exam.id)
+        var checkData = await checkRes.json()
+        if (checkData && Array.isArray(checkData.results)) {
+          examCheckData = checkData
+          if (checkData.results.length > 0) break
+        }
+      } catch { /* معاودة */ }
+      if (exChkAttempt === 0) { try { await new Promise(function(r) { setTimeout(r, 1200) }) } catch (e) {} }
+    }
+    if (examCheckData && examCheckData.results && examCheckData.results.length > 0) {
+      onExamSubmitted(exam.id)
+      setCheckingServer(false)
+      setBlockedExamId(exam.id)
+      return
+    }
     setCheckingServer(false)
     try {
       if (draft && Array.isArray(draft.questions) && draft.questions.length > 0) {
@@ -3316,6 +3479,14 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         >
           العودة إلى قائمة الامتحانات
         </Button>
+        {/* (2026-ي2) لو المستر مفعّل «إظهار النتيجة» — الطالب يشوف درجته من شاشة البلوك نفسها */}
+        {(() => {
+          var bxE: any = exams.find(function(e) { return e.id === blockedExamId })
+          var bxR: any = bxE ? results.find(function(r) { return r.examId === bxE.id }) : null
+          return bxE && (bxE as any).showResult === true ? (
+            <ExamResultViewer studentId={studentId} examId={bxE.id} examTitle={bxE.title} result={bxR} />
+          ) : null
+        })()}
       </div>
     )
   }
@@ -3797,14 +3968,15 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
         // مقفول بالتسلسل؟ الامتحان اللي قبله لسه متقدمش (زي الفيديوهات — طلب المستر)
         // (2026-و67) حكم السيرفر المؤكد بيتغلب على شك الخريطة المحلية
         const isExamSeqLocked = examLockMap[exam.id] === true && !seqOkExamIds.has(exam.id)
-        const prevExamId = examPrevMap[exam.id]
-        const prevExamTitle = prevExamId ? ((exams.find(function(x) { return x.id === prevExamId }) || ({} as any)).title || '') : ''
         /* 2026-و12 — مفيش نتيجة لحظية ولا تصحيح يتشاف من الطالب */
         let hasQuestions = false
         let parsedQuestions: any[] = []
         try { if ((exam as any).questions) { parsedQuestions = JSON.parse((exam as any).questions); hasQuestions = parsedQuestions.length > 0 } } catch {}
+        /* (2026-و115) نهاية المدة عدت؟ الكارت بيبان برسالة «مدة الامتحان خلصت»
+           (لسه في مهلة اليومين قبل الاختفاء التلقائي من السيرفر) */
+        const isEnded115 = (exam as any).ended === true
         return (
-          <Card key={exam.id} className={isExamSeqLocked ? 'border-red-500/30 opacity-90' : isCompleted ? 'border-emerald-500/30' : ''}>
+          <Card key={exam.id} className={isEnded115 ? 'border-red-500/30 opacity-75' : isExamSeqLocked ? 'border-red-500/30 opacity-90' : isCompleted ? 'border-emerald-500/30' : ''}>
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -3828,13 +4000,27 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                     })()}
                     {isExamSeqLocked && (
                       <p className="text-[11px] text-red-500 font-bold leading-relaxed">
-                        🔒 الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله{prevExamTitle ? ' — "' + prevExamTitle + '"' : ''}
+                        🔒 الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله
                       </p>
                     )}
                     {isCompleted ? (
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                           تم تسليم الامتحان
+                        </Badge>
+                        {(exam as any).showResult === true && (
+                          <ExamResultViewer
+                            studentId={studentId}
+                            examId={exam.id}
+                            examTitle={exam.title}
+                            result={examResult}
+                          />
+                        )}
+                      </div>
+                    ) : isEnded115 ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                          ⏰ مدة الامتحان خلصت
                         </Badge>
                       </div>
                     ) : isExamSeqLocked ? (
@@ -3853,11 +4039,11 @@ function ExamsTab({ exams, results, completedExamIds, onExamSubmitted, studentId
                                 setSeqOkExamIds(function(prev) { var n = new Set(prev); n.add(exam.id); return n })
                                 handleStartExam(exam, parsedQuestions)
                               } else {
-                                toast.error(String(d.reason || 'الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — امتحان " ' + (prevExamTitle || 'اللي قبله') + ' " الأول'), { duration: 6000 })
+                                toast.error(String(d.reason || 'الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — خده الأول'), { duration: 6000 })
                               }
                             } catch (e) {
                               setCheckingServer(false)
-                              toast.error('الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — امتحان " ' + (prevExamTitle || 'اللي قبله') + ' " الأول', { duration: 6000 })
+                              toast.error('الامتحان ده هيتفتح أول ما تاخد الامتحان اللي قبله — خده الأول', { duration: 6000 })
                             }
                           })()
                         }}

@@ -162,10 +162,6 @@ export const PARENT_PUSH_REMIND_HOMEWORK_TITLE = '⏰ واجب لسه مسلّم
 export const PARENT_PUSH_REMIND_EXAM_BODY = 'الطالب/ة {student} لسه ما حلّش امتحان «{title}» من أكتر من 24 ساعة — لزم يتسلم'
 export const PARENT_PUSH_REMIND_HOMEWORK_BODY = 'الطالب/ة {student} لسه ما سلمّش واجب «{title}» من أكتر من 24 ساعة — لازم يتسلم'
 
-/* (Z-30) إشعار الطالب الداخلي للتذكير — بيتكتب في جدول Notification */
-export const STUDENT_REMIND_HOMEWORK_TITLE = '⏰ تذكير: واجب «{title}» لسه مسلّمش — لازم يتسلم في أقرب وقت'
-export const STUDENT_REMIND_EXAM_TITLE = '⏰ تذكير: امتحان «{title}» لسه متحلّش — لازم تدخل وتسلّمه'
-
 /* ============================================================
    (2026-و91) أيقونة الإشعار الخارجي بطلب المستر: «الاشعار يكون
    بالصورة بتاعة المنصة — صورة الفافيكون بتاعة المستر» — بدل الجرس
@@ -433,11 +429,9 @@ export async function notifyParentsOfSubmission(opts: { studentId: string; kind:
 }
 
 /* ============================================================
-   (Z-30) إشعار ولي الأمر عند **إسناد واجب/امتحان جديد** — طلب المستر:
-   «يجي رسالة لولي الأمر إن ابنه عليه واجب أو امتحان».
-   بيتنادى من POST /api/homework و /api/exams بعد الإسناد (fire-and-forget
-   جوه after()) — لكل طالب مستهدف: بنجمع أرقام أولياء أموره ونكتب صف
-   داخلي + Web Push. أي فشل = لوج بس — الإسناد مش بيتأثر أبدًا.
+   (Z-30) دوال الإسناد والتذكير — نفس نمط notifyParentsOfSubmission:
+   نقرأ الطالب → نجمع أرقام أولياء أموره → صف داخلي + Web Push
+   أي فشل = لوج بس — العملية الأساسية مابتتأثرش أبدًا
    ============================================================ */
 function fillTpl(tpl: string, studentName: string, title: string): string {
   return String(tpl)
@@ -471,11 +465,6 @@ export async function notifyParentsOfAssignment(opts: { studentId: string; kind:
   }
 }
 
-/* ============================================================
-   (Z-30) تذكير 24 ساعة — لولي الأمر (صف داخلي + Web Push)
-   بيتنادى من /api/cron/homework-reminders للطلاب اللي عدى على
-   واجبهم/امتحانهم 24 ساعة من غير تسليم.
-   ============================================================ */
 export async function notifyParentOfPendingReminder(opts: { studentId: string; kind: 'exam' | 'homework'; title: string }): Promise<void> {
   try {
     if (!opts || !opts.studentId) return

@@ -126,13 +126,32 @@ var DEFAULTS = {
   payment_instapay: '',
   payment_fawry: '',
 
+  // === (G-2) قسم «إزاي تستخدم المنصة» — فيديو اختياري من الأدمن ===
+  // فاضي = السكشن مش بيظهر خالص في الصفحة الرئيسية (إخفاء شرطي صارم)
+  // kind: 'link' (يوتيوب/درايف/vimeo → iframe embed) أو 'file' (ملف مرفوع → <video>)
+  howto_video_url: '',
+  howto_video_kind: 'link',
+
+  // === (ص119) الفيديوهات التعريفية — نفس ميزة Zicola-Math بالظبط ===
+  // intro_video_url: فيديو تعريفي عن المنصة (سكشن بعد الهيرو مباشرة)
+  // teacher_video_url: فيديو تعريفي عن المستر (سكشن قبل المعرض)
+  // لينك (يوتيوب/درايف/فيميو/ستريمابل/أرشايف) أو ملف مرفوع (/api/files/<id>)
+  // فاضي = السكشن مش بيظهر خالص في الصفحة الرئيسية (إخفاء شرطي صارم)
+  intro_video_url: '',
+  teacher_video_url: '',
+
+  // === (2026-ص2) مفتاح قفل التسلسل الموحد — دروس/واجبات/امتحانات ===
+  // '1' (أو غايب) = التسلسل شغّال: كل حاجة بتفتح بعد اللي قبلها لكل الطلبة
+  // '0' = التسلسل مطفي للكل: كله مفتوح بنفس الشكل لكل الطلبة
+  video_sequence_lock: '1',
+
   // === (Z-30) القبول التلقائي للطلاب الجدد — طلب المستر: مفعّل افتراضيًا في كل المنصات ===
   // '1' = الطالب الجديد بيتقبل تلقائيًا ويدخل المنصة فورًا بعد التسجيل
   // '0' = الوضع القديم: الطالب بيتسجل pending وبيستنى موافقة الأدمن
   student_auto_approve: '1',
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
     var configs = await db.siteConfig.findMany()
     var map = Object.assign({}, DEFAULTS)
@@ -147,11 +166,22 @@ export async function GET() {
      * التكرار على القراءة كان بيلغي أي تعديل يعمله الأدمن فورًا فيظهرله إن
      * «التغييرات بترجع» رغم إنها متخزنة فعلًا. أي تعديل من الأدمن دلوقتي بيتخزن
      * وبيترجع زي ما هو. */
-    return NextResponse.json(map)
+    /* (توفير الباك إند — ص8) الكونفج بيتكاش على الـ CDN دقيقة (s-maxage=60
+       + stale-while-revalidate) بدل ما كل زيارة صفحة توقّع فانكشن.
+       الأدمن بيجيب الكونفج بـ ?fresh= اللي بتفلت الكاش دايمًا —
+       فتعديلاته بتوصل جهازه لحظيًا زي ما هي */
+    var res = NextResponse.json(map)
+    var isFresh = false
+    try { isFresh = new URL(request.url).searchParams.has('fresh') } catch (eU) {}
+    res.headers.set('Cache-Control', isFresh ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300')
+    return res
   } catch (error) {
     console.error('Config fetch error:', error)
     // CRITICAL FIX: Return flat DEFAULTS so frontend never crashes
-    return NextResponse.json(Object.assign({}, DEFAULTS))
+    /* (توفير الباك إند — ص8) الأخطاء عمري ما تتكاش */
+    var errRes = NextResponse.json(Object.assign({}, DEFAULTS))
+    errRes.headers.set('Cache-Control', 'private, no-store')
+    return errRes
   }
 }
 
@@ -160,20 +190,31 @@ export async function PUT(request) {
     var body = await request.json()
     var keys = Object.keys(body)
 
+    /* (ص119) إصلاح «صفحة الأدمن بتاخد وقت عقبال ما تتحفظ»:
+     * كل مفتاح كان بيتكتب لوحده — حفظ الكونفج الكامل = عشرات الرحلات
+     * المتتالية على Turso = دقايق. دلوقتي كل المفاتيح في transaction
+     * واحدة (batch واحدة على قاعدة البيانات) = ثواني أو أقل. */
+    var upserts = []
     for (var i = 0; i < keys.length; i++) {
       var key = keys[i]
       var value = body[key]
+        /* (ز16) grades_data وschedule_data حصراً لـ /api/site-config (لوحة الصفوف والمواعيد) —
+         * منع أي حفظ كونفج كامل من مسحهم بقيمة قديمة (علة «التعديلات بترجع»)،
+         * وfavicon_reset_v1 بصمة ترميم داخلية مش من الكونفج */
       // Skip non-config keys that might come from error responses
-      if (key === 'error' || key === 'defaults') continue
-      await safeWrite(function(k, v) {
-        return function() {
-          return db.siteConfig.upsert({
-            where: { key: k },
-            update: { value: v, updatedAt: new Date() },
-            create: { key: k, value: v },
-          })
-        }
-      }(key, value))
+      if (key === 'error' || key === 'defaults' || key === 'grades_data' || key === 'schedule_data' || key === 'favicon_reset_v1') continue
+      upserts.push(
+        db.siteConfig.upsert({
+          where: { key: key },
+          update: { value: String(value), updatedAt: new Date() },
+          create: { key: key, value: String(value) },
+        })
+      )
+    }
+    if (upserts.length > 0) {
+      await safeWrite(function () {
+        return db.$transaction(upserts)
+      })
     }
 
     return NextResponse.json({ message: 'Config updated' })

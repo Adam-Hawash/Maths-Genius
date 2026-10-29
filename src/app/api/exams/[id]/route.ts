@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { isAdmin } from '@/lib/video-guard'
+/* (S-4a — توحيد الصفوف) المرجع الموحد: كتابة = storeGrade */
+import { storeGrade } from '@/lib/grade-names'
 import { collectMediaIds, deleteMediaByIds, examHomeworkMediaTexts } from '@/lib/media-cleanup'
 
 /* (25-ب1) defensive ALTERs — نفس نمط المشروع: ممنوع db:push */
@@ -16,6 +18,8 @@ async function ensureExamFeatureColumns() {
   try { await db.$executeRawUnsafe("ALTER TABLE Exam ADD COLUMN targetStudentIds TEXT DEFAULT ''") } catch (e) {}
   /* (2026-و29) استهداف المجموعات */
   try { await db.$executeRawUnsafe("ALTER TABLE Exam ADD COLUMN targetGroupIds TEXT DEFAULT ''") } catch (e) {}
+  /* (2026-و115) نهاية مدة الامتحان */
+  try { await db.$executeRawUnsafe('ALTER TABLE Exam ADD COLUMN endsAt DATETIME') } catch (e) {}
 })()
   }
   await _examColsReady
@@ -33,6 +37,22 @@ export async function GET(
     if (!exam) {
       return NextResponse.json({ error: 'الامتحان غير موجود' }, { status: 404 })
     }
+
+    /* (2026-و115) نهاية المدة عدّت؟ الطالب مش يشوف الامتحان خالص —
+       الأدمن بس اللي يعدي (عشان يعدّل/يمسح بعد الانتهاء) */
+    try {
+      var endsMs115 = (exam as any).endsAt ? new Date((exam as any).endsAt).getTime() : 0
+      if (endsMs115 && Date.now() >= endsMs115) {
+        var adminOk115 = false
+        try {
+          var adminId115 = new URL(_request.url).searchParams.get('adminId') || ''
+          if (adminId115) adminOk115 = await isAdmin(adminId115)
+        } catch (e) {}
+        if (!adminOk115) {
+          return NextResponse.json({ error: 'مدة الامتحان خلصت', ended: true }, { status: 410 })
+        }
+      }
+    } catch (e115) {}
 
     return NextResponse.json({ exam })
   } catch (error) {
@@ -95,6 +115,21 @@ export async function PATCH(
       }
     }
 
+    /* (2026-و115) نهاية المدة: null = إلغاء النهاية، ISO = تحديد */
+    if (body.endsAt !== undefined) {
+      if (body.endsAt === null || body.endsAt === '') {
+        data.endsAt = null
+      } else {
+        try {
+          var ed115 = new Date(String(body.endsAt))
+          if (isNaN(ed115.getTime())) throw new Error('bad date')
+          data.endsAt = ed115
+        } catch (e) {
+          return NextResponse.json({ error: 'صيغة وقت النهاية غير صحيحة' }, { status: 400 })
+        }
+      }
+    }
+
     /* (2026-و26) استهداف الطلاب: array ids → JSON string (فاضي = الكل يشوفه) */
     if (body.targetStudentIds !== undefined) {
       var arr: unknown[] = []
@@ -150,7 +185,7 @@ export async function PUT(
       data: {
         ...(title && { title }),
         ...(content && { content }),
-        ...(grade && { grade }),
+        /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */ ...(grade && { grade: storeGrade(grade) }),
         ...(questions !== undefined && { questions: typeof questions === 'string' ? questions : JSON.stringify(questions) }),
         // نماذج الامتحان العشوائية (اختياري)
         ...(models !== undefined && { models: typeof models === 'string' ? models : JSON.stringify(models) }),

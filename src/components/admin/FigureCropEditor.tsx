@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { openPdf, renderPageToJpeg } from '@/lib/pdf-pages'
+import { openPdf, renderPageToPng } from '@/lib/pdf-pages'
 import { chunkedUpload } from '@/lib/chunked-upload'
 
 export interface FigureCropTarget {
@@ -75,9 +75,10 @@ export default function FigureCropEditor({ target, source, sourceMediaId, onSave
       if (isPdf) {
         var opened = await openPdf(f)
         var n = Math.max(1, Math.min(page, opened.numPages || page))
-        /* (2026-و110) طلب المستر: «الجودة ضعيفة ومش بيحفظ جودة الصورة زي ما هي»
-           — رندر 2400px بدل 1800 عشان الرسمة تتفصل بدقتها الحقيقية */
-        return await renderPageToJpeg(opened.doc, n, 2400, 0.92)
+        /* (2026-G-1) طلب المستر: «عايز الجودة زي ما هي بالظبط»
+           — رندر PNG Lossless بدقة عالية (3200px) بدل JPEG 0.92 اللي كان بيضيّع
+           جودة الرسمة قبل ما القص يبدأ أصلًا */
+        return await renderPageToPng(opened.doc, n, 3200)
       }
       return await new Promise<string>(function (resolve, reject) {
         var r = new FileReader()
@@ -93,8 +94,8 @@ export default function FigureCropEditor({ target, source, sourceMediaId, onSave
         var src = source || {}
         if (src.doc) {
           var nDoc = Math.max(1, Math.min(target.page, Number(src.doc.numPages) || target.page))
-          /* (2026-و110) نفس الرفع الجودي: 2400px — الرسمة بتنقص من المصدر بدقتها */
-          dataUrl = await renderPageToJpeg(src.doc, nDoc, 2400, 0.92)
+          /* (2026-G-1) نفس الرفع الجودي: رندر PNG Lossless 3200px — من غير JPEG وسيط */
+          dataUrl = await renderPageToPng(src.doc, nDoc, 3200)
         } else if (src.file) {
           dataUrl = await renderFromFile(src.file, target.page)
         } else if (sourceMediaId) {
@@ -189,9 +190,9 @@ export default function FigureCropEditor({ target, source, sourceMediaId, onSave
       var ey = Math.min(c.height, Math.ceil((box.y + box.h) * c.height) + mY)
       var sw = ex - sx, sh = ey - sy
       if (sw < 8 || sh < 8) throw new Error('التحديد صغير جدًا')
-      /* (2026-و110) مفيش تصغير يوخذ من الجودة: السقف بقى 2200 بدل 1600
-         — القص بيتحفظ بأقصى دقة متاحة من المصدر من غير ما يتقزّم */
-      var scale = Math.min(1, 2200 / Math.max(sw, sh))
+      /* (2026-G-1) مفيش أي تصغير للقص: المنطقة تتحفظ بدقتها الطبيعية من المصدر
+         — السقف 4000px حماية بس للحالات الاستثنائية الكبيرة جدًا */
+      var scale = Math.min(1, 4000 / Math.max(sw, sh))
       var out = document.createElement('canvas')
       out.width = Math.max(8, Math.round(sw * scale))
       out.height = Math.max(8, Math.round(sh * scale))
@@ -201,12 +202,21 @@ export default function FigureCropEditor({ target, source, sourceMediaId, onSave
       octx.imageSmoothingEnabled = true
       octx.imageSmoothingQuality = 'high'
       octx.drawImage(c, sx, sy, sw, sh, 0, 0, out.width, out.height)
+      /* (2026-G-1) حفظ بدون فقدان: PNG أصلًا — لو طلع ضخم جدًا (فوق 12MB)
+          نرجع لـ JPEG 100% بدل ما نضيّع جودة الرسمة في كل الحالات */
       var blob = await new Promise<Blob | null>(function (resolve) {
-        /* (2026-و110) جودة 95% بدل 92% — حروف وخطوط الرسمة بتفضل حادة */
-        out.toBlob(function (b: Blob | null) { resolve(b) }, 'image/jpeg', 0.95)
+        out.toBlob(function (b: Blob | null) { resolve(b) }, 'image/png')
       })
+      var outType = 'image/png'
+      var outExt = '.png'
       if (!blob) throw new Error('فشل تجهيز صورة القص')
-      var f = new File([blob], 'figure-' + Date.now() + '.jpg', { type: 'image/jpeg' })
+      if (blob.size > 12 * 1024 * 1024) {
+        var jblob = await new Promise<Blob | null>(function (resolve) {
+          out.toBlob(function (b: Blob | null) { resolve(b) }, 'image/jpeg', 1.0)
+        })
+        if (jblob && jblob.size < blob.size) { blob = jblob; outType = 'image/jpeg'; outExt = '.jpg' }
+      }
+      var f = new File([blob], 'figure-' + Date.now() + outExt, { type: outType })
       var up = await chunkedUpload(f, 'exam-figures')
       if (!up || !up.filePath || !/^\/api\/files\//.test(up.filePath)) throw new Error('فشل رفع الصورة')
       onSaved(up.filePath, { x: box.x, y: box.y, w: box.w, h: box.h }, target.page)
@@ -276,7 +286,7 @@ export default function FigureCropEditor({ target, source, sourceMediaId, onSave
           )}
         </div>
         <div className="flex items-center gap-2 p-3 border-t shrink-0">
-          <p className="text-[10px] text-muted-foreground flex-1">القص بيتحفظ بأعلى جودة (رندر 2400px + JPEG 95%) من الصفحة الأصلية نفسها — زي ما هي بالظبط.</p>
+          <p className="text-[10px] text-muted-foreground flex-1">القص بيتحفظ بدقة المصدر الكاملة بدون أي تصغير (رندر عالي + PNG بدون فقدان) من الصفحة الأصلية نفسها — زي ما هي بالظبط.</p>
           <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>إلغاء</Button>
           <Button type="button" size="sm" onClick={save} disabled={saving || loading || !!loadErr || !pageUrl}>
             {saving ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <span>💾</span>}

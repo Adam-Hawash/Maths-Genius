@@ -270,6 +270,10 @@ function buildSingleFilePrompt(grade: string, type: string): string {
   lines.push('  * Less/greater than: < > \u2264 \u2265 | NOT equal: \u2260 | Approximate: \u2248 | Angle: \u2220 | Degree: \u00b0 | Percent: %')
   lines.push('  * Do NOT write "squared", "cubed", "to the power of" as words.')
   lines.push('  * Do NOT use any other LaTeX: no $ signs, no \\sqrt, no \\times, no \\left, no \\right, no markdown (**, *, #). The ONLY LaTeX allowed is \\frac{numerator}{denominator}.')
+  /* (U-1) شكوى المستر: الأسئلة ظهرت «u221b48 / Xu222aY / a u2208» — الموديل كان
+     بيرمز الرموز النادرة كـ \\uXXXX جوه الـ JSON. ممنوع نهائيًا + الطبقة الأمنية
+     في repairCorruptMath بتفك أي escape نجا برضه */
+  lines.push('  * EVERY symbol must be a REAL Unicode character written directly: ∛ √ ∪ ∩ ∈ ≤ ≥ ≠ ∠ π × ÷ ± °. NEVER write symbols as \\uXXXX escape sequences (like u221b or \\u221b) — ALWAYS paste the actual character (∛ not u221b, ∪ not u222a, ∩ not u2229, ∈ not u2208).')
   lines.push('- Do NOT add questions from outside the document')
   lines.push('- Do NOT skip any question from the document')
   lines.push('- Preserve the order of questions as they appear in the document')
@@ -365,6 +369,7 @@ function buildAnswersOnlyPrompt(grade: string, type: string, questions: any[]): 
   lines.push('  * In modelAnswer / acceptedAnswers write every fraction as \\frac{numerator}{denominator} — rendered as a REAL stacked fraction. Example: "\\frac{3}{4}". NEVER write a/b or \u00be.')
   lines.push('  * Do NOT wrap the whole numerator or denominator in parentheses: write \\frac{2^4}{2^3} NOT \\frac{(2^4)}{(2^3)}.')
   lines.push('  * Use proper Unicode symbols: \u221a \u00d7 \u00f7 \u03c0 \u2264 \u2265 \u2260 \u2248 \u2220 \u00b0. Do NOT use other LaTeX ($, \\sqrt, \\times…) or markdown.')
+  lines.push('  * EVERY symbol must be a REAL Unicode character written directly (∛ ∪ ∩ ∈ √ π × ÷). NEVER write \\\\uXXXX escape sequences (u221b / \\\\u221b) — ALWAYS the actual character.')
   lines.push('- The "answers" array MUST have the same length and order as the questions above')
   lines.push('- Each answer object MUST have an "index" field matching the question number (0-based)')
   lines.push('')

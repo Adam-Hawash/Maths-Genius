@@ -253,7 +253,7 @@ export function LoginView() {
           body: JSON.stringify({ studentId: student.id })
         }).catch(function () {})
       } else if (student.status === 'rejected' || student.status === 'refused') {
-        toast.error('❌ الحساب بتاعك مرفوض من المنصة. لو عندك استفسار تواصل مع المستر', { duration: 8000 })
+        toast.error('❌ Your account has been rejected from the platform. If you have any questions, contact the teacher', { duration: 8000 })
         setStudentPhone('')
         setStudentPassword('')
       } else {
@@ -387,8 +387,7 @@ export function RegisterView() {
             }
           } catch (autoErr) { /* أي فشل في الدخول التلقائي → نكمل كأنه pending عادي */ }
         }
-        setCurrentStudent(data.student); setView('student-pending'); toast.success('تم تسجيل طلبك بنجاح! خش اعمل تسجيل دخول وشوف اتقبلت ولا لسه')
-      }
+        setCurrentStudent(data.student); setView('student-pending'); toast.success('تم تسجيل طلبك بنجاح! خش اعمل تسجيل دخول وشوف اتقبلت ولا لسه') }
       else { toast.error(data.error || 'حدث خطأ في التسجيل') }
     } catch (e) { toast.error('حدث خطأ في الاتصال') }
     setLoading(false)

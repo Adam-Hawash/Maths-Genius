@@ -22,7 +22,7 @@ import {
   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
   Video as VideoIcon, LinkIcon, MonitorPlay, Send,
   MessageCircle, Copy,
-  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown, Wrench, Brain, Swords
+  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown, Wrench, Brain, Swords, EyeOff
 } from 'lucide-react'
 import { AdminComplaints } from './AdminComplaints'
 import { CMSPanel } from './CMSPanel'
@@ -264,6 +264,26 @@ export function AdminDashboard() {
     return function () { alive = false; clearInterval(t) }
   }, [])
 
+  /* ===== (ز19) بادج «المدفوعات» — طلب المستر: «لما يكون في طالب دفع يجيلي
+     إشعار زي الشكاوي بالظبط» — عداد طلبات الدفع المستنية (pending) بيدور
+     كل دقيقة + فوريًا لما الأدمن يقبل/يرفض (حدث mg_payments_changed). */
+  const [pendingPayments, setPendingPayments] = useState(0)
+  useEffect(function () {
+    var alive = true
+    async function loadPendingCount() {
+      try {
+        var r = await fetch('/api/payments?status=pending&pageSize=1')
+        var d = await r.json()
+        if (alive) setPendingPayments(Number((d.counts && d.counts.pending) || 0))
+      } catch (e) { /* صامت */ }
+    }
+    loadPendingCount()
+    var t = setInterval(loadPendingCount, 60000)
+    function onPaymentsChanged() { loadPendingCount() }
+    window.addEventListener('mg_payments_changed', onPaymentsChanged)
+    return function () { alive = false; clearInterval(t); window.removeEventListener('mg_payments_changed', onPaymentsChanged) }
+  }, [])
+
   /* ===== (و46) بادج «المجتمعات» — طلب المستر: «في المجتمع لو حد بعت رسالة
      يجي له إشعار» — رسايل الطلاب الجديدة (بعد آخر فتح للمجتمع) بتظهر كعداد
      على التاب — وفتح التاب بيسجل إنها اتشافت. بيدور كل 60 ثانية. */
@@ -322,7 +342,11 @@ export function AdminDashboard() {
     ;(async () => {
       let sweptAny = false
       try {
-        for (let i = 0; i < 40; i++) {
+        /* (ص119) كانت لحد 40 طلب sweep ورا بعض — وكل طلب بيصحح بالذكاء
+           الاصطناعي (ممكن ياخد دقايق) فكان بيخنق باقي طلبات اللوحة على
+           Vercel. بقت 4 طلبات في الفتح مع ثانية راحة بينهم — الباقي
+           بيكمّله sweep اللي بيشتغل من routes تانية بشكل طبيعي. */
+        for (let i = 0; i < 4; i++) {
           const res = await fetch('/api/grading/sweep', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -331,6 +355,7 @@ export function AdminDashboard() {
           const data = await res.json()
           if (data && (data.fixed > 0 || (data.cleanedOrphans && (data.cleanedOrphans.homework > 0 || data.cleanedOrphans.exam > 0)))) sweptAny = true
           if (!data || data.done || data.remaining === 0) break
+          await new Promise((r) => setTimeout(r, 1000))
         }
       } catch { /* silent — التنضيف بيتعمل كمان من routes تانية */ }
       if (sweptAny) fetchStats()
@@ -340,17 +365,20 @@ export function AdminDashboard() {
   const openSettings = async () => {
     setShowSettings(true)
     setSettingsLoading(true)
+    /* (ص119) الطلبين كانوا ورا بعض — بقوا بالتوازي عشان شاشة الإعدادات تفتح في نص الوقت */
+    var settingsPromise = fetch('/api/admin/settings')
+      .then(function (r) { return r.json() })
+      .catch(function () { return null })
+    var configPromise = fetch('/api/config?fresh=' + Date.now())
+      .then(function (r) { return r.json() })
+      .catch(function () { return null })
     try {
-      const res = await fetch('/api/admin/settings')
-      const data = await res.json()
-      if (data.admin) {
+      const [data, cfgData] = await Promise.all([settingsPromise, configPromise])
+      if (data && data.admin) {
         setSettingsEmail(data.admin.email || '')
         if (data.admin.email && setCurrentAdmin) setCurrentAdmin({ ...currentAdmin!, email: data.admin.email })
       }
-      // Load Resend API key
-      try {
-        const cfgRes = await fetch('/api/config')
-        const cfgData = await cfgRes.json()
+      if (cfgData) {
         setResendApiKey(cfgData.resend_api_key || '')
         setHeroDevUrl(cfgData.hero_developer_url || '')
         setVodafoneCash(cfgData.payment_vodafone_cash || '')
@@ -358,7 +386,7 @@ export function AdminDashboard() {
         setFawry(cfgData.payment_fawry || '')
         /* (Z-30) القبول التلقائي — افتراضي مفعّل */
         setAutoApprove(String(cfgData.student_auto_approve ?? '1') !== '0')
-      } catch { /* silent */ }
+      }
     } catch { /* silent */ }
     setSettingsLoading(false)
   }
@@ -431,7 +459,7 @@ export function AdminDashboard() {
             <TabsTrigger value="gallery" className="text-xs sm:text-sm gap-1"><Camera className="h-4 w-4" /><span className="hidden sm:inline">{T('معرض الصور', 'Gallery')}</span></TabsTrigger>
             <TabsTrigger value="cms" className="text-xs sm:text-sm gap-1"><Settings className="h-4 w-4" /><span className="hidden sm:inline">{T('المحتوى', 'Content')}</span></TabsTrigger>
             <TabsTrigger value="social" className="text-xs sm:text-sm gap-1"><Link2 className="h-4 w-4" /><span className="hidden sm:inline">{T('الروابط', 'Links')}</span></TabsTrigger>
-            <TabsTrigger value="payments" className="text-xs sm:text-sm gap-1 text-amber-600 dark:text-amber-400"><Wallet className="h-4 w-4" /><span className="hidden sm:inline">{T('المدفوعات', 'Payments')}</span></TabsTrigger>
+            <TabsTrigger value="payments" className="text-xs sm:text-sm gap-1 text-amber-600 dark:text-amber-400"><Wallet className="h-4 w-4" /><span className="hidden sm:inline">{T('المدفوعات', 'Payments')}</span>{pendingPayments > 0 && <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">{pendingPayments}</span>}</TabsTrigger>
             <TabsTrigger value="ai-extract" className="text-xs sm:text-sm gap-1 text-purple-600 dark:text-purple-400"><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">{T('استخراج AI', 'AI Extract')}</span></TabsTrigger>
             <TabsTrigger value="complaints" className="text-xs sm:text-sm gap-1 text-red-600 dark:text-red-400"><Flag className="h-4 w-4" /><span className="hidden sm:inline">{T('الشكاوي', 'Complaints')}</span>{newComplaints > 0 && <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">{newComplaints}</span>}</TabsTrigger>
             <TabsTrigger value="grades-schedule" className="text-xs sm:text-sm gap-1 text-emerald-600 dark:text-emerald-400"><GraduationCap className="h-4 w-4" /><span className="hidden sm:inline">{T('الصفوف والمواعيد', 'Grades')}</span></TabsTrigger>
@@ -648,7 +676,7 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
   const gradesList = useGradesList()
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'paid'>('pending')
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'paid' | 'rejected'>('pending')
   const [filterGrade, setFilterGrade] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [studentProgress, setStudentProgress] = useState<any>(null)
@@ -674,7 +702,8 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
   const loadStudents = async (showLoader = true) => {
     if (showLoader) setLoading(true)
     try {
-      const params = new URLSearchParams({ pageSize: '100' })
+      /* (2026-ص2) pageSize 1000 — كان 100 بس، والطلاب بعد المية ما كانوش بيظهروا خالص */
+      const params = new URLSearchParams({ pageSize: '1000' })
       if (filter !== 'all') params.set('status', filter)
       if (filterGrade) params.set('grade', filterGrade)
       const res = await fetch(`/api/students?${params}`)
@@ -734,9 +763,13 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
     } catch { toast.error('خطأ في تحديث حالة الطالب') }
   }
 
-  const handleDelete = async (id: string) => {
-    try { await fetch(`/api/students/${id}`, { method: 'DELETE' }); toast.success('تم حذف الطالب'); loadStudents(false); onStatsRefresh() }
-    catch { toast.error('خطأ في حذف الطالب') }
+  /* (2026-ز12 — طلب المستر): زرار الباسكت الوحيد = رفض + حذف من المنصة:
+     الحساب بيتقفل نهائيًا (status=rejected) — لو الطالب حاول يدخل أو يسجل
+     تاني هيتقالده «حسابك مرفوض من المنصة»، وبينختفي من كل قايمات الأدمن.
+     من غير حذف نهائي لصفوفه عشان الرقم يفضل محفوظ والرفض يفضل شغال. */
+  const handleRejectDelete = async (id: string) => {
+    try { await fetch(`/api/students/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'rejected' }) }); toast.success('Student rejected and removed — if he tries to log in again he will get "Your account has been rejected"'); loadStudents(false); onStatsRefresh() }
+    catch { toast.error('Error rejecting student') }
   }
 
   // ===== فك ربط الجهاز — الزرار الوحيد للمستر (منظومة الجهاز الواحد) =====
@@ -851,7 +884,7 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
   // أسماء أنواع الأجهزة بالعربي — تظهر في بادج الطالب
   const deviceTypeLabels: Record<string, string> = { mobile: 'موبايل', tablet: 'تابلت', computer: 'كمبيوتر' }
   const deviceIcon = (t?: string) => t === 'computer' ? <Monitor className="h-2.5 w-2.5" /> : t === 'tablet' ? <Tablet className="h-2.5 w-2.5" /> : <Smartphone className="h-2.5 w-2.5" />
-  const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول (مجاني)', paid: 'بفلوس', rejected: 'مرفوض', refused: 'مرفوض' }
+  const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول (مجاني)', paid: 'بفلوس', rejected: 'Rejected', refused: 'Refused' }
 
   // Student Details Panel
   if (selectedStudentId && studentProgress) {
@@ -944,9 +977,9 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
               {gradesList.map((g) => <option key={g.ar} value={g.ar}>{(g.emoji ? g.emoji + ' ' : '') + g.ar}</option>)}
             </select>
             <div className="flex gap-1 bg-muted rounded-lg p-1">
-              {(['pending', 'all', 'approved', 'paid'] as const).map((f) => (
+              {(['pending', 'all', 'approved', 'paid', 'rejected'] as const).map((f) => (
                 <Button key={f} variant={filter === f ? 'default' : 'ghost'} size="sm" className="text-xs h-7 px-2" onClick={() => setFilter(f)}>
-                  {f === 'pending' ? 'بانتظار' : f === 'approved' ? 'مقبول (مجاني)' : f === 'paid' ? 'بفلوس' : 'الكل'}
+                  {f === 'pending' ? 'بانتظار' : f === 'approved' ? 'مقبول (مجاني)' : f === 'paid' ? 'بفلوس' : f === 'rejected' ? 'Rejected' : 'الكل'}
                 </Button>
               ))}
             </div>
@@ -1054,24 +1087,22 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
                   {s.status === 'pending' && (<>
                     <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="مقبول - مجاني"><Check className="h-4 w-4" /></Button>
                     <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleAction(s.id, 'paid')} title="بفلوس"><span className="text-sm font-bold">$</span></Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')} title="رفض الطالب - مش هيدخل على المنصة"><X className="h-4 w-4" /></Button>
-                  </>)}
+                                      </>)}
                   {s.status === 'approved' && (
                     <>
                       <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleAction(s.id, 'paid')} title="تحويل لبفلوس"><span className="text-sm font-bold">$</span></Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')} title="رفض الطالب"><X className="h-4 w-4" /></Button>
-                    </>
+                                          </>
                   )}
                   {s.status === 'paid' && (
                     <>
                       <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="تحويل لمجاني"><Check className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleAction(s.id, 'rejected')} title="رفض الطالب"><X className="h-4 w-4" /></Button>
-                    </>
+                                          </>
                   )}
                   {s.status === 'rejected' && (
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="إلغاء الرفض وقبول الطالب"><Check className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => handleAction(s.id, 'approved')} title="Un-reject and approve student"><Check className="h-4 w-4" /></Button>
                   )}
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(s.id)} title="حذف من النظام"><Trash2 className="h-4 w-4" /></Button>
+                  {/* (2026-ز12 — طلب المستر): زرار الباسكت الوحيد = رفض + حذف من المنصة */}
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleRejectDelete(s.id)} title="Reject & remove student from the platform"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
             ))}
@@ -1237,6 +1268,15 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   const [formGroupGrade, setFormGroupGrade] = useState('')
   const [expandedGroup, setExpandedGroup] = useState('')
   const [movingOrder, setMovingOrder] = useState(false)
+  /* (2026-ص2) مفتاح قفل التسلسل الموحد — دروس/واجبات/امتحانات بقاعدة واحدة لكل الطلبة */
+  const [seqLockOn, setSeqLockOn] = useState(true)
+  /* (2026-ص2) ملاحظة المستر على الدرس — بتظهر للطالب أول ما يفتح الدرس
+     بمودال «ملاحظة خد بالك» وزرار تمام أزرق. للدرس المتعدد: نفس الملاحظة
+     بتتكتب على كل الأجزاء مرة واحدة */
+  const [noteTarget, setNoteTarget] = useState<{ ids: string[]; title: string } | null>(null)
+  const [noteText, setNoteText] = useState('')
+  const [noteSaving, setNoteSaving] = useState(false)
+  const [seqLockSaving, setSeqLockSaving] = useState(false)
 
   const loadVideos = async (showLoader = true) => {
     if (showLoader) setLoading(true)
@@ -1256,6 +1296,54 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
   }
 
   useEffect(() => { loadVideos() }, [filterGrade])
+
+  /* (2026-ص2) حفظ ملاحظة الدرس — نفس الملاحظة على كل الأجزاء (الدرس كله)
+     + مسح الملاحظة بنص فاضي. الـ API بيحدد noteUpdatedAt لوحده */
+  const saveLessonNote = async () => {
+    if (!noteTarget) return
+    setNoteSaving(true)
+    try {
+      const results = await Promise.all(noteTarget.ids.map(function (id) {
+        return fetch('/api/videos/' + id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminId: currentAdminId, note: noteText }),
+        })
+      }))
+      const failed = results.filter(function (r) { return !r.ok }).length
+      if (failed > 0) { toast.error('اتحفظت بعض الأجزاء بس — جرب تاني', { duration: 6000 }) }
+      else { toast.success(noteText.trim() ? 'تم حفظ الملاحظة — هتظهر للطلاب أول ما يفتحوا الدرس' : 'تم مسح الملاحظة') }
+      setNoteTarget(null)
+      loadVideos(false)
+    } catch { toast.error('خطأ في حفظ الملاحظة — جرب تاني') }
+    setNoteSaving(false)
+  }
+
+  /* (2026-ص2) قراءة مفتاح قفل التسلسل من إعدادات المنصة */
+  useEffect(function () {
+    fetch('/api/config?fresh=' + Date.now()).then(function (r) { return r.json() }).then(function (d) {
+      setSeqLockOn(String((d || {}).video_sequence_lock ?? '1') !== '0')
+    }).catch(function () {})
+  }, [])
+
+  const saveSeqLock = async function (on: boolean) {
+    setSeqLockSaving(true)
+    var prev = seqLockOn
+    setSeqLockOn(on)
+    try {
+      const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ video_sequence_lock: on ? '1' : '0' }) })
+      if (res.ok) {
+        toast.success(on ? 'قفل التسلسل شغّال — كل الطلبة بنفس القاعدة' : 'قفل التسلسل اتقفل — الفيديوهات والواجبات والامتحانات مفتوحة لكل الطلبة', { duration: 6000 })
+      } else {
+        setSeqLockOn(prev)
+        toast.error('مقدرتش أحفظ الإعداد — جرب تاني')
+      }
+    } catch (e) {
+      setSeqLockOn(prev)
+      toast.error('مقدرتش أحفظ الإعداد — جرب تاني')
+    }
+    setSeqLockSaving(false)
+  }
 
   // Upload using shared chunked upload utility
   const uploadFileWithProgress = async (file: File, category: string, onProgress: (pct: number) => void, statusMsg: (msg: string) => void): Promise<string> => {
@@ -1390,6 +1478,76 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
     } catch { setAllStudents([]) }
   }
 
+  /* (2026-ز13) إخفاء درس كامل عن طلاب */
+  const [lessonHideOpen, setLessonHideOpen] = useState(false)
+  const [lessonHideGroup, setLessonHideGroup] = useState<{ key: string; title: string; grade: string; parts: number } | null>(null)
+  const [lessonHideStudents, setLessonHideStudents] = useState<any[]>([])
+  const [lessonHideSelected, setLessonHideSelected] = useState<string[]>([])
+  const [lessonHideSaving, setLessonHideSaving] = useState(false)
+  /* (ز18) Lesson price — set one price for the whole lesson (all its parts) */
+  const [lessonPriceOpen, setLessonPriceOpen] = useState(false)
+  const [lessonPriceGroup, setLessonPriceGroup] = useState<{ key: string; title: string; grade: string; price: number; videoId?: string } | null>(null)
+  const [lessonPriceValue, setLessonPriceValue] = useState('')
+  const [lessonPriceSaving, setLessonPriceSaving] = useState(false)
+
+  const openLessonPrice = function (key: string, grade: string, title: string, price: number, videoId?: string) {
+    setLessonPriceGroup({ key: key, grade: grade, title: title, price: price, videoId: videoId || '' })
+    setLessonPriceValue(price > 0 ? String(price) : '')
+    setLessonPriceOpen(true)
+  }
+
+  const handleLessonPriceSave = async function () {
+    if (!lessonPriceGroup) return
+    setLessonPriceSaving(true)
+    try {
+      var res = await fetch('/api/videos/lesson-price', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupKey: lessonPriceGroup.key, videoId: lessonPriceGroup.videoId || '', price: Number(lessonPriceValue) || 0 }),
+      })
+      var data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'failed')
+      toast.success('✓ Price saved: ' + (Number(lessonPriceValue) || 0) + ' EGP' + (lessonPriceGroup.key ? ' — applied to all parts of the lesson' : ' — this video is now paid for free-tier students'))
+      setLessonPriceOpen(false)
+      loadVideos(false)
+    } catch (e) {
+      toast.error('Could not save the lesson price — try again')
+    } finally {
+      setLessonPriceSaving(false)
+    }
+  }
+
+  const openLessonHide = async function (gKey: string, grade: string, title: string, parts: number) {
+    setLessonHideGroup({ key: gKey, title: title, grade: grade, parts: parts })
+    setLessonHideOpen(true)
+    setLessonHideStudents([])
+    try {
+      var res = await fetch('/api/students?pageSize=200&grade=' + encodeURIComponent(grade))
+      var data = await res.json()
+      setLessonHideStudents((data.students || []).filter(function (s: any) { return s.status === 'approved' || s.status === 'paid' }))
+    } catch { setLessonHideStudents([]) }
+    try {
+      var r2 = await fetch('/api/lesson-hide?groupKey=' + encodeURIComponent(gKey))
+      var d2 = await r2.json()
+      setLessonHideSelected(d2.studentIds || [])
+    } catch { setLessonHideSelected([]) }
+  }
+  const handleLessonHideSave = async function () {
+    if (!lessonHideGroup) return
+    setLessonHideSaving(true)
+    try {
+      var res = await fetch('/api/lesson-hide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupKey: lessonHideGroup.key, grade: lessonHideGroup.grade, studentIds: lessonHideSelected }),
+      })
+      if (res.ok) {
+        toast.success(lessonHideSelected.length > 0 ? 'Lesson hidden from the selected students — they will not see it at all' : 'Lesson unhidden — it is visible to everyone again')
+        setLessonHideOpen(false)
+      } else { toast.error('Failed to save') }
+    } catch { toast.error('Connection error') }
+    setLessonHideSaving(false)
+  }
   const loadExistingSchedule = async (videoId: string) => {
     try {
       var res = await fetch('/api/video-schedule?videoId=' + videoId)
@@ -1787,6 +1945,22 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
           </div>
         )}
 
+        {/* (2026-ص2) مفتاح قفل التسلسل الموحد — طلب المستر «خلي كله موحد»:
+            لوحة واحدة بتتحكم في التسلسل في الدروس والواجبات والامتحانات لكل الطلبة */}
+        <div className="rounded-lg border bg-card p-3 mb-4 flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-sm font-bold">قفل التسلسل في المشاهدة (دروس + واجبات + امتحانات)</p>
+            <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+              شغّال: كل الطلبة بنفس القاعدة — الفيديو/الواجب/الامتحان بيفتح بعد اللي قبله، والرسالة بتقول «شوف اللي قبله» من غير أسماء.
+              مطفي: كله مفتوح لكل الطلبة فورًا — لو طالب اتلخبط ترتيبه، اقفله وافتحه وهيرجع زي ما كان.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant={seqLockOn ? 'default' : 'secondary'} className="text-[10px]">{seqLockOn ? 'شغّال' : 'مطفي'}</Badge>
+            <Switch checked={seqLockOn} disabled={seqLockSaving} onCheckedChange={function (on) { saveSeqLock(on) }} aria-label="قفل التسلسل في المشاهدة" />
+          </div>
+        </div>
+
         {/* Video List — (2026-و106) الدروس المتعددة بتظهر كروت مجمعة بالأجزاء
             (2026-ص) قايمة موحدة بنفس ترتيب الطلبة الفعلي + ▲▼ لترتيب الدروس */}
         {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : videos.length === 0 ? (
@@ -1813,6 +1987,10 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                       <Badge className="text-[10px] shrink-0">{g.parts.length} فيديوهات</Badge>
                       <Badge variant={g.price > 0 ? 'default' : 'secondary'} className="text-[10px] shrink-0">{g.price > 0 ? g.price + ' ج.م' : 'مجاني'}</Badge>
                       <Badge variant="secondary" className="text-[10px] shrink-0">درس {gradePos} من {gradeTotal}</Badge>
+                      {/* (2026-ص2) بادج الملاحظة — الدرس ده عليه ملاحظة للطلاب */}
+                      {(g.parts as any[]).some(function (p) { return String((p as any).note || '').trim() }) && (
+                        <Badge className="text-[10px] shrink-0 bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">📝 عليه ملاحظة</Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {/* (2026-ص) ترتيب الدروس ▲▼ */}
@@ -1821,6 +1999,19 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setFormGroupKey(g.key); setFormGroupTitle(g.title); setFormGroupGrade(g.grade); setFormGrade(g.grade); setFormTitle(''); setFormUrl(''); setFormPrice(''); setFormFile(null); setFormThumbnailUrl(''); setShowForm(true) }}>
                         <Plus className="h-3.5 w-3.5 ml-1" />ضيف فيديو تاني للدرس ده
                       </Button>
+                      {/* (ز18) سعر الدرس كله — مرة واحدة على كل الأجزاء */}
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={function () { openLessonPrice(g.key, g.grade, g.title, g.price) }} title="Set one price for the whole lesson — paying once unlocks ALL its parts">
+                        💰 سعر الدرس كله
+                      </Button>
+                      {/* (2026-ص2) ملاحظة الدرس — بتظهر للطالب أول ما يفتح الدرس بزرار تمام */}
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-sky-700 dark:text-sky-400" onClick={function () { setNoteTarget({ ids: (g.parts as any[]).map(function (p) { return p.id }), title: g.title }); setNoteText(String(((g.parts as any[])[0] as any)?.note || '')) }} title="اكتب ملاحظة بتظهر للطالب أول ما يفتح الدرس">
+                        📝 ملاحظة
+                      </Button>
+                      {g ? (
+                        <Button size="sm" variant="ghost" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs h-7" onClick={() => openLessonHide(g.key, g.grade, g.title, g.parts.length)} title="Hide the whole lesson (all its videos) from selected students">
+                          <EyeOff className="h-3.5 w-3.5 mr-1" />Hide full lesson
+                        </Button>
+                      ) : null}
                       <Button size="sm" variant="ghost" className="h-7 px-1.5" onClick={() => setExpandedGroup(isExp ? '' : g.key)} aria-label={isExp ? 'إخفاء الأجزاء' : 'عرض الأجزاء'}>
                         <ChevronDown className={'h-4 w-4 transition-transform ' + (isExp ? 'rotate-180' : '')} />
                       </Button>
@@ -1869,6 +2060,10 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                   </div>
                   <div className="p-3 space-y-1.5">
                     <p className="font-semibold text-sm truncate">{v.title}</p>
+                    {/* (2026-ص2) بادج الملاحظة — الفيديو ده عليه ملاحظة للطلاب */}
+                    {String((v as any).note || '').trim() && (
+                      <Badge className="text-[10px] w-fit bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">📝 عليه ملاحظة</Badge>
+                    )}
                     <div className="flex items-center justify-between">
                       <Badge variant="outline" className="text-[10px]">{v.grade}</Badge>
                       <div className="flex items-center gap-1">
@@ -1892,8 +2087,16 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
                       <Button size="sm" variant="ghost" className="flex-1 text-teal-600 hover:text-teal-700 hover:bg-teal-50 dark:hover:bg-teal-900/20 text-xs h-7" onClick={() => { setSelectedVideoForGroups(v); setGroupScheduleOpen(true) }}>
                         <UsersRound className="h-3.5 w-3.5 mr-1" />المجموعات
                       </Button>
+                      {/* (2026-ص2) ملاحظة الفيديو — بتظهر للطالب أول ما يفتحه */}
+                      <Button size="sm" variant="ghost" className="flex-1 text-sky-600 hover:text-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 text-xs h-7" onClick={function () { setNoteTarget({ ids: [v.id], title: v.title }); setNoteText(String((v as any).note || '')) }}>
+                        📝 ملاحظة
+                      </Button>
                       <Button size="sm" variant="ghost" className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10 text-xs h-7" onClick={() => handleDelete(v.id)}>
                         <Trash2 className="h-3.5 w-3.5 mr-1" />حذف
+                      </Button>
+                      {/* (ز18-ب) سعر الفيديو المفرد — نفس نافذة السعر بس بـ videoId */}
+                      <Button size="sm" variant="ghost" className="w-full text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-xs h-7" onClick={function () { openLessonPrice('', v.grade, v.title, Number(v.price || 0), v.id) }} title="Set the price for this video — free students see it as paid content">
+                        💰 سعر الفيديو
                       </Button>
                     </div>
                   </div>
@@ -2006,6 +2209,75 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
         </div>
       )}
 
+      {/* (2026-ز13) إخفاء درس كامل عن طلاب — كل فيديوهات الدرس بتختفي */}
+      {lessonHideOpen && lessonHideGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setLessonHideOpen(false)}>
+          <div className="bg-card border border-border rounded-xl p-5 shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={function (e) { e.stopPropagation() }}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-bold text-sm">Hide lesson: {lessonHideGroup.title}</h3>
+                <p className="text-[10px] text-muted-foreground">The whole lesson ({lessonHideGroup.parts} videos) will be hidden from the selected students — they will not see it until you unhide it</p>
+              </div>
+              <button type="button" onClick={() => setLessonHideOpen(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mb-3">
+              <Label className="text-xs font-semibold text-red-600">Grade {lessonHideGroup.grade} students — selected ({lessonHideSelected.length})</Label>
+              <div className="max-h-[220px] overflow-y-auto border rounded-md p-2 space-y-1 mt-2">
+                {lessonHideStudents.length === 0 ? (
+                  <p className="text-[10px] text-muted-foreground text-center py-4">No students in this grade</p>
+                ) : (
+                  lessonHideStudents.map(function (s) {
+                    var isSel = lessonHideSelected.includes(s.id)
+                    return (
+                      <button key={'lh-' + s.id} type="button"
+                        onClick={function () { if (isSel) { setLessonHideSelected(lessonHideSelected.filter(function (id) { return id !== s.id })) } else { setLessonHideSelected([...lessonHideSelected, s.id]) } }}
+                        className={"w-full flex items-center gap-2 p-2 rounded-md text-xs transition-colors " + (isSel ? 'bg-red-50 dark:bg-red-900/20 border border-red-500/30' : 'bg-muted/30 hover:bg-muted/50')}>
+                        <div className={"h-4 w-4 rounded border-2 flex items-center justify-center " + (isSel ? 'border-red-500 bg-red-500' : 'border-muted-foreground/30')}>
+                          {isSel && <Check className="h-3 w-3 text-white" />}
+                        </div>
+                        <span className="font-medium">{s.name}</span>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">The selected students will have the whole lesson hidden — leave them empty and press Save to unhide it</p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleLessonHideSave} disabled={lessonHideSaving} className="flex-1">
+                {lessonHideSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+              </Button>
+              <Button variant="outline" onClick={() => setLessonHideOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* (ز18) Lesson price dialog — one price for the whole lesson */}
+      {lessonPriceOpen && lessonPriceGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={function () { setLessonPriceOpen(false) }}>
+          <div className="bg-card border border-border rounded-xl p-5 shadow-2xl w-full max-w-sm" onClick={function (e) { e.stopPropagation() }}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-bold text-sm">💰 Lesson price: {lessonPriceGroup.title}</h3>
+                <p className="text-[10px] text-muted-foreground">{lessonPriceGroup.key ? 'The price applies to the whole lesson (' + lessonPriceGroup.grade + ') — paying once unlocks ALL its parts.' : 'This video is priced on its own — free students see it as paid content.'} 0 = free.</p>
+              </div>
+              <button type="button" onClick={function () { setLessonPriceOpen(false) }} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mb-3">
+              <Label className="text-xs font-semibold">Price (EGP)</Label>
+              <Input type="number" min="0" step="1" value={lessonPriceValue} onChange={function (e) { setLessonPriceValue(e.target.value) }} placeholder="e.g. 50" className="mt-1" />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleLessonPriceSave} disabled={lessonPriceSaving} className="flex-1">
+                {lessonPriceSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+              </Button>
+              <Button variant="outline" onClick={function () { setLessonPriceOpen(false) }}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* (2026-و29) نافذة جدولة المجموعات — كل مجموعة بميعادها، والفيديو مخفي قبل الميعاد بدون عداد */}
       {selectedVideoForGroups && (
         <VideoGroupScheduleDialog
@@ -2014,6 +2286,36 @@ function VideoManager({ onStatsRefresh }: { onStatsRefresh: () => void }) {
           videoId={selectedVideoForGroups.id}
           videoTitle={selectedVideoForGroups.title}
         />
+      )}
+
+      {/* (2026-ص2) نافذة ملاحظة الدرس — بتظهر للطالب أول ما يفتح الدرس */}
+      {noteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={function () { if (!noteSaving) setNoteTarget(null) }}>
+          <div className="bg-card border border-border rounded-xl p-5 shadow-2xl w-full max-w-lg" onClick={function (e) { e.stopPropagation() }}>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-bold text-sm flex items-center gap-2 flex-wrap">📝 ملاحظة على: <span className="text-primary">{noteTarget.title}</span></h3>
+              <button type="button" onClick={function () { setNoteTarget(null) }} className="text-muted-foreground hover:text-foreground" aria-label="إغلاق">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-3">اكتب الملاحظة اللي عايزها — هتظهر للطالب أول ما يفتح الدرس ده في مودال «ملاحظة خد بالك» وزرار تمام. لو سبتها فاضية هتتمسح خالص</p>
+            <Textarea
+              value={noteText}
+              onChange={function (e) { setNoteText(e.target.value) }}
+              placeholder="مثال: ملاحظة خد بالك — الواجب بتاع الدرس ده لازم يتسلم قبل يوم الخميس..."
+              rows={5}
+              className="text-sm mb-3"
+              aria-label="نص الملاحظة"
+            />
+            <div className="flex gap-2">
+              <Button onClick={saveLessonNote} disabled={noteSaving} className="flex-1">
+                {noteSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ الملاحظة'}
+              </Button>
+              <Button variant="outline" disabled={noteSaving} onClick={function () { setNoteText('') }}>مسح النص</Button>
+              <Button variant="ghost" disabled={noteSaving} onClick={function () { setNoteTarget(null) }}>إلغاء</Button>
+            </div>
+          </div>
+        </div>
       )}
     </Card>
   )
@@ -2097,6 +2399,28 @@ function ExamSettingsRow({ exam, adminId, onChanged }: { exam: any; adminId: str
     setSavingSched(false)
   }
 
+  /* (2026-و115) نهاية مدة الامتحان — بعد المدة: رسالة «مدة الامتحان خلصت» ليومين ثم اختفاء تلقائي */
+  const [endsVal, setEndsVal] = useState<string>(toLocalInputValue((exam as any).endsAt))
+  const expiredNow = (function () {
+    var em115 = (exam as any).endsAt ? new Date((exam as any).endsAt).getTime() : 0
+    return !!em115 && Date.now() >= em115
+  })()
+
+  const saveEnds = async function () {
+    if (!endsVal) { toast.error('اختار وقت النهاية الأول'); return }
+    setSavingSched(true)
+    var ok = await patchExam({ endsAt: new Date(endsVal).toISOString() }, 'تم تحديد نهاية مدة الامتحان — بعدها بتظهر رسالة «مدة الامتحان خلصت» ليومين وبيختفي تلقائيًا')
+    if (ok) onChanged()
+    setSavingSched(false)
+  }
+
+  const cancelEnds = async function () {
+    setSavingSched(true)
+    var ok = await patchExam({ endsAt: null }, 'تم إلغاء نهاية المدة — الامتحان هيفضل ظاهر للطلاب')
+    if (ok) { setEndsVal(''); onChanged() }
+    setSavingSched(false)
+  }
+
   return (
     <div className="mt-2 p-2 rounded-lg border border-dashed border-emerald-500/40 bg-emerald-500/5 space-y-1.5"
       onClick={function (e) { e.stopPropagation() }}>
@@ -2111,6 +2435,12 @@ function ExamSettingsRow({ exam, adminId, onChanged }: { exam: any; adminId: str
         {scheduled && (
           <Badge className="text-[9px] bg-blue-500 text-white">مجدول — يظهر {formatEgyptian(exam.scheduledAt)}</Badge>
         )}
+        {(exam as any).endsAt && !expiredNow && (
+          <Badge className="text-[9px] bg-orange-500 text-white">⏰ تنتهي {formatEgyptian((exam as any).endsAt)}</Badge>
+        )}
+        {expiredNow && (
+          <Badge className="text-[9px] bg-red-500 text-white">⏰ انتهت المدة</Badge>
+        )}
       </div>
       {/* سطر 2: المؤقت بالدقائق + موعد الظهور */}
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -2122,6 +2452,15 @@ function ExamSettingsRow({ exam, adminId, onChanged }: { exam: any; adminId: str
         <Button type="button" variant="outline" size="sm" className="h-7 text-[10px] px-2" disabled={!schedVal || savingSched} onClick={saveSchedule}>حفظ الموعد</Button>
         {scheduled && (
           <Button type="button" variant="ghost" size="sm" className="h-7 text-[10px] px-2 text-destructive" disabled={savingSched} onClick={cancelSchedule}>إلغاء الجدولة</Button>
+        )}
+      </div>
+      {/* (2026-و115) سطر 2.5: نهاية مدة الامتحان — اختياري */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Input type="datetime-local" value={endsVal} onChange={function (e) { setEndsVal(e.target.value) }}
+          placeholder="بلا نهاية" className="h-7 text-[11px] flex-1 min-w-[150px]" title="نهاية مدة الامتحان — بعد المدة بيتكتب للطلاب «مدة الامتحان خلصت» ليومين وبعدها بيختفي تلقائيًا (فارغ = بدون نهاية)" />
+        <Button type="button" variant="outline" size="sm" className="h-7 text-[10px] px-2" disabled={!endsVal || savingSched} onClick={saveEnds}>حفظ النهاية</Button>
+        {(exam as any).endsAt && (
+          <Button type="button" variant="ghost" size="sm" className="h-7 text-[10px] px-2 text-destructive" disabled={savingSched} onClick={cancelEnds}>إلغاء النهاية</Button>
         )}
       </div>
       {/* (2026-و26) سطر 3: استهداف الطلاب — مين يشوف الامتحان (زي الفيديوهات) */}
@@ -2214,6 +2553,8 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
   const [formShowResult, setFormShowResult] = useState(false)
   const [formTimeLimit, setFormTimeLimit] = useState('')
   const [formScheduledAt, setFormScheduledAt] = useState('')
+  /* (2026-و115) نهاية مدة الامتحان في فورم الإضافة */
+  const [formEndsAt, setFormEndsAt] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const answerKeyRef = useRef<HTMLInputElement>(null)
   const thumbnailRef = useRef<HTMLInputElement>(null)
@@ -2347,9 +2688,13 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
       if (formScheduledAt.trim()) {
         try { body.scheduledAt = new Date(formScheduledAt).toISOString() } catch (e) {}
       }
+      /* (2026-و115) نهاية مدة الامتحان (اختياري) */
+      if (formEndsAt.trim()) {
+        try { body.endsAt = new Date(formEndsAt).toISOString() } catch (e) {}
+      }
       const res = await fetch('/api/exams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (res.ok) {
-        toast.success('تم إضافة الامتحان'); setShowForm(false); setFormTitle(''); setFormContent(''); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileType(''); setFormFileUrl(''); setFormQuestions([]); setFormPassScore(50); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyType(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setExamModels([]); setModelMode('random'); setFixedModelName(''); setFormShowResult(false); setFormTimeLimit(''); setFormScheduledAt(''); loadExams(false)
+        toast.success('تم إضافة الامتحان'); setShowForm(false); setFormTitle(''); setFormContent(''); setFormGrade(''); setFormFile(null); setFormFilePath(''); setFormFileType(''); setFormFileUrl(''); setFormQuestions([]); setFormPassScore(50); setAnswerKeyFile(null); setAnswerKeyPath(''); setAnswerKeyType(''); setAnswerKeyUrl(''); setThumbnailFile(null); setThumbnailPath(''); setThumbnailUrl(''); setExamModels([]); setModelMode('random'); setFixedModelName(''); setFormShowResult(false); setFormTimeLimit(''); setFormScheduledAt(''); setFormEndsAt(''); loadExams(false)
       } else { try { const d = await res.json(); toast.error(d.error || 'خطأ', { duration: 8000 }) } catch { toast.error('خطأ في السيرفر - حاول تاني', { duration: 8000 }) } }
     } catch (err: any) { toast.error('خطأ في الاتصال: ' + (err.message || ''), { duration: 8000 }) }
     setSubmitting(false)
@@ -2626,6 +2971,16 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                   <Button type="button" variant="ghost" size="sm" className="h-8 text-[11px] text-destructive"
                     onClick={function () { setFormScheduledAt('') }}>إلغاء الموعد (يظهر فورًا)</Button>
                 )}
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">نهاية مدة الامتحان (اختياري)</Label>
+                  <Input type="datetime-local" value={formEndsAt}
+                    onChange={function (e) { setFormEndsAt(e.target.value) }}
+                    placeholder="بلا نهاية" className="h-8 text-xs" title="بعد المدة دي: بتظهر للطلاب رسالة «مدة الامتحان خلصت» ليومين وبعدها الامتحان بيختفي تلقائيًا" />
+                </div>
+                {formEndsAt && (
+                  <Button type="button" variant="ghost" size="sm" className="h-8 text-[11px] text-destructive"
+                    onClick={function () { setFormEndsAt('') }}>إلغاء النهاية (بدون نهاية)</Button>
+                )}
               </div>
             </div>
 
@@ -2659,6 +3014,9 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                         {(exam as any).showResult && <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-600">إجابات ظاهرة</Badge>}
                         {Number((exam as any).timeLimitMin) > 0 && <Badge variant="outline" className="text-[9px] border-red-500/40 text-red-600">⏱ {Number((exam as any).timeLimitMin)} د</Badge>}
                         {isScheduledFuture((exam as any).scheduledAt) && <Badge className="text-[9px] bg-blue-500 text-white">مجدول</Badge>}
+                        {/* (2026-و115) بادجات نهاية المدة */}
+                        {(exam as any).endsAt && !(exam as any).expired && <Badge variant="outline" className="text-[9px] border-orange-500/40 text-orange-600">⏰ تنتهي {formatEgyptian((exam as any).endsAt)}</Badge>}
+                        {(exam as any).expired && <Badge className="text-[9px] bg-red-500 text-white">⏰ انتهت المدة</Badge>}
                         {/* (2026-و26) بادج الاستهداف */}
                         {parseTargetStudentIds((exam as any).targetStudentIds).length > 0 && <Badge className="text-[9px] bg-teal-600 text-white">👥 موجه لـ {parseTargetStudentIds((exam as any).targetStudentIds).length} طالب</Badge>}
                       </div>
@@ -5669,6 +6027,28 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
     setExtracting(false)
   }
 
+  /* (U-1) تصليح تلقائي لكل الأسئلة المخزنة — شكوى المستر: «الأسئلة ظهرت
+     u221b48 / Xu222aY / a u2208» — الزرار بيفك رموز \uXXXX لرموزها الحقيقية
+     (∛ ∪ ∩ ∈) في كل الجداول من غير إعادة استخراج ومن غير مساس بحلول الطلاب */
+  const [fixingUnicode, setFixingUnicode] = useState(false)
+  var handleFixUnicode = async function () {
+    if (fixingUnicode) return
+    setFixingUnicode(true)
+    try {
+      var res = await fetch('/api/admin/fix-unicode?adminId=' + encodeURIComponent(adminId || ''), { method: 'POST' })
+      var data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'فشل التصليح')
+      var parts: string[] = []
+      var fx = data.fixed || {}
+      Object.keys(fx).forEach(function (k) { if (fx[k] > 0) parts.push(k + ': ' + fx[k]) })
+      if (parts.length === 0) toast.success('كل حاجة نضيفة — مفيش أي رموز تالفة في الأسئلة')
+      else toast.success('اتصلحت الرموز في: ' + parts.join(' | '), { duration: 9000 })
+    } catch (e: any) {
+      toast.error(String((e && e.message) || 'خطأ في التصليح'), { duration: 6000 })
+    }
+    setFixingUnicode(false)
+  }
+
   var renderStep1 = function() {
     return (
       <div className="space-y-4">
@@ -5676,6 +6056,19 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
           <Sparkles className="h-10 w-10 text-purple-500 mx-auto mb-3" />
           <h3 className="text-lg font-bold">استخراج الذكاء الاصطناعي</h3>
           <p className="text-sm text-muted-foreground mt-1">ارفع ملف او استخرج من فيديو يوتيوب واحفظ الاسئلة مباشرة</p>
+        </div>
+        {/* (U-1) تصليح تلقائي للأسئلة المخزنة — من غير إعادة استخراج */}
+        <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold flex items-center gap-1.5"><Wrench className="h-3.5 w-3.5 text-amber-600 shrink-0" /> إصلاح رموز الأسئلة المخزنة</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">لو شفت رموز غريبة زي «u221b» أو «u222a» في أسئلة قديمة — الزرار ده يحولها لـ ∛ ∪ ∩ ∈ في كل الامتحانات والواجبات فورًا، من غير إعادة استخراج ومن غير أي تأثير على حلول الطلاب</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={handleFixUnicode} disabled={fixingUnicode} className="shrink-0 border-amber-300 hover:bg-amber-100 dark:border-amber-800 dark:hover:bg-amber-950">
+              {fixingUnicode ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+              تصليح تلقائي
+            </Button>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <button type="button" onClick={function() { setExtractType('exam') }} className={"p-4 rounded-xl border-2 text-center transition-all " + (extractType === 'exam' ? 'border-primary bg-primary/5 shadow-md' : 'border-muted hover:border-primary/30')}>

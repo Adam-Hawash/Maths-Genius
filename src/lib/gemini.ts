@@ -17,6 +17,7 @@
 // ============================================================
 
 import { db } from '@/lib/db'
+import { attemptInteractions, isAuthKey, isAuthKeyPathError } from './gemini-interactions'
 
 export var GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest']
 
@@ -32,13 +33,15 @@ export function getGeminiApiKeys(): string[] {
   var multi = process.env.GEMINI_API_KEYS || ''
   var single = process.env.GEMINI_API_KEY || ''
   if (multi.trim()) {
-    var parts = multi.split(',')
+    /* (و108) فصل متسامح: فاصلة إنجليزية , أو عربية ، أو منقوطة ; أو سطر جديد —
+       الفاصلة العربي كانت بتخلّي كل المفاتيح مفتاح واحد طويل بايظ */
+    var parts = multi.split(/[,،;\n\r\t]+/)
     for (var i = 0; i < parts.length; i++) {
-      var k = parts[i].trim()
+      var k = parts[i].replace(/[\u200B-\u200D\uFEFF]/g, '').trim()
       if (k) keys.push(k)
     }
   }
-  if (single.trim()) keys.push(single.trim())
+  if (single.trim()) keys.push(single.replace(/[\u200B-\u200D\uFEFF]/g, '').trim())
   // de-duplicate
   var seen = {}
   var unique = []
@@ -157,8 +160,9 @@ async function discoverModels(): Promise<string[]> {
       try {
         var controller = new AbortController()
         var to = setTimeout(function () { controller.abort() }, 8000)
-        var res = await fetch(GEMINI_BASE + '/v1beta/models?pageSize=200&key=' + keys[i], {
+        var res = await fetch(GEMINI_BASE + '/v1beta/models?pageSize=200', {
           method: 'GET',
+          headers: { 'x-goog-api-key': keys[i] },
           signal: controller.signal,
         })
         clearTimeout(to)
@@ -261,14 +265,19 @@ function extractText(data: any): string {
 
 // Single attempt against one model + one key
 async function attempt(model: string, apiKey: string, parts: any[], generationConfig: any, timeoutMs: number, thinkingMode: 'low' | 'off' | 'default'): Promise<GeminiResult> {
+  /* (و105) مفتاح auth (AQ.)؟ المسار القديم بيرفضه 401 غالبًا — روح
+     للمسار الجديد (interactions) على طول بدون ما نضيّع محاولة فاشلة */
+  if (isAuthKey(apiKey)) {
+    return attemptInteractions(model, apiKey, parts, generationConfig, timeoutMs, thinkingMode)
+  }
   var controller = new AbortController()
   var timeoutHandle = setTimeout(function () { controller.abort() }, timeoutMs)
   try {
-    var modelUrl = GEMINI_BASE + '/v1beta/models/' + model + ':generateContent?key=' + apiKey
+    var modelUrl = GEMINI_BASE + '/v1beta/models/' + model + ':generateContent'
     var withThinking = mergeConfig(generationConfig, buildThinkingConfig(model, thinkingMode))
     var res = await fetch(modelUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: withThinking }),
       signal: controller.signal,
     })
@@ -288,7 +297,7 @@ async function attempt(model: string, apiKey: string, parts: any[], generationCo
         try {
           var res2 = await fetch(modelUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
             body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: withThinking2 }),
             signal: controller2.signal,
           })
@@ -313,7 +322,7 @@ async function attempt(model: string, apiKey: string, parts: any[], generationCo
       try {
         var res3 = await fetch(modelUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
           body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: generationConfig }),
           signal: controller3.signal,
         })
@@ -323,6 +332,12 @@ async function attempt(model: string, apiKey: string, parts: any[], generationCo
           if (text3) return { ok: true, text: text3, model: model }
         }
       } catch (e) {} finally { clearTimeout(timeoutHandle3) }
+    }
+
+    /* (و105) مفاتيح الـ auth بترفض على المسار القديم — جرّب المسار الجديد قبل ما نستسلم */
+    if (isAuthKeyPathError(res.status, errBody) && !isAuthKey(apiKey)) {
+      var inter = await attemptInteractions(model, apiKey, parts, generationConfig, timeoutMs, thinkingMode)
+      if (inter.ok) return inter
     }
 
     return { ok: false, error: model + ': ' + res.status + ' ' + (errBody || '').substring(0, 300), status: res.status }
@@ -345,6 +360,7 @@ export async function callGemini(opts: {
   generationConfig?: any
   timeoutMs?: number          // per-attempt timeout (default 30000)
   fastFailFirstMs?: number    // optional shorter timeout for the very first attempt
+  budgetMs?: number           // (ز17) ميزانية كلية لكل الموديلات/المفاتيح — فوقها نسلّم للمحرك الاحتياطي فورًا
   thinking?: 'low' | 'off' | 'default'
 }): Promise<GeminiResult> {
   var keys = getGeminiApiKeys()
@@ -358,6 +374,12 @@ export async function callGemini(opts: {
   var lastError = ''
   var sawQuota = false
   var attemptIndex = 0
+  /* (ز17) ساعة الميزانية: بدء العد من أول محاولة — لو الموديلات بتلف ومفش حد بيرد
+     بنوقف بدل ما نخلي الطالب مستني ٣٥ ثانية على كل محاولة فاشلة */
+  var budgetStart = Date.now()
+  function budgetExceeded(): boolean {
+    return !!opts.budgetMs && (Date.now() - budgetStart) > opts.budgetMs
+  }
 
   // background refresh (cached 10 min) — never awaited on the fast path
   var discoveryPromise = discoverModels()
@@ -372,6 +394,8 @@ export async function callGemini(opts: {
       }
       for (var mi = 0; mi < models.length; mi++) {
         for (var ki = 0; ki < keys.length; ki++) {
+          /* (ز17) الميزانية خلصت؟ اخرج فورًا وسلّم للمحرك التالي (ZAI) بدل التلف الطويل */
+          if (budgetExceeded()) return null
           attemptIndex++
           var t = timeoutMs
           if (attemptIndex === 1 && opts.fastFailFirstMs) t = opts.fastFailFirstMs
@@ -434,14 +458,20 @@ export async function callGemini(opts: {
 async function streamAttempt(model: string, apiKey: string, parts: any[], generationConfig: any, timeoutMs: number, thinkingMode: 'low' | 'off' | 'default', onDelta?: (d: string) => void): Promise<GeminiResult> {
   var emitted = 0
 
+  /* (و105) مفتاح auth (AQ.)؟ الاستريم القديم بيرفضه — المسار الجديد
+     non-streaming والراوت بيعمل typewriter محلي في الحالة دي */
+  if (isAuthKey(apiKey)) {
+    return attemptInteractions(model, apiKey, parts, generationConfig, timeoutMs, thinkingMode)
+  }
+
   var runStream = async function (cfg: any): Promise<GeminiResult> {
     var controller = new AbortController()
     var timeoutHandle = setTimeout(function () { controller.abort() }, timeoutMs)
     try {
-      var modelUrl = GEMINI_BASE + '/v1beta/models/' + model + ':streamGenerateContent?alt=sse&key=' + apiKey
+      var modelUrl = GEMINI_BASE + '/v1beta/models/' + model + ':streamGenerateContent?alt=sse'
       var res = await fetch(modelUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: cfg }),
         signal: controller.signal,
       })
@@ -503,6 +533,11 @@ async function streamAttempt(model: string, apiKey: string, parts: any[], genera
     if (second.ok) return second
     return second
   }
+  /* (و105) مفتاح auth اترفض ومفيش أي دلتا اتبعت — جرّب المسار الجديد */
+  if (first.status && isAuthKeyPathError(first.status, first.error || '') && emitted === 0) {
+    var inter = await attemptInteractions(model, apiKey, parts, generationConfig, timeoutMs, thinkingMode)
+    if (inter.ok) return inter
+  }
   return first
 }
 
@@ -510,6 +545,8 @@ export async function streamGemini(opts: {
   parts: any[]
   generationConfig?: any
   timeoutMs?: number
+  fastFailFirstMs?: number    // (ز17) مهلة قصيرة للمحاولة الأولى فقط — موديل مَيّت ما يبقاش فخ
+  budgetMs?: number           // (ز17) ميزانية كلية قبل التسليم للمحرك الاحتياطي
   thinking?: 'low' | 'off' | 'default'
   onDelta?: (delta: string) => void
 }): Promise<GeminiResult> {
@@ -522,6 +559,11 @@ export async function streamGemini(opts: {
   var thinkingMode = opts.thinking || 'low'
   var lastError = ''
   var sawQuota = false
+  /* (ز17) ساعة الميزانية للستريم — نفس منطق callGemini */
+  var budgetStart = Date.now()
+  function budgetExceeded(): boolean {
+    return !!opts.budgetMs && (Date.now() - budgetStart) > opts.budgetMs
+  }
 
   var discoveryPromise = discoverModels()
   var staticModels = await getStaticChain()
@@ -529,7 +571,12 @@ export async function streamGemini(opts: {
   var tryList = async function (models: string[]): Promise<GeminiResult | null> {
     for (var mi = 0; mi < models.length; mi++) {
       for (var ki = 0; ki < keys.length; ki++) {
-        var result = await streamAttempt(models[mi], keys[ki], opts.parts, generationConfig, timeoutMs, thinkingMode, opts.onDelta)
+        /* (ز17) الميزانية خلصت؟ اخرج فورًا — ZAI بياخد الباقي */
+        if (budgetExceeded()) return null
+        var t = timeoutMs
+        var attemptIsFirst = (mi === 0 && ki === 0)
+        if (attemptIsFirst && opts.fastFailFirstMs) t = opts.fastFailFirstMs
+        var result = await streamAttempt(models[mi], keys[ki], opts.parts, generationConfig, t, thinkingMode, opts.onDelta)
         if (result.ok) {
           /* (و77) نجاح → احفظ الموديل الشغال للكولد ستارت الجاي (بدون انتظار) */
           try { cacheSet('working_model', models[mi]) } catch (e) {}

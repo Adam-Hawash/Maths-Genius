@@ -1,5 +1,310 @@
-import { Landing } from "@/components/english/Landing";
+'use client'
 
-export default function Home() {
-  return <Landing />;
+import { useAppStore } from '@/stores/app-store'
+import { Navbar } from '@/components/landing/Navbar'
+import { Footer } from '@/components/landing/Footer'
+import { StudentPendingView } from '@/components/landing/StudentPendingView'
+import { StudentPaymentView } from '@/components/landing/StudentPaymentView'
+import { LoginView, RegisterView } from '@/components/landing/AuthPages'
+import { Reveal } from '@/components/landing/Reveal'
+import dynamic from 'next/dynamic'
+import { useEffect, useState, useRef } from 'react'
+import { Loader2 } from 'lucide-react'
+
+const HeroSection = dynamic(() => import('@/components/landing/HeroSection'), {
+  loading: () => <div className="min-h-[70vh] bg-background" />,
+})
+const FeaturesGuideSection = dynamic(() => import('@/components/landing/FeaturesGuideSection'), {
+  loading: () => <div className="h-20" />,
+})
+const FeaturesSection = dynamic(() => import('@/components/landing/FeaturesSection').then(function(m) { return { default: m.FeaturesSection } }), {
+  loading: () => <div className="h-20" />,
+})
+/* (G-2) قسم «إزاي تستخدم المنصة؟» — فيديو اختياري من الأدمن: لو مفيش
+   فيديو محفوظ السكشن بيرجّع null فمش بيظهر في الـ DOM نهائيًا */
+const HowToVideoSection = dynamic(() => import('@/components/landing/HowToVideoSection').then(function(m) { return { default: (m as any).HowToVideoSection || (m as any).default } }), {
+  loading: () => <div className="h-20" />,
+})
+/* (ص119) الفيديوهات التعريفية — نفس ميزة Zicola-Math بالظبط:
+   IntroVideoSection (intro_video_url) بعد الهيرو مباشرة، و
+   TeacherVideoSection (teacher_video_url) قبل المعرض. فاضي = مفيش
+   سكشن في الـ DOM نهائيًا (نفس منطق HowToVideoSection) */
+const IntroVideoSection = dynamic(() => import('@/components/landing/IntroVideoSection').then(function(m) { return { default: (m as any).IntroVideoSection || (m as any).default } }), {
+  loading: () => <div className="h-20" />,
+})
+const TeacherVideoSection = dynamic(() => import('@/components/landing/TeacherVideoSection').then(function(m) { return { default: (m as any).TeacherVideoSection || (m as any).default } }), {
+  loading: () => <div className="h-20" />,
+})
+const GradesSection = dynamic(() => import('@/components/landing/GradesSection').then(function(m) { return { default: m.GradesSection } }), {
+  loading: () => <div className="h-20" />,
+})
+/* (2026-و29) قسم الأوائل اتشال من الصفحة الرئيسية بطلب المستر — بقى زرار
+   «أوائل الطلبة» في النافبار يفتح دايلوج بأول 3 طلاب (TopStudentsDialog) */
+const TipsSection = dynamic(() => import('@/components/landing/TipsSection'), {
+  loading: () => <div className="h-20" />,
+})
+const GallerySection = dynamic(() => import('@/components/landing/GallerySection'), {
+  loading: () => <div className="h-20" />,
+})
+const LessonsSection = dynamic(() => import('@/components/landing/LessonsSection'), {
+  loading: () => <div className="h-20" />,
+  ssr: false,
+})
+const WhatsAppButton = dynamic(() => import('@/components/landing/WhatsAppButton').then(m => ({ default: m.WhatsAppButton })), {
+  ssr: false,
+})
+const FloatingLoginButton = dynamic(() => import('@/components/landing/FloatingLoginButton').then(function(m) { return { default: m.FloatingLoginButton } }), {
+  ssr: false,
+})
+const VideoProtection = dynamic(() => import('@/components/landing/VideoProtection').then(m => ({ default: m.VideoProtection })), {
+  ssr: false,
+})
+const StudentPortal = dynamic(() => import('@/components/student/StudentPortal').then(m => ({ default: (m as any).default || m.StudentPortal })), {
+  loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
+})
+const ParentPortal = dynamic(() => import('@/components/parent/ParentPortal').then(m => ({ default: (m as any).ParentPortal })), {
+  loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
+})
+const ParentLoginView = dynamic(() => import('@/components/parent/ParentAuthPages').then(m => ({ default: m.ParentLoginView })), {
+  loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
+})
+const ParentRegisterView = dynamic(() => import('@/components/parent/ParentAuthPages').then(m => ({ default: m.ParentRegisterView })), {
+  loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
+})
+const AdminDashboard = dynamic(() => import('@/components/admin/AdminDashboard').then(m => ({ default: (m as any).default || m.AdminDashboard })), {
+  loading: () => <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>,
+})
+
+// Minimum loading screen duration (ms)
+// (2026-و30) طلب المستر: «لما يجي يدخل الطفل الأولاني بيقعد وقت — سرّعه»
+// كان 2000ms انتظار إجباري حتى لو البيانات وصلت — بقى 600ms بس (نفس
+// الوظيفة: منع وميض المحتوى غير المُبراند) والدخول بقى فوري تقريبًا
+var MIN_LOADING_MS = 600
+// Maximum loading screen duration - force show content even if APIs fail (ms)
+// (2026-و30) كان 5000 — بقى 3000 عشان البوابة ماتعلقش على API بطيء
+var MAX_LOADING_MS = 3000
+
+export default function HomePage() {
+  var store = useAppStore()
+  var currentView = store.currentView || 'landing'
+  var setGalleryImages = (store as any).setGalleryImages || function(){}
+  var siteConfig = store.siteConfig || {}
+  var configLoaded = store.configLoaded
+  var setSiteConfig = store.setSiteConfig
+  var setConfigLoaded = store.setConfigLoaded
+  var setStats = store.setStats
+
+  const [appReady, setAppReady] = useState(false)
+  const startTimeRef = useRef(Date.now())
+
+  /* ===== (2026-و39) مفيش استرجاع جلسة تلقائي — طلب المستر الحرفي:
+     «الطالب اللي يفتح منصة يفتح عليه على الصفحة الرئيسية اللي فيها صورة
+     المستر والحاجات دي وهو يعمل تسجيل دخول بنفسه — ونفس الكلام لولي الأمر».
+     الفتح دايمًا على الرئيسية (landing) والدخول يدوي كل مرة.
+     mg_student/mg_parent بتتكتب عند الدخول عشان باقي الواجهات تستخدمها
+     جوه الجلسة، بس مش بترجّع حد لأي بورتال لوحده.
+     حماية شاشة الحل (و38: mg_active_solve + المسودات) شغالة زي ما هي
+     وبتتفعل بعد الدخول اليدوي. */
+
+  // Load config + gallery + stats on mount
+  useEffect(function() {
+    /* (2026-و88) لينك إشعار ولي الأمر الخارجي (واتساب/SMS) بييجي بالشكل
+       /#parent-login — أول ما الصفحة تفتح بننتقل على طول لشاشة تسجيل
+       دخول ولي الأمر (نفس تدفق المستر: «يدوس على الإشعار من بره → يفتحه
+       على صفحة تسجيل الدخول → يسجل دخول → يشوف الإشعار جوه المنصة»)
+       (2026-و89) لوولي الأمر لسه مسجل جوه الجلسة → ندخله بورتاله على طول */
+    try {
+      var h = String(window.location.hash || '').replace('#', '')
+      if (h === 'parent-login') {
+        var par = (store as any).currentParent
+        ;(store as any).setView && (store as any).setView(par && par.id ? 'parent-portal' : 'parent-login')
+        if (window.history && window.history.replaceState) window.history.replaceState(null, '', window.location.pathname)
+      }
+    } catch (eHash) {}
+
+    /* (2026-و89) Service Worker إشعارات ولي الأمر — تسجيل + استقبال ضغطة
+       الإشعار الخارجي (بره على شاشة الموبايل): لو المنصة مفتوحة بالفعل
+       والـ SW ركّز النافذة، بنوجّه الصفحة: مسجل دخول → بورتال الإشعارات،
+       غير كده → شاشة تسجيل دخول ولي الأمر (نفس تدفق المستر) */
+    try {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {})
+        navigator.serviceWorker.addEventListener('message', function (ev: MessageEvent) {
+          var d: any = ev && ev.data ? ev.data : null
+          if (!d || d.type !== 'parent-notification-click') return
+          try {
+            var st = (store as any)
+            if (st.currentParent && st.currentParent.id) st.setView && st.setView('parent-portal')
+            else st.setView && st.setView('parent-login')
+          } catch (eSwp) {}
+        })
+      }
+    } catch (eSw) {}
+
+    var dataReady = false
+    var minTimerDone = false
+
+    // Minimum display timer - ensures loading screen shows for at least 2s
+    var minTimer = setTimeout(function() {
+      minTimerDone = true
+      if (dataReady) setAppReady(true)
+    }, MIN_LOADING_MS)
+
+    // Safety timer - force show content after 5s no matter what
+    var maxTimer = setTimeout(function() {
+      setAppReady(true)
+    }, MAX_LOADING_MS)
+
+    Promise.all([
+      fetch('/api/config').then(function(r) { return r.json() }).catch(function() { return {} }),
+      fetch('/api/gallery').then(function(r) { return r.json() }).catch(function() { return {} }),
+      fetch('/api/stats').then(function(r) { return r.json() }).catch(function() { return {} }),
+    ]).then(function(results) {
+      var cfg = results[0]
+      var gal = results[1]
+      var sta = results[2]
+      if (cfg && cfg.error && cfg.defaults) {
+        cfg = cfg.defaults
+      }
+      if (cfg && !configLoaded) {
+        setSiteConfig(cfg)
+        setConfigLoaded(true)
+      }
+      if (gal && gal.images) {
+        setGalleryImages(gal.images)
+      }
+      if (sta && sta.totalStudents !== undefined) {
+        setStats(sta)
+      }
+      dataReady = true
+      if (minTimerDone) {
+        clearTimeout(maxTimer)
+        setAppReady(true)
+      }
+    })
+
+    return function() {
+      clearTimeout(minTimer)
+      clearTimeout(maxTimer)
+    }
+  }, [])
+
+  const showFooter = currentView === 'landing'
+  const showWhatsApp = currentView === 'landing' || currentView === 'auth-login' || currentView === 'auth-register'
+
+  // Full-page loading screen
+  if (!appReady) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-background flex flex-col items-center justify-center gap-6">
+        <div className="relative">
+          <div className="absolute -inset-6 rounded-full bg-[#C49A38]/10 blur-xl" />
+          <div className="relative w-20 h-20 rounded-2xl bg-muted border border-[#C49A38]/30 flex items-center justify-center overflow-hidden">
+            {/* (2026-و97) صورة الفافيكون بتاعة المنصة بدل قبعة التخرج — طلب المستر
+                (2026-و97-B) الفافيكون الحقيقي = صورة المستر (زي الإنتاج بالظبط)
+                — مش لوجو Z: الفالب هنا لازم يكون نفس صورة الإنتاج */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={String(siteConfig.favicon_url || '/images/mr-wael-photo.webp')} alt="Math Genius" className="h-12 w-12 object-cover rounded-xl" />
+          </div>
+        </div>
+        <div className="text-center space-y-3">
+          <h1 className="text-2xl font-bold text-foreground tracking-wide">
+            <span className="text-[#8B6914] dark:text-[#E5BE5A]">Math</span> Genius
+          </h1>
+          {/* (2026-و75-C) إيموجيز الرياضيات بندوبة متدرجة فوق شاشة التحميل */}
+          <div className="flex items-end justify-center gap-3 text-3xl leading-none" dir="ltr">
+            <span className="animate-bounce">🧮</span>
+            <span className="animate-bounce [animation-delay:0.15s]">➗</span>
+            <span className="animate-bounce [animation-delay:0.3s]">✖️</span>
+            <span className="animate-bounce [animation-delay:0.45s]">📐</span>
+          </div>
+          <div className="flex items-center gap-3 justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-[#C49A38]" />
+            <p className="text-muted-foreground text-sm">جاري التحميل...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <VideoProtection />
+      <Navbar />
+
+      {currentView === 'landing' && (
+        <main className="flex-1">
+          {/* (و111-a) الهيرو من غير Reveal — حركة دخوله خاصة بيه */}
+          <HeroSection />
+          {/* (ص119) الفيديو التعريفي عن المنصة — بعد الهيرو مباشرة
+              (نفس مكان زيكولا بالظبط) — بيظهر بس لو intro_video_url مش فاضي */}
+          <Reveal>
+            <IntroVideoSection />
+          </Reveal>
+          <Reveal>
+            <FeaturesGuideSection />
+          </Reveal>
+          <Reveal>
+            <FeaturesSection />
+          </Reveal>
+          {/* (G-2) فيديو «إزاي تستخدم المنصة» — بعد المميزات وقبل صفوف الصفوف
+              الدراسية — وبيظهر بس لما الأدمن يكون ضاف فيديو من لوحة التحكم */}
+          <Reveal>
+            <HowToVideoSection />
+          </Reveal>
+          <Reveal>
+            <GradesSection />
+          </Reveal>
+          {/* (2026-و29) أفضل 3 طلاب بقوا في النافبار (زرار أوائل الطلبة) بدل الرئيسية */}
+          <Reveal>
+            <LessonsSection />
+          </Reveal>
+          <Reveal>
+            <TipsSection />
+          </Reveal>
+          {/* (ص119) فيديو تعريف المستر — قبل قسم المعرض بالظبط (نفس زيكولا)
+              — بيظهر بس لو teacher_video_url مش فاضي */}
+          <Reveal>
+            <TeacherVideoSection />
+          </Reveal>
+          <Reveal>
+            <GallerySection />
+          </Reveal>
+        </main>
+      )}
+
+      {currentView === 'auth-login' && (
+        <main className="flex-1">
+          <LoginView />
+        </main>
+      )}
+
+      {currentView === 'auth-register' && (
+        <main className="flex-1">
+          <RegisterView />
+        </main>
+      )}
+
+      {currentView === 'student-pending' && <StudentPendingView />}
+      {currentView === 'student-portal' && <StudentPortal />}
+      {currentView === 'student-payment' && <StudentPaymentView />}
+      {currentView === 'admin-dashboard' && <AdminDashboard />}
+
+      {/* (2026-و37) شاشات ولي الأمر */}
+      {currentView === 'parent-login' && (
+        <main className="flex-1">
+          <ParentLoginView />
+        </main>
+      )}
+      {currentView === 'parent-register' && (
+        <main className="flex-1">
+          <ParentRegisterView />
+        </main>
+      )}
+      {currentView === 'parent-portal' && <ParentPortal />}
+
+      {showFooter && <Footer />}
+      {showWhatsApp && <WhatsAppButton />}
+      {showWhatsApp && <FloatingLoginButton />}
+    </div>
+  )
 }

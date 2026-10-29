@@ -56,13 +56,14 @@ function collectTargets(questions: any[]): CropTarget[] {
   return targets
 }
 
-/* حفظ بافر صورة في جدول Media وإرجاع المسار /api/files/<id> */
-async function saveFigure(buf: Buffer): Promise<string> {
+/* حفظ بافر صورة في جدول Media وإرجاع المسار /api/files/<id> — (2026-G-1) PNG بدون فقدان */
+async function saveFigure(buf: Buffer, mime?: string): Promise<string> {
+  var isPng = mime === 'image/png'
   var media = await db.media.create({
     data: {
-      filename: 'figure-' + Date.now() + '.jpg',
-      filePath: 'exam-figures/' + Date.now() + '_server-crop.jpg',
-      fileType: 'image/jpeg',
+      filename: 'figure-' + Date.now() + (isPng ? '.png' : '.jpg'),
+      filePath: 'exam-figures/' + Date.now() + '_server-crop' + (isPng ? '.png' : '.jpg'),
+      fileType: isPng ? 'image/png' : 'image/jpeg',
       fileSize: String(buf.length),
       data: buf.toString('base64'),
       category: 'exam-figures',
@@ -250,8 +251,8 @@ export async function cropFiguresServerSide(
           var page = await doc.getPage(n)
           var base = page.getViewport({ scale: 1 })
           var longest = Math.max(base.width, base.height) || 1600
-          /* (و52) رندر أعلى — (2026-و110) 2300 بدل 2000 — نفس الرفع الجودي للطلب: «زي ما هي» */
-          var scale = Math.min(4, 2300 / longest)
+          /* (2026-G-1) رندر أعلى 3000px — القص بياخد الدقة الطبيعية للمنطقة من غير تلاعب */
+          var scale = Math.min(4, 3000 / longest)
           var vp = page.getViewport({ scale: scale })
           var canvas = createCanvas(Math.max(1, Math.ceil(vp.width)), Math.max(1, Math.ceil(vp.height)))
           var ctx = canvas.getContext('2d')
@@ -322,8 +323,8 @@ async function cropOne(
     sx = regD.x; sy = regD.y; sw = regD.w; sh = regD.h
     if (sw < 8 || sh < 8) return false
 
-    /* (2026-و110) سقف التصغير بقى 2000 بدل 1600 — الرسمة بتنحفظ بدقتها الحقيقية */
-    var scale = Math.min(1, 2000 / Math.max(sw, sh))
+    /* (2026-G-1) مفيش تصغير للقص: الدقة الطبيعية — سقف 4000px حماية فقط */
+    var scale = Math.min(1, 4000 / Math.max(sw, sh))
     var outW = Math.max(8, Math.round(sw * scale))
     var outH = Math.max(8, Math.round(sh * scale))
     var out = createCanvas(outW, outH)
@@ -333,11 +334,18 @@ async function cropOne(
     octx.imageSmoothingEnabled = true
     octx.imageSmoothingQuality = 'high'
     octx.drawImage(pageCanvas, sx, sy, sw, sh, 0, 0, outW, outH)
-    /* (2026-و110) JPEG 95% بدل 92% — حدة كاملة للخطوط والحروف */
-    var outBuf: Buffer = out.toBuffer('image/jpeg', 0.95)
+    /* (2026-G-1) حفظ بدون فقدان: PNG — لو ضخم جدًا (فوق 12MB) JPEG 100% */
+    var outBuf: Buffer = out.toBuffer('image/png')
+    var outMime = 'image/png'
     if (!outBuf || outBuf.length < 100) return false
+    if (outBuf.length > 12 * 1024 * 1024) {
+      try {
+        var jbuf: Buffer = out.toBuffer('image/jpeg', 1.0)
+        if (jbuf && jbuf.length > 0 && jbuf.length < outBuf.length) { outBuf = jbuf; outMime = 'image/jpeg' }
+      } catch (eJ) {}
+    }
 
-    var url = await saveFigure(outBuf)
+    var url = await saveFigure(outBuf, outMime)
     if (tgt.kind === 'q') {
       q.figure = Object.assign({}, q.figure, { url: url })
     } else {

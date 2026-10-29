@@ -13,7 +13,7 @@
 // كان بيفشل بـ «Unexpected token <») + الرفع بقى متوازي ×3 بأجزاء 3MB.
 // ============================================================
 
-import { useAppStore, GRADES } from '@/stores/app-store'
+import { useAppStore, gradesFromConfig } from '@/stores/app-store'
 import { chunkedUpload } from '@/lib/chunked-upload'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,6 +38,8 @@ function formatBookSize(bytes: number): string {
 
 export function BooksManager() {
   const adminId = useAppStore(function (s) { return s.currentAdmin?.id || '' })
+  /* (ز15) القايمة الديناميكية من لوحة الأدمن (grades_data) */
+  const GRADES = gradesFromConfig(useAppStore(function (s) { return s.siteConfig })).map(function (g) { return g.ar })
   const [books, setBooks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -357,18 +359,18 @@ export function BooksManager() {
                       <>
                         {qCount > 0 && (
                           <Button variant="outline" size="sm" className="h-8 px-2 text-[10px] font-bold border-emerald-500/40 text-emerald-700 dark:text-emerald-400" onClick={function () { setBookQsBook(b) }}>
-                            الأسئلة ({qCount})
+                            Questions ({qCount})
                           </Button>
                         )}
                         {src2 && (
-                          <Button variant="outline" size="sm" className="h-8 w-8 p-0" title="معاينة الكتاب" onClick={function () { setPreviewBook(b) }} aria-label="معاينة">
+                          <Button variant="outline" size="sm" className="h-8 w-8 p-0" title="Preview book" onClick={function () { setPreviewBook(b) }} aria-label="Preview">
                             👁
                           </Button>
                         )}
                       </>
                     )
                   })()}
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={function () { handleDelete(b) }} title="حذف">
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={function () { handleDelete(b) }} title="Delete">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -385,14 +387,14 @@ export function BooksManager() {
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-2 sm:p-6" onMouseDown={function (e) { if (e.target === e.currentTarget) setPreviewBook(null) }}>
             <div className="bg-background rounded-xl border shadow-2xl w-full max-w-4xl h-[92vh] flex flex-col">
               <div className="flex items-center justify-between gap-2 p-3 border-b shrink-0">
-                <p className="text-sm font-bold truncate">👁 معاينة: {previewBook.title}</p>
+                <p className="text-sm font-bold truncate">👁 Preview: {previewBook.title}</p>
                 <div className="flex items-center gap-1 shrink-0">
-                  <a href={pSrc} target="_blank" rel="noreferrer" className="text-xs text-sky-600 dark:text-sky-400 hover:underline px-2">فتح في تاب جديد</a>
-                  <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={function () { setPreviewBook(null) }} aria-label="إغلاق">✕</Button>
+                  <a href={pSrc} target="_blank" rel="noreferrer" className="text-xs text-sky-600 dark:text-sky-400 hover:underline px-2">Open in new tab</a>
+                  <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={function () { setPreviewBook(null) }} aria-label="Close">✕</Button>
                 </div>
               </div>
               <div className="flex-1 min-h-0">
-                <iframe src={pSrc} title={'معاينة ' + (previewBook.title || 'الكتاب')} className="w-full h-full rounded-b-xl bg-white" />
+                <iframe src={pSrc} title={'Preview ' + (previewBook.title || 'book')} className="w-full h-full rounded-b-xl bg-white" />
               </div>
             </div>
           </div>
@@ -408,14 +410,14 @@ export function BooksManager() {
             <div className="bg-background rounded-xl border shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
               <div className="flex items-center justify-between gap-2 p-3 border-b shrink-0">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold truncate">📄 أسئلة «{bookQsBook.title}»</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">آخر أسئلة اتحكمت من الكتاب ده — {qsList.length} سؤال</p>
+                  <p className="text-sm font-bold truncate">📄 Questions «{bookQsBook.title}»</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Latest questions graded from this book — {qsList.length} questions</p>
                 </div>
-                <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={function () { setBookQsBook(null) }} aria-label="إغلاق">✕</Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={function () { setBookQsBook(null) }} aria-label="Close">✕</Button>
               </div>
               <div className="p-3 overflow-y-auto custom-scrollbar flex-1 space-y-2">
                 {qsList.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-8">لسه مستخرجتش أسئلة من الكتاب ده — استخرج منه من شاشة استخراج الذكاء الاصطناعي والأسئلة هتتفصل هنا</p>
+                  <p className="text-xs text-muted-foreground text-center py-8">No questions extracted from this book yet — extract them from the AI extraction screen and they will show up here</p>
                 ) : qsList.map(function (q: any, qi: number) {
                   return (
                     <div key={qi} className="p-2.5 rounded-lg border border-border bg-muted/30">
@@ -428,7 +430,7 @@ export function BooksManager() {
                           })}
                         </div>
                       )}
-                      {(!Array.isArray(q.options) || q.options.length === 0) && q.modelAnswer ? <p className="text-[11px] text-muted-foreground mt-1">النموذجي: {String(q.modelAnswer).substring(0, 200)}</p> : null}
+                      {(!Array.isArray(q.options) || q.options.length === 0) && q.modelAnswer ? <p className="text-[11px] text-muted-foreground mt-1">Model answer: {String(q.modelAnswer).substring(0, 200)}</p> : null}
                     </div>
                   )
                 })}

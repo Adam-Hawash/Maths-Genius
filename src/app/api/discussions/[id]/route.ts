@@ -1,6 +1,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+/* (S-4a — توحيد الصفوف) المرجع الموحد: كتابة = storeGrade */
+import { storeGrade } from '@/lib/grade-names'
 
 // GET /api/discussions/[id] - جلب مناقشة بالمعرف
 export async function GET(
@@ -41,7 +43,7 @@ export async function PUT(
       where: { id },
       data: {
         ...(studentName && { studentName }),
-        ...(grade && { grade }),
+        /* (S-4a — توحيد الصفوف) الكتابة دايمًا بالاسم المعتمد الكامل */ ...(grade && { grade: storeGrade(grade) }),
         ...(content && { content }),
       },
     })
