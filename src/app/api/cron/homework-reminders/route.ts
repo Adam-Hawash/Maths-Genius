@@ -17,7 +17,7 @@
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { notifyStudent } from '@/lib/notify'
+import { notifyStudents } from '@/lib/notify'
 import { notifyParentOfPendingReminder } from '@/lib/parent-notify'
 
 /* ✏️ مفتاح الحماية — نفس القيمة متكتبة في vercel.json → crons → path */
@@ -87,25 +87,38 @@ async function submittedStudentIds(kind: string, itemId: string): Promise<Set<st
   return out
 }
 
-/* سبق إرسال تذكير للطالب ده على العنصر ده؟ */
-async function alreadyReminded(kind: string, itemId: string, studentId: string): Promise<boolean> {
+/* (Z-30-تحسين) الطلاب اللي سبق تذكيرهم للعنصر ده — استعلام واحد مجمّع
+   بدل استعلام لكل طالب (استعلامات Turso المتسلسلة كانت بتخلي التشغيلة
+   تعلق على الإنتاج) */
+async function remindedStudentIds(kind: string, itemId: string): Promise<Set<string>> {
+  var out = new Set<string>()
   try {
-    var rows: any = await db.$queryRawUnsafe('SELECT id FROM ReminderSent WHERE kind = ? AND itemId = ? AND studentId = ? LIMIT 1', kind, String(itemId), String(studentId))
-    return !!(rows && rows.length)
-  } catch (e) {
-    return false
+    var rows: any = await db.$queryRawUnsafe('SELECT studentId FROM ReminderSent WHERE kind = ? AND itemId = ?', kind, String(itemId))
+    for (var i = 0; i < (rows || []).length; i++) out.add(String(rows[i].studentId))
+  } catch (e) {}
+  return out
+}
+
+/* تسجيل التذكيرات المرسلة — INSERT OR IGNORE مجمّع على دفعات */
+async function markRemindedBatch(kind: string, itemId: string, studentIds: string[]): Promise<void> {
+  var CHUNK = 40
+  for (var i = 0; i < studentIds.length; i += CHUNK) {
+    var slice = studentIds.slice(i, i + CHUNK)
+    var values: string[] = []
+    var args: any[] = []
+    for (var k = 0; k < slice.length; k++) {
+      values.push('(?, ?, ?, CURRENT_TIMESTAMP)')
+      args.push(kind, String(itemId), slice[k])
+    }
+    try {
+      await db.$executeRawUnsafe('INSERT OR IGNORE INTO ReminderSent (kind, itemId, studentId, sentAt) VALUES ' + values.join(', '), ...args)
+    } catch (e) {
+      console.error('[cron-reminders] batch mark failed (ignored):', e)
+    }
   }
 }
 
-async function markReminded(kind: string, itemId: string, studentId: string): Promise<void> {
-  try {
-    await db.$executeRawUnsafe('INSERT INTO ReminderSent (kind, itemId, studentId, sentAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)', kind, String(itemId), String(studentId))
-  } catch (e) {
-    /* تكرار UNIQUE = سبق الإرسال — مقبول */
-  }
-}
-
-async function sweepKind(kind: string): Promise<{ items: number; reminded: number }> {
+async function sweepKind(kind: string, deadlineMs: number): Promise<{ items: number; reminded: number }> {
   var table = kind === 'exam' ? 'Exam' : 'Homework'
   var out = { items: 0, reminded: 0 }
   /* العناصر: اتعملت من أكتر من 24 ساعة + موعد الظهور عدى (لو موجود) */
@@ -113,7 +126,7 @@ async function sweepKind(kind: string): Promise<{ items: number; reminded: numbe
   try {
     items = await db.$queryRawUnsafe(
       'SELECT id, title, grade, targetStudentIds, targetGroupIds, scheduledAt FROM ' + table +
-      " WHERE createdAt <= datetime('now', '-24 hours') AND (scheduledAt IS NULL OR scheduledAt = '' OR scheduledAt <= datetime('now')) ORDER BY createdAt DESC LIMIT 50"
+      " WHERE createdAt <= datetime('now', '-24 hours') AND (scheduledAt IS NULL OR scheduledAt = '' OR scheduledAt <= datetime('now')) ORDER BY createdAt DESC LIMIT 25"
     )
   } catch (e) {
     console.error('[cron-reminders] fetch ' + kind + ' failed (ignored):', e)
@@ -121,37 +134,54 @@ async function sweepKind(kind: string): Promise<{ items: number; reminded: numbe
   }
   items = items || []
 
-  for (var i = 0; i < items.length && out.reminded < MAX_REMINDERS_PER_RUN; i++) {
+  for (var i = 0; i < items.length; i++) {
+    /* ميزانية زمنية — بنرجّع رد دايمًا حتى لو لسه فيه بقايا (بتاخدها تشغيلة الغد) */
+    if (Date.now() > deadlineMs || out.reminded >= MAX_REMINDERS_PER_RUN) break
     var item = items[i]
     if (!item || !item.id) continue
     var targets = await resolveTargetStudents(kind, item)
     if (!targets.length) continue
     var submitted = await submittedStudentIds(kind, String(item.id))
+    var reminded = await remindedStudentIds(kind, String(item.id))
     var pending: string[] = []
-    for (var s = 0; s < targets.length; s++) {
-      var sid = targets[s]
-      if (submitted.has(sid)) continue
-      if (await alreadyReminded(kind, String(item.id), sid)) continue
+    for (var s2 = 0; s2 < targets.length; s2++) {
+      var sid = targets[s2]
+      if (submitted.has(sid) || reminded.has(sid)) continue
       pending.push(sid)
     }
     if (!pending.length) continue
     out.items++
-    for (var p = 0; p < pending.length && out.reminded < MAX_REMINDERS_PER_RUN; p++) {
-      var studentId = pending[p]
+    var title = String(item.title || (kind === 'exam' ? 'امتحان' : 'واجب'))
+    var done: string[] = []
+    /* 1) إشعار داخلي مجمّع للطلاب — دفعة واحدة */
+    try {
+      var msgTitle = kind === 'exam'
+        ? '⏰ تذكير: امتحان «' + title + '» لسه متحلّش — لازم تدخل وتسلّمه'
+        : '⏰ تذكير: واجب «' + title + '» لسه مسلّمش — لازم يتسلم في أقرب وقت'
+      var msgBody = kind === 'exam'
+        ? 'عدى أكتر من 24 ساعة على الامتحان من غير تسليم — دخول من تاب الامتحانات وحلّه دلوقتي'
+        : 'عدى أكتر من 24 ساعة على الواجب من غير تسليم — دخول من تاب الواجبات وسلّمه دلوقتي'
+      await notifyStudents({ studentIds: pending, type: kind === 'exam' ? 'exam_reminder' : 'homework_reminder', title: msgTitle, body: msgBody })
+      done = pending.slice()
+    } catch (eN) {
+      console.error('[cron-reminders] student notify failed (ignored):', eN)
+    }
+    /* 2) إشعار ولي الأمر لكل طالب (صف داخلي + Push) — مع الالتزام بالميزانية الزمنية.
+       بنسجّل بس اللي وصلهم إشعار ولي الأمر فعلًا — اللي ما وصلهمش بياخدهم
+       تشغيلة الغد كاملة (إشعار الطالب الداخلي هيتكرر — مقبول) */
+    var processed: string[] = []
+    for (var p2 = 0; p2 < done.length; p2++) {
+      if (Date.now() > deadlineMs || out.reminded >= MAX_REMINDERS_PER_RUN) break
       try {
-        var title = String(item.title || (kind === 'exam' ? 'امتحان' : 'واجب'))
-        if (kind === 'exam') {
-          await notifyStudent(studentId, 'exam_reminder', '⏰ تذكير: امتحان «' + title + '» لسه متحلّش — لازم تدخل وتسلّمه', 'عدى أكتر من 24 ساعة على الامتحان من غير تسليم — دخول من تاب الامتحانات وحلّه دلوقتي')
-        } else {
-          await notifyStudent(studentId, 'homework_reminder', '⏰ تذكير: واجب «' + title + '» لسه مسلّمش — لازم يتسلم في أقرب وقت', 'عدى أكتر من 24 ساعة على الواجب من غير تسليم — دخول من تاب الواجبات وسلّمه دلوقتي')
-        }
-        await notifyParentOfPendingReminder({ studentId: studentId, kind: kind === 'exam' ? 'exam' : 'homework', title: title })
-        await markReminded(kind, String(item.id), studentId)
+        await notifyParentOfPendingReminder({ studentId: done[p2], kind: kind === 'exam' ? 'exam' : 'homework', title: title })
+        processed.push(done[p2])
         out.reminded++
       } catch (eOne) {
         console.error('[cron-reminders] one reminder failed (ignored):', eOne)
       }
     }
+    /* 3) تسجيل المرسل لهم فقط */
+    if (processed.length) await markRemindedBatch(kind, String(item.id), processed)
   }
   return out
 }
@@ -167,8 +197,9 @@ export async function GET(request: NextRequest) {
 
     await ensureReminderSentTable()
 
-    var hw = await sweepKind('homework')
-    var ex = await sweepKind('exam')
+    var deadline = Date.now() + 20000 /* ميزانية 20 ثانية لكل تشغيلة */
+    var hw = await sweepKind('homework', deadline)
+    var ex = await sweepKind('exam', deadline)
 
     return NextResponse.json({
       ok: true,
