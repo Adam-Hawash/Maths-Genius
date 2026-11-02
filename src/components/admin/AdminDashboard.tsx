@@ -5414,7 +5414,12 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
            من غير FormData (حد Vercel 4.5MB كان بيفشل «أضف ملف تاني» على
            الملفات الكبيرة وكان بطيء جدًا). الصغير والصور بيفضلوا على المسار
            الخام زي ما هو (مطابقة ملف الإجابات شغالة هناك) */
-        var isBigPdf = !!file && (file.type === 'application/pdf' || /\.pdf$/i.test(String(file.name || ''))) && file.size > 3.5 * 1024 * 1024
+        /* (Z-39) كل ملفات PDF على محرك الصفحات — مش الكبيرة بس:
+           النداء الواحد القديم (/api/ai-extract) بيرجّع 504 FUNCTION_INVOCATION_TIMEOUT
+           حتى لملف صفحتين (اتأكدت لايف على الإنتاج 2026-11-02) وده كان سبب
+           «انتهت مهلة الاستخراج» — محرك الصفحات موجود أصلًا في الكود واتأكدت إنه
+           بيستخرج صح في 26 ثانية — سطر توجيه بس، مفيش أي محرك جديد */
+        var isBigPdf = !!file && (file.type === 'application/pdf' || /\.pdf$/i.test(String(file.name || '')))
         if (isBigPdf && file) {
           var openedF = await openPdf(file)
           var docF = openedF.doc
