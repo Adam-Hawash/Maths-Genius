@@ -21,7 +21,7 @@ import {
   Link2, Activity, Eye, ImagePlus, Trophy, UserX, Camera,
   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
   Video as VideoIcon, LinkIcon, MonitorPlay, Send,
-  MessageCircle, Copy,
+  MessageCircle, Copy, Zap,
   ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown, Wrench, Brain, Swords, EyeOff
 } from 'lucide-react'
 import { AdminComplaints } from './AdminComplaints'
@@ -690,6 +690,31 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
   const [loadingProgress, setLoadingProgress] = useState(false)
   /* (و65) التقارير الجاهزة للطباعة — طلب المستر: «أطبع ملف PDF تقرير لحاله لكل طالب» + «ملف لكل الطلاب» */
   const T = useT()
+  /* (Z-37) القبول التلقائي بقى سويتش في تاب الطلاب نفسه — طلب المستر:
+     «عايز الزرار بتاع الطلاب المقبولين يبقى زي سويتش زي بتاع زيكولا ماث» —
+     نفس مفتاح student_auto_approve بتاع شاشة الإعدادات (مفتاح واحد لكل حتة) */
+  const [autoApproveBar, setAutoApproveBar] = useState<boolean | null>(null)
+  const [autoApproveBarBusy, setAutoApproveBarBusy] = useState(false)
+  useEffect(() => {
+    var alive = true
+    fetch('/api/config?fresh=1').then(function (r) { return r.json() }).then(function (cfg: any) {
+      if (alive) setAutoApproveBar(String((cfg && cfg.student_auto_approve) ?? '1') !== '0')
+    }).catch(function () { if (alive) setAutoApproveBar(true) })
+    return function () { alive = false }
+  }, [])
+  const toggleAutoApproveBar = async (vArg?: boolean) => {
+    var v = typeof vArg === 'boolean' ? vArg : !(autoApproveBar !== false)
+    setAutoApproveBar(v); setAutoApproveBarBusy(true)
+    try {
+      const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_auto_approve: v ? '1' : '0' }) })
+      if (res.ok) {
+        const cfg = useAppStore.getState().siteConfig
+        useAppStore.getState().setSiteConfig({ ...cfg, student_auto_approve: v ? '1' : '0' })
+        toast.success(v ? 'القبول التلقائي مفعّل — الطلاب الجدد يدخلوا فورًا' : 'القبول التلقائي متقفل — التسجيلات تستنى موافقتك من تاب «بانتظار»')
+      } else { toast.error('خطأ في الحفظ'); setAutoApproveBar(!v) }
+    } catch { toast.error('خطأ في الاتصال'); setAutoApproveBar(!v) }
+    setAutoApproveBarBusy(false)
+  }
   const [reportFor, setReportFor] = useState<Student | null>(null)
   const [classReportOpen, setClassReportOpen] = useState(false)
   /* (MG-1) بحث فوري في الطلاب: بالاسم أو رقم الموبايل أو الصف (من غير طلب سيرفر) */
@@ -982,6 +1007,23 @@ function StudentsManager({ onStatsRefresh, onViewImage }: { onStatsRefresh: () =
                   {f === 'pending' ? 'بانتظار' : f === 'approved' ? 'مقبول (مجاني)' : f === 'paid' ? 'بفلوس' : f === 'rejected' ? 'Rejected' : 'الكل'}
                 </Button>
               ))}
+            </div>
+            {/* (Z-37) القبول التلقائي — سويتش حقيقي في تاب الطلاب (نفس سويتش شاشة الإعدادات) */}
+            <div
+              className="flex items-center gap-2 h-8 pl-2.5 pr-2 rounded-lg border bg-card"
+              title="لما يكون مفعّل: أي طالب يسجل يدخل المنصة فورًا. لما يتقفل: التسجيلات تبقى «قيد المراجعة» وتوافق عليها من تاب «بانتظار»"
+            >
+              {autoApproveBarBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> : <Zap className={"h-3.5 w-3.5 shrink-0 " + (autoApproveBar ? "text-emerald-500" : "text-muted-foreground")} />}
+              <span className="text-xs font-medium whitespace-nowrap">{T('القبول التلقائي', 'Auto-approve')}</span>
+              <Switch
+                checked={autoApproveBar === true}
+                onCheckedChange={function (v: boolean) { toggleAutoApproveBar(v) }}
+                disabled={autoApproveBarBusy || autoApproveBar === null}
+                aria-label="قبول الطلاب الجدد تلقائيًا"
+              />
+              <span className={"text-[10px] font-bold whitespace-nowrap " + (autoApproveBar ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
+                {autoApproveBar === null ? '...' : autoApproveBar ? T('مفعّل', 'ON') : T('متقفل', 'OFF')}
+              </span>
             </div>
             {/* (و65) التقرير الشامل — ملف PDF واحد لكل الطلاب (حسب الصف المختار) */}
             <Button
@@ -2733,7 +2775,7 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
       fd.append('type', 'exam')
       fd.append('grade', formGrade)
       var ctrl = new AbortController()
-      var tmr = setTimeout(function () { ctrl.abort() }, 180000)
+      var tmr = setTimeout(function () { ctrl.abort() }, 300000)
       var res = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl.signal })
       clearTimeout(tmr)
       var data = await res.json()
@@ -4469,7 +4511,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       fd.append('type', 'exam')
       fd.append('grade', formGrade)
       var ctrl = new AbortController()
-      var tmr = setTimeout(function() { ctrl.abort() }, 180000)
+      var tmr = setTimeout(function() { ctrl.abort() }, 300000)
       var res = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl.signal })
       clearTimeout(tmr)
       var data = await res.json()
@@ -4524,7 +4566,7 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
       fd.append('type', 'exam')
       fd.append('grade', formGrade)
       var ctrl = new AbortController()
-      var tmr = setTimeout(function () { ctrl.abort() }, 180000)
+      var tmr = setTimeout(function () { ctrl.abort() }, 300000)
       var res = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl.signal })
       clearTimeout(tmr)
       var data = await res.json()
@@ -5388,7 +5430,7 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
         }
         // YouTube extraction (المسار القديم زي ما هو)
         var ctrl = new AbortController()
-        var tmr = setTimeout(function() { ctrl.abort() }, 180000)
+        var tmr = setTimeout(function() { ctrl.abort() }, 300000)
         var res = await fetch('/api/ai-extract-youtube', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -5437,7 +5479,7 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
             for (var attemptF = 0; attemptF < 2 && !chunkDataF; attemptF++) {
               try {
                 var ctrlF = new AbortController()
-                var tmrF = setTimeout(function() { ctrlF.abort() }, 180000)
+                var tmrF = setTimeout(function() { ctrlF.abort() }, 300000)
                 var resF = await fetch('/api/ai-extract-pages', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -5484,7 +5526,7 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
         fd.append('type', extractType)
         fd.append('grade', grade)
         var ctrl2 = new AbortController()
-        var tmr2 = setTimeout(function() { ctrl2.abort() }, 180000)
+        var tmr2 = setTimeout(function() { ctrl2.abort() }, 300000)
         var res2 = await fetch('/api/ai-extract', { method: 'POST', body: fd, signal: ctrl2.signal })
         clearTimeout(tmr2)
         var data2 = await res2.json()
@@ -5949,7 +5991,7 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
         for (var attempt = 0; attempt < 2 && !extractedChunk; attempt++) {
           try {
             var ctrlB = new AbortController()
-            var tmrB = setTimeout(function() { ctrlB.abort() }, 180000)
+            var tmrB = setTimeout(function() { ctrlB.abort() }, 300000)
             var resB = await fetch('/api/ai-extract-pages', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -5979,7 +6021,7 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
         var picked: any[] | null = null
         try {
           var ctrlS = new AbortController()
-          var tmrS = setTimeout(function() { ctrlS.abort() }, 180000)
+          var tmrS = setTimeout(function() { ctrlS.abort() }, 300000)
           var resS = await fetch('/api/ai-extract-pages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

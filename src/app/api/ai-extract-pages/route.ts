@@ -34,7 +34,7 @@ import { isWritingQuestion } from '@/lib/question-figures'
    بجودة كاملة هو المصدر الأساسي، والسيرفر إنقاذ بس (/api/crop-figures) */
 
 export const runtime = 'nodejs'
-export const maxDuration = 180
+export const maxDuration = 300
 
 var MAX_PAGES_PER_REQUEST = 30
 var BATCH_SIZE = 5

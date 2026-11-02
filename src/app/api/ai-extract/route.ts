@@ -19,7 +19,7 @@ import { isWritingQuestion } from '@/lib/question-figures'
 import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
-export const maxDuration = 180
+export const maxDuration = 300
 
 function toBase64(file: File): Promise<string> {
   return file.arrayBuffer().then(function(buf) {
