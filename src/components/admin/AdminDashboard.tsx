@@ -3044,6 +3044,8 @@ function ExamTrackingPanel({ onViewImage }: { onViewImage?: (src: string) => voi
                 apiPath="/api/exams"
                 itemId={examEditTarget ? examEditTarget.id : ''}
                 initialQuestionsRaw={examEditTarget ? (examEditTarget as any).questions : null}
+                /* (Z-41) ملف المصدر المخزن — منه زرار ✂️ عدّل القص بيفتح صفحة الأصل */
+                sourceFilePath={examEditTarget ? String((examEditTarget as any).filePath || '') : ''}
                 onSaved={function () { if (selectedExam) loadExamResults(selectedExam) }}
               />
               {!selectedExam ? (
@@ -4964,6 +4966,8 @@ function ContentManager<T extends { id: string; grade: string; createdAt: string
             apiPath={apiPath}
             itemId={editTarget ? editTarget.id : ''}
             initialQuestionsRaw={editTarget ? (editTarget as any).questions : null}
+            /* (Z-41) ملف المصدر المخزن — منه زرار ✂️ عدّل القص بيفتح صفحة الأصل */
+            sourceFilePath={editTarget ? String((editTarget as any).filePath || '') : ''}
             onSaved={function () { loadItems(false); if (onRefresh) onRefresh() }}
           />
         )}
@@ -5823,12 +5827,21 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
       }
       var blob = await res.blob()
       if (blob.size === 0) throw new Error('الملف اللي جاي من الرابط فاضي — اتأكد إن الرابط بيوصل للملف مباشرة')
-      var file = new File([blob], 'book-' + Date.now() + '.pdf', { type: 'application/pdf' })
+      /* (Z-41) الاسم الحقيقي للكتاب — البروكسي بينقل Content-Disposition من
+         المصدر (بما فيه درايف) في X-Proxy-Filename — بدل «كتاب من رابط»
+         وbook-1730000.pdf اللي المستر كان بيشوفهم كاسم تاني */
+      var realName = ''
+      try {
+        var hName = res.headers.get('X-Proxy-Filename')
+        if (hName) realName = decodeURIComponent(String(hName)).trim()
+      } catch (eH) {}
+      var baseName = (realName || 'كتاب من رابط').replace(/\.pdf$/i, '').trim() || 'كتاب من رابط'
+      var file = new File([blob], realName ? realName : ('book-' + Date.now() + '.pdf'), { type: 'application/pdf' })
       setBookFile(file); bookDocRef.current = null; setBookNumPages(0); setBookPagesText('')
       var opened = await openPdf(file)
       bookDocRef.current = opened.doc
       setBookNumPages(opened.numPages)
-      setBookName(''); setTitle(function (t: string) { return t || 'كتاب من رابط' })
+      setBookName(baseName); setTitle(function (t: string) { return (t && String(t).trim()) || baseName })
       setBookPagesText('1-' + Math.min(opened.numPages, 30))
       toast.success('اتفتح الكتاب من الرابط — عدد الصفحات: ' + opened.numPages + ' — حدد الصفحات واضغط استخراج')
     } catch (e: any) {

@@ -343,7 +343,8 @@ export function BooksManager() {
                     </div>
                   </div>
                   <a
-                    href={isLinkBook ? b.sourceUrl : (b.filePath + (b.filePath.indexOf('?') !== -1 ? '&' : '?') + 'dl=1')}
+                    /* (Z-41) كتب اللينك الخارجي التحميل من خلال البروكسي — لينك جوجل المباشر كان بيفتح صفحة HTML مش الملف */
+                    href={isLinkBook ? ('/api/books/proxy?url=' + encodeURIComponent(b.sourceUrl) + '&dl=1') : (b.filePath + (b.filePath.indexOf('?') !== -1 ? '&' : '?') + 'dl=1')}
                     target="_blank"
                     rel="noreferrer"
                     className="shrink-0"
