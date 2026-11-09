@@ -5926,6 +5926,39 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
   /* (2026-و108) حفظ الكتاب المفتوح في المكتبة من شاشة الاستخراج نفسها —
      طلب المستر: «أنا عاوز كل مرحلة يكون لها كتب محفوظة وأحدد الصفحات» —
      من غير ما يروح تاب الكتب والملازم ويرفع الملف من الأول كل مرة */
+  /* (و118) «احفظ في المكتبة» باللينك — طلب المستر: «لما أحط اللينك أول ما أدوس
+     يكون في زرار صغير أدوس أحفظ في المكتبة» — درايف وأي لينك بيتحفظ من غير رفع */
+  var saveLinkBookToLibrary = async function () {
+    if (!adminId) { toast.error('مفيش جلسة أدمن — سجل دخول تاني'); return }
+    if (bookSaving) return
+    if (!bookUrl.trim()) { toast.error('الصق لينك الكتاب الأول'); return }
+    var t = (bookName.trim() || title.trim() || '').trim()
+    if (!t) {
+      var typedL = window.prompt('اكتب عنوان الكتاب عشان يتخزن في المكتبة:', 'كتاب من رابط') || ''
+      t = typedL.trim()
+    }
+    if (!t) return
+    var g = bookGradeFilter || grade || ''
+    setBookSaving(true)
+    setStatusMsg('جاري حفظ «' + t + '» في المكتبة باللينك…')
+    try {
+      var resL = await fetch('/api/admin/books?adminId=' + encodeURIComponent(adminId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: t, description: '', sourceUrl: bookUrl.trim(), grade: g, usage: 'both' }),
+      })
+      var dL = await resL.json()
+      if (!resL.ok) throw new Error(dL.error || 'فشل حفظ الكتاب في المكتبة')
+      toast.success('اتحفظ «' + t + '» في المكتبة باللينك ✓ — هيفضل ثابت في قايمة «الكتب المحفوظة» هنا وفي تاب «الكتب والملازم» — وكل مرة تفتحه بالضغط عليه بس وتطلع منه واجبات وامتحانات زي ما أنت عايز', { duration: 10000 })
+      await loadSavedBooks()
+      setShowSavedBooks(true)
+    } catch (e: any) {
+      toast.error('مقدرتش أحفظ الكتاب: ' + String((e && e.message) || e), { duration: 8000 })
+    }
+    setStatusMsg('')
+    setBookSaving(false)
+  }
+
   var saveBookToLibrary = async function () {
     if (!bookFile) { toast.error('افتح الكتاب الأول (ملف أو لينك) وبعدين احفظه'); return }
     if (!adminId) { toast.error('مفيش جلسة أدمن — سجل دخول تاني'); return }
@@ -6329,6 +6362,15 @@ function AIExtractionPanel({ onRefresh, adminId }: { onRefresh: () => void; admi
                   افتح الرابط
                 </Button>
               </div>
+              {/* (و118) زرار «احفظ في المكتبة» بلصق اللينك — طلب المستر الحرفي:
+                  «لما أحط اللينك أول ما أدوس يكون في زرار صغير أدوس أحفظ في المكتبة»
+                  — بيتحفظ باللينك نفسه من غير رفع — مثالي لكتب درايف الكبيرة */}
+              {bookUrl.trim() && (
+                <Button type="button" variant="outline" onClick={saveLinkBookToLibrary} disabled={bookSaving} title="حفظ الكتاب بالمكتبة باللينك — من غير رفع — هيفضل ثابت في الكتب المحفوظة وكل مرة تفتحه بالضغط عليه بس" className="w-full border-emerald-400/50 text-emerald-700 dark:text-emerald-400">
+                  {bookSaving ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
+                  احفظ في المكتبة
+                </Button>
+              )}
               <p className="text-[10px] text-muted-foreground">لو حطيت ملف ورابط، الملف هو اللي هيفتح. اللينك بيتحمل عن طريق المنصة (حماية + بلا مشاكل CORS) — مستحسن للكتب الكبيرة على Drive</p>
             </div>
             {/* (2026-و44 + و107) الكتب المحفوظة — تدفق مرتب بطلب المستر:
