@@ -1293,6 +1293,10 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
   /* (2026-و25) resultId مع النتيجة عشان شاشة المراجعة تعرف تجيب
      writingResults المخزنة من /api/homework/result/[id] عند إعادة الفتح */
   const [hwResults, setHwResults] = useState<Record<string, { score: number; maxScore: number; resultId?: string }>>({})
+  /* (2026-و114) نظام المحاولات السبع — معلومات محاولة كل واجب من السيرفر:
+     attemptNo رقم المحاولة، attemptPenalty خصمها، autoSubmitted تسليم تلقائي (المحاولة السابعة) */
+  const [hwAttemptInfo, setHwAttemptInfo] = useState<Record<string, { attemptNo: number; attemptPenalty: number; autoSubmitted: number }>>({})
+  const [hwAutoFinalBusy, setHwAutoFinalBusy] = useState(false)
   const [hwWrongQuestions, setHwWrongQuestions] = useState<Record<string, { question: string; studentAnswer: string; correctAnswer: string; origIdx?: number }[]>>({})
   const [hwAllQuestions, setHwAllQuestions] = useState<Record<string, any[]>>({})
   const [hwWritingAnswers, setHwWritingAnswers] = useState<Record<string, any[]>>({})
@@ -1559,11 +1563,16 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
             return
           }
           var map: Record<string, { score: number; maxScore: number; resultId?: string }> = {}
+          /* (2026-و114) من نفس الرد: معلومات المحاولة لكل نتيجة (السيرفر بيرجع
+             attemptNo=1 وautoSubmitted=0 للنتايج القديمة اللي من غير أعمدة محاولات) */
+          var attMap: Record<string, { attemptNo: number; attemptPenalty: number; autoSubmitted: number }> = {}
           ;(data.results || []).forEach(function(r: any) {
             map[r.homeworkId] = { score: r.score, maxScore: r.maxScore, resultId: r.id }
+            attMap[r.homeworkId] = { attemptNo: Number(r.attemptNo || 1), attemptPenalty: Number(r.attemptPenalty || 0), autoSubmitted: Number(r.autoSubmitted || 0) }
             onHwSubmitted(r.homeworkId)
           })
           setHwResults(map)
+          setHwAttemptInfo(attMap)
           /* بس بعد رد ناجح مؤكد — القفل التسلسلي مسموح يشتغل */
           setHwResultsLoaded(true)
         })
@@ -1646,6 +1655,45 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     return parseTableValuesFromText(String(answerText || ''), t)
   }
 
+  /* ===== (2026-و114) المحاولة السابعة — تسليم تلقائي بزرار واحد (autoFinal) =====
+     نفس شكل الطلب بتاع التسليم العادي (نفس الهيدرز + studentId/homeworkId) + autoFinal:
+     السيرفر بيسجل المحاولة السابعة من غير إعادة تصحيح وبرجع result/attemptNo/autoSubmitted.
+     بنطبّق نفس منطق نجاح التسليم العادي: النتيجة/الغلط/المقالي + onHwSubmitted + مسح المسودة */
+  const submitHwAutoFinal = async function (hwId: string) {
+    if (hwAutoFinalBusy) return
+    setHwAutoFinalBusy(true)
+    try {
+      var res = await fetch('/api/homework/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, homeworkId: hwId, autoFinal: true }),
+      })
+      var data = await res.json()
+      if (res.ok || data.alreadySubmitted) {
+        toast.success('تم تسليم واجبك تلقائي — المحاولة السابعة')
+        setHwAttemptInfo(function (prev) { return { ...prev, [hwId]: { attemptNo: Number(data.attemptNo || 7), attemptPenalty: Number(data.attemptPenalty || 0), autoSubmitted: Number(data.autoSubmitted || 1) } } })
+        if (data.result) {
+          setHwResults(function (prev) { return { ...prev, [hwId]: { score: data.result.score, maxScore: data.result.maxScore, resultId: data.result.id } } })
+          if (data.result.wrongQuestions && data.result.wrongQuestions.length > 0) {
+            setHwWrongQuestions(function (prev) { return { ...prev, [hwId]: data.result.wrongQuestions } })
+          }
+          if (data.result.writingAnswers && data.result.writingAnswers.length > 0) {
+            setHwWritingAnswers(function (prev) { return { ...prev, [hwId]: data.result.writingAnswers } })
+          }
+          /* أسئلة الواجب كاملة — عشان شاشة المراجعة تعرض الجداول/الرسمات بعد التسليم */
+          setHwAllQuestions(function (prev) { var n = { ...prev }; if (!n[hwId] || n[hwId].length === 0) n[hwId] = hwQuestionsById(hwId); return n })
+          if (data.pendingGrading && data.result.id) startGradingPoll(data.result.id, hwId)
+        }
+        onHwSubmitted(hwId)
+        clearHwDraft(hwId)
+        setBlockedHwId(function (cur) { return cur === hwId ? null : cur })
+      } else {
+        toast.error(data.error || 'خطأ')
+      }
+    } catch (e) { toast.error('خطأ في الاتصال') }
+    setHwAutoFinalBusy(false)
+  }
+
   if (homework.length === 0) return <EmptyState message="لا توجد واجبات حالياً" />
 
   // BLOCK SCREEN — homework already submitted, cannot re-enter, but show score + wrong answers
@@ -1655,21 +1703,56 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     var bAllQs = hwQuestionsById(blockedHwId)
     var bScore = hwResults[blockedHwId]
     var bWrong = hwWrongQuestions[blockedHwId] || []
+    /* (2026-و114) حالة المحاولات للواجب المفتوح — n=رقم المحاولة، autoSubmitted=التسليم التلقائي حصل */
+    var bAtt = hwAttemptInfo[blockedHwId]
+    var bAttNo = (bAtt && bAtt.attemptNo) || 1
+    var bAutoDone = !!(bAtt && bAtt.autoSubmitted) || bAttNo >= 7
     // remaining homeworks: not yet submitted (excluding the blocked one)
     var bRemaining = homework.filter(function(h) { return h.id !== blockedHwId && !completedHwIds.has(h.id) })
     var bDone = homework.filter(function(h) { return h.id !== blockedHwId && completedHwIds.has(h.id) })
     return (
       <div className="space-y-4">
-        {/* Block header */}
+        {/* (2026-و114) شاشة المحاولات — بدل رسالة «ممنوع الإعادة» الصارمة:
+            السابع/التلقائي = نتيجة نهائية، السادسة = زرار التسليم التلقائي،
+            قبل السادسة = زرار حل المحاولة الجاية — وعرض النتيجة زي ما هو تحت */}
         <div className="flex flex-col items-center justify-center py-10 px-6 space-y-4">
-          <div className="h-20 w-20 rounded-full bg-red-500/10 flex items-center justify-center">
-            <X className="h-12 w-12 text-red-500" />
+          <div className={"h-20 w-20 rounded-full flex items-center justify-center " + (bAutoDone ? 'bg-emerald-500/10' : 'bg-red-500/10')}>
+            {bAutoDone ? <CheckCircle2 className="h-12 w-12 text-emerald-500" /> : <X className="h-12 w-12 text-red-500" />}
           </div>
           <div className="text-center space-y-2">
-            <h2 className="text-lg font-bold text-red-600">تم تقديم هذا الواجب بالفعل ولا يمكنك إعادته</h2>
+            {bAutoDone ? (
+              <>
+                <h2 className="text-lg font-bold text-emerald-600">تم التسليم التلقائي ✅</h2>
+                <p className="text-sm text-muted-foreground">خلصت المحاولات السبعة — دي نتيجتك النهائية</p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-lg font-bold text-red-600">تم تقديم هذا الواجب — المحاولة {bAttNo} من 7</h2>
+                <p className="text-sm text-muted-foreground">{bAttNo === 6 ? 'فاضل محاولة واحدة بس — دي هتتسلم تلقائي من غير إعادة حل' : 'تقدر تعيد الحل — النتيجة النهائية أعلى محاولة بعد الخصم'}</p>
+              </>
+            )}
             {blockedHw && <p className="text-sm text-muted-foreground">{blockedHw.title}</p>}
           </div>
-          <Button onClick={function() { onHwSubmitted(blockedHwId); setBlockedHwId(null) }} variant="outline">العودة إلى قائمة الواجبات</Button>
+          {bAutoDone ? (
+            <Button onClick={function() { onHwSubmitted(blockedHwId); setBlockedHwId(null) }} variant="outline">العودة إلى قائمة الواجبات</Button>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+              {bAttNo === 6 && (
+                <Button onClick={function() { if (blockedHwId) submitHwAutoFinal(blockedHwId) }} disabled={hwAutoFinalBusy} className="bg-emerald-600 hover:bg-emerald-700 text-white h-11">
+                  {hwAutoFinalBusy ? <span className="flex items-center gap-1.5"><Loader2 className="h-4 w-4 animate-spin" /> جاري التسليم التلقائي...</span> : 'المحاولة السابعة — هتتسلم تلقائي'}
+                </Button>
+              )}
+              {bAttNo < 6 && (
+                <Button onClick={function() { var id = blockedHwId; setBlockedHwId(null); if (id) setTimeout(function() { setExpandedHw(id) }, 50) }} variant="secondary" className="h-11">حل المحاولة الجاية</Button>
+              )}
+              <Button onClick={function() { onHwSubmitted(blockedHwId); setBlockedHwId(null) }} variant="outline">العودة إلى قائمة الواجبات</Button>
+            </div>
+          )}
+          {!bAutoDone && bAttNo < 6 && (
+            <p className="text-[11px] leading-relaxed text-muted-foreground bg-muted/50 border border-border/60 rounded-lg px-3 py-2 max-w-md text-center">
+              النتيجة النهائية = أعلى محاولة بعد الخصم — المحاولتين الأولانيين من غير خصم، من التالتة خصم ٢ درجة، من الخامسة خصم ٤ درجات
+            </p>
+          )}
         </div>
         {/* Score + wrong answers */}
         {bScore && (
@@ -2133,9 +2216,16 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
     )
   }
 
-  // Split homework into new (not submitted) and done (submitted)
-  var newHomework = homework.filter(function(hw) { return !completedHwIds.has(hw.id) })
-  var doneHomework = homework.filter(function(hw) { return completedHwIds.has(hw.id) })
+  // Split homework into new and done — (2026-و114) بوعي المحاولات:
+  // واجب سلّم ومازال عنده محاولات (أقل من 7 ومن غير تسليم تلقائي) يفضل في «جديد»
+  // عشان الطالب يقدر يكمّل محاولاته — اللي اتفضل فعلا بس يدخل «واجبات مُسلمة»
+  var hwHasAttemptsLeft = function(hwId: string) {
+    var ai = hwAttemptInfo[hwId]
+    if (!ai) return !completedHwIds.has(hwId)
+    return !ai.autoSubmitted && ai.attemptNo < 7
+  }
+  var newHomework = homework.filter(function(hw) { return hwHasAttemptsLeft(hw.id) })
+  var doneHomework = homework.filter(function(hw) { return !hwHasAttemptsLeft(hw.id) })
 
   return (
     <div className="space-y-4">
@@ -2183,6 +2273,10 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
         var hasWriting = writingQuestions.length > 0
         var isExpanded = expandedHw === hw.id
         var isSubmitted = completedHwIds.has(hw.id)
+        /* (2026-و114) إعادة المحاولة: سلّم قبل كده ومازال عنده محاولات — شاشة الحل بتفتح تاني */
+        var hwAtt = hwAttemptInfo[hw.id]
+        var isHwReattempt = !!hwAtt && !hwAtt.autoSubmitted && hwAtt.attemptNo < 7
+        var hwNextAttempt = (hwAtt ? hwAtt.attemptNo : 0) + 1
         // مقفول بالتسلسل؟ الواجب اللي قبله لسه متسلمش (زي الفيديوهات — طلب المستر)
         var isHwSeqLocked = hwLockMap[hw.id] === true && !seqOkHwIds.has(hw.id)
         var prevHwId = hwPrevMap[hw.id]
@@ -2318,6 +2412,13 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                       {isHwSeqLocked && <Badge className="text-[10px] bg-red-500 text-white gap-0.5"><Lock className="h-2.5 w-2.5" /> مقفول</Badge>}
                       {isSubmitted && existingResult && <Badge className="text-[10px] bg-emerald-500 text-white">النتيجة: {existingResult.score}/{existingResult.maxScore}</Badge>}
                       {isSubmitted && !existingResult && <Badge className="text-[10px] bg-emerald-500 text-white">تم التسليم</Badge>}
+                      {/* (2026-و114) بادج المحاولة — التسليم التلقائي بياخد بادجه الخاص */}
+                      {isSubmitted && (function() {
+                        var ai = hwAttemptInfo[hw.id]
+                        if (!ai) return null
+                        if (ai.autoSubmitted) return <Badge className="text-[10px] bg-emerald-600 text-white gap-0.5">تم التسليم التلقائي ✅</Badge>
+                        return <Badge variant="outline" className="text-[10px] border-sky-500/40 text-sky-600">المحاولة {ai.attemptNo} من 7</Badge>
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -2334,8 +2435,8 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                 </div>
               )}
 
-              {/* ACTIVE HOMEWORK - not yet submitted */}
-              {isExpanded && hasQuestions && !isSubmitted && !isHwSeqLocked && (
+              {/* ACTIVE HOMEWORK - not yet submitted (أو لسه عنده محاولات — و114) */}
+              {isExpanded && hasQuestions && !isHwSeqLocked && (!isSubmitted || isHwReattempt) && (
                 <div className="mt-4 pt-4 border-t space-y-4">
                   {/* ===== (2026-و40-w) ورقة العمل: صفحات المصدر مجمعة — بادج دائري
                       + جدول يكتب فيه الطالب + رسمة السؤال — زي الورقة بالظبط ===== */}
@@ -2516,6 +2617,12 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                   {/* (2026-و76) id=hw-submit-<hwId> — onGiveUp بتدور عليه بالـgetElementById
                      عشان التسليم التلقائي عند المغادرة الرابعة يشتغل زي الامتحانات بالظبط
                      + data-photo-busy عشان التسليم التلقائي ما يحصلش والصورة لسه بتترفع */}
+                  {/* (2026-و114) تنبيه الخصم قبل التسليم — من المحاولة التالتة */}
+                  {hwNextAttempt >= 3 && (
+                    <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 leading-relaxed">
+                      في المحاولة رقم {hwNextAttempt} هيتخصم {hwNextAttempt <= 4 ? 2 : 4} درجة من نتيجتك — والنتيجة النهائية بتكون أعلى محاولة
+                    </p>
+                  )}
                   <Button id={'hw-submit-' + hw.id} data-photo-busy={hwPhotoBusy[hw.id] ? '1' : '0'} size="sm" className="w-full sm:w-auto h-11 sm:h-8 mt-1" disabled={Object.keys(myAnswers).length === 0 && Object.keys(hwAnswers[hw.id] || {}).length === 0 || hwSubmitting === hw.id || hwPhotoBusy[hw.id] === true} onClick={async function() {
                     setHwSubmitting(hw.id)
                     try {
@@ -2565,6 +2672,14 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                       })
                       var data = await res.json()
                       if (res.ok || data.alreadySubmitted) {
+                        /* (2026-و114) معلومات المحاولة من السيرفر — بادج المحاولات + توستات التسليم التلقائي.
+                           alreadySubmitted بيتعامل معاه زي ما هو (نجاح) — من غير ما نلمس التعامل الأصلي */
+                        var hwAttNo = Number(data.attemptNo || 0)
+                        if (hwAttNo > 0) {
+                          setHwAttemptInfo(function(prev) { return { ...prev, [hw.id]: { attemptNo: hwAttNo, attemptPenalty: Number(data.attemptPenalty || 0), autoSubmitted: Number(data.autoSubmitted || 0) } } })
+                        }
+                        if (data.autoSubmitted) toast.success('تم تسليم واجبك تلقائي — المحاولة السابعة')
+                        else if (data.attemptsExhausted) toast('خلصت المحاولات السبعة — تم التسليم التلقائي')
                         /* (2026-و110) مسح عدّاد محاولات المساعد بعد التسليم + توست الخصم */
                         clearUses(hw.id)
                         var hwAssistPenalty = Number((data && data.result && data.result.assistantPenalty) || 0)
@@ -2647,6 +2762,13 @@ function HomeworkTab({ homework, studentId, completedHwIds, onHwSubmitted }: { h
                         {dScore && (
                           <Badge className="text-[9px] bg-emerald-500 text-white">النتيجة: {dScore.score}/{dScore.maxScore}</Badge>
                         )}
+                        {/* (2026-و114) بادج المحاولة في واجبات مُسلمة — التلقائي بياخد بادجه */}
+                        {(function() {
+                          var ai = hwAttemptInfo[hw.id]
+                          if (!ai) return null
+                          if (ai.autoSubmitted) return <Badge className="text-[9px] bg-emerald-600 text-white">تم التسليم التلقائي ✅</Badge>
+                          return <Badge variant="outline" className="text-[9px] border-sky-500/40 text-sky-600">المحاولة {ai.attemptNo} من 7</Badge>
+                        })()}
                         {qCount > 0 && <span className="text-[10px] text-muted-foreground">{qCount} سؤال</span>}
                       </div>
                     </div>
