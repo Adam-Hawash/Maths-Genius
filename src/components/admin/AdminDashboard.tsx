@@ -22,8 +22,10 @@ import {
   PlayCircle, Pause, Film, Search, FileDown, PictureInPicture2, Save, Sparkles, Wallet,
   Video as VideoIcon, LinkIcon, MonitorPlay, Send,
   MessageCircle, Copy,
-  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown, Wrench, Brain, Swords, EyeOff
+  ChevronLeft, CheckCircle2, Smartphone, RotateCcw, ShieldCheck, Monitor, Tablet, Flag, GraduationCap, UsersRound, PieChart, BookOpen, ChevronDown, Wrench, Brain, Swords, EyeOff, Lightbulb
 } from 'lucide-react'
+/* (ر3 — منقول من منصة مستر شريف) معلومة اليوم / حكمة اليوم — لوحة المستر */
+import { DailyInfoAdmin } from './DailyInfoAdmin'
 import { AdminComplaints } from './AdminComplaints'
 import { CMSPanel } from './CMSPanel'
 /* (و64) الترجمة الحقيقية عربي/إنجليزي — الزراير الموحدة في النافبار */
@@ -454,6 +456,8 @@ export function AdminDashboard() {
             {/* (2026-و38) تحليلات الأسئلة — أكتر سؤال الطلاب غلطت فيه + أساميهم — طلب المستر */}
             <TabsTrigger value="item-analytics" className="text-xs sm:text-sm gap-1 text-violet-600 dark:text-violet-400"><PieChart className="h-4 w-4" /><span className="hidden sm:inline">{T('تحليلات الأسئلة', 'Analytics')}</span></TabsTrigger>
             <TabsTrigger value="announcements" className="text-xs sm:text-sm gap-1"><Megaphone className="h-4 w-4" /><span className="hidden sm:inline">{T('الإعلانات', 'Announcements')}</span></TabsTrigger>
+            {/* (ر3) معلومة اليوم / حكمة اليوم — منقولة من منصة مستر شريف بطلب المستر */}
+            <TabsTrigger value="daily-info" className="text-xs sm:text-sm gap-1 text-amber-600 dark:text-amber-400"><Lightbulb className="h-4 w-4" /><span className="hidden sm:inline">{T('معلومة اليوم', 'Daily Info')}</span></TabsTrigger>
             <TabsTrigger value="community" className="text-xs sm:text-sm gap-1"><MessageSquare className="h-4 w-4" /><span className="hidden sm:inline">{T('المجتمعات', 'Communities')}</span>{newCommunityCount > 0 && <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold">{newCommunityCount > 99 ? '99+' : newCommunityCount}</span>}</TabsTrigger>
             <TabsTrigger value="activity" className="text-xs sm:text-sm gap-1"><Activity className="h-4 w-4" /><span className="hidden sm:inline">{T('المتابعة', 'Activity')}</span></TabsTrigger>
             <TabsTrigger value="gallery" className="text-xs sm:text-sm gap-1"><Camera className="h-4 w-4" /><span className="hidden sm:inline">{T('معرض الصور', 'Gallery')}</span></TabsTrigger>
@@ -492,6 +496,8 @@ export function AdminDashboard() {
               fields={{ title: { label: 'عنوان | Title', type: 'text' }, content: { label: 'المحتوى | Content', type: 'textarea' } }}
               renderTitle={(item) => item.title} renderSubtitle={(item) => item.content?.substring(0, 100) + '...'} onRefresh={fetchStats} />
           </TabsContent>
+          {/* (ر3) معلومة اليوم / حكمة اليوم — كتابة + ملف مرفق + تفعيل */}
+          <TabsContent value="daily-info"><DailyInfoAdmin adminId={(currentAdmin && currentAdmin.id) || ''} /></TabsContent>
           <TabsContent value="community"><CommunityPanel /></TabsContent>
           <TabsContent value="activity"><ActivityPanel /></TabsContent>
           <TabsContent value="gallery"><GalleryManager /></TabsContent>
