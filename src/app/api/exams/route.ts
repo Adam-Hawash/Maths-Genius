@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
 import { notifyStudents } from '@/lib/notify'
 import { notifyParentsOfAssignment } from '@/lib/parent-notify'
-import { isAdmin } from '@/lib/video-guard'
+import { isAdmin } from '@/lib/video-guard-server'
 /* (2026-و55) إخفاء إجابات الـ AI في الجداول عن الطالب — تنظيف سيرفري */
 import { questionsJsonForStudent } from '@/lib/table-sanitize'
 

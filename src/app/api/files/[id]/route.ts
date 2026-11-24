@@ -10,7 +10,7 @@
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { isAdmin, verifyVideoToken } from '@/lib/video-guard'
+import { isAdmin, verifyVideoToken } from '@/lib/video-guard-server'
 
 /* ============================================================
    (ص119) حذف ملف من جدول Media — محمي بمعرّف الأدمن (نفس بوابة

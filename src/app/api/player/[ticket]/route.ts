@@ -78,7 +78,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
 import { db } from '@/lib/db'
-import { getYouTubeId, mediaIdFromPath, signVideoToken, ensurePlayTicketTable } from '@/lib/video-guard'
+import { getYouTubeId, mediaIdFromPath, signVideoToken, ensurePlayTicketTable } from '@/lib/video-guard-server'
 import { sanitizePlayerConfig } from '@/lib/player-config'
 
 /* ===== (و35) أي لينك فيديو بيتشغل — مش شرط يوتيوب أو امتداد مباشر =====

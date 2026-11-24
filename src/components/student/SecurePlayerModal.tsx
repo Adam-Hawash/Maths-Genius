@@ -24,6 +24,7 @@
 // ============================================================
 import { useEffect, useRef, useState } from 'react'
 import { X, Loader2, ShieldCheck } from 'lucide-react'
+import { notifyVideoOpened } from '@/lib/video-guard'
 
 export function SecurePlayerModal({
   ticket,
@@ -47,6 +48,11 @@ export function SecurePlayerModal({
   var setResume = rs[1]
   var onWatchRef = useRef(onWatch)
   useEffect(function () { onWatchRef.current = onWatch }, [onWatch])
+
+  // (ر7) حارس الفيديو — أي فتح للمشغل الآمن بيطلع التنبيه بعد التنازلي 10 ثواني
+  useEffect(function () {
+    notifyVideoOpened()
+  }, [])
 
   // ===== ملء الشاشة (بيتحكم فيه الأب) =====
   var stageRef = useRef<HTMLDivElement>(null)

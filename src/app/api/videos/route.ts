@@ -10,7 +10,7 @@
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
-import { isAdmin, getStudentAnyStatus, safeThumb, getYouTubeId, mediaIdFromPath, ensureVideoTable } from '@/lib/video-guard'
+import { isAdmin, getStudentAnyStatus, safeThumb, getYouTubeId, mediaIdFromPath, ensureVideoTable } from '@/lib/video-guard-server'
 /* (S-4a — توحيد الصفوف) المرجع الموحد: قراءة = gradeWhere (كل الصيغ)، كتابة = storeGrade (الاسم المعتمد) */
 import { gradeWhere, storeGrade } from '@/lib/grade-names'
 import crypto from 'crypto'

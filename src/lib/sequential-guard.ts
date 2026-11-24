@@ -26,7 +26,7 @@ import { db, withRetry } from '@/lib/db'
 import { gradeVariants, normalizeGrade } from '@/lib/grade-names'
 /* (2026-ص2) مفتاح قفل التسلسل الموحد — نفس مفتاح الفيديوهات بالظبط:
    لوحة التحكم بتقفله مرة واحدة → دروس/واجبات/امتحانات كله موحد */
-import { isSequenceLockEnabled } from '@/lib/video-guard'
+import { isSequenceLockEnabled } from '@/lib/video-guard-server'
 /* (2026-و67) أسئلة الطالب الفعلية — نفس الدالة اللي بتقرأ شاشة الأدمن/التسليم،
    عشان امتحانات النماذج (أ/ب) تتتبع صح: سلسلة الحارس لازم تطابق حرفيًا
    اللي الطالب شايفه في قايمته (القايمة بترجع أسئلة نموذجه هو) */

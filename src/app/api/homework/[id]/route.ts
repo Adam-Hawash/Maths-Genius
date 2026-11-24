@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db, safeWrite } from '@/lib/db'
-import { isAdmin } from '@/lib/video-guard'
+import { isAdmin } from '@/lib/video-guard-server'
 /* (S-4a — توحيد الصفوف) المرجع الموحد: كتابة = storeGrade */
 import { storeGrade } from '@/lib/grade-names'
 import { collectMediaIds, deleteMediaByIds, examHomeworkMediaTexts } from '@/lib/media-cleanup'
