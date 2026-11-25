@@ -1,69 +1,50 @@
 'use client'
 
 // ============================================================
-// DevToolsGuard — الحارس الموحد (ر8 — طلب المستر الحرفي المحدّث)
+// DevToolsGuard — ر10 بطلب المستر الحرفي:
+// «انا مرة افتح المنصة الاقي جاب لي العداد ده من غير ما اعمل اي حاجة،
+//  مرة افتح الفيديو بس الاقيه جاب لي كده — انا عاوز العداد ده يظهر
+//  في حالة واحدة بس: ان انا فتحت الـ Developer Tools — لكن غير كده لا
+//  — عشان بقى في اخطاء كتير بتحصل»
 // ============================================================
-// «أنا بفتح الـ Developer Tools اهو بيظهر لي لينك اليوتيوب» —
-// «أي حد يفتح الـ Developer Tools وهو شغال الفيديو → أول ما يفتح
-//  DevTools فورًا: شاشة المنصة تقلب سودة + تحذير بعد تنازلي
-//  8→7→6→...→0 بنص «إلا هتخرج من المنصة» — لو قفل الـ DevTools على
-//  طول خلال العدّ يكمل عادي — لو العد خلص أو حاول يجيب لينك الفيديو
-//  حسابه يترفض نهائيًا برسالة «حسابك مرفوض من المنصة» ويتقفل له كل
-//  حاجة ولا يدخل تاني — والمستر فقط يقدر يرجّعه من صفحة الأدمن»
-//  + «المهلة 8 ثواني بدل 10 — والمهلة أقدر أتحكم فيها من صفحة
-//    الأدمن» → الإعداد guard_countdown_seconds في لوحة «حماية
-//    الفيديوهات» (افتراضي 8 — يقبل من 3 لـ 120).
+// قرار ر10:
+//   • العدّ في **حالة واحدة بس**: أدوات المطوّر مفتوحة فعلًا.
+//   • فتح المنصة عادي أو فتح فيديو = صفر عدّاد صفر إنذارات — إنذار
+//     فتح الفيديو (ر7/ر8) اتلغى بالكامل بطلب المستر.
+//   • المصدر الوحيد للإنذارات الكاذبة اتمسح: الفحص كان بيعتمد 4 إشارات
+//     هشّة (فجوة مقاس النافذة بتكذب مع تغيّر الفيوبورت/الكيبورد/الزووم،
+//     وتوقيت جملة debugger بتنذّر مع أي تهنيج في تحميل الصفحة أو تشغيل
+//     فيديو على موبايل ضعيف، وبلاغات mg_vp المتأخرة بتكذب مع تثبيت
+//     التاب/قفل الموبايل أثناء التشغيل) — كلها اتشالت نهائيًا.
+//   • الكشف بقى **إشارة واحدة موثوقة 100%: فخ الكونسول** — object
+//     بخاصية getter بينسجل في الكونسول كل ثانيتين، والمحتوى مبيتشافش
+//     غير لما كونسول حقيقي (أدوات مطوّر مفتوحة، حتى undocked أو فحص
+//     عن بعد من الموبايل) يعرضه ويشغّل الـ getter — من غير أدوات
+//     مفتوحة الـ getter عمره ما بيتشغل = مستحيل يكذب.
+//   • المهلة بتفضل من إعداد الأدمن guard_countdown_seconds (افتراضي
+//     8 ثواني — يقبل 3..120) زي ما المستر طلب: «المهلة أقدر أتحكم
+//     فيها من صفحة الأدمن».
+//   • إصلاح بَج ر8 المكتشف أثناء المراجعة: بعد المسامحة (قفل الأدوات
+//     قبل الصفر) كانت body.style.overflow بتفضل hidden = المنصة
+//     بتقف عن التمرير خالص — دلوقتي بترجع فورًا مع إزالة الشاشة.
 //
-// سيناريوهات الحارس:
-//   1) الطالب فتح فيديو → تنبيه حماية الفيديو بمهلة العدّ — قفل
-//      التنبيه (زرار إغلاق) أو قفل الفيديو قبل الصفر = مسامحة
-//   2) فتح أدوات المطوّر (الفيديو شغال أو لا) → **شاشة سودة فورية**
-//      بنفس المهلة (لو مفيش فيديو مفتوح المهلة 35 ثواني زي قرار ز19)
-//      — قفل الأدوات قبل الصفر = مسامحة وبيكمل عادي
-//   3) الصفر من غير قفل → محاولة وصول للينك/الكود:
-//      نضرب فورًا: تدمير كل الـ iframes والفيديوهات من الصفحة (منع
-//      النسخ) + POST /api/security/reject-account بيحوّل الحساب
-//      status=rejected (مش مسح — المستر يرجّعه من الأدمن) + قفل
-//      الجلسات + شاشة «حسابك مرفوض من المنصة» دائمة في التاب حتى
-//      بعد Refresh — والدخول بيتمنع من /api/students برسالة عربية
-//
-// الكشف — 4 إشارات مستقلة (درس 2026-ز11: صفر إنذارات كاذبة):
-//   أ) فجوة مقاس النافذة معقّمة من الزووم: زووم المتصفح بيغيّر
-//      devicePixelRatio — أي تغيير dpr = زووم/سيلينج نظام (بنعيد
-//      ضبط المرجع) — أدوات مطوّرة مثبتة بيكبر الفجوة من غير أي
-//      تغيير dpr = إشارة (الزووم 125%/150% والسايدبارات سليمة)
-//   ب) توقيت جملة debugger — الأدوات مفتوحة والـ breakpoints شغالة
-//      = التنفيذ بيفصل عند الجملة (من الحارس القديم ز19)
-//   ج) فخ الكونسول: object بخاصية getter بنسجله كل ثانيتين والأدوات
-//      مفتوحة — الكونسول لما يعرضه بيشغّل الـ getter حتى لو الأدوات
-//      في نافذة منفصلة (undocked) أو موبايل بفحص عن بعد
-//   د) صدمة البلاغات المتأخرة: مشغّل الفيديو المحمي بيبعت بلاغ
-//      mg_vp بطابع زمني — لو وصل متأخر عن طابعه أكتر من 10 ثواني =
-//      الصفحة كانت مجمّدة (خدعة إيقاف الـ debugger عشان يشوف
-//      الفيديو في الـ iframe بس) → إشارة
-//
-// العدّ على **ساعة الحائط** (Date.now) مش عدّاد تيك — تجميد الصفحة
-// من الـ debugger ما بيمددش ولا يوقفش العد: أول ما الصفحة تفضلش
-// بتحصل على نفسها، العد بيتلاقى منتهي فورًا.
+// عند الصفر (أدوات مفتوحة والعد خلص) — نفس قرار ر7/ر8:
+//   تدمير كل الـ iframes والفيديوهات من الصفحة (منع النسخ) +
+//   POST /api/security/reject-account بيرفض الحساب نهائيًا (مش مسح
+//   — المستر يرجّعه من تاب الطلاب المرفوضين) + قفل الجلسات + شاشة
+//   «حسابك مرفوض من المنصة» دائمة.
 //
 // الأدمن مستثنى (قرار ز19): جلسة أدمن بدون جلسة طالب = الحارس ما
-// بيشتغلش أصلًا — المستر يفتح أدوات المطوّر براحته، وأولياء الأمور
-// مش بيتهمسهم الحارس أصلًا (مفيش حساب طالب يترفض).
+// بيشتغلش أصلًا — المستر يفتح أدوات المطوّر براحته.
 // ============================================================
 import { useEffect } from 'react'
 import { getDeviceCandidates, getDeviceId } from '@/lib/device'
 import {
-  VIDEO_OPENED_EVENT,
-  VIDEO_CLOSED_EVENT,
   GUARD_COUNTDOWN_KEY,
   GUARD_COUNTDOWN_DEFAULT,
 } from '@/lib/video-guard'
 
 const LOCK_KEY = 'dv_guard_locked'
-/* قرار ز19: أدوات المطوّر من غير فيديو مفتوح = مهلة 35 ثواني */
-const LEGACY_DT_MS = 35 * 1000
-/* فجوة المقاس اللي بتعتبر أدوات مطوّرة (الدرس: 160 كان بيعمل إنذارات — 170 آمن) */
-const Z_GAP = 170
 
 export function DevToolsGuard() {
   useEffect(function () {
@@ -132,52 +113,18 @@ export function DevToolsGuard() {
     /* ===== الحالة ===== */
     var done = false
     var running = false
-    var videoOpen = false
-    var dismissed = false
     var dtOpen = false
-    var mode: '' | 'warn' | 'black' = ''
-    var prevMode: '' | 'warn' | 'black' = ''
     var deadline = 0
     var armedDurMs = 0
     var lastShown = -1
-
-    /* ===== إشارات أدوات المطوّر ===== */
-    var dpr0 = (window.devicePixelRatio as number) || 1
-    var gap0 = (window.outerWidth || 0) - (window.innerWidth || 0)
-    var sizePos = 0
-    var dbgPos = 0
-    var cleanStreak = 0
     var lastGetterHit = 0
-    var lastStaleHit = 0
+    var cleanStreak = 0
     var tickNo = 0
 
-    function sizeSignal(): boolean {
-      try {
-        var dpr = (window.devicePixelRatio as number) || 1
-        if (Math.abs(dpr - dpr0) > 0.015) {
-          /* زووم متصفح أو تغيير سيلينج النظام — سليم: بنعيد ضبط المرجع */
-          dpr0 = dpr
-          gap0 = (window.outerWidth || 0) - (window.innerWidth || 0)
-          sizePos = 0
-          return false
-        }
-        var gap = (window.outerWidth || 0) - (window.innerWidth || 0)
-        return gap - gap0 > Z_GAP
-      } catch (e) { return false }
-    }
-
-    function dbgSignal(): boolean {
-      var t0 = (window.performance && performance.now) ? performance.now() : Date.now()
-      try {
-        /* جملة debugger داخل دالة متولدة — الأدوات مفتوحة والـ
-           breakpoints شغالة = التنفيذ بيفصل عند الجملة */
-        (function () {} as any).constructor('debugger')()
-      } catch (e) {}
-      var dt = ((window.performance && performance.now) ? performance.now() : Date.now()) - t0
-      return dt > 50
-    }
-
-    /* فخ الكونسول — getter بيتشغل لما الكونسول يعرض الـ object */
+    /* ===== الإشارة الوحيدة: فخ الكونسول =====
+       getter بيتشغل لحظة ما كونسول حقيقي يعرض الـ object — من غير
+       أدوات مطوّر مفتوحة مفيش حاجة بتعرضه فمستحيل يشتغل = صفر إنذارات
+       كاذبة على فتح المنصة العادي أو تشغيل الفيديو أو أي جهاز ضعيف */
     var trapObj: any = {}
     try {
       Object.defineProperty(trapObj, 'id', {
@@ -185,17 +132,6 @@ export function DevToolsGuard() {
         configurable: true,
       })
     } catch (e) {}
-
-    /* بلاغات المشغل المتأخرة = الصفحة كانت مجمّدة */
-    function onPlayerMessage(ev: MessageEvent) {
-      try {
-        var d: any = ev && ev.data
-        if (!d || typeof d !== 'object') return
-        if (d.type === 'mg_vp' && d.tm) {
-          if (Date.now() - Number(d.tm) > 10000) lastStaleHit = Date.now()
-        }
-      } catch (e) {}
-    }
 
     /* ===== منع النسخ: تدمير كل الـ iframes والفيديوهات من الصفحة =====
        بيتنفذ لحظة تأكيد فتح أدوات المطوّر وعند الرفض — عشان لينك
@@ -217,72 +153,29 @@ export function DevToolsGuard() {
       } catch (e) {}
     }
 
-    /* ===== أحداث فتح/قفل الفيديو (من المشغل الآمن) ===== */
-    function onVideoOpen() {
-      if (done || videoOpen) return
-      if (!readStudent()) return /* مفيش جلسة طالب — مفيش حساب نقدر نرفضه */
-      videoOpen = true
-      dismissed = false /* فيديو جديد = تنبيه جديد */
-      recompute()
-    }
-    function onVideoClose() {
-      if (done) return
-      if (!videoOpen) return
-      videoOpen = false
-      recompute()
-    }
-    function onResizeEvt() { if (!done) tickBody() }
-    try {
-      window.addEventListener(VIDEO_OPENED_EVENT, onVideoOpen as EventListener)
-      window.addEventListener(VIDEO_CLOSED_EVENT, onVideoClose as EventListener)
-      window.addEventListener('message', onPlayerMessage as EventListener)
-      window.addEventListener('resize', onResizeEvt as EventListener)
-    } catch (e) {}
-
     /* ===== آلة الحالة — العدّ على ساعة الحائط ===== */
-    function blackDurMs(): number {
-      return videoOpen ? countMs : LEGACY_DT_MS
-    }
-
     function recompute() {
       if (done) return
-      var armedBlack = dtOpen
-      var armedWarn = videoOpen && !dismissed
-      if (!armedBlack && !armedWarn) {
+      if (!dtOpen) {
         if (running) {
-          /* المسامحة — الأدوات/الفيديو اتقفلوا قبل الصفر: الاشعار بيروح وبيكمل عادي */
+          /* المسامحة — أدوات المطوّر اتقفلت قبل الصفر: الشاشة بتروح
+             والصفحة بترجع تتمرر عادي (إصلاح بَج الـ overflow) */
           running = false
           deadline = 0
-          mode = ''
-          prevMode = ''
           removeUI()
         }
         return
       }
-      if (armedBlack) {
-        mode = 'black'
-        if (prevMode !== 'black') {
-          /* أول ما الأدوات تتفتح: سودة فورية + عدّ كامل من الأول */
-          deadline = Date.now() + blackDurMs()
-          armedDurMs = blackDurMs()
-          running = true
-          nukeMedia() /* منع النسخ: المشغل/اليوتيوب يختفي من الـ DOM فورًا */
-          renderMode()
-          lastShown = -1
-          paintCount()
-        }
-      } else {
-        mode = 'warn'
-        if (prevMode !== 'warn') {
-          deadline = Date.now() + countMs
-          armedDurMs = countMs
-          running = true
-          renderMode()
-          lastShown = -1
-          paintCount()
-        }
+      if (!running) {
+        /* أول ما الأدوات تتأكد مفتوحة: سودة فورية + عدّ كامل من الأول */
+        deadline = Date.now() + countMs
+        armedDurMs = countMs
+        running = true
+        nukeMedia() /* منع النسخ: المشغل/اليوتيوب يختفي من الـ DOM فورًا */
+        renderMode()
+        lastShown = -1
+        paintCount()
       }
-      prevMode = mode
     }
 
     /* ===== حلقة التشغيل (500ms) ===== */
@@ -292,20 +185,15 @@ export function DevToolsGuard() {
       if (done) return
       tickNo++
 
-      if (tickNo % 2 === 0) { if (dbgSignal()) { dbgPos++; cleanStreak = 0 } else { dbgPos = 0; cleanStreak++ } }
-      if (sizeSignal()) { sizePos++; cleanStreak = 0 } else { sizePos = 0; cleanStreak++ }
-
-      /* فخ الكونسول — لما الفيديو مفتوح أو العدّ شغال.
-         log عادي من غير %c عشان الكونسول يعرض الـ object ويشغّل الـ getter */
-      if ((videoOpen || running) && tickNo % 4 === 0) {
+      /* فخ الكونسول — log عادي كل ثانيتين من غير %c عشان الكونسول
+         يعرض الـ object ويشغّل الـ getter (من غير أدوات مفتوحة =
+         مفيش عرض = مفيش إشارة = مفيش إنذار) */
+      if (tickNo % 4 === 0) {
         try { console.log(trapObj) } catch (e) {}
       }
 
       var getterFresh = (Date.now() - lastGetterHit) < 3000
-      var staleFresh = (Date.now() - lastStaleHit) < 5000
-      var pos = sizePos >= 2 || dbgPos >= 2 || getterFresh || staleFresh
-
-      if (pos) {
+      if (getterFresh) {
         cleanStreak = 0
         if (!dtOpen) {
           if (readStudent()) { dtOpen = true; recompute() }
@@ -314,6 +202,8 @@ export function DevToolsGuard() {
         /* الأدوات اتقفلت 3 ثواني نضيفة = مسامحة (طلب المستر الحرفي) */
         dtOpen = false
         recompute()
+      } else if (!getterFresh) {
+        cleanStreak++
       }
 
       recompute()
@@ -321,8 +211,7 @@ export function DevToolsGuard() {
       if (running) {
         paintCount()
         /* لو حد شال العنصر نفسه من الـ DOM بالأدوات — بنرجّعه فورًا */
-        if (mode === 'black' && !document.getElementById('mg-guard-black')) renderMode()
-        if (mode === 'warn' && !document.getElementById('mg-guard-warn')) renderMode()
+        if (!document.getElementById('mg-guard-black')) renderMode()
         /* الصفر على ساعة الحائط — تجميد الصفحة ما بينفعش */
         if (Date.now() >= deadline) { punish(); return }
       }
@@ -353,13 +242,15 @@ export function DevToolsGuard() {
 
     function removeUI() {
       try {
-        var w = document.getElementById('mg-guard-warn')
-        if (w && w.parentNode) w.parentNode.removeChild(w)
         var b = document.getElementById('mg-guard-black')
         if (b && b.parentNode) b.parentNode.removeChild(b)
       } catch (e) {}
       numEl = null
       barEl = null
+      try {
+        /* إصلاح بَج ر8: التمرير بيرجع فورًا مع إزالة الشاشة */
+        document.body.style.overflow = ''
+      } catch (e) {}
     }
 
     function baseStyles(): string {
@@ -367,62 +258,30 @@ export function DevToolsGuard() {
     }
 
     function renderMode() {
+      if (done) return
       removeUI()
-      var secs = Math.max(1, Math.round((mode === 'black' ? blackDurMs() : countMs) / 1000))
-      if (mode === 'black') {
-        var o = document.createElement('div')
-        o.id = 'mg-guard-black'
-        o.setAttribute('role', 'alert')
-        o.setAttribute('aria-live', 'assertive')
-        o.style.cssText = baseStyles()
-        o.innerHTML =
-          '<div style="max-width:560px;display:flex;flex-direction:column;align-items:center;gap:16px">' +
-          '<div style="font-size:60px;line-height:1">🛡️</div>' +
-          '<div style="font-size:24px;font-weight:900;letter-spacing:.5px">أدوات المطوّر ممنوعة على المنصة</div>' +
-          '<div style="font-size:15px;color:#d4d4d8;line-height:1.9">عندك <b style="color:#fbbf24">' + secs + ' ثواني</b> بس — اقفل أدوات المطوّر فورًا<br/>' +
-          '<b style="color:#f87171">إلا هتخرج من المنصة وحسابك هيترفض نهائيًا</b> ومش هتقدر تدخل تاني</div>' +
-          '<div id="mg-num" style="font-size:92px;font-weight:900;color:#f87171;font-variant-numeric:tabular-nums;line-height:1">' + secs + '</div>' +
-          '<div style="width:100%;max-width:340px;height:8px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden">' +
-          '<div id="mg-bar" style="height:100%;width:100%;background:#f87171;border-radius:99px;transition:width .5s linear"></div>' +
-          '</div>' +
-          '<div style="font-size:12px;color:#71717a">المنصة بتحمي مجهود المستر وحق الطلاب اللي دفعوا</div>' +
-          '</div>'
-        document.body.appendChild(o)
-        try { document.body.style.overflow = 'hidden' } catch (e) {}
-        numEl = o.querySelector('#mg-num')
-        barEl = o.querySelector('#mg-bar')
-      } else if (mode === 'warn') {
-        var w = document.createElement('div')
-        w.id = 'mg-guard-warn'
-        w.setAttribute('role', 'alert')
-        w.setAttribute('aria-live', 'assertive')
-        w.style.cssText = baseStyles()
-        w.innerHTML =
-          '<div style="max-width:560px;display:flex;flex-direction:column;align-items:center;gap:18px">' +
-          '<div style="font-size:60px;line-height:1">📹</div>' +
-          '<div style="font-size:24px;font-weight:900;letter-spacing:.5px">تنبيه حماية الفيديو</div>' +
-          '<div style="font-size:14px;color:#d4d4d8;line-height:1.9">لو حاولت تجيب لينك الفيديو أو تصوره — ' +
-          '<b style="color:#f87171">حسابك هيترفض من المنصة تمامًا ومش هتقدر تدخل تاني</b><br/>لو مش قصدك دوس «إغلاق التنبيه» قبل الصفر وكمّل عادي</div>' +
-          '<div id="mg-num" style="font-size:88px;font-weight:900;color:#f87171;font-variant-numeric:tabular-nums;line-height:1">' + secs + '</div>' +
-          '<div style="width:100%;max-width:340px;height:8px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden">' +
-          '<div id="mg-bar" style="height:100%;width:100%;background:#f87171;border-radius:99px;transition:width .5s linear"></div>' +
-          '</div>' +
-          '<button id="mg-vg-dismiss" type="button" style="margin-top:6px;padding:14px 34px;border-radius:14px;border:0;cursor:pointer;font-size:16px;font-weight:900;font-family:inherit;background:#f87171;color:#fff;box-shadow:0 6px 18px rgba(248,113,113,.35)">إغلاق التنبيه ✓</button>' +
-          '<div style="font-size:12px;color:#71717a">المنصة بتحمي مجهود المستر وحق الطلاب اللي دفعوا</div>' +
-          '</div>'
-        document.body.appendChild(w)
-        try { document.body.style.overflow = 'hidden' } catch (e) {}
-        numEl = w.querySelector('#mg-num')
-        barEl = w.querySelector('#mg-bar')
-        var btn = w.querySelector('#mg-vg-dismiss')
-        if (btn) {
-          btn.addEventListener('click', function (ev: any) {
-            try { ev.preventDefault(); ev.stopPropagation() } catch (e) {}
-            dismissed = true
-            recompute()
-          })
-        }
-      }
+      var secs = Math.max(1, Math.round(countMs / 1000))
+      var o = document.createElement('div')
+      o.id = 'mg-guard-black'
+      o.setAttribute('role', 'alert')
+      o.setAttribute('aria-live', 'assertive')
+      o.style.cssText = baseStyles()
+      o.innerHTML =
+        '<div style="max-width:560px;display:flex;flex-direction:column;align-items:center;gap:16px">' +
+        '<div style="font-size:60px;line-height:1">🛡️</div>' +
+        '<div style="font-size:24px;font-weight:900;letter-spacing:.5px">أدوات المطوّر ممنوعة على المنصة</div>' +
+        '<div style="font-size:15px;color:#d4d4d8;line-height:1.9">عندك <b style="color:#fbbf24">' + secs + ' ثواني</b> بس — اقفل أدوات المطوّر فورًا<br/>' +
+        '<b style="color:#f87171">إلا هتخرج من المنصة وحسابك هيترفض نهائيًا</b> ومش هتقدر تدخل تاني</div>' +
+        '<div id="mg-num" style="font-size:92px;font-weight:900;color:#f87171;font-variant-numeric:tabular-nums;line-height:1">' + secs + '</div>' +
+        '<div style="width:100%;max-width:340px;height:8px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden">' +
+        '<div id="mg-bar" style="height:100%;width:100%;background:#f87171;border-radius:99px;transition:width .5s linear"></div>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#71717a">المنصة بتحمي مجهود المستر وحق الطلاب اللي دفعوا</div>' +
+        '</div>'
+      document.body.appendChild(o)
+      try { document.body.style.overflow = 'hidden' } catch (e) {}
+      numEl = o.querySelector('#mg-num')
+      barEl = o.querySelector('#mg-bar')
     }
 
     function renderFinal(kind: 'rejected' | 'locked') {
@@ -463,7 +322,7 @@ export function DevToolsGuard() {
         renderFinal('rejected')
         var payload: any = {
           studentId: st.id,
-          reason: videoOpen ? 'video' : 'devtools',
+          reason: 'devtools',
         }
         try {
           payload.deviceId = getDeviceId()
@@ -499,15 +358,9 @@ export function DevToolsGuard() {
       } catch (e) {}
     }
 
-    /* بداية نظيفة */
+    /* بداية نظيفة — مفيش أي listeners خارجية: الإشارة الوحيدة فخ الكونسول */
     return function cleanup() {
-      try {
-        clearInterval(timer)
-        window.removeEventListener(VIDEO_OPENED_EVENT, onVideoOpen as EventListener)
-        window.removeEventListener(VIDEO_CLOSED_EVENT, onVideoClose as EventListener)
-        window.removeEventListener('message', onPlayerMessage as EventListener)
-        window.removeEventListener('resize', onResizeEvt as EventListener)
-      } catch (e) {}
+      try { clearInterval(timer) } catch (e) {}
     }
   }, [])
   return null
