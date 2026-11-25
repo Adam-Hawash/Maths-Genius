@@ -9,6 +9,10 @@
 //    معاه حتى لما يعمل لوج ان — تتقفل لما يدوس بس على حرف الـ X»
 //   «ما يكونش بوقت — مش بوقت ويختفي — لما أدوس X يختفي»
 //   • بتنزلق من الشمال أول ما أي حد يفتح المنصة (زائر/طالب — حتى غير المسجلين)
+//   • (ر10) الكارت بقى فوق عمود الأزرار العايمة بالكامل (زرار «ثبّت
+//     التطبيق» + واتساب اللي فوقه) بطلب المستر الحرفي: «انا عاوز اما
+//     افتح المعلومة تكون فوق زرار التنزيل عشان اسم المستر يبان» — كان
+//     الزرار العايم مغطي أسفل الكارت وبيخفي سطر التوقيع «MR. Wael Khodair»
 //   • بتفضل ثابتة بعد تسجيل الدخول كمان — نفس الكارت بلا انقطاع
 //   • من غير أي مؤقت ولا إغلاق تلقائي — الإغلاق الوحيد هو زرار الـ X
 //   • الـ X = تتقفل خالص ومش بتظهر تاني (localStorage) + تسجيل مشاهدة للأدمن
@@ -109,7 +113,7 @@ export function DailyInfoToast() {
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: '-120%', opacity: 0 }}
           transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-          className="fixed bottom-4 left-3 z-[60] w-[calc(100%-1.5rem)] max-w-sm sm:bottom-6 sm:left-6"
+          className="fixed left-3 z-[60] w-[calc(100%-1.5rem)] max-w-sm bottom-[calc(9rem+env(safe-area-inset-bottom))] sm:left-6 sm:bottom-[calc(9.5rem+env(safe-area-inset-bottom))]"
           role="alertdialog"
           aria-label={isWisdom ? 'حكمة اليوم' : 'معلومة اليوم'}
         >
