@@ -34,6 +34,10 @@ export async function POST(request: NextRequest) {
     try { student = await db.student.findUnique({ where: { id: studentId } }) } catch (e) { student = null }
     if (!student) return NextResponse.json({ ok: true, rejected: false })
 
+    /* سبب الرفض (ر8): devtools = فتح أدوات المطوّر — video = تنبيه الفيديو */
+    var reason = String(body.reason || 'video')
+    if (reason !== 'devtools' && reason !== 'video') reason = 'video'
+
     /* مرفوض أصلًا — مفيش حاجة نعملها */
     var curStatus = String((student as any).status || '')
     if (curStatus === 'rejected' || curStatus === 'refused') {
@@ -75,11 +79,14 @@ export async function POST(request: NextRequest) {
 
     // سجل النشاط — بصيغة مفهومة للمستر في لوحة النشاطات
     try {
+      var details = reason === 'devtools'
+        ? 'اترفض تلقائيًا: فتح أدوات المطوّر (Developer Tools) والمهلة خلصت من غير قفل — بيتحسب محاولة وصول للينكات/الكود — بيتقفل الدخول لحد ما تعيد تفعيله من تاب الطلاب المرفوضين'
+        : 'اترفض تلقائيًا: تنبيه حماية الفيديو ما اتقفلش خلال المهلة المحددة — بيتحسب محاولة يجيب لينك الفيديو — بيتقفل الدخول لحد ما تعيد تفعيله من تاب الطلاب المرفوضين'
       await db.studentActivity.create({
         data: {
           studentId: studentId,
           action: 'account_rejected_video',
-          details: 'اترفض تلقائيًا: العد التنازلي للفيديو (10 ثواني) خلص من غير ما يقفل التنبيه — بيتحسب محاولة يجيب لينك الفيديو',
+          details: details,
         },
       })
     } catch (e) {}
