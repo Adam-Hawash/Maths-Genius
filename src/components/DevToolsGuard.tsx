@@ -1,7 +1,18 @@
 'use client'
 
 // ============================================================
-// DevToolsGuard — ر15 بطلب المستر الحرفي:
+// DevToolsGuard — ر16 بطلب المستر الحرفي (تحصين شاشة ر15):
+//   ر16 بيقفل 4 ثغرات كانت بتسمح بهزم السودة وهو مفتوح:
+//     (1) إخفاء العنصر بالـ CSS من الأدوات (display:none/visibility/opacity)
+//         كان بيسمع الشاشة — كل تيك بنفحص المحسوبات وبنرجّعها فورًا
+//     (2) مسح جلسة الطالب من الكونسول وهو مفتوح كان بيفك الحماية (forgive)
+//         — السودة دلوقتي مش متعلقة بالجلسة خالص وبتفضل واقفة لحد قفل
+//         الأدوات فعليًا وكل مسارات المسامحة شغالة بلا جلسة
+//     (3) إعادة ملء الشاشة (fullscreen) بعد ظهور السودة كانت بتدفنها في
+//         الـ top layer — fullscreenchange بيخرج فورًا + فحص كل تيك
+//     (4) المشغل الآمن /api/player/[ticket] ما كانش بيستقبل أمر الإيقاف
+//         (صيغة يوتيوب مش مفهومة له) — رسالة mg_guard_pause جديدة بتوقفه
+//         من جوه + إعادة تثبيت ستايل ومكان العنصر كل تيك ضد العبث
 // «أول حاجة أنا لما بفتح أدوات المطورين عشان أشغل الفيديو بيجيلي
 //  الصورة بتاعت الشاشة السوداء والعادي دي وبعدين بتروح كلها بتتغير
 //  فبيجيلي كده وكده مبيبقاش فيه وأقدر أخد اللينك بكل سهولة،
@@ -252,6 +263,9 @@ export function DevToolsGuard() {
           try {
             /* YouTube IFrame API — إيقاف الصوت ورا الشاشة السودة */
             if (f.contentWindow) f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*')
+            /* (ر16) المشغل الآمن /api/player/[ticket] مش بيستقبل صيغة يوتيوب
+               — رسالة مخصصة بوقفه فعلًا من جوه (الصوت كان بيكمل ورا السودة) */
+            if (f.contentWindow) f.contentWindow.postMessage(JSON.stringify({ type: 'mg_guard_pause' }), '*')
           } catch (e) {}
         }
       } catch (e) {}
@@ -356,9 +370,11 @@ export function DevToolsGuard() {
       }
 
       if (running) {
-        /* جلسة الطالب اختفت (خروج من تاب تاني مثلًا) → مفيش حاجة نحميها
-           → إصلاح فوري من غير أي شاشة */
-        if (!isStudent) forgive()
+        /* (ر16) جلسة الطالب لو اتمسحت من الكونسول والأدوات مفتوحة — الشاشة
+           تفضل واقفة: كانت دي أخطر ثغرة في ر15 (مسح مفتاح الجلسة من
+           الكونسول وهو مفتوح كان بينفّذ forgive فالسودة تروح والفيديو
+           يرجع «بتروح كلها بتتغير» حرفيًا). الحماية دلوقتي مش متعلقة
+           بالجلسة خالص — كل مسارات المسامحة تحت شغالة من غير جلسة. */
 
         /* العدّ الاستعراضي خلص والأدوات لسه مفتوحة → الشاشة تفضل واقفة
            برسالة ثابتة — مفيش أي تنفيذ بعد الصفر خالص (علة «الهبل») */
@@ -368,14 +384,43 @@ export function DevToolsGuard() {
         }
 
         paintCount()
-        /* لو حد شال العنصر نفسه من الـ DOM بالأدوات — بنرجّعه فورًا */
-        if (!document.getElementById('mg-guard-black')) renderMode(stalled)
+        /* (ر16) الشاشة السودة قفل حقيقي مش زخرفة — كل تيك بنفحصها
+           وبنعيد تثبيتها: لو حد شالها من الـ DOM أو خبّاها بالـ CSS
+           (display:none / visibility:hidden / opacity:0) أو غير مكانها
+           أو عبث في ستايلها من الأدوات → بنرجّعها لحظتها. الحماية حالة
+           داخلية مش متعلقة بوجود العنصر ولا بشكله. */
+        var blk = document.getElementById('mg-guard-black') as HTMLElement | null
+        var blkGone = !blk
+        if (!blkGone) {
+          try {
+            var bcs = window.getComputedStyle(blk as HTMLElement)
+            if (bcs.display === 'none' || bcs.visibility === 'hidden' || parseFloat(bcs.opacity || '1') < 0.5) blkGone = true
+          } catch (e) { blkGone = true }
+        }
+        if (blkGone) {
+          renderMode(stalled)
+        } else {
+          try {
+            if (blk && blk.parentNode !== document.body) document.body.appendChild(blk)
+            if (blk) blk.style.cssText = baseStyles()
+          } catch (e) {}
+        }
+        try { if (document.body.style.overflow !== 'hidden') document.body.style.overflow = 'hidden' } catch (e) {}
+        /* (ر16) إعادة ملء الشاشة وأنا واقف = محاولة دفن السودة تحت
+           الـ top layer — بنخرج من الفول سكرين فورًا هنا كمان احتياط */
+        try {
+          var fsNow = (document as any).fullscreenElement || (document as any).webkitFullscreenElement
+          if (fsNow) {
+            try { if ((document as any).exitFullscreen) (document as any).exitFullscreen().catch(function () {}) } catch (e) {}
+            try { if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen() } catch (e) {}
+          }
+        } catch (e) {}
 
         if (gapArmed) {
           /* شبكة أمان الفجوة: التسليح من الفجوة والفجوة راحت من غير
-             resize = الأدوات قفلت → إصلاح فوري */
+             resize = الأدوات قفلت → إصلاح فوري (شغالة من غير جلسة — ر16) */
           if (!gapNow()) forgive()
-        } else if (!noAutomation && dbgFn && isStudent && tickNo % 2 === 0) {
+        } else if (!noAutomation && dbgFn && tickNo % 2 === 0) {
           /* القفل undocked أثناء التسليح: تيك زوجي = فحص توقّف —
              توقّف طويل = لسه مفتوحة، تيك سريع بعد توقّف = قفلت
              → إصلاح فوري ≤1 ثانية */
@@ -420,6 +465,22 @@ export function DevToolsGuard() {
       }
     }
     try { window.addEventListener('resize', onResize) } catch (e) {}
+
+    /* ===== (ر16) إعادة ملء الشاشة وأنا مسلح = دفن للشاشة السودة في
+       الـ top layer (أعلى من أي z-index) — بنخرج فورًا لحظة الحدث
+       مش مستنيين التيك عشان السودة تفضل ظاهرة طول الأدوات مفتوحة ===== */
+    function onFsChange() {
+      if (done || !running) return
+      try {
+        var fsEl = (document as any).fullscreenElement || (document as any).webkitFullscreenElement
+        if (fsEl) {
+          try { if ((document as any).exitFullscreen) (document as any).exitFullscreen().catch(function () {}) } catch (e) {}
+          try { if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen() } catch (e) {}
+        }
+      } catch (e) {}
+    }
+    try { document.addEventListener('fullscreenchange', onFsChange) } catch (e) {}
+    try { document.addEventListener('webkitfullscreenchange', onFsChange) } catch (e) {}
 
     /* ===== فحص التحميل الجديد (علة سكرين شوت المستر) =====
        الأدوات المفتوحة **قبل** تحميل الصفحة كانت بتمتص في خط الأساس
@@ -506,7 +567,9 @@ export function DevToolsGuard() {
           '<div style="font-size:12px;color:#71717a">المنصة بتحمي مجهود المستر وحق الطلاب اللي دفعوا</div>' +
           '</div>'
       } else {
-        var secs = Math.max(1, Math.round(countMs / 1000))
+        /* (ر16) لو الرسم بيحصل وإحنا واقفين في نص عدّ (إعادة رسم بعد ما
+           حد خبّى العنصر من الأدوات) — نبدأ من المتبقي الفعلي مش من الأول */
+        var secs = running && deadline ? Math.max(0, secsLeft()) : Math.max(1, Math.round(countMs / 1000))
         o.innerHTML =
           '<div style="max-width:560px;display:flex;flex-direction:column;align-items:center;gap:16px">' +
           '<div style="font-size:60px;line-height:1">🛡️</div>' +
@@ -552,6 +615,8 @@ export function DevToolsGuard() {
     /* بداية نظيفة */
     return function cleanup() {
       try { window.removeEventListener('resize', onResize) } catch (e) {}
+      try { document.removeEventListener('fullscreenchange', onFsChange) } catch (e) {}
+      try { document.removeEventListener('webkitfullscreenchange', onFsChange) } catch (e) {}
       try { clearInterval(timer) } catch (e) {}
     }
   }, [])

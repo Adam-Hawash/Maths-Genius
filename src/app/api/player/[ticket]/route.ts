@@ -1015,6 +1015,11 @@ try { EMBEDDED = !!(window.parent && window.parent !== window); } catch(e) { EMB
 window.addEventListener('message', function(ev){
   var d = ev.data;
   if(d && d.type === 'mg_fs_state'){ parentFs = !!d.on; layoutWrap(); }
+  /* (ر16) الحارس العام بيبعت إيقاف مؤقت للوسائط لما أدوات المطوّر تتفتح —
+     المشغل الآمن بيرد على رسالته الخاصة ويوقف الفيديو فعلًا من جوه
+     (صيغة يوتيوب IFrame API اللي كانت بتتبعت له مش مفهومة له أصلًا
+     فالصوت كان بيكمل شغال ورا الشاشة السودة) */
+  if(d && d.type === 'mg_guard_pause'){ try{ if(playerApi && playerApi.pauseVideo) playerApi.pauseVideo(); }catch(e){} }
 });
 function isFs(){ var d=document; return !!(d.fullscreenElement || d.webkitFullscreenElement); }
 /* قفل الدوران على العرض — لو اشتغل الجهاز هيلف لوحده، لو فشل الدوران القسري بالـ CSS بياخد مكانه */
