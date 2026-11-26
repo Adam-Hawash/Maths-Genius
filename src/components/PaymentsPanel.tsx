@@ -59,7 +59,9 @@ var studentStatusConfig: Record<string, { label: string; color: string; icon: an
   paid: { label: 'مشاهدة بفلوس', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', icon: Wallet },
 }
 
-export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
+/* (ر17) adminId جديد — نداء فيديوهات الطالب بيمشي بشخصية الأدمن عشان كل
+   فيديوهات الصف ترجع (كان بيمشي زائر فيختبى الدرس المسعّر من المستر نفسه) */
+export function PaymentsPanel({ onRefresh, adminId }: { onRefresh: () => void; adminId?: string }) {
   const [subTab, setSubTab] = useState<'payments' | 'students'>('payments')
   const [payments, setPayments] = useState<PaymentItem[]>([])
   const [counts, setCounts] = useState<PaymentCounts>({ total: 0, pending: 0, approved: 0, rejected: 0 })
@@ -123,8 +125,8 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
   var loadStudentVideos = async function(studentId: string, studentGrade: string) {
     setStudentVideosLoading(true)
     try {
-      // Load all videos for this student's grade
-      var videosRes = await fetch('/api/videos?grade=' + encodeURIComponent(studentGrade) + '&pageSize=100')
+      // (ر17) adminId في النداء — كل فيديوهات الصف بترجع للمستر (المجاني والمسعّر)
+      var videosRes = await fetch('/api/videos?grade=' + encodeURIComponent(studentGrade) + '&pageSize=100&adminId=' + encodeURIComponent(adminId || ''))
       var videosData = await videosRes.json()
       var gradeVideos = videosData.videos || []
 
@@ -516,11 +518,14 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
                             </div>
                           ) : (
                             <div className="space-y-2">
-                              <p className="text-xs font-semibold text-muted-foreground mb-2">فيديوهات الصف ({studentVideos.length}) — {st.status === 'approved' ? 'الطالب يشوف الكل مجاناً' : 'الطالب محتاج يدفع للفيديوهات المدفوعة'}</p>
+                              {/* (ر17) نص محايد بنموذج الدفع الفردي — مفيش حد بيشوف الكل مجاناً */}
+                              <p className="text-xs font-semibold text-muted-foreground mb-2">فيديوهات الصف ({studentVideos.length}) — المجاني مفتوح للكل، والدرس بفلوس محتاج تسديده لكل طالب</p>
                               {studentVideos.map(function(v: any) {
                                 var loading = accessActionLoading === (st.id + '_' + v.id)
                                 var isFree = !v.price || v.price === 0
-                                var isUnlocked = v.isUnlocked || st.status === 'approved'
+                                /* (ر17) الفيديو المجاني مفتوح للكل — والمسعّر بس بالدفعة
+                                   أو المنحة — شيلنا «approved = الكل مفتوح» خالص */
+                                var isUnlocked = isFree || v.isUnlocked
                                 return (
                                   <div key={v.id} className={"flex items-center gap-3 p-2.5 rounded-lg bg-background border " + (isUnlocked ? 'border-emerald-500/30' : '')}>
                                     <div className={"h-8 w-8 rounded-lg flex items-center justify-center shrink-0 " + (isUnlocked ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30')}>
@@ -529,11 +534,12 @@ export function PaymentsPanel({ onRefresh }: { onRefresh: () => void }) {
                                     <div className="min-w-0 flex-1">
                                       <p className="text-xs font-medium truncate">{v.title}</p>
                                       <div className="flex items-center gap-2">
-                                        <p className="text-[10px] text-muted-foreground">{isFree ? 'مجاني' : v.price + ' ج.م'}</p>
-                                        {isUnlocked && <span className="text-[9px] text-emerald-600">{v.unlockReason === 'payment' ? '✓ مدفوع' : v.unlockReason === 'granted' ? '✓ مفتوح' : '✓ مجاني (مقبول)'}</span>}
+                                        <p className="text-[10px] text-muted-foreground">{isFree ? 'مجاني' : 'بفلوس — ' + v.price + ' ج.م'}</p>
+                                        {isUnlocked && <span className="text-[9px] text-emerald-600">{isFree ? '✓ مفتوح للكل' : v.unlockReason === 'payment' ? '✓ مدفوع' : '✓ مفتوح (منحة)'}</span>}
                                       </div>
                                     </div>
-                                    {!isFree && st.status !== 'approved' && (
+                                    {/* (ر17) زرار الفتح/القفل متاح لكل الطلاب على الدروس المسعّرة */}
+                                    {!isFree && (
                                       <Button size="sm" variant="ghost" className={"h-7 w-7 p-0 shrink-0 " + (isUnlocked ? 'text-emerald-600 hover:bg-emerald-50' : 'text-blue-600 hover:bg-blue-50')} onClick={function(e) { e.stopPropagation(); isUnlocked ? handleRemoveAccess(st.id, v.id, v.title) : handleGrantAccess(st.id, v.id, v.title) }} disabled={loading}>
                                         {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : isUnlocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
                                       </Button>

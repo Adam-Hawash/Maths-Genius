@@ -253,7 +253,11 @@ function StudentPortalInner() {
     ;(async () => {
       try {
         const [videosRes, hwRes, examsRes, annRes, resultsRes, actRes, payRes, accessRes, progressRes, hwResultsRes] = await Promise.all([
-          fetch(`/api/videos?grade=${encodeURIComponent(grade)}&pageSize=100`).then(r => r.json()),
+          /* (ر17 — علة المستر الحرفية «بضيف بفلوس ما بيتضافش اصلا مش بيظهر للطلاب خالص»):
+             studentId في نداء الفيديوهات زي باقي النداءات بالظبط — من غيره السيرفر
+             بيعتبر النداء زائر حقيقي وبيقفل فلتر price=0 على القايمة فكل الدروس
+             المسعّرة بتختفي عن كل الطلاب نهائيًا */
+          fetch(`/api/videos?grade=${encodeURIComponent(grade)}&pageSize=100&studentId=${encodeURIComponent(studentId)}`).then(r => r.json()),
           fetch(`/api/homework?grade=${encodeURIComponent(grade)}&pageSize=50&studentId=${encodeURIComponent(studentId)}`).then(r => r.json()),
           fetch(`/api/exams?grade=${encodeURIComponent(grade)}&pageSize=50&studentId=${encodeURIComponent(studentId)}`).then(r => r.json()),
           fetch(`/api/announcements?grade=${encodeURIComponent(grade)}&pageSize=10`).then(r => r.json()),
@@ -1022,7 +1026,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                       <Lock className="h-7 w-7 text-white" />
                     </div>
                     <Badge className="text-lg px-4 py-1.5 bg-amber-500 text-white">
-                      {video.price} ج.م
+                      بفلوس — {video.price} ج.م
                     </Badge>
                     <Button
                       className="mt-1"
@@ -1188,7 +1192,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
             </Badge>
             {/* (ز18) سعر الدرس كله يظهر لطلاب المجانية */}
             {lessonLockedZ18 && pricedPartZ18 && (
-              <Badge className="bg-amber-500 text-white text-[10px] gap-1 font-bold">💰 الدرس كامل {pricedPartZ18.price} ج.م</Badge>
+              <Badge className="bg-amber-500 text-white text-[10px] gap-1 font-bold">💰 الدرس كله بفلوس — {pricedPartZ18.price} ج.م</Badge>
             )}
             {/* (2026-د) إجمالي مدة الدرس ⏱ */}
             {g.parts.reduce(function (acc: number, p: any) { return acc + (Number(p.durationSec) || 0) }, 0) > 0 && !anyNeedPay && (
@@ -1346,7 +1350,7 @@ function VideosTab({ videos, watchedIds, approvedVideoIds, studentId, grade, vid
                           {watchedP && <Badge variant="secondary" className="text-[10px] text-emerald-600">تمت المشاهدة</Badge>}
                           {pctP > 0 && !watchedP && <span className="text-[10px] font-bold text-muted-foreground">{pctP}%</span>}
                           {seqLockedP && <Badge variant="outline" className="text-[10px] text-red-500">مقفول — شوف الجزء اللي قبله الأول{seqInfoP && seqInfoP.blockerPct > 0 ? ' (' + seqInfoP.blockerPct + '%)' : ''}</Badge>}
-                          {!seqLockedP && payLockedP && <Badge variant="outline" className="text-[10px] text-amber-600">محتاج تسديد {p.price} ج.م</Badge>}
+                          {!seqLockedP && payLockedP && <Badge variant="outline" className="text-[10px] text-amber-600">بفلوس — محتاج تسديد {p.price} ج.م</Badge>}
                           {!seqLockedP && !payLockedP && !watchedP && <Badge variant="outline" className="text-[10px] text-emerald-600">جاهز للمشاهدة</Badge>}
                         </div>
                       </div>

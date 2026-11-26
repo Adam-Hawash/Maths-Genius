@@ -503,7 +503,7 @@ export function AdminDashboard() {
           <TabsContent value="gallery"><GalleryManager /></TabsContent>
           <TabsContent value="cms"><CMSPanel /></TabsContent>
           <TabsContent value="social"><SocialLinksPanel /></TabsContent>
-          <TabsContent value="payments"><PaymentsPanel onRefresh={fetchStats} /></TabsContent>
+          <TabsContent value="payments"><PaymentsPanel onRefresh={fetchStats} adminId={(currentAdmin && currentAdmin.id) || ''} /></TabsContent>
           <TabsContent value="ai-extract"><AIExtractionPanel onRefresh={fetchStats} adminId={(currentAdmin && currentAdmin.id) || ''} /></TabsContent>
           <TabsContent value="complaints"><AdminComplaints /></TabsContent>
           {/* (و24) طلب المستر: إدارة الصفوف الدراسية (إضافة/حذف صف + عربي/إنجليزي/إيموجي) + مواعيد السنتر (حذف/إضافة يوم وحصة) */}

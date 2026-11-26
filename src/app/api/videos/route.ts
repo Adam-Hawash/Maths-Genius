@@ -43,8 +43,22 @@ export async function GET(request: NextRequest) {
     const adminId = searchParams.get('adminId')
     const studentId = searchParams.get('studentId')
 
+    /* (ر17 — طلب المستر الحرفي: «الفيديوهات كلها تتضاف لكل الطلاب — لو بسعر
+       يتضاف بسعر، لو مش بسعر يتضاف زي ما هو»)
+       العلة الجذرية: getStudentAnyStatus لو فشلت بأي سبب (جلسة قديمة / خطأ
+       لحظي في القاعدة / طالب اتمسح واتضاف من جديد) كانت بترجع null بصمت
+       → النداء بيتحول لوضع الزائر → فيلتر price=0 بيشيل كل الدروس المسعّرة
+       → الطالب ما يلاقيش الفيديو خالص. الإصلاح: أي نداء جاي بـ studentId
+       يفضل بشخصية طالب في العرض مهما حصل — صفر إخفاء صامت. حماية اللينكات
+       ثابتة: stripVideo بيشيل url/filePath والتشغيل محروس computePlayback
+       (402 «محتاج تسديد الفيديو ده الأول» قبل الدفع لكل الطلاب بلا استثناء). */
+    const studentIdSent = Boolean(String(studentId || '').trim())
     const admin = await isAdmin(adminId)
     const student = admin ? null : await getStudentAnyStatus(studentId)
+    if (studentIdSent && !admin && !student) {
+      console.warn('[videos] studentId=' + String(studentId).slice(0, 10) + '… مش موجود في القاعدة — العرض ماشي بشخصية طالب بلا أي إخفاء (ر17: كل الفيديوهات لكل الطلاب)')
+    }
+    const studentContext = Boolean(admin || student || studentIdSent)
 
     const where: Record<string, unknown> = {}
     /* (S-4a — توحيد الصفوف) كل صيغ نفس الصف مع بعض — الفيديو المخزن
@@ -55,8 +69,10 @@ export async function GET(request: NextRequest) {
         { title: { contains: keyword } },
       ]
     }
-    // زائر بدون حساب → الفيديوهات المجانية بس (ومن غير أي لينكات)
-    if (!admin && !student) where.price = 0
+    /* (ر17) الفلتر ده للزائر الحقيقي فقط — أي نداء بـ studentId ما بيمرش
+       منه أبدًا عشان مفيش فيديو يتخفي عن طالب بصمت تاني: له سعر يتضاف
+       بسعره (كارت مقفول + ادفع الآن)، ملوش سعر يتضاف زي ما هو */
+    if (!admin && !studentContext) where.price = 0
 
     const [videos, total] = await Promise.all([
       db.video.findMany({

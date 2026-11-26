@@ -418,11 +418,8 @@ export function ParentPortal() {
                       حساب مفعل ✓
                     </span>
                   )}
-                  {student.isPaidAccess && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-bold">
-                      وصول مدفوع
-                    </span>
-                  )}
+                  {/* (ر17) شيلنا شارة «وصول مدفوع» خالص بطلب المستر — مفيش طلاب
+                     مدفوعين: الدفع فردي لكل فيديو ومفيش تصنيف خاص لأي طالب */}
                 </div>
               </div>
 
