@@ -1,87 +1,71 @@
 'use client'
 
 // ============================================================
-// DevToolsGuard — ر14 بطلب المستر الحرفي:
-// «يا ابني حرام عليك يا ابني مش شغالة برضه، ما فيش حاجة شغالة،
-//  بتشتغل أول ما بقفل الـ يعني بكون أنا خلصت الـ
-//  أنا عاوز أول ما أفتحها وأول ما أخرج يتصلح»
+// DevToolsGuard — ر15 بطلب المستر الحرفي:
+// «أول حاجة أنا لما بفتح أدوات المطورين عشان أشغل الفيديو بيجيلي
+//  الصورة بتاعت الشاشة السوداء والعادي دي وبعدين بتروح كلها بتتغير
+//  فبيجيلي كده وكده مبيبقاش فيه وأقدر أخد اللينك بكل سهولة،
+//  بعد أما بخرج أخرج خالص لقيت العداد بيشتغل ويعمل فيديو،
+//  طب ما أنا خلاص أكون خدت الحاجة، هو إيه الهبل ده؟»
 // ============================================================
-// تشخيص ر14 (الدليل الحي: سكرين شوت المستر التالت «Paused in
-// debugger» على maths-genius.com = فخ ر13 واصل لايف فعلًا — والعلة
-// تصميمية جوّه ر13 نفسه):
-//   • ر13 كان بيحاول يربط الحالة بحالة الأدوات عن طريق فخ الـ
-//     debugger — لكن التوقّف معناه إن كل الـ JS متجمد: مفيش أي
-//     شاشة أو عدّاد ينقدر يترسم وهو متجمّد، والتسليح كان محتاج
-//     توقّفين متتاليين = المستر يدوس Continue مرتين وهو مفتوح.
-//   • ولو قفل وهو متجمّد (أي مستخدم حقيقي بيقفل من غير Continue):
-//     كروم بيكمل التنفيذ لوحده لحظة القفل → التوقّف بيخلص بعد
-//     القفل بالحرف → الشاشة السودة تنطلق بعد القفل «بتشتغل أول ما
-//     بقفل» + nukeMedia كانت بتدمر الـ iframes صامتة حتى في المسار
-//     المطموس = الفيديو بيبوظ من غير سبب ظاهر.
+// تشخيص ر15 الجذري (الدليل: سكرين شوت المستر — فيديو ظاهر + Paused
+// in debugger + مفيش شاشة سودة = الحارس صامت والأدوات مفتوحة):
+//   • علة 1 — ثغرة «الأدوات مفتوحة قبل التحميل»: خط أساس الفجوة
+//     بيتلقط لحظة التحميل، لو الأدوات مفتوحة من قبلها الفجوة بتمتص
+//     في الأساس → gapNow() بيرجع صفر للأبد → الحارس صامت خالص
+//     → الطالب يفتح الصفحة والأدوات مفتوحة وياخد اللينك بكل سهولة.
+//   • علة 2 — «كلها بتتغير»: العدّاد لما يخلص والأدوات لسه مفتوحة
+//     كان بينفّذ عقوبة (مسح جلسة + redirect للرئيسية / رفض نهائي)
+//     → الشاشة تروح والصفحة تتغير وهو مفتوح → ويترجع ياخد اللينك.
+//   • علة 3 — «العداد بيشتغل بعد أما بخرج»: كل الآليات كانت مربوطة
+//     بمهلة زمنية على ساعة الحائط، والقفل قبل/حول لحظة الصفر كان
+//     بيسيب العدّ أو العقوبة تشتغل بعد الخروج = هبل بالحرف.
 //
-// قرار ر14 — الحالة مربوطة بحالة الأدوات **نفسها** بمصدرين مستقلين:
+// قرار ر15 — الحارس بقى **بوابة نضيفة** مربوطة بحالة الأدوات 1:1:
 //
-//   المصدر 1 (الأساسي الجديد — فوري في الاتجاهين ومن غير أي تجميد):
-//     فجوة النافذة = outerWidth/outerHeight ناقص innerWidth/
-//     innerHeight فوق خط أساس بيتلقط لحظة التشغيل وبيتحدّث بأقل قيمة:
-//       - الفجوة العرضية (docked يمين/شمال + responsive mode)
-//         شغالة على أي جهاز — كيبورد الموبايل ما بيغيّرش العرض.
-//       - الفجوة الطولية (docked تحت) على الديسكتوب الصافي فقط
-//         ((hover:hover) و (pointer:fine) و maxTouchPoints===0)
-//         عشان كيبورد الموبايل ما ينذرش كاذب (درس ر10).
-//       - خط الأساس بيمتص الزووم من أول لحظة (طالب بزووم 150% من
-//         غير أدوات = صفر إنذار) — والانتقال نفسه هو الإشارة:
-//         الفجوة زادت 160px عن الأساس = أدوات اتفتحت لحظة الفتح.
-//       - حدث resize بيتنادى لحظة الفتح ولحظة القفل → تسليح فوري
-//         (<100ms) ومسامحة فورية — في سيناريو المستر بالحرف:
-//         يفتح docked أو responsive = سودة وعدّاد فورًا من غير ولا
-//         توقّف ولا Continue، يقفل = الشاشة تروح والتمرير يرجع
-//         فورًا. صفر «Paused in debugger» في السيناريو ده خالص.
+//   أدوات مفتوحة  → شاشة سودة فورية (<100ms) وتفضل واقفة طول ما
+//                   هي مفتوحة — مفيش أي حاجة بتشيلها وهو مفتوح:
+//                   مفيش redirect، مفيش مسح جلسة، مفيش رفض حساب،
+//                   مفيش أي عقوبة خالص. الفيديو واقف والتمرير مقفول
+//                   والطالب مش شايف أي حاجة يقدر ياخد منها لينك.
+//   أدوات مقفولة  → **كل حاجة تتصلح فورًا**: الشاشة تروح، العدّ
+//                   يقف ويتمسح، التمرير يرجع، الفيديو يكمّل من مكانه
+//                   — ومفيش أي حاجة بتشتغل بعد القفل خالص (علة 3
+//                   اتحلت بالجذر: مفيش deadline أصلاً بيحصل بعده حاجة).
 //
-//   المصدر 2 (كاشف الحالة الحي — للـ undocked والفحص عن بعد):
-//     فخ توقّف الـ debugger (دالة مولّدة مرة واحدة ومسخّنة برة
-//     القياس — درس ر12: المينيفايشن بيشيل الجملة الثابتة):
-//       - مفتوحة = التنفيذ بيقف (مؤكد 100%)، مقفولة = no-op في نص
-//         ميكروثانية (مؤكد 100%).
-//       - وهو مفتوح docked: التوقّف الأول نفسه بيسلّح فورًا (الفجوة
-//         بتأكد إن الأدوات لسه مفتوحة لحظة الرجوع).
-//       - وهو مفتوح undocked (مفيش فجوة): توقّفان متتاليان = تسليح
-//         (التوقّف التاني دليل إنه قاوم التجميد وهو مفتوح).
-//       - قفل وهو متجمّد: الرجوع بعد القفل بييجي مع فجوة = صفر →
-//         **صفر شاشة بعد القفل خالص** (علة المستر الحرفية اتعالجت).
-//       - أثناء العدّ: الفخ بيتنادى في التيكات الزوجية للأسلحة اللي
-//         جت من undocked بس (الأسلحة اللي جت من الفجوة عدّها ناعم
-//         خالص من غير أي تجميد) — والصفر على ساعة الحائط زي ما هو:
-//         التجميد ما بيمدّدش ولا يوقفش العد، والقفل undocked بيتحس
-//         خلال ≤1 ثانية والشاشة بتروح (مفيش عقوبة بعد القفل).
+//   العدّاد اللي على الشاشة بقى استعراضي بس (ضغط نفسي عشان يقفل
+//   فورًا): يخلص → الشاشة تفضل واقفة برسالة ثابتة «المنصة واقفة
+//   لحد ما تقفل أدوات المطوّر» — من غير أي تنفيذ بعد الصفر.
 //
-//   فخ الكونسول getter — احتياطي فقط لو فخ الـ debugger تعذّر
-//   إنشاؤه (CSP) بنفس منطق ر13، ومن غير أي log لما الفخ موجود
-//   (الكونسول يفضل نضيف — المستر كان شايف Object مطوية).
+//   مصادر كشف الفتح (كلها من غير أي تجميد في مسار الفتح العادي):
+//     1) فجوة النافذة outer-inner فوق خط أساس بيتحدّث بأقل قيمة
+//        (الزووم من أول لحظة بيمتص في الأساس — درس ر10) + حدث
+//        resize لحظي في الاتجاهين — docked يمين/شمال/تحت + responsive
+//        زي سكرين شوت المستر بالحرف. الطولية على الديسكتوب الصافي
+//        فقط عشان كيبورد الموبايل ما ينذرش كاذب.
+//     2) **فحص التحميل الجديد** (علة 1): لو الفجوة كبيرة من أول
+//        لحظة (أدوات مفتوحة قبل التحميل أو زووم) → فحص توقّف
+//        الـ debugger مرتين متتاليتين وقت التحميل نفسه: توقّفان =
+//        أدوات مفتوحة مؤكد → شاشة فورية. مفيش توقّف = زووم →
+//        يفضل صامت تمامًا زي ر10 (صفر إنذار كاذب).
+//     3) فخ توقّف الـ debugger للـ undocked (مفيش فجوة): توقّفان
+//        متتاليان = مفتوحة مؤكد (المستر داس Continue وهو فاتح) —
+//        وقفل وهو متجمّد: الرجوع بتيك سريع → صفر شاشة بعد القفل
+//        خالص (نفس علة المستر الحرفية اتعالجت برضو).
+//        أثناء التسليح غير الفجوي: تيك زوجي بيفحص — توقّف طويل =
+//        لسه مفتوحة، تيك سريع بعد توقّف = قفلت → مسامحة ≤1 ثانية.
+//     4) احتياطي الكونسول getter لو فخ الـ debugger تعذّر إنشاؤه
+//        (CSP) بنفس منطق ر13 — ومن غير أي log لما الفخ موجود.
 //
-//   الوسائط: التسليح = إيقاف مؤقت للفيديوهات + الخروج من fullscreen
-//   (الشاشة السودة فوق كل حاجة حتى الفيديو الفول سكرين) — والمسامحة
-//   بترجّع الفيديو اللي كان شغال من مكانه. التدمير الكامل (nukeMedia)
-//   بقال عند العقوبة النهائية بس — عكس ر13 اللي كانت بتدمر على أول
-//   توقّف حتى لو المسار المطموس.
-//
-//   الصفر على ساعة الحائط:
-//     - تسليح فيه تأكيد توقّف حقيقي (debugger/كونسول) = العقوبة
-//       الصلبة زي ر7/ر8/ر13 بالحرف: تدمير الوسائط + POST
-//       /api/security/reject-account + شاشة «حسابك مرفوض» دائمة.
-//     - تسليح من الفجوة فقط (بدون أي تأكيد توقّف — احتمال إنذار
-//       كاذب من Side Panel مثلًا) = عقوبة مرنة قابلة للاسترجاع:
-//       مسح الجلسة والعودة للرئيسية — من غير رفض نهائي ولا أي سجل.
-//       ولو المستخدم قفل الفجوة قبل الصفر = مسامحة فورية بصمت.
-//
-//   كل قرار ر10/ر12/ر13 ثابت: العدّ في حالة واحدة بس (أدوات مفتوحة
-//   فعلًا)، صفر إنذارات كاذبة من أي حاجة تانية (زووم/كيبورد/فتح
-//   فيديو/تهنيج)، الأدمن مستثنى، الأتمتة مستثنية من فخ التوقّف،
+//   شروط ثابتة من ر10/ر12/ر13/ر14: الحارس لجلسات الطلاب بس،
+//   الأدمن مستثنى، الأتمتة (webdriver) مستثنية من فخ التوقّف،
 //   المهلة من إعداد الأدمن guard_countdown_seconds (افتراضي 8 —
-//   يقبل 3..120).
+//   يقبل 3..120)، صفر إنذارات كاذب من زووم/كيبورد/تهنيج.
+//   وتبعًا لقرار ر15: مفيش أي كتابة على /api/security/reject-account
+//   ولا أي مسح جلسات — البوابة نفسها هي الحماية (وهو مفتوح مش
+//   شايف حاجة، وهو مقفول كل حاجة رجعت زي ما كانت).
 // ============================================================
 import { useEffect } from 'react'
-import { getDeviceCandidates, getDeviceId } from '@/lib/device'
 import {
   GUARD_COUNTDOWN_KEY,
   GUARD_COUNTDOWN_DEFAULT,
@@ -125,14 +109,15 @@ export function DevToolsGuard() {
        مسجّل، الحارس شغال عادي (حماية الحساب أهم) */
     if (hasAdminKey() && !readStudent()) return
 
-    /* تاب متقفل نهائي (الرفض حصل قبل كده في نفس التاب) */
+    /* تاب متقفل نهائي من نسخ قديمة (الرفض حصل قبل ر15 في نفس التاب) —
+       بنحترمه عشان قرار قديم ما يتراجعش بنفس التاب */
     try {
       var lockedVal = sessionStorage.getItem(LOCK_KEY) || ''
       if (lockedVal === 'rejected') { renderFinal('rejected'); return }
       if (lockedVal === '1') { renderFinal('locked'); return }
     } catch (e) {}
 
-    /* ===== الإعداد: مهلة العدّ من لوحة الأدمن (افتراضي 8 ثواني) ===== */
+    /* ===== الإعداد: مهلة العدّ الاستعراضي من لوحة الأدمن (افتراضي 8) ===== */
     var countMs = GUARD_COUNTDOWN_DEFAULT * 1000
     try {
       fetch('/api/site-config')
@@ -155,11 +140,11 @@ export function DevToolsGuard() {
 
     /* ===== الحالة ===== */
     var done = false
-    var running = false        /* الشاشة السودة والعدّاد شغالين */
-    var gapArmed = false       /* التسليح جاي من فجوة النافذة (من غير تأكيد توقّف) */
-    var confirmed = false      /* فيه تأكيد توقّف حقيقي (debugger/كونسول) في التسليح الحالي */
-    var pendingPause = false   /* توقّف واحد من غير فجوة (undocked غامض) — بستنى التوقّف التاني */
-    var pendingRun = false     /* أثناء العدّ undocked: توقّف طويل — بستنى تيك سريع أثبت القفل */
+    var running = false        /* الشاشة السودة واقفة (الأدوات مفتوحة) */
+    var gapArmed = false       /* التسليح جاي من فجوة النافذة — القفل بيتحس من resize لحظيًا */
+    var stalled = false        /* العدّ الاستعراضي خلص — الشاشة تفضل واقفة لحد القفل */
+    var pendingPause = false   /* توقّف من غير فجوة (undocked غامض) — بنستنى التوقّف التاني */
+    var pendingRun = false     /* أثناء التسليح غير الفجوي: توقّف طويل — بنستنى تيك سريع يثبت القفل */
     var cleanStreak = 0        /* احتياطي الكونسول (!dbgFn) — نفس منطق ر13 */
     var deadline = 0
     var armedDurMs = 0
@@ -172,15 +157,10 @@ export function DevToolsGuard() {
     var noAutomation = false
     try { noAutomation = (navigator as any).webdriver === true } catch (e) {}
 
-    /* ===== خط أساس الفجوة (ضد الزووم — درس ر10 وضُبط في ر14) =====
+    /* ===== خط أساس الفجوة (ضد الزووم — درس ر10) =====
        بيتلقط لحظة التشغيل وبيتحدّث بأقل قيمة شوفناها: الزووم من أول
        لحظة بيمتص في الأساس (صفر إنذار)، والفجوة اللي بتظهر **فوق**
-       الأساس أثناء الجلسة هي اللي بتدل على أدوات اتفتحت.
-       الزووم اللي بيحصل في نص الجلسة ممكن يزود الفجوة مؤقتًا —
-       عقوبته مرنة (الأسلحة اللي جت من الفجوة من غير تأكيد توقّف) +
-       أول ما يرجّع الزووم الفجوة ترجع للأساس والمسامحة فورية.
-       والأدوات المفتوحة قبل التحميل ما محتاجاش فلاغ خاص — فخ
-       التوقّف بيمسكها (توقّفان متتاليان) من غير أي افتراض عن الفجوة. */
+       الأساس أثناء الجلسة هي اللي بتدل على أدوات اتفتحت لحظتها. */
     var baselineW = 0
     var baselineH = 0
     try {
@@ -223,9 +203,8 @@ export function DevToolsGuard() {
     /* دالة الـ debugger مولّدة مرة واحدة وتسخّنة برة القياس —
        ليه مولّدة؟ لأن مينفايشن SWC بيشيل جملة debugger الثابتة من
        السورس (drop_debugger) — إثبات ر12 — لكن السترينج بيرجع.
-       من غير أدوات مفتوحة الاستدعاء no-op في نص الميكروثانية من
-       غير أدوات (الكومبايلة حصلت مرة واحدة)، ومع أدوات مفتوحة
-       التنفيذ بيقف لحد Continue = الفرق ثواني = مفتوحة مؤكد. */
+       من غير أدوات مفتوحة الاستدعاء no-op في نص الميكروثانية،
+       ومع أدوات مفتوحة التنفيذ بيقف لحد Continue = الفرق ثواني. */
     var dbgFn: any = null
     try { dbgFn = (function () {} as any).constructor('debugger') } catch (e) {}
 
@@ -240,9 +219,9 @@ export function DevToolsGuard() {
       })
     } catch (e) {}
 
-    /* ===== الوسائط: إيقاف مؤقت عند التسليح + رجوع عند المسامحة =====
-       عكس ر13: مفيش تدمير على أول إشارة — التدمير الكامل للعقوبة
-       النهائية بس. عشان الفيديو ما يبوظش لو الإشارة طلعت مطموسة. */
+    /* ===== الوسائط: إيقاف مؤقت عند الفتح + رجوع فوري عند القفل =====
+       مفيش أي تدمير خالص في ر15 — البوابة بتوقف العرض مؤقتًا بس،
+       والقفل بيرجّع كل حاجة من مكانها بالظبط. */
     var pausedVideos: Array<{ el: HTMLVideoElement; was: boolean }> = []
     var pausedFrames: HTMLIFrameElement[] = []
 
@@ -286,28 +265,10 @@ export function DevToolsGuard() {
         }
         /* ملاحظة: الـ iframes مش بنبعث لهم playVideo عمدًا — عشان ما
            نشغلش درس الطالب ما كان مقفولوش أصلًا. يوتيوب بيفضل واقف
-           في مكانه والطالب يدوس شغّال عادي بعد المسامحة. */
+           في مكانه والطالب يدوس شغّال عادي بعد القفل. */
       } catch (e) {}
       pausedVideos = []
       pausedFrames = []
-    }
-
-    /* ===== منع النسخ عند العقوبة النهائية: تدمير كل الـ iframes والفيديوهات ===== */
-    function nukeMedia() {
-      try {
-        var fr = document.querySelectorAll('iframe')
-        for (var i = 0; i < fr.length; i++) {
-          var f = fr[i] as HTMLIFrameElement
-          try { f.src = 'about:blank' } catch (e) {}
-          try { if (f.parentNode) f.parentNode.removeChild(f) } catch (e) {}
-        }
-        var vd = document.querySelectorAll('video')
-        for (var j = 0; j < vd.length; j++) {
-          try { (vd[j] as HTMLVideoElement).pause() } catch (e) {}
-          try { vd[j].removeAttribute('src') } catch (e) {}
-          try { (vd[j] as HTMLVideoElement).load() } catch (e) {}
-        }
-      } catch (e) {}
     }
 
     /* ===== فخ التوقّف: بيرجّع الفرق بالمللي ثانية ===== */
@@ -317,40 +278,36 @@ export function DevToolsGuard() {
       return Date.now() - t0
     }
 
-    /* ===== تسليح: سودة فورية + عدّ كامل من الأول =====
-       gap = من الفجوة (من غير تأكيد توقّف — عقوبته المرنة)
-       probe/console = فيه تأكيد توقّف حقيقي (العقوبة الصلبة) */
-    function arm(kind: 'gap' | 'probe' | 'console') {
+    /* ===== تسليح: شاشة فورية — من غير أي عقوبة ومرتبطة بالقفل بس ===== */
+    function arm(fromGap: boolean) {
       if (done) return
+      if (running) return
       if (!readStudent()) return
-      if (!running) {
-        running = true
-        deadline = Date.now() + countMs
-        armedDurMs = countMs
-        lastShown = -1
-        gapArmed = kind === 'gap'
-        confirmed = kind !== 'gap'
-        pendingPause = false
-        pendingRun = false
-        pauseMedia()
-        renderMode()
-        paintCount()
-      } else if (kind !== 'gap') {
-        /* ترقية تسليح قايم لتأكيد حقيقي — من غير إعادة عدّ */
-        confirmed = true
-        gapArmed = false
-      }
-    }
-
-    /* ===== المسامحة الفورية: الشاشة تروح والتمرير يرجع والفيديو يكمل ===== */
-    function forgive() {
-      running = false
-      deadline = 0
-      gapArmed = false
-      confirmed = false
+      running = true
+      gapArmed = fromGap
+      deadline = Date.now() + countMs
+      armedDurMs = countMs
+      stalled = false
+      lastShown = -1
       pendingPause = false
       pendingRun = false
       cleanStreak = 0
+      pauseMedia()
+      renderMode(false)
+      paintCount()
+    }
+
+    /* ===== الإصلاح الفوري عند القفل: الشاشة تروح والعدّ يتمسح
+       والتمرير يرجع والفيديو يكمّل — ومفيش أي حاجة بعد كده خالص ===== */
+    function forgive() {
+      running = false
+      gapArmed = false
+      stalled = false
+      pendingPause = false
+      pendingRun = false
+      cleanStreak = 0
+      deadline = 0
+      lastShown = -1
       removeUI()
       resumeMedia()
     }
@@ -369,18 +326,19 @@ export function DevToolsGuard() {
       if (!running) {
         /* 1) الفوري: فجوة فوق الأساس = أدوات مفتوحة الآن */
         if (gap) {
-          arm('gap')
+          arm(true)
         } else if (!noAutomation && dbgFn && isStudent) {
-          /* 2) كاشف الحالة الحي — لما مش شغال فقط:
-             توقّف + فجوة لحظة الرجوع = docked مفتوحة → تسليح فوري
+          /* 2) كاشف الحالة الحي — للـ undocked والأدوات المفتوحة قبل
+             التحميل (الفجوة بتاعتهم ممتصة في الأساس):
+             توقّف + فجوة لحظة الرجوع = docked مفتوحة → شاشة فورية
              توقّف + مفيش فجوة → undocked غامض (Continue عادي أو قفل)
-               → توقّفان متتاليان = مفتوحة مؤكد → تسليح
+               → توقّفان متتاليان = مفتوحة مؤكد → شاشة فورية
                → تيك سريع بعد التوقّف = قفل بعد التجميد → صفر شاشة */
           var d1 = probeDelta()
           if (d1 > 100) {
             lastSignalHit = Date.now()
-            if (gapNow()) arm('probe')
-            else if (pendingPause) { pendingPause = false; arm('probe') }
+            if (gapNow()) arm(true)
+            else if (pendingPause) { pendingPause = false; arm(false) }
             else pendingPause = true
           } else if (pendingPause) {
             /* الرجوع ده بعد قفل الأدوات وهو متجمّد — المستر الحرفي:
@@ -392,43 +350,43 @@ export function DevToolsGuard() {
           if (tickNo % 4 === 0) { try { console.log(trapObj) } catch (e) {} }
           if ((Date.now() - lastSignalHit) < 3000) {
             cleanStreak = 0
-            arm('console')
+            arm(false)
           }
         }
       }
 
       if (running) {
+        /* جلسة الطالب اختفت (خروج من تاب تاني مثلًا) → مفيش حاجة نحميها
+           → إصلاح فوري من غير أي شاشة */
+        if (!isStudent) forgive()
+
+        /* العدّ الاستعراضي خلص والأدوات لسه مفتوحة → الشاشة تفضل واقفة
+           برسالة ثابتة — مفيش أي تنفيذ بعد الصفر خالص (علة «الهبل») */
+        if (running && !stalled && Date.now() >= deadline) {
+          stalled = true
+          renderMode(true)
+        }
+
         paintCount()
         /* لو حد شال العنصر نفسه من الـ DOM بالأدوات — بنرجّعه فورًا */
-        if (!document.getElementById('mg-guard-black')) renderMode()
+        if (!document.getElementById('mg-guard-black')) renderMode(stalled)
 
-        /* القفل undocked أثناء العدّ (الأسلحة اللي من الفخ فقط —
-           أسلحة الفجوة عدّها ناعم خالص والقفل بيتحس من resize):
-           تيك زوجي = فحص توقّف — توقّف طويل = لسه مفتوحة، تيك سريع
-           بعد توقّف = قفلت → مسامحة فورية ≤1 ثانية */
-        if (!gapArmed && !noAutomation && dbgFn && isStudent && tickNo % 2 === 0) {
+        if (gapArmed) {
+          /* شبكة أمان الفجوة: التسليح من الفجوة والفجوة راحت من غير
+             resize = الأدوات قفلت → إصلاح فوري */
+          if (!gapNow()) forgive()
+        } else if (!noAutomation && dbgFn && isStudent && tickNo % 2 === 0) {
+          /* القفل undocked أثناء التسليح: تيك زوجي = فحص توقّف —
+             توقّف طويل = لسه مفتوحة، تيك سريع بعد توقّف = قفلت
+             → إصلاح فوري ≤1 ثانية */
           var d2 = probeDelta()
           if (d2 > 100) { pendingRun = true; lastSignalHit = Date.now() }
           else if (pendingRun) { pendingRun = false; forgive() }
-        }
-
-        /* شبكة أمان الفجوة: تسليح من الفجوة والفجوة راحت من غير resize */
-        if (running && gapArmed && !confirmed && !gapNow()) forgive()
-
-        /* احتياطي الكونسول وأثناء العدّ — نفس منطق ر13 */
-        if (running && !dbgFn) {
+        } else if (!dbgFn) {
+          /* احتياطي الكونسول وأثناء التسليح — نفس منطق ر13 */
           if ((Date.now() - lastSignalHit) < 3000) cleanStreak = 0
-          else if (cleanStreak >= 6) { forgive() }
+          else if (cleanStreak >= 6) forgive()
           else cleanStreak++
-        }
-
-        /* الصفر على ساعة الحائط — تجميد الصفحة ما بينفعش:
-           تسليح فيه تأكيد توقّف حقيقي = العقوبة الصلبة (رفض نهائي)،
-           تسليح من الفجوة فقط = العقوبة المرنة القابلة للاسترجاع */
-        if (running && Date.now() >= deadline) {
-          if (gapArmed && !confirmed) softPunish()
-          else punish()
-          return
         }
       }
     }
@@ -438,15 +396,56 @@ export function DevToolsGuard() {
        بيتنادى لحظة docking/undocking/responsive لحظيًا */
     function onResize() {
       if (done) return
+      var preW = baselineW
+      var preH = baselineH
+      var curW = 0
+      var curH = 0
+      try {
+        curW = Math.max(0, (window.outerWidth || 0) - (window.innerWidth || 0))
+        curH = Math.max(0, (window.outerHeight || 0) - (window.innerHeight || 0))
+      } catch (e) {}
       updateBaselines()
       var g = gapNow()
       if (g) {
-        if (!running) arm('gap')
-      } else if (running && gapArmed && !confirmed) {
+        if (!running) arm(true)
+      } else if (running && gapArmed) {
         forgive()
+      } else if (running) {
+        /* تسليح من الفخ (أدوات مفتوحة قبل التحميل — الفجوة كانت ممتصة
+           في الأساس) والفجوة الحالية نزلت كتير تحت الأساس اللي شفناه
+           قبل كده = الأدوات قفلت → إصلاح فوري بدل انتظار فحص التيك */
+        try {
+          if ((preW > 100 && curW < preW - 50) || (preH > 100 && curH < preH - 50)) forgive()
+        } catch (e) {}
       }
     }
     try { window.addEventListener('resize', onResize) } catch (e) {}
+
+    /* ===== فحص التحميل الجديد (علة سكرين شوت المستر) =====
+       الأدوات المفتوحة **قبل** تحميل الصفحة كانت بتمتص في خط الأساس
+       والحارس بيفضل صامت خالص والطالب ياخد اللينك بسهولة.
+       الحل: لو الفجوة كبيرة من أول لحظة (يا أدوات مفتوحة يا زووم)
+       → فحص توقّف مرتين متتاليتين وقت التحميل: توقّفان = أدوات
+       مفتوحة مؤكد → شاشة فورية. مفيش توقّف = زووم → صمت تمام
+       زي ر10. ولو قفل بدل ما يدوس Continue → الرجوع تيك سريع
+       → صفر شاشة بعد القفل خالص. */
+    if (!noAutomation && dbgFn && readStudent()) {
+      setTimeout(function () {
+        if (done || running) return
+        var d0 = probeDelta()
+        if (d0 <= 100) return /* زووم/عادي — صمت تمام */
+        lastSignalHit = Date.now()
+        /* لسه مفتوحة وقت الرجوع؟ فحص تاني فوري — لو مفتوحة هيتوقّف تاني */
+        var d0b = probeDelta()
+        if (d0b > 100) {
+          lastSignalHit = Date.now()
+          arm(false)
+        } else if (gapNow()) {
+          arm(true)
+        }
+        /* غير كده: قفل بدل ما يدوس Continue — صفر شاشة */
+      }, 350)
+    }
 
     /* ===== الرسم ===== */
     var numEl: HTMLElement | null = null
@@ -459,7 +458,7 @@ export function DevToolsGuard() {
     }
 
     function paintCount() {
-      if (!running || done) return
+      if (!running || done || stalled) return
       var left = secsLeft()
       if (left === lastShown) return
       lastShown = left
@@ -479,7 +478,7 @@ export function DevToolsGuard() {
       numEl = null
       barEl = null
       try {
-        /* إصلاح بَج ر8: التمرير بيرجع فورًا مع إزالة الشاشة */
+        /* التمرير بيرجع فورًا مع إزالة الشاشة — «أول ما أخرج يتصلح» */
         document.body.style.overflow = ''
       } catch (e) {}
     }
@@ -488,27 +487,38 @@ export function DevToolsGuard() {
       return 'position:fixed;inset:0;z-index:2147483647;background:#000;display:flex;align-items:center;justify-content:center;direction:rtl;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#fff;text-align:center;padding:24px'
     }
 
-    function renderMode() {
+    function renderMode(stalledMode: boolean) {
       if (done) return
       removeUI()
-      var secs = Math.max(1, Math.round(countMs / 1000))
       var o = document.createElement('div')
       o.id = 'mg-guard-black'
       o.setAttribute('role', 'alert')
       o.setAttribute('aria-live', 'assertive')
       o.style.cssText = baseStyles()
-      o.innerHTML =
-        '<div style="max-width:560px;display:flex;flex-direction:column;align-items:center;gap:16px">' +
-        '<div style="font-size:60px;line-height:1">🛡️</div>' +
-        '<div style="font-size:24px;font-weight:900;letter-spacing:.5px">أدوات المطوّر ممنوعة على المنصة</div>' +
-        '<div style="font-size:15px;color:#d4d4d8;line-height:1.9">عندك <b style="color:#fbbf24">' + secs + ' ثواني</b> بس — اقفل أدوات المطوّر فورًا<br/>' +
-        '<b style="color:#f87171">إلا هتخرج من المنصة وحسابك هيترفض نهائيًا</b> ومش هتقدر تدخل تاني</div>' +
-        '<div id="mg-num" style="font-size:92px;font-weight:900;color:#f87171;font-variant-numeric:tabular-nums;line-height:1">' + secs + '</div>' +
-        '<div style="width:100%;max-width:340px;height:8px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden">' +
-        '<div id="mg-bar" style="height:100%;width:100%;background:#f87171;border-radius:99px;transition:width .5s linear"></div>' +
-        '</div>' +
-        '<div style="font-size:12px;color:#71717a">المنصة بتحمي مجهود المستر وحق الطلاب اللي دفعوا</div>' +
-        '</div>'
+      if (stalledMode) {
+        /* العدّ خلص والأدوات لسه مفتوحة — الشاشة تفضل واقفة لحد القفل
+           من غير أي عقوبة ولا redirect ولا مسح جلسة */
+        o.innerHTML =
+          '<div style="max-width:560px;display:flex;flex-direction:column;align-items:center;gap:16px">' +
+          '<div style="font-size:60px;line-height:1">🛡️</div>' +
+          '<div style="font-size:24px;font-weight:900;letter-spacing:.5px">المنصة واقفة لحد ما تقفل أدوات المطوّر</div>' +
+          '<div style="font-size:15px;color:#d4d4d8;line-height:1.9">اقفل أدوات المطوّر من علامة <b style="color:#fbbf24">×</b> أو زرار <b style="color:#fbbf24">F12</b><br/>وأول ما تقفلها هترجع للمنصة عادي وتكمل من مكانك <b style="color:#4ade80">فورًا</b></div>' +
+          '<div style="font-size:12px;color:#71717a">المنصة بتحمي مجهود المستر وحق الطلاب اللي دفعوا</div>' +
+          '</div>'
+      } else {
+        var secs = Math.max(1, Math.round(countMs / 1000))
+        o.innerHTML =
+          '<div style="max-width:560px;display:flex;flex-direction:column;align-items:center;gap:16px">' +
+          '<div style="font-size:60px;line-height:1">🛡️</div>' +
+          '<div style="font-size:24px;font-weight:900;letter-spacing:.5px">أدوات المطوّر ممنوعة على المنصة</div>' +
+          '<div style="font-size:15px;color:#d4d4d8;line-height:1.9">اقفل أدوات المطوّر <b style="color:#fbbf24">دلوقتي</b> عشان تكمل عادي<br/>وأول ما تقفلها كل حاجة هترجع <b style="color:#4ade80">فورًا</b></div>' +
+          '<div id="mg-num" style="font-size:92px;font-weight:900;color:#f87171;font-variant-numeric:tabular-nums;line-height:1">' + secs + '</div>' +
+          '<div style="width:100%;max-width:340px;height:8px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden">' +
+          '<div id="mg-bar" style="height:100%;width:100%;background:#f87171;border-radius:99px;transition:width .5s linear"></div>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#71717a">المنصة بتحمي مجهود المستر وحق الطلاب اللي دفعوا</div>' +
+          '</div>'
+      }
       document.body.appendChild(o)
       try { document.body.style.overflow = 'hidden' } catch (e) {}
       numEl = o.querySelector('#mg-num')
@@ -537,74 +547,6 @@ export function DevToolsGuard() {
           : '<div style="font-size:26px;font-weight:900">اتقفل الدخول للمنصة</div>' +
             '<div style="font-size:14px;color:#d4d4d8;line-height:1.9">أدوات المطوّر ممنوعة تمامًا على المنصة.</div>') +
         '</div>'
-    }
-
-    /* ===== العقوبة الصلبة (تأكيد توقّف حقيقي): الرفض النهائي ===== */
-    function punish() {
-      if (done) return
-      done = true
-      running = false
-      try { window.removeEventListener('resize', onResize) } catch (e) {}
-      try { clearInterval(timer) } catch (e) {}
-      nukeMedia()
-      removeUI()
-      var st = readStudent()
-      if (st && st.id) {
-        try { sessionStorage.setItem(LOCK_KEY, 'rejected') } catch (e) {}
-        renderFinal('rejected')
-        var payload: any = {
-          studentId: st.id,
-          reason: 'devtools',
-        }
-        try {
-          payload.deviceId = getDeviceId()
-          payload.candidates = getDeviceCandidates()
-        } catch (e) {}
-        try {
-          fetch('/api/security/reject-account', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            keepalive: true,
-          }).catch(function () {})
-        } catch (e) {}
-        setTimeout(function () {
-          try { clearSessions() } catch (e) {}
-          try { location.replace('/') } catch (e) {}
-        }, 900)
-      } else {
-        try { sessionStorage.setItem(LOCK_KEY, '1') } catch (e) {}
-        clearSessions()
-        renderFinal('locked')
-      }
-    }
-
-    /* ===== العقوبة المرنة (تسليح من الفجوة فقط — بدون أي تأكيد توقّف):
-       مسح الجلسة والعودة للرئيسية — قابلة للاسترجاع بالدخول عادي،
-       من غير رفض نهائي ولا أي سجل — عشان إنذار كاذب محتمل (Side
-       Panel مثلًا) ما يضركش طالب بريء أبدًا. ولو قفل الفجوة قبل
-       الصفر = مسامحة فورية بصمت أصلًا. */
-    function softPunish() {
-      if (done) return
-      done = true
-      running = false
-      try { window.removeEventListener('resize', onResize) } catch (e) {}
-      try { clearInterval(timer) } catch (e) {}
-      removeUI()
-      resumeMedia()
-      clearSessions()
-      try { location.replace('/') } catch (e) {}
-    }
-
-    function clearSessions() {
-      try {
-        var kill: string[] = []
-        for (var i = 0; i < localStorage.length; i++) {
-          var k = localStorage.key(i) || ''
-          if (k === 'ln' || /student|parent/i.test(k)) kill.push(k)
-        }
-        for (var j = 0; j < kill.length; j++) localStorage.removeItem(kill[j])
-      } catch (e) {}
     }
 
     /* بداية نظيفة */
