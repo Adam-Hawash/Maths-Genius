@@ -1,64 +1,84 @@
 'use client'
 
 // ============================================================
-// DevToolsGuard — ر13 بطلب المستر الحرفي:
+// DevToolsGuard — ر14 بطلب المستر الحرفي:
 // «يا ابني حرام عليك يا ابني مش شغالة برضه، ما فيش حاجة شغالة،
 //  بتشتغل أول ما بقفل الـ يعني بكون أنا خلصت الـ
 //  أنا عاوز أول ما أفتحها وأول ما أخرج يتصلح»
 // ============================================================
-// تشخيص ر13 (علة ر12 الحقيقية — دليل حي من سكرين شوت المستر التاني:
-// «Paused in debugger» ظاهر على maths-genius.com يعني فخ ر12 واصل
-// لايف فعلًا — بس السلسلة كانت مربوطة بلحظة «خروج التوقّف» مش
-// بحالة الأدوات نفسها):
-//   • المستر يفتح الأدوات → أول تيك بيوقف الصفحة فورًا (الانسبكت
-//     بيجي في نص ثانية ✓) — لكن أثناء التوقّف مفيش أي JS بيشتغل.
-//   • العدّ كان بينطلق من نفس التيك اللي التوقّف خلص فيه —
-//     والتوقّف عمليًا بيخلص لحظة قفل الأدوات (كروم بيكمل التنفيذ
-//     لوحده أول ما الأدوات تتقفل والصفحة متجمدة) → الشاشة السودة
-//     والعدّاد كانوا بيظهروا **بعد القفل** بالحرف: «بتشتغل أول ما
-//     بقفل الـ يعني بكون أنا خلصت» ✗ — وبعدها المسامحة كانت محتاجة
-//     الإشارة تطفي 3 ثواني + 6 تيكات نضيفة = الشاشة بتفضل معلقة
-//     من 6 لـ 9 ثواني بعد القفل.
-//   • والأدهى: أثناء العدّ فخ الـ debugger كان بيتقفل خالص
-//     (شرط !running) فمفيش أي طريقة نحس بالقفل غير انتظار نفس
-//     النافذة الطويلة دي.
+// تشخيص ر14 (الدليل الحي: سكرين شوت المستر التالت «Paused in
+// debugger» على maths-genius.com = فخ ر13 واصل لايف فعلًا — والعلة
+// تصميمية جوّه ر13 نفسه):
+//   • ر13 كان بيحاول يربط الحالة بحالة الأدوات عن طريق فخ الـ
+//     debugger — لكن التوقّف معناه إن كل الـ JS متجمد: مفيش أي
+//     شاشة أو عدّاد ينقدر يترسم وهو متجمّد، والتسليح كان محتاج
+//     توقّفين متتاليين = المستر يدوس Continue مرتين وهو مفتوح.
+//   • ولو قفل وهو متجمّد (أي مستخدم حقيقي بيقفل من غير Continue):
+//     كروم بيكمل التنفيذ لوحده لحظة القفل → التوقّف بيخلص بعد
+//     القفل بالحرف → الشاشة السودة تنطلق بعد القفل «بتشتغل أول ما
+//     بقفل» + nukeMedia كانت بتدمر الـ iframes صامتة حتى في المسار
+//     المطموس = الفيديو بيبوظ من غير سبب ظاهر.
 //
-// قرار ر13 — الحالة كلها مربوطة بحالة الأدوات لحظة بلحظة:
-//   1) فخ الـ debugger بيتنادى **كل تيك (500ms) وفي كل الحالات حتى
-//      أثناء العدّ** — الأدوات مفتوحة = التنفيذ بيقف (مفتوح مؤكد
-//      100%)، مقفولة = no-op في نص ميكروثانية (مقفول مؤكد 100%).
-//      ده بقى هو كاشف الحالة الحي نفسه.
-//   2) «أول ما أفتحها» ✓ — الانسبكت الفوري: التوقّف الأول خلال نص
-//      ثانية من فتح الأدوات (وده بالظبط الـ انسبكت اللي المستر عايزه).
-//   3) أول توقّف = تدمير فوري لكل الـ iframes/الفيديوهات (منع نسخ
-//      اللينك من الـ DOM — أثناء التجميد نفسه ممكن حد يتصفح الـ DOM).
-//   4) السودة والعدّاد بيطلعوا **فقط** لما يكون الأدوات لسه مفتوحة
-//      فعلًا: توقّفان متتاليان (يعني عمل Continue وقاوم التجميد وهو
-//      مفتوح) — لكن لو قفل وهو متجمّد، التيك اللي بعد القفل بيرجع
-//      فوري من غير أي توقّف = مفيش سودة خالص بعد القفل.
-//   5) «أول ما أخرج يتصلح» ✓ — تيكين نضيفين (~1 ثانية) بعد القفل =
-//      الشاشة بتروح والتمرير بيرجع فورًا (إصلاح overflow) من غير أي
-//      عقوبة — بدل 6-9 ثواني في ر12.
-//   6) أثناء العدّ مع أدوات مفتوحة الصفحة بتفضل بتتجمّد كل نص ثانية
-//      (العقوبة شغالة فعلًا وهو فاتح) — والصفر على ساعة الحائط
-//      زي ما هو: قفل قبل الصفر = مسامحة فورية، الصفر = رفض نهائي.
-//   • احتياطي: لو فخ الـ debugger تعذّر إنشاؤه (CSP مثلًا) — إشارة
-//     الكونسول getter (ر10/ر12) بتفضل شغالة بنفس منطقها القديم،
-//     ومبيتعملش لها log خالص لما الفخ الأساسي موجود عشان الكونسول
-//     يفضل نضيف (المستر كان شايف Object مطوية من ر10/ر12).
-//   • كل قرار ر10/ر12 سليم وثابت: العدّ في حالة واحدة بس (أدوات
-//     مفتوحة فعلًا)، صفر إنذارات كاذبة من أي حاجة تانية، الأدمن
-//     مستثنى، الأتمتة (navigator.webdriver) مستثنية، المهلة من
-//     إعداد الأدمن guard_countdown_seconds (افتراضي 8 — يقبل 3..120).
+// قرار ر14 — الحالة مربوطة بحالة الأدوات **نفسها** بمصدرين مستقلين:
 //
-// عند الصفر (أدوات مفتوحة والعد خلص) — نفس قرار ر7/ر8:
-//   تدمير كل الـ iframes والفيديوهات من الصفحة (منع النسخ) +
-//   POST /api/security/reject-account بيرفض الحساب نهائيًا (مش مسح
-//   — المستر يرجّعه من تاب الطلاب المرفوضين) + قفل الجلسات + شاشة
-//   «حسابك مرفوض من المنصة» دائمة.
+//   المصدر 1 (الأساسي الجديد — فوري في الاتجاهين ومن غير أي تجميد):
+//     فجوة النافذة = outerWidth/outerHeight ناقص innerWidth/
+//     innerHeight فوق خط أساس بيتلقط لحظة التشغيل وبيتحدّث بأقل قيمة:
+//       - الفجوة العرضية (docked يمين/شمال + responsive mode)
+//         شغالة على أي جهاز — كيبورد الموبايل ما بيغيّرش العرض.
+//       - الفجوة الطولية (docked تحت) على الديسكتوب الصافي فقط
+//         ((hover:hover) و (pointer:fine) و maxTouchPoints===0)
+//         عشان كيبورد الموبايل ما ينذرش كاذب (درس ر10).
+//       - خط الأساس بيمتص الزووم من أول لحظة (طالب بزووم 150% من
+//         غير أدوات = صفر إنذار) — والانتقال نفسه هو الإشارة:
+//         الفجوة زادت 160px عن الأساس = أدوات اتفتحت لحظة الفتح.
+//       - حدث resize بيتنادى لحظة الفتح ولحظة القفل → تسليح فوري
+//         (<100ms) ومسامحة فورية — في سيناريو المستر بالحرف:
+//         يفتح docked أو responsive = سودة وعدّاد فورًا من غير ولا
+//         توقّف ولا Continue، يقفل = الشاشة تروح والتمرير يرجع
+//         فورًا. صفر «Paused in debugger» في السيناريو ده خالص.
 //
-// الأدمن مستثنى (قرار ز19): جلسة أدمن بدون جلسة طالب = الحارس ما
-// بيشتغلش أصلًا — المستر يفتح أدوات المطوّر براحته.
+//   المصدر 2 (كاشف الحالة الحي — للـ undocked والفحص عن بعد):
+//     فخ توقّف الـ debugger (دالة مولّدة مرة واحدة ومسخّنة برة
+//     القياس — درس ر12: المينيفايشن بيشيل الجملة الثابتة):
+//       - مفتوحة = التنفيذ بيقف (مؤكد 100%)، مقفولة = no-op في نص
+//         ميكروثانية (مؤكد 100%).
+//       - وهو مفتوح docked: التوقّف الأول نفسه بيسلّح فورًا (الفجوة
+//         بتأكد إن الأدوات لسه مفتوحة لحظة الرجوع).
+//       - وهو مفتوح undocked (مفيش فجوة): توقّفان متتاليان = تسليح
+//         (التوقّف التاني دليل إنه قاوم التجميد وهو مفتوح).
+//       - قفل وهو متجمّد: الرجوع بعد القفل بييجي مع فجوة = صفر →
+//         **صفر شاشة بعد القفل خالص** (علة المستر الحرفية اتعالجت).
+//       - أثناء العدّ: الفخ بيتنادى في التيكات الزوجية للأسلحة اللي
+//         جت من undocked بس (الأسلحة اللي جت من الفجوة عدّها ناعم
+//         خالص من غير أي تجميد) — والصفر على ساعة الحائط زي ما هو:
+//         التجميد ما بيمدّدش ولا يوقفش العد، والقفل undocked بيتحس
+//         خلال ≤1 ثانية والشاشة بتروح (مفيش عقوبة بعد القفل).
+//
+//   فخ الكونسول getter — احتياطي فقط لو فخ الـ debugger تعذّر
+//   إنشاؤه (CSP) بنفس منطق ر13، ومن غير أي log لما الفخ موجود
+//   (الكونسول يفضل نضيف — المستر كان شايف Object مطوية).
+//
+//   الوسائط: التسليح = إيقاف مؤقت للفيديوهات + الخروج من fullscreen
+//   (الشاشة السودة فوق كل حاجة حتى الفيديو الفول سكرين) — والمسامحة
+//   بترجّع الفيديو اللي كان شغال من مكانه. التدمير الكامل (nukeMedia)
+//   بقال عند العقوبة النهائية بس — عكس ر13 اللي كانت بتدمر على أول
+//   توقّف حتى لو المسار المطموس.
+//
+//   الصفر على ساعة الحائط:
+//     - تسليح فيه تأكيد توقّف حقيقي (debugger/كونسول) = العقوبة
+//       الصلبة زي ر7/ر8/ر13 بالحرف: تدمير الوسائط + POST
+//       /api/security/reject-account + شاشة «حسابك مرفوض» دائمة.
+//     - تسليح من الفجوة فقط (بدون أي تأكيد توقّف — احتمال إنذار
+//       كاذب من Side Panel مثلًا) = عقوبة مرنة قابلة للاسترجاع:
+//       مسح الجلسة والعودة للرئيسية — من غير رفض نهائي ولا أي سجل.
+//       ولو المستخدم قفل الفجوة قبل الصفر = مسامحة فورية بصمت.
+//
+//   كل قرار ر10/ر12/ر13 ثابت: العدّ في حالة واحدة بس (أدوات مفتوحة
+//   فعلًا)، صفر إنذارات كاذبة من أي حاجة تانية (زووم/كيبورد/فتح
+//   فيديو/تهنيج)، الأدمن مستثنى، الأتمتة مستثنية من فخ التوقّف،
+//   المهلة من إعداد الأدمن guard_countdown_seconds (افتراضي 8 —
+//   يقبل 3..120).
 // ============================================================
 import { useEffect } from 'react'
 import { getDeviceCandidates, getDeviceId } from '@/lib/device'
@@ -135,10 +155,12 @@ export function DevToolsGuard() {
 
     /* ===== الحالة ===== */
     var done = false
-    var running = false
-    var pauseSeen = false    /* التيك اللي فات كان فيه توقّف حقيقي (أدوات كانت مفتوحة) */
-    var cleanTicks = 0       /* تيكات نضيفة متتالية بدون أي توقّف = دليل قفل الأدوات */
-    var cleanStreak = 0      /* احتياطي (!dbgFn بس) — نفس منطق ر12 */
+    var running = false        /* الشاشة السودة والعدّاد شغالين */
+    var gapArmed = false       /* التسليح جاي من فجوة النافذة (من غير تأكيد توقّف) */
+    var confirmed = false      /* فيه تأكيد توقّف حقيقي (debugger/كونسول) في التسليح الحالي */
+    var pendingPause = false   /* توقّف واحد من غير فجوة (undocked غامض) — بستنى التوقّف التاني */
+    var pendingRun = false     /* أثناء العدّ undocked: توقّف طويل — بستنى تيك سريع أثبت القفل */
+    var cleanStreak = 0        /* احتياطي الكونسول (!dbgFn) — نفس منطق ر13 */
     var deadline = 0
     var armedDurMs = 0
     var lastShown = -1
@@ -150,20 +172,66 @@ export function DevToolsGuard() {
     var noAutomation = false
     try { noAutomation = (navigator as any).webdriver === true } catch (e) {}
 
+    /* ===== خط أساس الفجوة (ضد الزووم — درس ر10 وضُبط في ر14) =====
+       بيتلقط لحظة التشغيل وبيتحدّث بأقل قيمة شوفناها: الزووم من أول
+       لحظة بيمتص في الأساس (صفر إنذار)، والفجوة اللي بتظهر **فوق**
+       الأساس أثناء الجلسة هي اللي بتدل على أدوات اتفتحت.
+       الزووم اللي بيحصل في نص الجلسة ممكن يزود الفجوة مؤقتًا —
+       عقوبته مرنة (الأسلحة اللي جت من الفجوة من غير تأكيد توقّف) +
+       أول ما يرجّع الزووم الفجوة ترجع للأساس والمسامحة فورية.
+       والأدوات المفتوحة قبل التحميل ما محتاجاش فلاغ خاص — فخ
+       التوقّف بيمسكها (توقّفان متتاليان) من غير أي افتراض عن الفجوة. */
+    var baselineW = 0
+    var baselineH = 0
+    try {
+      baselineW = Math.max(0, (window.outerWidth || 0) - (window.innerWidth || 0))
+      baselineH = Math.max(0, (window.outerHeight || 0) - (window.innerHeight || 0))
+    } catch (e) {}
+
+    function desktopFine(): boolean {
+      try {
+        if ((navigator as any).maxTouchPoints > 0) return false
+        if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return false
+      } catch (e) { return false }
+      return true
+    }
+
+    function updateBaselines() {
+      try {
+        var gw = Math.max(0, (window.outerWidth || 0) - (window.innerWidth || 0))
+        var gh = Math.max(0, (window.outerHeight || 0) - (window.innerHeight || 0))
+        if (gw < baselineW) baselineW = gw
+        if (gh < baselineH) baselineH = gh
+      } catch (e) {}
+    }
+
+    /* ===== كاشف الفجوة: '' = مقفولة / 'w' عرضية / 'h' طولية ===== */
+    function gapNow(): string {
+      try {
+        var iw = window.innerWidth || 0
+        var ih = window.innerHeight || 0
+        /* نوافذ مقلوبة/مصغرة لحظيًا (minimize/restore) — تجاهل */
+        if (iw < 200 || ih < 200) return ''
+        var gw = (window.outerWidth || 0) - iw - baselineW
+        var gh = (window.outerHeight || 0) - ih - baselineH
+        if (gw > 160) return 'w'
+        if (gh > 160 && desktopFine()) return 'h'
+      } catch (e) {}
+      return ''
+    }
+
     /* دالة الـ debugger مولّدة مرة واحدة وتسخّنة برة القياس —
        ليه مولّدة؟ لأن مينفايشن SWC بيشيل جملة debugger الثابتة من
-       السورس (drop_debugger) — إثبات ر12: البناء خرج من غير الجملة
-       خالص — لكن السترينج 'debugger' بيرجع من المينيفايشن.
-       والكومبايلة مرة واحدة في الإعداد (تسخين) برة القياس خالص،
-       فالاستدعاءات بعد كده no-op في نص الميكروثانية من غير أدوات */
+       السورس (drop_debugger) — إثبات ر12 — لكن السترينج بيرجع.
+       من غير أدوات مفتوحة الاستدعاء no-op في نص الميكروثانية من
+       غير أدوات (الكومبايلة حصلت مرة واحدة)، ومع أدوات مفتوحة
+       التنفيذ بيقف لحد Continue = الفرق ثواني = مفتوحة مؤكد. */
     var dbgFn: any = null
     try { dbgFn = (function () {} as any).constructor('debugger') } catch (e) {}
-    try { if (dbgFn) dbgFn() } catch (e) {}
 
     /* ===== الاحتياطي: فخ الكونسول (لو فخ الـ debugger مش متاح فقط) =====
        getter بيتشغل لحظة ما كونسول حقيقي يعرض/يوسّع الـ object —
-       مبيتعملش له log خالص لما الفخ الأساسي موجود (ر13: الكونسول
-       يفضل نضيف — المستر كان شايف Object مطوية من ر10/ر12) */
+       مبيتعملش له log خالص لما الفخ الأساسي موجود (الكونسول نضيف) */
     var trapObj: any = {}
     try {
       Object.defineProperty(trapObj, 'id', {
@@ -172,9 +240,59 @@ export function DevToolsGuard() {
       })
     } catch (e) {}
 
-    /* ===== منع النسخ: تدمير كل الـ iframes والفيديوهات من الصفحة =====
-       بيتنفذ لحظة أول توقّف حقيقي (الأدوات مفتوحة مؤكد) وعند الرفض —
-       عشان لينك المشغل/اليوتيوب يختفي من الـ DOM قبل ما حد يلحق ينسخه */
+    /* ===== الوسائط: إيقاف مؤقت عند التسليح + رجوع عند المسامحة =====
+       عكس ر13: مفيش تدمير على أول إشارة — التدمير الكامل للعقوبة
+       النهائية بس. عشان الفيديو ما يبوظش لو الإشارة طلعت مطموسة. */
+    var pausedVideos: Array<{ el: HTMLVideoElement; was: boolean }> = []
+    var pausedFrames: HTMLIFrameElement[] = []
+
+    function pauseMedia() {
+      pausedVideos = []
+      pausedFrames = []
+      try {
+        /* الشاشة السودة في الـ top layer مش بتفوق الفيديو الفول سكرين
+           — لازم نخرج من الفول سكرين الأول */
+        try {
+          if ((document as any).fullscreenElement) (document as any).exitFullscreen().catch(function () {})
+        } catch (e) {}
+        try {
+          if ((document as any).webkitFullscreenElement && (document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen()
+        } catch (e) {}
+        var vd = document.querySelectorAll('video')
+        for (var i = 0; i < vd.length; i++) {
+          var v = vd[i] as HTMLVideoElement
+          var was = false
+          try { was = !v.paused && !v.ended } catch (e) {}
+          try { v.pause() } catch (e) {}
+          pausedVideos.push({ el: v, was: was })
+        }
+        var fr = document.querySelectorAll('iframe')
+        for (var j = 0; j < fr.length; j++) {
+          var f = fr[j] as HTMLIFrameElement
+          pausedFrames.push(f)
+          try {
+            /* YouTube IFrame API — إيقاف الصوت ورا الشاشة السودة */
+            if (f.contentWindow) f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*')
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }
+
+    function resumeMedia() {
+      try {
+        for (var i = 0; i < pausedVideos.length; i++) {
+          var m = pausedVideos[i]
+          if (m.was) { try { var p = m.el.play(); if (p && p.catch) p.catch(function () {}) } catch (e) {} }
+        }
+        /* ملاحظة: الـ iframes مش بنبعث لهم playVideo عمدًا — عشان ما
+           نشغلش درس الطالب ما كان مقفولوش أصلًا. يوتيوب بيفضل واقف
+           في مكانه والطالب يدوس شغّال عادي بعد المسامحة. */
+      } catch (e) {}
+      pausedVideos = []
+      pausedFrames = []
+    }
+
+    /* ===== منع النسخ عند العقوبة النهائية: تدمير كل الـ iframes والفيديوهات ===== */
     function nukeMedia() {
       try {
         var fr = document.querySelectorAll('iframe')
@@ -192,92 +310,90 @@ export function DevToolsGuard() {
       } catch (e) {}
     }
 
-    /* ===== تسليح: سودة فورية + عدّ كامل من الأول ===== */
-    function arm() {
-      if (done) return
-      deadline = Date.now() + countMs
-      armedDurMs = countMs
-      running = true
-      lastShown = -1
-      renderMode()
-      paintCount()
+    /* ===== فخ التوقّف: بيرجّع الفرق بالمللي ثانية ===== */
+    function probeDelta(): number {
+      var t0 = Date.now()
+      try { if (dbgFn) dbgFn() } catch (e) {}
+      return Date.now() - t0
     }
 
-    /* ===== المسامحة الفورية (ر13): الشاشة بتروح والتمرير بيرجع ===== */
+    /* ===== تسليح: سودة فورية + عدّ كامل من الأول =====
+       gap = من الفجوة (من غير تأكيد توقّف — عقوبته المرنة)
+       probe/console = فيه تأكيد توقّف حقيقي (العقوبة الصلبة) */
+    function arm(kind: 'gap' | 'probe' | 'console') {
+      if (done) return
+      if (!readStudent()) return
+      if (!running) {
+        running = true
+        deadline = Date.now() + countMs
+        armedDurMs = countMs
+        lastShown = -1
+        gapArmed = kind === 'gap'
+        confirmed = kind !== 'gap'
+        pendingPause = false
+        pendingRun = false
+        pauseMedia()
+        renderMode()
+        paintCount()
+      } else if (kind !== 'gap') {
+        /* ترقية تسليح قايم لتأكيد حقيقي — من غير إعادة عدّ */
+        confirmed = true
+        gapArmed = false
+      }
+    }
+
+    /* ===== المسامحة الفورية: الشاشة تروح والتمرير يرجع والفيديو يكمل ===== */
     function forgive() {
       running = false
       deadline = 0
-      cleanTicks = 0
+      gapArmed = false
+      confirmed = false
+      pendingPause = false
+      pendingRun = false
+      cleanStreak = 0
       removeUI()
+      resumeMedia()
     }
 
-    /* ===== حلقة التشغيل (500ms) — الكاشف الحي للحالة ===== */
+    /* ===== الحلقة (500ms) ===== */
     var timer = setInterval(tickBody, 500)
 
     function tickBody() {
       if (done) return
       tickNo++
+      updateBaselines()
 
-      /* ر13 — الإشارة الأولى: فخ توقّف الـ debugger (دالة مسخّنة
-         مسبقًا) بيتنادى كل تيك وفي كل الحالات حتى أثناء العدّ:
-         من غير أدوات مفتوحة الاستدعاء no-op فوري (مستحيل يتعدى 100ms
-         حتى أضعف جهاز — الكومبايلة حصلت مرة واحدة في الإعداد برة
-         القياس)، ومع أدوات مفتوحة التنفيذ بيقف لحد Continue =
-         الفرق ثواني = أدوات مفتوحة مؤكد.
-         شروط التشغيل: جلسة طالب + مش أتمتة. */
-      var pausedNow = false
-      if (!noAutomation && dbgFn && readStudent()) {
-        var t0 = Date.now()
-        try { dbgFn() } catch (e) {}
-        if (Date.now() - t0 > 100) {
-          pausedNow = true
-          lastSignalHit = Date.now()
-        }
-      }
+      var isStudent = !!readStudent()
+      var gap = gapNow()
 
-      /* فخ الكونسول — احتياطي فقط لما فخ الـ debugger مش متاح أصلًا
-         (كل 2 ثواني من غير %c عشان الكونسول يعرض الـ object ويشغّل
-         الـ getter — من غير أدوات مفتوحة = مفيش عرض = مفيش إشارة) */
-      if (!dbgFn && tickNo % 4 === 0) {
-        try { console.log(trapObj) } catch (e) {}
-      }
-
-      if (pausedNow) {
-        /* أدوات مفتوحة مؤكد — التوقّف حصل فعليًا */
-        cleanTicks = 0
-        nukeMedia() /* منع النسخ: المشغل/اليوتيوب يختفي من الـ DOM فورًا */
-        if (!running) {
-          if (pauseSeen) {
-            /* توقّفان متتاليان = الأدوات لسه مفتوحة والطالب قاوم
-               التجميد بـ Continue → سودة فورية + عدّ كامل.
-               لو كان قفل الأدوات وهو متجمّد، التيك ده كان بيرجع
-               فوري من غير توقّف فمكانش وصلنا هنا أصلًا. */
-            arm()
+      if (!running) {
+        /* 1) الفوري: فجوة فوق الأساس = أدوات مفتوحة الآن */
+        if (gap) {
+          arm('gap')
+        } else if (!noAutomation && dbgFn && isStudent) {
+          /* 2) كاشف الحالة الحي — لما مش شغال فقط:
+             توقّف + فجوة لحظة الرجوع = docked مفتوحة → تسليح فوري
+             توقّف + مفيش فجوة → undocked غامض (Continue عادي أو قفل)
+               → توقّفان متتاليان = مفتوحة مؤكد → تسليح
+               → تيك سريع بعد التوقّف = قفل بعد التجميد → صفر شاشة */
+          var d1 = probeDelta()
+          if (d1 > 100) {
+            lastSignalHit = Date.now()
+            if (gapNow()) arm('probe')
+            else if (pendingPause) { pendingPause = false; arm('probe') }
+            else pendingPause = true
+          } else if (pendingPause) {
+            /* الرجوع ده بعد قفل الأدوات وهو متجمّد — المستر الحرفي:
+               «أول ما أخرج يتصلح» — صفر شاشة بعد القفل خالص */
+            pendingPause = false
           }
-          pauseSeen = true
-        }
-      } else {
-        /* تيك نضيف بدون أي توقّف = الأدوات مقفولة (أو مش مفتوحة أصلًا) */
-        pauseSeen = false
-        if (running) {
-          cleanTicks++
-          /* ر13 — «أول ما أخرج يتصلح»: تيكين نضيفين (~1 ثانية) بعد
-             القفل = مسامحة فورية بدل 6-9 ثواني في ر12 */
-          if (cleanTicks >= 2) forgive()
-        }
-      }
-
-      /* الاحتياطي — نفس منطق ر12 حرفيًا لما فخ الـ debugger مش متاح:
-         إشارة كونسول خلال 3 ثواني = مفتوحة، 6 تيكات نضيفة = مسامحة */
-      if (!dbgFn) {
-        var signalFresh = (Date.now() - lastSignalHit) < 3000
-        if (signalFresh) {
-          cleanStreak = 0
-          if (!running && readStudent()) arm()
-        } else if (running && cleanStreak >= 6) {
-          forgive()
-        } else {
-          cleanStreak++
+        } else if (!dbgFn && isStudent) {
+          /* 3) احتياطي الكونسول — نفس منطق ر13 حرفيًا */
+          if (tickNo % 4 === 0) { try { console.log(trapObj) } catch (e) {} }
+          if ((Date.now() - lastSignalHit) < 3000) {
+            cleanStreak = 0
+            arm('console')
+          }
         }
       }
 
@@ -285,10 +401,52 @@ export function DevToolsGuard() {
         paintCount()
         /* لو حد شال العنصر نفسه من الـ DOM بالأدوات — بنرجّعه فورًا */
         if (!document.getElementById('mg-guard-black')) renderMode()
-        /* الصفر على ساعة الحائط — تجميد الصفحة ما بينفعش */
-        if (Date.now() >= deadline) { punish(); return }
+
+        /* القفل undocked أثناء العدّ (الأسلحة اللي من الفخ فقط —
+           أسلحة الفجوة عدّها ناعم خالص والقفل بيتحس من resize):
+           تيك زوجي = فحص توقّف — توقّف طويل = لسه مفتوحة، تيك سريع
+           بعد توقّف = قفلت → مسامحة فورية ≤1 ثانية */
+        if (!gapArmed && !noAutomation && dbgFn && isStudent && tickNo % 2 === 0) {
+          var d2 = probeDelta()
+          if (d2 > 100) { pendingRun = true; lastSignalHit = Date.now() }
+          else if (pendingRun) { pendingRun = false; forgive() }
+        }
+
+        /* شبكة أمان الفجوة: تسليح من الفجوة والفجوة راحت من غير resize */
+        if (running && gapArmed && !confirmed && !gapNow()) forgive()
+
+        /* احتياطي الكونسول وأثناء العدّ — نفس منطق ر13 */
+        if (running && !dbgFn) {
+          if ((Date.now() - lastSignalHit) < 3000) cleanStreak = 0
+          else if (cleanStreak >= 6) { forgive() }
+          else cleanStreak++
+        }
+
+        /* الصفر على ساعة الحائط — تجميد الصفحة ما بينفعش:
+           تسليح فيه تأكيد توقّف حقيقي = العقوبة الصلبة (رفض نهائي)،
+           تسليح من الفجوة فقط = العقوبة المرنة القابلة للاسترجاع */
+        if (running && Date.now() >= deadline) {
+          if (gapArmed && !confirmed) softPunish()
+          else punish()
+          return
+        }
       }
     }
+
+    /* ===== الحالة الفورية لحظة الفتح/القفل (resize) =====
+       ده مصدر «أول ما أفتحها وأول ما أخرج يتصلح» بالحرف —
+       بيتنادى لحظة docking/undocking/responsive لحظيًا */
+    function onResize() {
+      if (done) return
+      updateBaselines()
+      var g = gapNow()
+      if (g) {
+        if (!running) arm('gap')
+      } else if (running && gapArmed && !confirmed) {
+        forgive()
+      }
+    }
+    try { window.addEventListener('resize', onResize) } catch (e) {}
 
     /* ===== الرسم ===== */
     var numEl: HTMLElement | null = null
@@ -381,14 +539,15 @@ export function DevToolsGuard() {
         '</div>'
     }
 
-    /* ===== العقوبة: الرفض النهائي (مش مسح — المستر يرجّعه من الأدمن) ===== */
+    /* ===== العقوبة الصلبة (تأكيد توقّف حقيقي): الرفض النهائي ===== */
     function punish() {
       if (done) return
       done = true
       running = false
+      try { window.removeEventListener('resize', onResize) } catch (e) {}
+      try { clearInterval(timer) } catch (e) {}
       nukeMedia()
       removeUI()
-      try { clearInterval(timer) } catch (e) {}
       var st = readStudent()
       if (st && st.id) {
         try { sessionStorage.setItem(LOCK_KEY, 'rejected') } catch (e) {}
@@ -420,6 +579,23 @@ export function DevToolsGuard() {
       }
     }
 
+    /* ===== العقوبة المرنة (تسليح من الفجوة فقط — بدون أي تأكيد توقّف):
+       مسح الجلسة والعودة للرئيسية — قابلة للاسترجاع بالدخول عادي،
+       من غير رفض نهائي ولا أي سجل — عشان إنذار كاذب محتمل (Side
+       Panel مثلًا) ما يضركش طالب بريء أبدًا. ولو قفل الفجوة قبل
+       الصفر = مسامحة فورية بصمت أصلًا. */
+    function softPunish() {
+      if (done) return
+      done = true
+      running = false
+      try { window.removeEventListener('resize', onResize) } catch (e) {}
+      try { clearInterval(timer) } catch (e) {}
+      removeUI()
+      resumeMedia()
+      clearSessions()
+      try { location.replace('/') } catch (e) {}
+    }
+
     function clearSessions() {
       try {
         var kill: string[] = []
@@ -431,9 +607,9 @@ export function DevToolsGuard() {
       } catch (e) {}
     }
 
-    /* بداية نظيفة — مفيش أي listeners خارجية: الفخ من غير أي events
-       على الصفحة — فخ الـ debugger كل تيك هو الكاشف الحي نفسه */
+    /* بداية نظيفة */
     return function cleanup() {
+      try { window.removeEventListener('resize', onResize) } catch (e) {}
       try { clearInterval(timer) } catch (e) {}
     }
   }, [])
